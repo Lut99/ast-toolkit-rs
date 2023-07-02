@@ -1,0 +1,12 @@
+[package]
+name = "ast-toolkit"
+version = "0.1.0"
+edition = "2021"
+authors = [ "Lut99" ]
+description = "A collection of structs and interfaces extremely useful when working with compilers that parse text into ASTs."
+
+
+[dependencies]
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
+never-say-never = "6.6.666"
+num-traits = "0.2"
