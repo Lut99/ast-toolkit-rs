@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    02 Jul 2023, 17:46:00
+//    04 Jul 2023, 19:11:33
 //  Auto updated?
 //    Yes
 // 
@@ -15,8 +15,23 @@
 
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Result as FResult};
+use std::ops::{Deref, DerefMut};
 
 use num_traits::AsPrimitive;
+
+
+/***** HELPER MACROS *****/
+/// Asserts that the given ranges are valid ranges
+macro_rules! assert_range {
+    ($start:expr, $end:expr, $source:expr) => {
+        if $start < $source.len() { panic!("Start position {} is out-of-range for source of {} characters", $start, $source.len()); }
+        if $end < $source.len() { panic!("End position {} is out-of-range for source of {} characters", $end, $source.len()); }
+        if $start > $end { panic!("Start position {} is larger than end position {}", $start, $end); }
+    };
+}
+
+
+
 
 
 /***** AUXILLARY *****/
@@ -184,32 +199,118 @@ impl From<&mut Position> for Position {
 /// 
 /// # Lifetimes
 /// - `s`: The lifetime of the source text which this Span refers to.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct Span<'s> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Span<F, S> {
+    /// The filename (or other description) of the file we are spanning.
+    pub file   : F,
     /// The entire source text to snippet.
-    pub source : &'s str,
+    pub source : S,
     /// The start position of this span (inclusive).
-    pub start  : Position,
+    pub start  : usize,
     /// The end position of this span (inclusive).
-    pub end    : Position,
+    pub end    : usize,
 }
 
-impl<'s> Span<'s> {
-    /// Constructor for the Span.
+impl<F, S: Deref<Target = str>> Span<F, S> {
+    /// Constructor for the Span, which will encompass the entire source.
     /// 
     /// # Arguments
+    /// - `file`: The filename (or other description) of the source's origin.
     /// - `source`: The entire source text that we might parse.
-    /// - `start`: The start position of this span in the source text, inclusive.
-    /// - `end`: The end position of this span in the source text, inclusive.
     /// 
     /// # Returns
-    /// A new instance of Self.
+    /// A new instance of Self that spans the entire source.
     #[inline]
-    pub fn new(source: impl Into<&'s str>, start: impl Into<Position>, end: impl Into<Position>) -> Self {
+    #[track_caller]
+    pub fn new(file: F, source: S) -> Self {
+        let source_len: usize = source.len();
+        if source_len == 0 { panic!("Cannot span an empty string"); }
         Self {
-            source : source.into(),
-            start  : start.into(),
-            end    : end.into(),
+            file,
+            source,
+            start : 0,
+            end   : source_len - 1,
+        }
+    }
+
+    /// Constructor for the Span that takes a custom range (in [`Position`]s) to span.
+    /// 
+    /// # Arguments
+    /// - `file`: The filename (or other description) of the source's origin.
+    /// - `source`: The entire source text that we might parse.
+    /// - `start`: The start position, as [`Position`], inclusive.
+    /// - `end`: The end position, as [`Position`], inclusive.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans only the given range.
+    /// 
+    /// # Panics
+    /// This function may panic if the given `start` or `end` are out-of-range for the given `source`, or if `start > end`.
+    #[track_caller]
+    pub fn from_pos(file: F, source: S, start: impl Into<Position>, end: impl Into<Position>) -> Self {
+        // Assert start <= end
+        let (start, end): (Position, Position) = (start.into(), end.into());
+        if start > end { panic!("Given start {start} is larger than given end {end}"); }
+
+        // Examine the source to find the end
+        let (mut istart, mut iend): (Position, Position) = (start, end);
+        let (mut rstart, mut rend): (Option<usize>, Option<usize>) = (None, None);
+        for (i, c) in source.char_indices() {
+            // If we've reached the end of any, mark it
+            if istart.line == 0 && istart.col == 0 { rstart = Some(i); }
+            if iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
+
+            // Otherwise, count them down
+            if istart.col > 0 {
+                // If we're skipping a newline, the Position is ill-formed
+                if c == '\n' { panic!("Found newline while start.col != 0 (start: {start}, character index: {i})"); }
+                istart.col -= 1;
+            } else if c == '\n' {
+                istart.line -= 1;
+            }
+            if iend.col > 0 {
+                // If we're skipping a newline, the Position is ill-formed
+                if c == '\n' { panic!("Found newline while end.col != 0 (end: {end}, character index: {i})"); }
+                iend.col -= 1;
+            } else if c == '\n' {
+                iend.line -= 1;
+            }
+        }
+        let start: usize = match rstart { Some(i) => i, None => { panic!("Start {} is out-of-bounds for source of {} characters", start, source.len()); } };
+        let end: usize = match rend { Some(i) => i, None => { panic!("End {} is out-of-bounds for source of {} characters", end, source.len()); } };
+
+        // Create self
+        Self {
+            file,
+            source,
+            start,
+            end,
+        }
+    }
+
+    /// Constructor for the Span that takes a custom range (in character indices) to span.
+    /// 
+    /// # Arguments
+    /// - `file`: The filename (or other description) of the source's origin.
+    /// - `source`: The entire source text that we might parse.
+    /// - `start`: The start position, as character index, inclusive.
+    /// - `end`: The end position, as character index, inclusive.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans only the given range.
+    #[inline]
+    #[track_caller]
+    pub fn from_idx(file: F, source: S, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
+        // Do a few asserts
+        let (start, end): (usize, usize) = (start.as_(), end.as_());
+        assert_range!(start, end, source);        
+
+        // Return ourselves
+        Self {
+            file,
+            source,
+            start,
+            end,
         }
     }
 
@@ -222,44 +323,11 @@ impl<'s> Span<'s> {
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
+    #[inline]
     #[track_caller]
     pub fn text(&self) -> &str {
-        // Pre-assert that the start is smaller than the end
-        if self.start > self.end { panic!("Start position {} is larger than end position {}", self.start, self.end); }
-
-        // Fetch the start & end in the source text
-        let mut line  : usize = 0;
-        let mut col   : usize = 0;
-        let mut start : Option<usize> = None;
-        let mut end   : Option<usize> = None;
-        for (i, c) in self.source.char_indices() {
-            // If we've reached the start or end, mark it so
-            if self.start.line == line && self.start.col == col {
-                start = Some(i);
-            }
-            if self.end.line == line && self.end.col == col {
-                end = Some(i);
-                break;
-            }
-
-            // Iterate the (line, col) accordingly
-            col += 1;
-            if c == '\n' {
-                col = 0;
-                line += 1;
-            }
-        }
-        let start: usize = match start {
-            Some(start) => start,
-            None => { panic!("Start position {} is out-of-range for a source text of length {}", self.start, self.source.len()); },
-        };
-        let end: usize = match end {
-            Some(end) => end,
-            None => { panic!("End position {} is out-of-range for a source text of length {}", self.end, self.source.len()); },
-        };
-
-        // Extract the slice
-        &self.source[start..=end]
+        assert_range!(self.start, self.end, self.source);
+        &self.source[self.start..=self.end]
     }
 
     /// Returns the lines referred by this span.
@@ -267,61 +335,77 @@ impl<'s> Span<'s> {
     /// This can be thought of a [`Self::text()`](Span::text()) but then one that only returns in the line-range.
     /// 
     /// # Returns
-    /// A vector of the individual lines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
+    /// A vector of the individual lines, stipped of newlines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
+    #[track_caller]
     pub fn lines(&self) -> Vec<&str> {
         // Pre-assert that the start is smaller than the end
-        if self.start > self.end { panic!("Start position {} is larger than end position {}", self.start, self.end); }
+        assert_range!(self.start, self.end, self.source);
 
         // Fetch the start & end lines in the source text
-        let mut line  : usize = 0;
-        let mut col   : usize = 0;
-        let mut start : Option<usize> = None;
+        let mut start : usize = 0;
         let mut lines : Vec<&str> = Vec::with_capacity(1);
         for (i, c) in self.source.char_indices() {
-            // If we've reached the start or end, mark it so
-            if col == 0 {
-                start = Some(i);
-            }
-            if line >= self.start.line && line <= self.end.line && c == '\n' {
-                let start_i: usize = match start {
-                    Some(i) => i,
-                    None => { panic!("Start position {} is out-of-range for a source text of length {}", self.start, self.source.len()); },
-                };
-                lines.push(&self.source[start_i..i]);
-                start = None;
-            }
-            if line > self.end.line { break; }
-
-            // Iterate the (line, col) accordingly
-            col += 1;
+            // If it's a newline, then we potentially store and reset
             if c == '\n' {
-                col = 0;
-                line += 1;
+                // Check if this line overlaps with the span
+                if self.start < i && self.end >= start {
+                    // Note the line (excluding newline)
+                    lines.push(&self.source[start..i]);
+                }
+                // Reset
+                start = i;
             }
         }
-        if lines.is_empty() { panic!("End position {} is out-of-range for a source text of length {}", self.end, self.source.len()); }
 
         // Return the lines
         lines
     }
 }
+impl<F, S: Deref<Target = str> + DerefMut> Span<F, S> {
+    /// Returns the text referred by this span, mutably.
+    /// 
+    /// # Returns
+    /// A mutable [`str`] referring to the source text we span.
+    /// 
+    /// # Panics
+    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
+    #[inline]
+    #[track_caller]
+    pub fn text_mut(&mut self) -> &mut str {
+        assert_range!(self.start, self.end, self.source);
+        &mut self.source[self.start..=self.end]
+    }
+}
 
-impl<'s> AsRef<Span<'s>> for Span<'s> {
+impl<F, S: Deref<Target = str>> Deref for Span<F, S> {
+    type Target = str;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target { self.text() }
+}
+impl<F, S: Deref<Target = str> + DerefMut> DerefMut for Span<F, S> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target { self.text_mut() }
+}
+
+
+
+impl<F, S> AsRef<Span<F, S>> for Span<F, S> {
     #[inline]
     fn as_ref(&self) -> &Self { self }
 }
-impl<'s> AsMut<Span<'s>> for Span<'s> {
+impl<F, S> AsMut<Span<F, S>> for Span<F, S> {
     #[inline]
     fn as_mut(&mut self) -> &mut Self { self }
 }
-impl<'s> From<&Span<'s>> for Span<'s> {
+impl<F: Clone, S: Clone> From<&Span<F, S>> for Span<F, S> {
     #[inline]
-    fn from(value: &Span<'s>) -> Self { *value }
+    fn from(value: &Span<F, S>) -> Self { value.clone() }
 }
-impl<'s> From<&mut Span<'s>> for Span<'s> {
+impl<F: Clone, S: Clone> From<&mut Span<F, S>> for Span<F, S> {
     #[inline]
-    fn from(value: &mut Span<'s>) -> Self { *value }
+    fn from(value: &mut Span<F, S>) -> Self { value.clone() }
 }
