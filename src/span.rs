@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    04 Jul 2023, 19:11:33
+//    05 Jul 2023, 11:36:51
 //  Auto updated?
 //    Yes
 // 
@@ -18,14 +18,15 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::ops::{Deref, DerefMut};
 
 use num_traits::AsPrimitive;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 
 /***** HELPER MACROS *****/
 /// Asserts that the given ranges are valid ranges
 macro_rules! assert_range {
     ($start:expr, $end:expr, $source:expr) => {
-        if $start < $source.len() { panic!("Start position {} is out-of-range for source of {} characters", $start, $source.len()); }
-        if $end < $source.len() { panic!("End position {} is out-of-range for source of {} characters", $end, $source.len()); }
+        if $start >= $source.len() { panic!("Start position {} is out-of-range for source of {} characters", $start, $source.len()); }
+        if $end >= $source.len() { panic!("End position {} is out-of-range for source of {} characters", $end, $source.len()); }
         if $start > $end { panic!("Start position {} is larger than end position {}", $start, $end); }
     };
 }
@@ -255,7 +256,7 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         // Examine the source to find the end
         let (mut istart, mut iend): (Position, Position) = (start, end);
         let (mut rstart, mut rend): (Option<usize>, Option<usize>) = (None, None);
-        for (i, c) in source.char_indices() {
+        for (i, c) in source.grapheme_indices(true) {
             // If we've reached the end of any, mark it
             if istart.line == 0 && istart.col == 0 { rstart = Some(i); }
             if iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
@@ -263,16 +264,16 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
             // Otherwise, count them down
             if istart.col > 0 {
                 // If we're skipping a newline, the Position is ill-formed
-                if c == '\n' { panic!("Found newline while start.col != 0 (start: {start}, character index: {i})"); }
+                if c == "\n" { panic!("Found newline while start.col != 0 (start: {start}, character index: {i})"); }
                 istart.col -= 1;
-            } else if c == '\n' {
+            } else if c == "\n" {
                 istart.line -= 1;
             }
             if iend.col > 0 {
                 // If we're skipping a newline, the Position is ill-formed
-                if c == '\n' { panic!("Found newline while end.col != 0 (end: {end}, character index: {i})"); }
+                if c == "\n" { panic!("Found newline while end.col != 0 (end: {end}, character index: {i})"); }
                 iend.col -= 1;
-            } else if c == '\n' {
+            } else if c == "\n" {
                 iend.line -= 1;
             }
         }
@@ -316,6 +317,65 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
 
 
 
+    /// Converts a character index to a [`Position`] within this span's source text.
+    /// 
+    /// # Arguments
+    /// - `index`: The index to translate.
+    /// 
+    /// # Returns
+    /// A new [`Position`] representing the index as a (line, column) coordinate.
+    /// 
+    /// # Panics
+    /// This function may panic if the given index is not at the grapheme boundary.
+    pub fn pos_of(&self, index: impl AsPrimitive<usize>) -> Position {
+        let index: usize = index.as_();
+
+        // Iterate over the source to find the line & column
+        let (mut line, mut col): (usize, usize) = (0, 0);
+        for (i, c) in self.source.grapheme_indices(true) {
+            // If we reached it, we done
+            if i == index { break; }
+            else if i > index { panic!("Index {} does not point to grapheme boundary", index); }
+
+            // Otherwise, count
+            if c == "\n" { line += 1; col = 0; }
+            else { col += 1; }
+        }
+
+        // Done, return it as a position
+        Position::new0(line, col)
+    }
+
+    /// Returns the start position of this span as a [`Position`].
+    /// 
+    /// # Returns
+    /// A [`Position`] describing the start position in the source text.
+    /// 
+    /// # Panics
+    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `start` does not point at the unicode grapheme boundary.
+    #[inline]
+    #[track_caller]
+    pub fn start(&self) -> Position {
+        // Assert some things
+        assert_range!(self.start, self.end, self.source);
+        self.pos_of(self.start)
+    }
+
+    /// Returns the end position of this span as a [`Position`].
+    /// 
+    /// # Returns
+    /// A [`Position`] describing the end position in the source text.
+    /// 
+    /// # Panics
+    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `end` does not point at the unicode grapheme boundary.
+    #[inline]
+    #[track_caller]
+    pub fn end(&self) -> Position {
+        // Assert some things
+        assert_range!(self.start, self.end, self.source);
+        self.pos_of(self.end)
+    }
+
     /// Returns the text referred by this span.
     /// 
     /// # Returns
@@ -347,17 +407,22 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         // Fetch the start & end lines in the source text
         let mut start : usize = 0;
         let mut lines : Vec<&str> = Vec::with_capacity(1);
-        for (i, c) in self.source.char_indices() {
+        for (i, c) in self.source.grapheme_indices(true) {
             // If it's a newline, then we potentially store and reset
-            if c == '\n' {
+            if c == "\n" {
                 // Check if this line overlaps with the span
                 if self.start < i && self.end >= start {
                     // Note the line (excluding newline)
                     lines.push(&self.source[start..i]);
                 }
                 // Reset
-                start = i;
+                start = i + 1;
             }
+        }
+
+        // If the current start is within the range, then add it as well
+        if self.start < self.source.len() && self.end >= start {
+            lines.push(&self.source[start..]);
         }
 
         // Return the lines
@@ -390,8 +455,6 @@ impl<F, S: Deref<Target = str> + DerefMut> DerefMut for Span<F, S> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target { self.text_mut() }
 }
-
-
 
 impl<F, S> AsRef<Span<F, S>> for Span<F, S> {
     #[inline]
