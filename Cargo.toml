@@ -1,14 +1,10 @@
-[package]
-name = "ast-toolkit"
-version = "0.1.0"
+[workspace]
+members = [
+    "ast-toolkit",
+    "ast-toolkit-derive",
+]
+
+
+[workspace.package]
 edition = "2021"
 authors = [ "Lut99" ]
-description = "A collection of structs and interfaces extremely useful when working with compilers that parse text into ASTs."
-
-
-[dependencies]
-console = "0.15"
-enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
-never-say-never = "6.6.666"
-num-traits = "0.2"
-unicode-segmentation = "1.10"

@@ -1,0 +1,8 @@
+[package]
+name = "ast-toolkit-derive"
+edition = { workspace = true }
+authors = { workspace = true }
+description = "Crate that implements various `#[derive(...)]` macros for the `ast-toolkit` crate."
+
+
+[dependencies]
