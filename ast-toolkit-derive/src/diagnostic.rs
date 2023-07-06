@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    06 Jul 2023, 09:37:49
+//    06 Jul 2023, 18:53:54
 //  Auto updated?
 //    Yes
 // 
@@ -15,9 +15,10 @@
 //!   but rather the [`Into<Diagnostic>`].
 // 
 
+use enum_debug::EnumDebug;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Attribute, Data, Expr, ExprLit, Fields, Generics, Ident, FieldsNamed, FieldsUnnamed, Lit, LitStr, Meta, Token, Visibility};
+use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, FieldsNamed, FieldsUnnamed, Lit, LitStr, Meta, Token, Visibility};
 use syn::__private::Span;
 use syn::parse::ParseBuffer;
 use syn::spanned::Spanned as _;
@@ -60,8 +61,8 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
     let attrs: &[Attribute] = attrs.as_ref();
 
     // Parse the attributes
-    let mut fields: Vec<(FieldAttributes, Span)> = vec![];
-    'attrs: for a in attrs {
+    let mut fields: Vec<FieldAttributes> = vec![];
+    for a in attrs {
         // Examine the meta found
         match &a.meta {
             Meta::List(l) => if l.path.is_ident("diag") {
@@ -101,24 +102,81 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
                         } else {
                             proc_macro_error::Diagnostic::spanned(p.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", p.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
                         },
-
-                        Meta::List(l) => {
-                            proc_macro_error::Diagnostic::spanned(l.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", l.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
-                        },
-
-                        Meta::NameValue(nv) => if nv.path.is_ident("code") {
-                            // Parse the value as a string literal
+                        
+                        Meta::NameValue(nv) => if nv.path.is_ident("message") {
+                            // Parse the value as a string literal or a direct identifier
                             if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.code = Some(s.value());
+                                f.message = Some(StringOrField::String(s.value()));
+                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
+                                f.message = Some(if let Some(path) = path.get_ident() {
+                                    StringOrField::Field(path.clone())
+                                } else {
+                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                    continue;
+                                });
                             } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal".into()).emit();
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                continue;
+                            }
+                        } else if nv.path.is_ident("code") {
+                            // Parse the value as a string literal or a direct identifier
+                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                f.code = Some(StringOrField::String(s.value()));
+                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
+                                f.code = Some(if let Some(path) = path.get_ident() {
+                                    StringOrField::Field(path.clone())
+                                } else {
+                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                    continue;
+                                });
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                continue;
+                            }
+                        } else if nv.path.is_ident("note") {
+                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                f.note = Some(StringOrField::String(s.value()));
+                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
+                                f.note = Some(if let Some(path) = path.get_ident() {
+                                    StringOrField::Field(path.clone())
+                                } else {
+                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                    continue;
+                                });
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                continue;
+                            }
+                        } else if nv.path.is_ident("span") {
+                            if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
+                                f.span = Some(if let Some(path) = path.get_ident() {
+                                    path.to_string()
+                                } else {
+                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected identifier".into()).emit();
+                                    continue;
+                                });
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected identifier".into()).emit();
                                 continue;
                             }
                         } else {
                             proc_macro_error::Diagnostic::spanned(nv.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", nv.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
                         },
+
+                        Meta::List(l) => {
+                            proc_macro_error::Diagnostic::spanned(l.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", l.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
+                        },
                     }
                 }
+
+                // Assert some properties are there
+                if f.kind == DiagnosticKind::Unspecified {
+                    return Err(proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "No diagnostic kind specified".into())
+                        .span_note(span, "Add either 'error', 'warn', 'note' or 'suggestion' to this attribute".into()))
+                }
+
+                // With all the attributes we care about parsed, add it to the list
+                fields.push(f);
             },
 
             // The rest we are not looking for
@@ -127,16 +185,8 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
         }
     }
 
-    // Assert some mandatory fields are there
-    for (f, diag) in &fields {
-        if f.kind == DiagnosticKind::Unspecified {
-            return Err(proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "No diagnostic kind specified".into())
-                .span_note(*diag, "Add either 'error', 'warn', 'note' or 'suggestion' to this attribute".into()))
-        }
-    }
-
     // Done, return the struct
-    Ok(fields.into_iter().map(|(f, _)| f).collect())
+    Ok(fields)
 }
 
 /// Parses a struct or enum body.
@@ -152,6 +202,29 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
 /// # Errors
 /// This function may errors if something about the fields (probably attributes) was invalid.
 fn parse_fields(_tattrs: &ToplevelAttributes, fattrs: Vec<FieldAttributes>, fields: Fields) -> Result<DiagnosticInfo, proc_macro_error::Diagnostic> {
+    // Collect the available fields
+
+    // Iterate over the found attributes
+    for attr in fattrs {
+        // Resolve the message
+        let message: MessageStrategy = if let Some(StringOrField::String(message)) = attr.message {
+            // We take the message as-is
+            MessageStrategy::String(message)
+        } else if let Some(StringOrField::Field(field)) = attr.message {
+            // Return it
+            MessageStrategy::Field(field)
+        } else {
+            // Revert to default; put as Display
+            MessageStrategy::Display
+        };
+
+        // Resolve the code
+        // Resolve the note
+        // Resolve the span
+
+        // OK, done - create the diagnostic info
+    }
+
     // Done, return the info
     Ok(DiagnosticInfo {
         
@@ -185,9 +258,15 @@ impl ToplevelAttributes {
 /// Defines the field-level attributes we like to learn.
 struct FieldAttributes {
     /// The kind of diagnostic we are parsing.
-    kind : DiagnosticKind,
+    kind    : DiagnosticKind,
+    /// The message given by the user.
+    message : Option<StringOrField>,
     /// The code to set, if any.
-    code : Option<String>,
+    code    : Option<StringOrField>,
+    /// The note to set, if any.
+    note    : Option<StringOrField>,
+    /// Any explicit span given by the user, which always refers to a field.
+    span    : Option<String>,
 }
 impl FieldAttributes {
     /// Creates an empty attributes that can be populated as attributes pop up their heads.
@@ -197,14 +276,17 @@ impl FieldAttributes {
     #[inline]
     fn empty() -> Self {
         Self {
-            kind : DiagnosticKind::Unspecified,
-            code : None,
+            kind    : DiagnosticKind::Unspecified,
+            message : None,
+            note    : None,
+            code    : None,
+            span    : None,
         }
     }
 }
 
 /// Defines the possible types of diagnostic we have.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, EnumDebug, Eq, PartialEq)]
 enum DiagnosticKind {
     Error,
     Warn,
@@ -215,6 +297,15 @@ enum DiagnosticKind {
     Unspecified,
 }
 
+/// Defines that a value is either a direct string or that it refers to a field which contains the string.
+#[derive(Clone, Debug, EnumDebug)]
+enum StringOrField {
+    /// It's a literal string
+    String(String),
+    /// It's a field reference
+    Field(Ident),
+}
+
 
 
 /// Defines the information we extract from the body of a struct or enum.
@@ -223,6 +314,17 @@ struct DiagnosticInfo {
 }
 impl DiagnosticInfo {
     
+}
+
+/// Defines the possible strategies for building the `message`-field in a [`Diagnostic`].
+#[derive(Clone, Debug, EnumDebug)]
+enum MessageStrategy {
+    /// We're given a string
+    String(String),
+    /// We're given a field to refer
+    Field(Ident),
+    /// We're given nothing, so we take Display
+    Display,
 }
 
 
