@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    04 Jul 2023, 19:12:21
+//    07 Jul 2023, 09:48:07
 //  Auto updated?
 //    Yes
 // 
@@ -16,3 +16,8 @@
 // Define the submodules
 pub mod span;
 pub mod diagnostic;
+
+
+// Pull the relevant stuff into the global namespace
+pub use span::{Position, Span};
+pub use diagnostic::{Diagnostic, DiagnosticKind};

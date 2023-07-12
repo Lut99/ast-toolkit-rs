@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    06 Jul 2023, 09:29:35
+//    07 Jul 2023, 12:06:04
 //  Auto updated?
 //    Yes
 // 
@@ -27,7 +27,7 @@ pub enum TestError<F, S> {
     #[diag(error, code = "E0001")]
     Test { value: i32, span: Span<F, S> },
     #[diag(error, code = "E0002")]
-    #[diag(note, message = "This has everything to do with something important over here!", span = "note")]
+    #[diag(note, message = "This has everything to do with something important over here!", span = note)]
     TestNote { value: i32, span: Span<F, S>, note: Span<F, S> },
 }
 impl<F, S> Display for TestError<F, S> {

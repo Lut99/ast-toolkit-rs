@@ -13,5 +13,6 @@ proc-macro = true
 [dependencies]
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 proc-macro-error = "1.0"
+rand = "0.8"
 quote = "1.0"
 syn   = { version = "2.0", features = ["derive"] }

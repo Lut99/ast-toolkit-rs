@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    06 Jul 2023, 18:53:54
+//    12 Jul 2023, 18:24:34
 //  Auto updated?
 //    Yes
 // 
@@ -17,14 +17,28 @@
 
 use enum_debug::EnumDebug;
 use proc_macro::TokenStream;
+use rand::Rng as _;
+use rand::distributions::Alphanumeric;
 use quote::quote;
-use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, FieldsNamed, FieldsUnnamed, Lit, LitStr, Meta, Token, Visibility};
+use quote::__private::TokenStream as TokenStream2;
+use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, Lit, Meta, Token, Visibility};
 use syn::__private::Span;
 use syn::parse::ParseBuffer;
 use syn::spanned::Spanned as _;
 
 
 /***** HELPER FUNCTIONS *****/
+/// Generates a random identifier string.
+/// 
+/// # Returns
+/// A string that can be used as a generated identifier name.
+#[inline]
+fn generate_random_identifier() -> String {
+    format!("___{}", rand::thread_rng().sample_iter(Alphanumeric).take(16).map(char::from).collect::<String>())
+}
+
+
+
 /// Extracts the information we want from the toplevel attributes.
 /// 
 /// # Arguments
@@ -36,10 +50,10 @@ use syn::spanned::Spanned as _;
 /// # Errors
 /// This function may errors if the attribute tokens were invalid.
 fn parse_toplevel_attrs(attrs: impl AsRef<[Attribute]>) -> Result<ToplevelAttributes, proc_macro_error::Diagnostic> {
-    let attrs: &[Attribute] = attrs.as_ref();
+    let _attrs: &[Attribute] = attrs.as_ref();
 
     // Parse the attributes
-    let mut toplevel: ToplevelAttributes = ToplevelAttributes::empty();
+    let toplevel: ToplevelAttributes = ToplevelAttributes::empty();
     /* TODO */
 
     // Done, return the struct
@@ -84,7 +98,7 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
                 };
 
                 // Now iterate over them to collect the arguments
-                let mut f: FieldAttributes = FieldAttributes::empty();
+                let mut f: FieldAttributes = FieldAttributes::empty(l.path.span(), l.delimiter.span().open());
                 for a in args {
                     match a {
                         Meta::Path(p) => if p.is_ident("error") {
@@ -147,10 +161,24 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
                                 proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
                                 continue;
                             }
+                        } else if nv.path.is_ident("suggestion") {
+                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                f.suggestion = Some((StringOrField::String(s.value()), nv.path.span()));
+                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
+                                f.suggestion = Some(if let Some(path) = path.get_ident() {
+                                    (StringOrField::Field(path.clone()), nv.path.span())
+                                } else {
+                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                    continue;
+                                });
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
+                                continue;
+                            }
                         } else if nv.path.is_ident("span") {
                             if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
                                 f.span = Some(if let Some(path) = path.get_ident() {
-                                    path.to_string()
+                                    path.clone()
                                 } else {
                                     proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected identifier".into()).emit();
                                     continue;
@@ -192,8 +220,10 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
 /// Parses a struct or enum body.
 /// 
 /// # Arguments
+/// - `fkind`: The kind of fields for which we will be parsing.
 /// - `tattrs`: Any toplevel attributes that we have to take into account.
 /// - `fattrs`: The attributes of the given fields that we should parse. Note that there is one per diagnostic to generate in this chain of diagnostics.
+/// - `variant`: The [`Ident`]ifier of the variant.
 /// - `fields`: The [`Fields`] to parse.
 /// 
 /// # Returns
@@ -201,33 +231,223 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
 /// 
 /// # Errors
 /// This function may errors if something about the fields (probably attributes) was invalid.
-fn parse_fields(_tattrs: &ToplevelAttributes, fattrs: Vec<FieldAttributes>, fields: Fields) -> Result<DiagnosticInfo, proc_macro_error::Diagnostic> {
+fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<FieldAttributes>, variant: Option<Ident>, fields: Fields) -> Result<DiagnosticInfo, proc_macro_error::Diagnostic> {
     // Collect the available fields
+    let fs: Vec<Ident> = if let FieldKind::TupleEnum = fkind {
+        fields.into_iter().map(|f| Ident::new(&generate_random_identifier(), f.ty.span())).collect()
+    } else {
+        fields.into_iter().enumerate().map(|(i, f)| f.ident.unwrap_or_else(|| Ident::new(&i.to_string(), f.ty.span()))).collect()
+    };
 
     // Iterate over the found attributes
+    let mut diag: Option<DiagnosticInfo> = None;
     for attr in fattrs {
         // Resolve the message
-        let message: MessageStrategy = if let Some(StringOrField::String(message)) = attr.message {
-            // We take the message as-is
-            MessageStrategy::String(message)
-        } else if let Some(StringOrField::Field(field)) = attr.message {
-            // Return it
-            MessageStrategy::Field(field)
-        } else {
-            // Revert to default; put as Display
-            MessageStrategy::Display
+        let message: TripleStrategy = match attr.message {
+            Some(StringOrField::String(s)) => TripleStrategy::String(s),
+            Some(StringOrField::Field(f))  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; TripleStrategy::Field(f) },
+            None                           => TripleStrategy::Display,
         };
 
         // Resolve the code
+        let code: Option<DuoStrategy> = match attr.code {
+            Some(StringOrField::String(s)) => Some(DuoStrategy::String(s)),
+            Some(StringOrField::Field(f))  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; Some(DuoStrategy::Field(f)) },
+            None                           => None,
+        };
         // Resolve the note
+        let note: Option<DuoStrategy> = match attr.note {
+            Some(StringOrField::String(s)) => Some(DuoStrategy::String(s)),
+            Some(StringOrField::Field(f))  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; Some(DuoStrategy::Field(f)) },
+            None                           => None,
+        };
+        // Resolve the suggestion
+        let suggestion: Option<DuoStrategy> = match attr.suggestion {
+            Some((suggestion, span)) => if attr.kind == DiagnosticKind::Suggestion {
+                match suggestion {
+                    StringOrField::String(s) => Some(DuoStrategy::String(s)),
+                    StringOrField::Field(f)  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; Some(DuoStrategy::Field(f)) },
+                }
+            } else {
+                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Warning, "`suggestion` field is ignored for non-Suggestion diagnostics".into()).emit();
+                None
+            },
+            None => if attr.kind == DiagnosticKind::Suggestion {
+                // Get the identifier to `span` from the list
+                let full_span: Option<Span> = attr.diag.join(attr.lparen);
+                proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `suggestion`-field defined in struct".into())
+                    .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = \"<message>\"` argument to set the message manually", if full_span.is_some() { "diag(suggestion = \"foo()\", ".into() } else { "(suggestion = \"foo()\", ".into() })
+                    .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(suggestion = foo, ".into() } else { "(suggestion = foo, ".into() })
+                    .emit();
+                continue;
+            } else {
+                None
+            },
+        };
         // Resolve the span
+        let span: Ident = match attr.span {
+            Some(f) => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string())).emit(); continue; }; f },
+            None    => match fs.iter().find(|f| f.to_string() == "span") {
+                Some(f) => f.clone(),
+                None => {
+                    let full_span: Option<Span> = attr.diag.join(attr.lparen);
+                    proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `span`-field defined in struct".into())
+                        .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `span = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(span = foo, ".into() } else { "(span = foo, ".into() })
+                        .emit();
+                    continue;
+                },
+            },
+        };
 
-        // OK, done - create the diagnostic info
+        // OK - create the diagnostic info
+        let mut new_diag: DiagnosticInfo = DiagnosticInfo {
+            variant : variant.clone().map(|v| (v, fs.clone())),
+
+            kind : attr.kind,
+            message,
+            code,
+            note,
+            suggestion,
+            span,
+
+            sub : vec![],
+        };
+
+        // Now, let us potentially rewrite the tokens if we're a tuple enum variant
+        if let FieldKind::TupleEnum = fkind {
+            if let TripleStrategy::Field(f) = &mut new_diag.message {
+                // Extract the name as an index
+                let i: usize = match usize::from_str_radix("", 10) {
+                    Ok(i) => i,
+                    Err(_) => { proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, "Given field name is not a tuple index (i.e., a number)".into()).emit(); continue; },
+                };
+
+                // Get the matching identifier
+                *f = match fs.iter().nth(i) {
+                    Some(f) => f.clone(),
+                    None => { proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{i}` does not refer to an existing field")).emit(); continue; },
+                };
+            }
+        }
+
+        // We can push it to the better diags
+        if let Some(diag) = &mut diag {
+            diag.sub.push(new_diag);
+        } else {
+            diag = Some(new_diag);
+        }
     }
 
     // Done, return the info
-    Ok(DiagnosticInfo {
-        
+    // SAFETY: We can unwrap without checking here because we already assert that `fields` is not empty when calling this function
+    Ok(diag.unwrap())
+}
+
+/// Generates the construction logic for a single [`DiagnosticInfo`].
+/// 
+/// # Arguments
+/// - `kind`: The [`FieldKind`] that describes for what type of field we are generating. This can be a named struct, tuple struct, named enum variant or tuple enum variant.
+/// - `info`: The [`DiagnosticInfo`] that represents the information we need to build the constructor of a single struct/variant.
+/// 
+/// # Returns
+/// A tuple with the variant for which constructor is created (if any), the fields necessary to build this kind and the [`TokenStream`] with generated code for the constructor.
+fn generate_constructor(fkind: FieldKind, info: DiagnosticInfo) -> (Option<(Ident, Vec<Ident>)>, TokenStream2) {
+    // Unwrap the diagnostic info
+    let DiagnosticInfo { variant, kind, message, code, note, suggestion, span, sub } = info;
+
+    // Resolve the strategies
+    let message: TokenStream2 = match message {
+        TripleStrategy::String(s) => quote! { #s },
+        TripleStrategy::Field(f) => match fkind {
+            FieldKind::NamedStruct |
+            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::NamedEnum   |
+            FieldKind::TupleEnum   => quote! { #f },
+        },
+        TripleStrategy::Display => quote! { format!("{value}") },
+    };
+    // let message: TokenStream2 = quote!{ "Hello there!" };
+    let code: Option<TokenStream2> = code.map(|code| match code {
+        DuoStrategy::String(s) => quote! { #s },
+        DuoStrategy::Field(f) => match fkind {
+            FieldKind::NamedStruct |
+            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::NamedEnum   |
+            FieldKind::TupleEnum   => quote! { #f },
+        },
+    });
+    // let code: Option<TokenStream2> = None;
+    let note: Option<TokenStream2> = note.map(|note| match note {
+        DuoStrategy::String(s) => quote! { #s },
+        DuoStrategy::Field(f) => match fkind {
+            FieldKind::NamedStruct |
+            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::NamedEnum   |
+            FieldKind::TupleEnum   => quote! { #f },
+        },
+    });
+    // let note: Option<TokenStream2> = None;
+    let suggestion: Option<TokenStream2> = suggestion.map(|suggestion| match suggestion {
+        DuoStrategy::String(s) => quote! { #s },
+        DuoStrategy::Field(f) => match fkind {
+            FieldKind::NamedStruct |
+            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::NamedEnum   |
+            FieldKind::TupleEnum   => quote! { #f },
+        },
+    });
+    // let suggestion: Option<TokenStream2> = suggestion.map(|_| quote!{ "Code" });
+
+    // Construct the constructor!
+    let main: TokenStream2 = match kind {
+        DiagnosticKind::Error => quote! {
+            ::ast_toolkit::diagnostic::Diagnostic::error(
+                #message,
+                value.#span,
+            )
+            // #[.set_code(#code)]?
+            // #[.set_note(#note)]?
+        },
+
+        DiagnosticKind::Warn => quote! {
+            ::ast_toolkit::diagnostic::Diagnostic::warn(
+                #message,
+                value.#span,
+            )
+            // #[.set_code(#code)]?
+            // #[.set_note(#note)]?
+        },
+
+        DiagnosticKind::Note => quote! {
+            ::ast_toolkit::diagnostic::Diagnostic::note(
+                #message,
+                value.#span,
+            )
+            // #[.set_code(#code)]?
+            // #[.set_note(#note)]?
+        },
+
+        DiagnosticKind::Suggestion => {
+            let suggestion: TokenStream2 = suggestion.expect("Suggestion was not given in a suggestion diagnostic; this should never happen!");
+            quote! {
+                ::ast_toolkit::diagnostic::Diagnostic::suggestion(
+                    #message,
+                    value.#span,
+                    #suggestion,
+                )
+                // #[.set_code(#code)]?
+                // #[.set_note(#note)]?
+            }
+        },
+
+        DiagnosticKind::Unspecified => { unreachable!(); },
+    };
+
+    // Next up, push additional diagnostics (recursively) and that's it!
+    let sub: Vec<TokenStream2> = sub.into_iter().map(|i| generate_constructor(fkind, i).1).collect();
+    (variant, quote! {
+        #main
+        #(.add(#sub);)*
     })
 }
 
@@ -236,6 +456,17 @@ fn parse_fields(_tattrs: &ToplevelAttributes, fattrs: Vec<FieldAttributes>, fiel
 
 
 /***** HELPERS *****/
+/// Defines what kind of field we can be generating for.
+#[derive(Clone, Copy, Debug, EnumDebug, Eq, PartialEq)]
+enum FieldKind {
+    NamedStruct,
+    TupleStruct,
+    NamedEnum,
+    TupleEnum,
+}
+
+
+
 /// Defines the toplevel attributes we like to learn.
 struct ToplevelAttributes {
     
@@ -257,30 +488,45 @@ impl ToplevelAttributes {
 
 /// Defines the field-level attributes we like to learn.
 struct FieldAttributes {
+    /// The span of the 'diag' token.
+    diag   : Span,
+    /// The span of the left parenthesis following the diag.
+    lparen : Span,
+
     /// The kind of diagnostic we are parsing.
-    kind    : DiagnosticKind,
+    kind       : DiagnosticKind,
     /// The message given by the user.
-    message : Option<StringOrField>,
+    message    : Option<StringOrField>,
     /// The code to set, if any.
-    code    : Option<StringOrField>,
+    code       : Option<StringOrField>,
     /// The note to set, if any.
-    note    : Option<StringOrField>,
+    note       : Option<StringOrField>,
+    /// The suggestion to give, if any.
+    suggestion : Option<(StringOrField, Span)>,
     /// Any explicit span given by the user, which always refers to a field.
-    span    : Option<String>,
+    span       : Option<Ident>,
 }
 impl FieldAttributes {
     /// Creates an empty attributes that can be populated as attributes pop up their heads.
     /// 
+    /// # Arguments
+    /// - `diag`: The [`Span`] of the `diag` token in `#[diag(...)]`.
+    /// - `lparen`: The [`Span`] of the left parenthesis token in `#[diag(...)]`.
+    /// 
     /// # Returns
     /// A new instance of Self with everything initialized to default.
     #[inline]
-    fn empty() -> Self {
+    fn empty(diag: Span, lparen: Span) -> Self {
         Self {
-            kind    : DiagnosticKind::Unspecified,
-            message : None,
-            note    : None,
-            code    : None,
-            span    : None,
+            diag,
+            lparen,
+
+            kind       : DiagnosticKind::Unspecified,
+            message    : None,
+            note       : None,
+            code       : None,
+            suggestion : None,
+            span       : None,
         }
     }
 }
@@ -310,21 +556,44 @@ enum StringOrField {
 
 /// Defines the information we extract from the body of a struct or enum.
 struct DiagnosticInfo {
-    
-}
-impl DiagnosticInfo {
-    
+    /// Contains the identifier of the variant and the fields for which this diagnostic holds, if any.
+    variant : Option<(Ident, Vec<Ident>)>,
+
+    /// The kind of diagnostic we are parsing.
+    kind       : DiagnosticKind,
+    /// The message given by the user.
+    message    : TripleStrategy,
+    /// The code to set, if any.
+    code       : Option<DuoStrategy>,
+    /// The note to set, if any.
+    note       : Option<DuoStrategy>,
+    /// The suggestion to give, if any. Is guaranteed to be `None` if `kind` is _not_ a [`DiagnosticKind::Suggestion`].
+    suggestion : Option<DuoStrategy>,
+    /// Any explicit span given by the user, which always refers to a field.
+    span       : Ident,
+
+    /// Any nested diagnostics
+    sub : Vec<Self>,
 }
 
 /// Defines the possible strategies for building the `message`-field in a [`Diagnostic`].
 #[derive(Clone, Debug, EnumDebug)]
-enum MessageStrategy {
+enum TripleStrategy {
     /// We're given a string
     String(String),
     /// We're given a field to refer
     Field(Ident),
     /// We're given nothing, so we take Display
     Display,
+}
+
+/// Defines the possible strategies for building certain fields in a [`Diagnostic`].
+#[derive(Clone, Debug, EnumDebug)]
+enum DuoStrategy {
+    /// We're given a string
+    String(String),
+    /// We're given a field to refer
+    Field(Ident),
 }
 
 
@@ -343,15 +612,16 @@ enum MessageStrategy {
 /// 
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, vis: Visibility) -> Result<TokenStream, proc_macro_error::Diagnostic> {
+pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, proc_macro_error::Diagnostic> {
     // Read the given struct and extract _everything_ we need
-    let diags: Vec<DiagnosticInfo> = match data {
+    let is_struct: bool = matches!(data, Data::Struct(_));
+    let mut diags: Vec<(FieldKind, DiagnosticInfo)> = match data {
         Data::Struct(s) => {
             // Assert the type of variant (struct, tuple or unit) is supported
-            match s.fields {
+            let fkind: FieldKind = match s.fields {
                 // These are supported
-                Fields::Named(_)   |
-                Fields::Unnamed(_) => {},
+                Fields::Named(_)   => FieldKind::NamedStruct,
+                Fields::Unnamed(_) => FieldKind::TupleStruct,
 
                 // The other cases are also unsupported
                 Fields::Unit => { return Err(proc_macro_error::Diagnostic::spanned(ident.span(), proc_macro_error::Level::Error, "Cannot derive a Diagnostic on a struct without fields".into())); },
@@ -362,38 +632,44 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
             // Derive the field-level attributes
             let fattrs: Vec<FieldAttributes> = parse_field_attrs(attrs, ident.span())?;
             if fattrs.is_empty() {
-                return Err(proc_macro_error::Diagnostic::spanned(ident.span(), proc_macro_error::Level::Error, "Missing '#[diag(...)]' attribute on struct".into()));
+                return Err(proc_macro_error::Diagnostic::spanned(ident.span(), proc_macro_error::Level::Error, "Missing `#[diag(...)]` attribute on struct".into()));
             };
             // Then extract the attributes of the diag itself (which are the same attributes)
-            let info: DiagnosticInfo = parse_fields(&tattrs, fattrs, s.fields)?;
+            let info: DiagnosticInfo = parse_fields(fkind, &tattrs, fattrs, None, s.fields)?;
 
             // Done!
-            vec![ info ]
+            vec![ (fkind, info) ]
         },
         Data::Enum(e) => {
             // The rest is field-specific, so we can parse toplevel attributes already
             let tattrs: ToplevelAttributes = parse_toplevel_attrs(attrs)?;
 
             // Iterate over the existing variants
-            let mut diags: Vec<DiagnosticInfo> = Vec::with_capacity(e.variants.len());
+            let mut diags: Vec<(FieldKind, DiagnosticInfo)> = Vec::with_capacity(e.variants.len());
             for v in e.variants {
                 // Assert the type of variant (struct, tuple or unit) is supported
-                match v.fields {
+                let fkind: FieldKind = match v.fields {
                     // These are supported
-                    Fields::Named(_)   |
-                    Fields::Unnamed(_) => {},
+                    Fields::Named(_)   => FieldKind::NamedEnum,
+                    Fields::Unnamed(_) => FieldKind::TupleEnum,
 
                     // These are unsupported
-                    Fields::Unit => { return Err(proc_macro_error::Diagnostic::spanned(v.ident.span(), proc_macro_error::Level::Error, "Cannot derive a Diagnostic on an enum variant without fields".into())); },
-                }
+                    Fields::Unit => { proc_macro_error::Diagnostic::spanned(v.ident.span(), proc_macro_error::Level::Error, "Cannot derive a Diagnostic on an enum variant without fields".into()).emit(); continue; },
+                };
 
                 // Parse the field attributes, then the general thing
-                let fattrs: Vec<FieldAttributes> = parse_field_attrs(v.attrs, v.ident.span())?;
+                let fattrs: Vec<FieldAttributes> = match parse_field_attrs(v.attrs, v.ident.span()) {
+                    Ok(attrs) => attrs,
+                    Err(err)  => { err.emit(); continue; }
+                };
                 if fattrs.is_empty() { continue; }
-                let info: DiagnosticInfo = parse_fields(&tattrs, fattrs, v.fields)?;
+                let info: DiagnosticInfo = match parse_fields(fkind, &tattrs, fattrs, Some(v.ident), v.fields) {
+                    Ok(attrs) => attrs,
+                    Err(err)  => { err.emit(); continue; }
+                };
 
                 // Ok, add that and continue
-                diags.push(info);
+                diags.push((fkind, info));
             }
 
             // Done
@@ -406,6 +682,62 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
     // Assert we found at least one
     if diags.is_empty() { return Err(proc_macro_error::Diagnostic::spanned(ident.span(), proc_macro_error::Level::Error, "No '#[diag(...)]' attribute occurs on any of the enum fields".into())) }
 
-    // Done!
-    Ok(quote!{}.into())
+    // Now generate the construction function for this one
+    let construct: TokenStream2 = if is_struct {
+        // It's a struct
+        let (fkind, diag) = diags.swap_remove(0);
+        // NOTE: No variant/fields are required here, since it's all accessed through `self`.
+        generate_constructor(fkind, diag).1
+    } else {
+        // It's an enum
+
+        // Build all of the individual constructors first
+        let mut variants: Vec<TokenStream2> = Vec::with_capacity(diags.len());
+        for (fkind, info) in diags {
+            // Get the constructor
+            let (variant, code): (Option<(Ident, Vec<Ident>)>, TokenStream2) = generate_constructor(fkind, info);
+
+            // Generate the match for the variant
+            let (name, fields): (Ident, Vec<Ident>) = variant.unwrap();
+            match fkind {
+                FieldKind::NamedEnum => {
+                    variants.push(quote! {
+                        #ident::#name{ #(#fields),* } => { #code },
+                    });
+                },
+                FieldKind::TupleEnum => {
+                    variants.push(quote! {
+                        #ident::#name( #(#fields),* ) => { #code },
+                    });
+                },
+                _ => { panic!("Cannot be generating code for an enum while FieldKind is {:?}!", fkind.variant()); },
+            }
+        }
+
+        // Wrap that in a big match, one for every variant
+        quote!{
+            match value {
+                #(#variants)*
+                _ => { panic!("Cannot call Into<Diagnostic> for unspecified enum variant"); },
+            }
+        }
+    };
+
+    // Finally, generate the implementation
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
+    Ok(quote! {
+        impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
+            #[inline]
+            fn from(value: #ident #type_generics) -> Self { Self::from(&value) }
+        }
+        impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
+            fn from(value: &#ident #type_generics) -> Self {
+                #construct
+            }
+        }
+        impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
+            #[inline]
+            fn from(value: &mut #ident #type_generics) -> Self { Self::from(&*value) }
+        }
+    }.into())
 }
