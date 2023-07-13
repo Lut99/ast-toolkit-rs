@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    05 Jul 2023, 12:07:00
+//    13 Jul 2023, 11:50:01
 //  Auto updated?
 //    Yes
 // 
@@ -351,7 +351,7 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
                 let lines: Vec<String> = source.split('\n').map(|s| s.into()).collect();
 
                 // Now get the adapted start and end and return
-                let (start, end): (Position, Position) = (self.span.start(), self.span.pos_of(self.span.start + suggestion.graphemes(true).count()));
+                let (start, end): (Position, Position) = (self.span.start(), self.span.pos_of(self.span.start + suggestion.graphemes(true).map(|c| c.len()).sum::<usize>() - 1));
                 ("suggestion", Style::new().cyan().bold(), lines, start, end)
             },
         };

@@ -17,4 +17,5 @@ ast-toolkit-derive = { path = "../ast-toolkit-derive", optional = true }
 
 
 [features]
+default = [ "derive" ]
 derive = [ "dep:ast-toolkit-derive" ]

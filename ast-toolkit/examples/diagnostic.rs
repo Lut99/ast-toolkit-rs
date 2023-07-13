@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 11:20:29
 //  Last edited:
-//    05 Jul 2023, 12:07:57
+//    13 Jul 2023, 11:41:31
 //  Auto updated?
 //    Yes
 // 
@@ -27,8 +27,14 @@ fn main() {
     Diagnostic::error("A commonly occurring error", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0))
         .set_code("E001")
         .emit();
+    Diagnostic::error("A commonly occurring error but runtime-dependent", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0))
+        .set_code(format!("E00{}", 2))
+        .emit();
     Diagnostic::warn("A specific warning", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34))
         .set_note("`#[warn(last_char)]` is enabled by default")
+        .emit();
+    Diagnostic::warn("A specific warning but runtime-dependent", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34))
+        .set_note(format!("`#[warn({})]` is enabled by default", "runtime_error"))
         .emit();
 
     // Warnings, notes
@@ -37,6 +43,7 @@ fn main() {
 
     // Some suggestion
     Diagnostic::suggestion("A suggestion to replace 'TEXT' with 'text'", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22), "text").emit();
+    Diagnostic::suggestion("A suggestion to replace 'TEXT' with a runtime-dependent value", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22), format!("text {}", 2)).emit();
 
     // Chain a few
     Diagnostic::error("Invalid identifier 'SOURCE'", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5))

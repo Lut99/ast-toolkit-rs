@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    12 Jul 2023, 18:24:34
+//    13 Jul 2023, 11:47:40
 //  Auto updated?
 //    Yes
 // 
@@ -17,12 +17,11 @@
 
 use enum_debug::EnumDebug;
 use proc_macro::TokenStream;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
-use quote::quote;
-use quote::__private::TokenStream as TokenStream2;
+use quote::{quote, quote_spanned};
 use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, Lit, Meta, Token, Visibility};
-use syn::__private::Span;
 use syn::parse::ParseBuffer;
 use syn::spanned::Spanned as _;
 
@@ -50,11 +49,69 @@ fn generate_random_identifier() -> String {
 /// # Errors
 /// This function may errors if the attribute tokens were invalid.
 fn parse_toplevel_attrs(attrs: impl AsRef<[Attribute]>) -> Result<ToplevelAttributes, proc_macro_error::Diagnostic> {
-    let _attrs: &[Attribute] = attrs.as_ref();
+    let attrs: &[Attribute] = attrs.as_ref();
 
     // Parse the attributes
-    let toplevel: ToplevelAttributes = ToplevelAttributes::empty();
-    /* TODO */
+    let mut toplevel: ToplevelAttributes = ToplevelAttributes::empty();
+    for a in attrs {
+        // Examine the meta found
+        match &a.meta {
+            Meta::List(l) => if l.path.is_ident("diagnostic") {
+                // Attempt to parse its arguments as a comma-separated list of more metas
+                let args: Vec<Meta> = match l.parse_args_with(|buffer: &ParseBuffer| {
+                    // Repeatedly parsed metas separated by commands
+                    let mut metas: Vec<Meta> = vec![ buffer.parse()? ];
+                    while !buffer.is_empty() {
+                        // Parse a comma then a meta
+                        buffer.parse::<Token!(,)>()?;
+                        metas.push(buffer.parse()?);
+                    }
+                    Ok(metas)
+                }) {
+                    Ok(args) => args,
+                    Err(err) => { return Err(proc_macro_error::Diagnostic::spanned(l.tokens.span(), proc_macro_error::Level::Error, "Failed to parse struct/enum arguments".into()).span_error(err.span(), err.to_string())); },
+                };
+
+                // Now iterate over them to collect the arguments
+                for a in args {
+                    match a {
+                        Meta::NameValue(nv) => if nv.path.is_ident("generics") {
+                            // Get the string value given
+                            let span: Span = nv.value.span();
+                            let generics: String = if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                s.value()
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal".into()).emit();
+                                continue;
+                            };
+
+                            // Parse it as the contents of a generics
+                            toplevel.generics = match generics.parse::<TokenStream2>() {
+                                Ok(generics) => quote_spanned!(span => #generics),
+                                Err(err) => {
+                                    proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, format!("Failed to parse as valid Rust tokens: {err}")).emit();
+                                    continue;
+                                },
+                            };
+                        } else {
+                            proc_macro_error::Diagnostic::spanned(nv.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diagnostic(...)]'", nv.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
+                        },
+
+                        Meta::Path(p) => {
+                            proc_macro_error::Diagnostic::spanned(p.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diagnostic(...)]'", p.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
+                        },
+                        Meta::List(l) => {
+                            proc_macro_error::Diagnostic::spanned(l.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diagnostic(...)]'", l.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit()
+                        },
+                    }
+                }
+            },
+
+            // The rest we are not looking for
+            Meta::Path(_)      |
+            Meta::NameValue(_) => {},
+        }
+    }
 
     // Done, return the struct
     Ok(toplevel)
@@ -80,7 +137,7 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
         // Examine the meta found
         match &a.meta {
             Meta::List(l) => if l.path.is_ident("diag") {
-                // It's the diagnostic we are looking for *jedi handwaving
+                // It's the diagnostic we are looking for *jedi handwaving*
 
                 // Attempt to parse its arguments as a comma-separated list of more metas
                 let args: Vec<Meta> = match l.parse_args_with(|buffer: &ParseBuffer| {
@@ -273,13 +330,16 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
                 None
             },
             None => if attr.kind == DiagnosticKind::Suggestion {
-                // Get the identifier to `span` from the list
-                let full_span: Option<Span> = attr.diag.join(attr.lparen);
-                proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `suggestion`-field defined in struct".into())
-                    .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = \"<message>\"` argument to set the message manually", if full_span.is_some() { "diag(suggestion = \"foo()\", ".into() } else { "(suggestion = \"foo()\", ".into() })
-                    .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(suggestion = foo, ".into() } else { "(suggestion = foo, ".into() })
-                    .emit();
-                continue;
+                // See if there is an identifier to set
+                match fs.iter().find(|f| f.to_string() == "suggestion") {
+                    Some(f) => Some(DuoStrategy::Field(f.clone())),
+                    None => {
+                        let full_span: Option<Span> = attr.diag.join(attr.lparen);
+                        return Err(proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `suggestion`-field defined in struct".into())
+                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = \"<message>\"` argument to set the message manually", if full_span.is_some() { "diag(suggestion = \"foo()\", ".into() } else { "(suggestion = \"foo()\", ".into() })
+                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(suggestion = foo, ".into() } else { "(suggestion = foo, ".into() }));
+                    }
+                }
             } else {
                 None
             },
@@ -291,10 +351,8 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
                 Some(f) => f.clone(),
                 None => {
                     let full_span: Option<Span> = attr.diag.join(attr.lparen);
-                    proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `span`-field defined in struct".into())
-                        .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `span = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(span = foo, ".into() } else { "(span = foo, ".into() })
-                        .emit();
-                    continue;
+                    return Err(proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `span`-field defined in struct".into())
+                        .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `span = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(span = foo, ".into() } else { "(span = foo, ".into() }));
                 },
             },
         };
@@ -347,84 +405,99 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
 /// 
 /// # Arguments
 /// - `kind`: The [`FieldKind`] that describes for what type of field we are generating. This can be a named struct, tuple struct, named enum variant or tuple enum variant.
+/// - `value`: The [`Ident`]ifier that we use to refer to the would-be-called `value`-field in the [`From`].
 /// - `info`: The [`DiagnosticInfo`] that represents the information we need to build the constructor of a single struct/variant.
 /// 
 /// # Returns
 /// A tuple with the variant for which constructor is created (if any), the fields necessary to build this kind and the [`TokenStream`] with generated code for the constructor.
-fn generate_constructor(fkind: FieldKind, info: DiagnosticInfo) -> (Option<(Ident, Vec<Ident>)>, TokenStream2) {
+fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -> (Option<(Ident, Vec<Ident>)>, TokenStream2) {
     // Unwrap the diagnostic info
     let DiagnosticInfo { variant, kind, message, code, note, suggestion, span, sub } = info;
 
     // Resolve the strategies
     let message: TokenStream2 = match message {
-        TripleStrategy::String(s) => quote! { #s },
+        TripleStrategy::String(s) => quote! { format!(#s) },
         TripleStrategy::Field(f) => match fkind {
             FieldKind::NamedStruct |
-            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::TupleStruct => quote! { &#value.#f },
             FieldKind::NamedEnum   |
             FieldKind::TupleEnum   => quote! { #f },
         },
-        TripleStrategy::Display => quote! { format!("{value}") },
+        TripleStrategy::Display => { let sfmt: String = format!("{{{value}}}"); quote! { format!(#sfmt) } },
     };
     // let message: TokenStream2 = quote!{ "Hello there!" };
-    let code: Option<TokenStream2> = code.map(|code| match code {
-        DuoStrategy::String(s) => quote! { #s },
-        DuoStrategy::Field(f) => match fkind {
-            FieldKind::NamedStruct |
-            FieldKind::TupleStruct => quote! { &value.#f },
-            FieldKind::NamedEnum   |
-            FieldKind::TupleEnum   => quote! { #f },
-        },
-    });
+    let code: Vec<TokenStream2> = if let Some(code) = code {
+        match code {
+            DuoStrategy::String(s) => vec![ quote! { format!(#s) } ],
+            DuoStrategy::Field(f) => match fkind {
+                FieldKind::NamedStruct |
+                FieldKind::TupleStruct => vec![ quote! { &#value.#f } ],
+                FieldKind::NamedEnum   |
+                FieldKind::TupleEnum   => vec![ quote! { #f } ],
+            },
+        }
+    } else {
+        vec![]
+    };
     // let code: Option<TokenStream2> = None;
-    let note: Option<TokenStream2> = note.map(|note| match note {
-        DuoStrategy::String(s) => quote! { #s },
-        DuoStrategy::Field(f) => match fkind {
-            FieldKind::NamedStruct |
-            FieldKind::TupleStruct => quote! { &value.#f },
-            FieldKind::NamedEnum   |
-            FieldKind::TupleEnum   => quote! { #f },
-        },
-    });
+    let note: Vec<TokenStream2> = if let Some(note) = note {
+        match note {
+            DuoStrategy::String(s) => vec![ quote! { format!(#s) } ],
+            DuoStrategy::Field(f) => match fkind {
+                FieldKind::NamedStruct |
+                FieldKind::TupleStruct => vec![ quote! { &#value.#f } ],
+                FieldKind::NamedEnum   |
+                FieldKind::TupleEnum   => vec![ quote! { #f } ],
+            },
+        }
+    } else {
+        vec![]
+    };
     // let note: Option<TokenStream2> = None;
     let suggestion: Option<TokenStream2> = suggestion.map(|suggestion| match suggestion {
-        DuoStrategy::String(s) => quote! { #s },
+        DuoStrategy::String(s) => quote! { format!(#s) },
         DuoStrategy::Field(f) => match fkind {
             FieldKind::NamedStruct |
-            FieldKind::TupleStruct => quote! { &value.#f },
+            FieldKind::TupleStruct => quote! { &#value.#f },
             FieldKind::NamedEnum   |
             FieldKind::TupleEnum   => quote! { #f },
         },
     });
     // let suggestion: Option<TokenStream2> = suggestion.map(|_| quote!{ "Code" });
+    let span: TokenStream2 = match fkind {
+        FieldKind::NamedStruct |
+        FieldKind::TupleStruct => quote! { &#value.#span },
+        FieldKind::NamedEnum   |
+        FieldKind::TupleEnum   => quote! { #span },
+    };
 
     // Construct the constructor!
     let main: TokenStream2 = match kind {
         DiagnosticKind::Error => quote! {
             ::ast_toolkit::diagnostic::Diagnostic::error(
                 #message,
-                value.#span,
+                #span,
             )
-            // #[.set_code(#code)]?
-            // #[.set_note(#note)]?
+            #(.set_code(#code))*
+            #(.set_note(#note))*
         },
 
         DiagnosticKind::Warn => quote! {
             ::ast_toolkit::diagnostic::Diagnostic::warn(
                 #message,
-                value.#span,
+                #span,
             )
-            // #[.set_code(#code)]?
-            // #[.set_note(#note)]?
+            #(.set_code(#code))*
+            #(.set_note(#note))*
         },
 
         DiagnosticKind::Note => quote! {
             ::ast_toolkit::diagnostic::Diagnostic::note(
                 #message,
-                value.#span,
+                #span,
             )
-            // #[.set_code(#code)]?
-            // #[.set_note(#note)]?
+            #(.set_code(#code))*
+            #(.set_note(#note))*
         },
 
         DiagnosticKind::Suggestion => {
@@ -432,11 +505,11 @@ fn generate_constructor(fkind: FieldKind, info: DiagnosticInfo) -> (Option<(Iden
             quote! {
                 ::ast_toolkit::diagnostic::Diagnostic::suggestion(
                     #message,
-                    value.#span,
+                    #span,
                     #suggestion,
                 )
-                // #[.set_code(#code)]?
-                // #[.set_note(#note)]?
+                #(.set_code(#code))*
+                #(.set_note(#note))*
             }
         },
 
@@ -444,10 +517,10 @@ fn generate_constructor(fkind: FieldKind, info: DiagnosticInfo) -> (Option<(Iden
     };
 
     // Next up, push additional diagnostics (recursively) and that's it!
-    let sub: Vec<TokenStream2> = sub.into_iter().map(|i| generate_constructor(fkind, i).1).collect();
+    let sub: Vec<TokenStream2> = sub.into_iter().map(|i| generate_constructor(fkind, value, i).1).collect();
     (variant, quote! {
         #main
-        #(.add(#sub);)*
+        #(.add(#sub))*
     })
 }
 
@@ -469,7 +542,8 @@ enum FieldKind {
 
 /// Defines the toplevel attributes we like to learn.
 struct ToplevelAttributes {
-    
+    /// The generics to use for `F` and `S`, respectively.
+    generics : TokenStream2,
 }
 impl ToplevelAttributes {
     /// Creates an empty instance that can be populated as attributes pop up their heads.
@@ -479,7 +553,7 @@ impl ToplevelAttributes {
     #[inline]
     fn empty() -> Self {
         Self {
-            
+            generics : quote!{ <F, S> },
         }
     }
 }
@@ -615,7 +689,7 @@ enum DuoStrategy {
 pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, proc_macro_error::Diagnostic> {
     // Read the given struct and extract _everything_ we need
     let is_struct: bool = matches!(data, Data::Struct(_));
-    let mut diags: Vec<(FieldKind, DiagnosticInfo)> = match data {
+    let (top_attrs, mut diags): (ToplevelAttributes, Vec<(FieldKind, DiagnosticInfo)>) = match data {
         Data::Struct(s) => {
             // Assert the type of variant (struct, tuple or unit) is supported
             let fkind: FieldKind = match s.fields {
@@ -638,7 +712,7 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
             let info: DiagnosticInfo = parse_fields(fkind, &tattrs, fattrs, None, s.fields)?;
 
             // Done!
-            vec![ (fkind, info) ]
+            (tattrs, vec![ (fkind, info) ])
         },
         Data::Enum(e) => {
             // The rest is field-specific, so we can parse toplevel attributes already
@@ -673,7 +747,7 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
             }
 
             // Done
-            diags
+            (tattrs, diags)
         },
 
         // Not supported
@@ -683,11 +757,12 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
     if diags.is_empty() { return Err(proc_macro_error::Diagnostic::spanned(ident.span(), proc_macro_error::Level::Error, "No '#[diag(...)]' attribute occurs on any of the enum fields".into())) }
 
     // Now generate the construction function for this one
+    let value_ident: Ident = Ident::new(&generate_random_identifier(), Span::call_site());
     let construct: TokenStream2 = if is_struct {
         // It's a struct
         let (fkind, diag) = diags.swap_remove(0);
         // NOTE: No variant/fields are required here, since it's all accessed through `self`.
-        generate_constructor(fkind, diag).1
+        generate_constructor(fkind, &value_ident, diag).1
     } else {
         // It's an enum
 
@@ -695,7 +770,7 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
         let mut variants: Vec<TokenStream2> = Vec::with_capacity(diags.len());
         for (fkind, info) in diags {
             // Get the constructor
-            let (variant, code): (Option<(Ident, Vec<Ident>)>, TokenStream2) = generate_constructor(fkind, info);
+            let (variant, code): (Option<(Ident, Vec<Ident>)>, TokenStream2) = generate_constructor(fkind, &value_ident, info);
 
             // Generate the match for the variant
             let (name, fields): (Ident, Vec<Ident>) = variant.unwrap();
@@ -716,7 +791,7 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
 
         // Wrap that in a big match, one for every variant
         quote!{
-            match value {
+            match #value_ident {
                 #(#variants)*
                 _ => { panic!("Cannot call Into<Diagnostic> for unspecified enum variant"); },
             }
@@ -725,17 +800,22 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
 
     // Finally, generate the implementation
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
+    let diag_generics = top_attrs.generics;
     Ok(quote! {
-        impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
+        #[automatically_derived]
+        impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {
             #[inline]
             fn from(value: #ident #type_generics) -> Self { Self::from(&value) }
         }
-        impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
-            fn from(value: &#ident #type_generics) -> Self {
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {
+            fn from(#value_ident: &#ident #type_generics) -> Self {
                 #construct
             }
         }
-        impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<&str, &str> #where_clause {
+        #[automatically_derived]
+        impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {
             #[inline]
             fn from(value: &mut #ident #type_generics) -> Self { Self::from(&*value) }
         }
