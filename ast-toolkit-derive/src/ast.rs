@@ -4,7 +4,7 @@
 //  Created:
 //    13 Jul 2023, 12:24:09
 //  Last edited:
-//    13 Jul 2023, 12:25:50
+//    15 Jul 2023, 13:01:56
 //  Auto updated?
 //    Yes
 // 
@@ -15,7 +15,26 @@
 // 
 
 use proc_macro::TokenStream;
-use proc_macro_error::Diagnostic;
+use proc_macro_error::{Diagnostic, Level};
+use quote::quote;
+use syn::{parse, Data};
+use syn::parse::Parse;
+
+
+/***** DEFINITIONS *****/
+/// Defines the input layout of the macro.
+struct AstInput {
+    
+}
+
+impl Parse for AstInput {
+    fn parse(input: parse::ParseStream) -> syn::Result<Self> {
+        Ok(AstInput {  })
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -30,5 +49,12 @@ use proc_macro_error::Diagnostic;
 /// # Errors
 /// This function may error if the input tokenstream was not valid for the macro.
 pub fn handle(input: TokenStream) -> Result<TokenStream, Diagnostic> {
-    Ok(input)
+    // Let us parse the input
+    let input: AstInput = match parse::<AstInput>(input) {
+        Ok(input) => input,
+        Err(err)  => { return Ok(TokenStream::from(err.to_compile_error())); }
+    };
+
+    // The quote to run
+    Ok(quote!{}.into())
 }
