@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    13 Jul 2023, 11:50:01
+//    16 Jul 2023, 12:13:42
 //  Auto updated?
 //    Yes
 // 
@@ -24,17 +24,82 @@ use unicode_segmentation::UnicodeSegmentation as _;
 use crate::span::{Position, Span};
 
 
+/***** HELPERS *****/
+/// Defines the specific attributes for certain kinds of diagnostic.
+#[derive(Clone, Debug, EnumDebug)]
+enum DiagnosticSpecific {
+    /// A typical error
+    Error,
+    /// A typical warning
+    Warning,
+    /// A typical note
+    Note,
+    /// A suggestion.
+    Suggestion {
+        /// Provides a replacement for the [`Span`]ned area.
+        suggestion : String,
+    },
+}
+
+
+
+
+
 /***** AUXILLARY *****/
 /// Defines the possible types of [`Diagnostic`].
+/// 
+/// Despite the existance of this struct, there is no way to generally construct a [`Diagnostic`] with variable kind because of the varying input for every kind.
+/// 
+/// Instead, this can be used to, for example, check which [`Diagnostic`] has been emitted by a function.
+/// 
+/// # Example
+/// ```rust
+/// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+/// 
+/// fn foo(raw: &str) -> Diagnostic<&str, &str> {
+///     Diagnostic::error("Invalid input", Span::new("<example>", raw))
+/// }
+/// 
+/// let diag = foo("Hello, world!");
+/// if diag.kind() == DiagnosticKind::Error {
+///     diag.emit();
+///     eprintln!("Could not run foo() due to the previous error.");
+/// };
+/// ```
 #[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
 pub enum DiagnosticKind {
     /// An fatal error.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+    /// 
+    /// assert_eq!(Diagnostic::error("Example", Span::new("<example>", "example")).kind(), DiagnosticKind::Error);
+    /// ```
     Error,
     /// A warning.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+    /// 
+    /// assert_eq!(Diagnostic::warn("Example", Span::new("<example>", "example")).kind(), DiagnosticKind::Warning);
     Warning,
     /// A note.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+    /// 
+    /// assert_eq!(Diagnostic::note("Example", Span::new("<example>", "example")).kind(), DiagnosticKind::Note);
     Note,
     /// A suggestion.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+    /// 
+    /// assert_eq!(Diagnostic::suggestion("Example", Span::new("<example>", "example"), "better example").kind(), DiagnosticKind::Suggestion);
     Suggestion,
 }
 
@@ -44,6 +109,10 @@ pub enum DiagnosticKind {
 
 /***** LIBRARY *****/
 /// Represents a (series of) source-bound errors that can be neatly formatted.
+/// 
+/// # Generic arguments
+/// - `F`: Decides the type of the filename string embedded in [`Span`]s compatible with this diagnostic.
+/// - `S`: Decides the type of the source string embedded in [`Span`]s compatible with this diagnostic.
 #[derive(Clone, Debug)]
 pub struct Diagnostic<F, S> {
     /// The message to show
@@ -63,12 +132,24 @@ pub struct Diagnostic<F, S> {
 impl<F, S> Diagnostic<F, S> {
     /// Constructor for an error.
     /// 
+    /// Note that the diagnostic's generics -`F` and `S`- are decuded from the span you give here, so if you are using references in the [`Span`] it means that the diagnostic inherits their lifetimes.
+    /// 
     /// # Arguments
     /// - `message`: The message to show to the user.
     /// - `span`: The [`Span`] that relates this diagnostic to the source text.
     /// 
     /// # Returns
     /// A new Diagnostic that will emit an error.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// // Note the propagation of the span types, but not the message.
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::error("An example error.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// ```
     #[inline]
     pub fn error(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         Self {
@@ -83,12 +164,24 @@ impl<F, S> Diagnostic<F, S> {
 
     /// Constructor for a warning.
     /// 
+    /// Note that the diagnostic's generics -`F` and `S`- are decuded from the span you give here, so if you are using references in the [`Span`] it means that the diagnostic inherits their lifetimes.
+    /// 
     /// # Arguments
     /// - `message`: The message to show to the user.
     /// - `span`: The [`Span`] that relates this diagnostic to the source text.
     /// 
     /// # Returns
     /// A new Diagnostic that will emit a warning.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// // Note the propagation of the span types, but not the message.
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::warn("An example warning.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::warn("An example warning.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// ```
     #[inline]
     pub fn warn(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         Self {
@@ -103,12 +196,24 @@ impl<F, S> Diagnostic<F, S> {
 
     /// Constructor for a note.
     /// 
+    /// Note that the diagnostic's generics -`F` and `S`- are decuded from the span you give here, so if you are using references in the [`Span`] it means that the diagnostic inherits their lifetimes.
+    /// 
     /// # Arguments
     /// - `message`: The message to show to the user.
     /// - `span`: The [`Span`] that relates this diagnostic to the source text.
     /// 
     /// # Returns
     /// A new Diagnostic that will emit a note.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// // Note the propagation of the span types, but not the message.
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::note("An example note.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::note("An example note.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// ```
     #[inline]
     pub fn note(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         Self {
@@ -123,6 +228,8 @@ impl<F, S> Diagnostic<F, S> {
 
     /// Constructor for a suggestion.
     /// 
+    /// Note that the diagnostic's generics -`F` and `S`- are decuded from the span you give here, so if you are using references in the [`Span`] it means that the diagnostic inherits their lifetimes.
+    /// 
     /// # Arguments
     /// - `message`: The message to show to the user.
     /// - `span`: The [`Span`] that relates this diagnostic to the source text.
@@ -130,6 +237,16 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// A new Diagnostic that will emit a suggestion.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// // Note the propagation of the span types, but not the message or the suggestion.
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::suggestion("An example suggestion.", Span::new("<example>", "Example"), "A better example.");
+    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::suggestion("An example suggestion.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()), "A better example.");
+    /// ```
     #[inline]
     pub fn suggestion(message: impl Into<String>, span: impl Into<Span<F, S>>, suggestion: impl Into<String>) -> Self {
         Self {
@@ -146,13 +263,22 @@ impl<F, S> Diagnostic<F, S> {
 
     /// Adds a code to this Diagnostic.
     /// 
-    /// This is useful for telling the user very short-hand, machine-readable identifiers of the error or warning. For example, `E001` or `dead_code`.
+    /// This is useful for telling the user very short-hand, machine-readable identifiers of the diagnostic. For example, `E001` or `dead_code`.
     /// 
     /// # Arguments
     /// - `code`: The code to set.
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// Diagnostic::error("An example error.", Span::new("<example>", "Example"))
+    ///     .set_code("1")
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn set_code(mut self, code: impl Into<String>) -> Self {
         self.code = Some(code.into());
@@ -167,6 +293,15 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// Diagnostic::note("An example note.", Span::new("<example>", "Example"))
+    ///     .set_note("We can apply more notes for just this diagnostic!")
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn set_note(mut self, message: impl Into<String>) -> Self {
         self.note = Some(message.into());
@@ -182,6 +317,11 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// 
+    /// ```
     #[inline]
     pub fn add(mut self, diagnostic: impl Into<Diagnostic<F, S>>) -> Self {
         self.sub.push(diagnostic.into());
@@ -191,7 +331,7 @@ impl<F, S> Diagnostic<F, S> {
     /// Adds a new error to be emitted right after this diagnostic.
     /// 
     /// This is a convenience function for calling:
-    /// ```no_run
+    /// ```ignore
     /// diagnostic.add(Diagnostic::error(message, span));
     /// ```
     /// 
@@ -210,7 +350,7 @@ impl<F, S> Diagnostic<F, S> {
     /// Adds a new warning to be emitted right after this diagnostic.
     /// 
     /// This is a convenience function for calling:
-    /// ```no_run
+    /// ```ignore
     /// diagnostic.add(Diagnostic::warn(message, span));
     /// ```
     /// 
@@ -229,7 +369,7 @@ impl<F, S> Diagnostic<F, S> {
     /// Adds a new note to be emitted right after this diagnostic.
     /// 
     /// This is a convenience function for calling:
-    /// ```no_run
+    /// ```ignore
     /// diagnostic.add(Diagnostic::note(message, span));
     /// ```
     /// 
@@ -248,7 +388,7 @@ impl<F, S> Diagnostic<F, S> {
     /// Adds a new suggestion to be emitted right after this diagnostic.
     /// 
     /// This is a convenience function for calling:
-    /// ```no_run
+    /// ```ignore
     /// diagnostic.add(Diagnostic::suggestion(message, span, code));
     /// ```
     /// 
@@ -481,22 +621,4 @@ impl<F: Clone, S: Clone> From<&Diagnostic<F, S>> for Diagnostic<F, S> {
 impl<F: Clone, S: Clone> From<&mut Diagnostic<F, S>> for Diagnostic<F, S> {
     #[inline]
     fn from(value: &mut Diagnostic<F, S>) -> Self { value.clone() }
-}
-
-
-
-/// Defines the specific attributes for certain kinds of diagnostic.
-#[derive(Clone, Debug, EnumDebug)]
-enum DiagnosticSpecific {
-    /// A typical error
-    Error,
-    /// A typical warning
-    Warning,
-    /// A typical note
-    Note,
-    /// A suggestion.
-    Suggestion {
-        /// Provides a replacement for the [`Span`]ned area.
-        suggestion : String,
-    },
 }

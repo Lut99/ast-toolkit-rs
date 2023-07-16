@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    13 Jul 2023, 11:46:37
+//    16 Jul 2023, 11:15:17
 //  Auto updated?
 //    Yes
 // 
@@ -16,7 +16,6 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::Diagnostic;
-use ast_toolkit_derive::Diagnostic;
 
 type Span = ast_toolkit::Span<&'static str, String>;
 

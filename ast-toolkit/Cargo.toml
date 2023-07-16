@@ -5,6 +5,8 @@ edition = { workspace = true }
 authors = { workspace = true }
 description = "A collection of structs and interfaces extremely useful when working with compilers that parse text into ASTs."
 
+repository = "https://github.com/Lut99/ast-toolkit-rs"
+
 
 [dependencies]
 console = "0.15"
