@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    16 Jul 2023, 12:13:42
+//    17 Jul 2023, 19:49:01
 //  Auto updated?
 //    Yes
 // 
@@ -120,7 +120,7 @@ pub struct Diagnostic<F, S> {
     /// Some code identifier for distinguishing errors machine-wise.
     code    : Option<String>,
     /// The in-diagnostic note to display, if any.
-    note    : Option<String>,
+    remark  : Option<String>,
     /// The span that relates this message to the source text.
     span    : Span<F, S>,
     /// Anything kind-specific.
@@ -155,7 +155,7 @@ impl<F, S> Diagnostic<F, S> {
         Self {
             message : message.into(),
             code    : None,
-            note    : None,
+            remark  : None,
             span    : span.into(),
             kind    : DiagnosticSpecific::Error,
             sub     : vec![],
@@ -187,7 +187,7 @@ impl<F, S> Diagnostic<F, S> {
         Self {
             message : message.into(),
             code    : None,
-            note    : None,
+            remark  : None,
             span    : span.into(),
             kind    : DiagnosticSpecific::Warning,
             sub     : vec![],
@@ -219,7 +219,7 @@ impl<F, S> Diagnostic<F, S> {
         Self {
             message : message.into(),
             code    : None,
-            note    : None,
+            remark  : None,
             span    : span.into(),
             kind    : DiagnosticSpecific::Note,
             sub     : vec![],
@@ -252,7 +252,7 @@ impl<F, S> Diagnostic<F, S> {
         Self {
             message : message.into(),
             code    : None,
-            note    : None,
+            remark  : None,
             span    : span.into(),
             kind    : DiagnosticSpecific::Suggestion { suggestion: suggestion.into() },
             sub     : vec![],
@@ -289,7 +289,7 @@ impl<F, S> Diagnostic<F, S> {
     /// This differs from [`Self::add_note()`](Diagnostic::add_note()) in that the latter adds a completely new diagnostic with the `note`-keyword. In contrast, this function simply adds a small note at the end of it.
     /// 
     /// # Arguments
-    /// - `message`: The message to add as note.
+    /// - `message`: The message to add as remark.
     /// 
     /// # Returns
     /// `self` to allow chaining.
@@ -299,12 +299,12 @@ impl<F, S> Diagnostic<F, S> {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// Diagnostic::note("An example note.", Span::new("<example>", "Example"))
-    ///     .set_note("We can apply more notes for just this diagnostic!")
+    ///     .set_remark("We can apply more notes for just this diagnostic!")
     ///     .emit();
     /// ```
     #[inline]
-    pub fn set_note(mut self, message: impl Into<String>) -> Self {
-        self.note = Some(message.into());
+    pub fn set_remark(mut self, message: impl Into<String>) -> Self {
+        self.remark = Some(message.into());
         self
     }
 
@@ -320,7 +320,12 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Examples
     /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
     /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// Diagnostic::error("Unknown keyword 'sttaic'", span)
+    ///     .add(Diagnostic::suggestion("Try 'static'", span, "static"))
+    ///     .emit();
     /// ```
     #[inline]
     pub fn add(mut self, diagnostic: impl Into<Diagnostic<F, S>>) -> Self {
@@ -341,6 +346,18 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let source: &str = "pbu static TEST = 42;";
+    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 0, 2);
+    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// Diagnostic::error("Unknown keyword 'pbu'", span1)
+    ///     .add_error("'TEST' is therefore not publicly accessible", span2)
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn add_error(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         self.sub.push(Self::error(message, span));
@@ -360,6 +377,18 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let source: &str = "pbu static TeST = 42;";
+    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 0, 2);
+    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// Diagnostic::error("Unknown keyword 'pbu'", span1)
+    ///     .add_warn("Statics are conventionally spelled using full-caps", span2)
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn add_warn(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         self.sub.push(Self::warn(message, span));
@@ -379,6 +408,18 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let source: &str = "pub static TEST = 42; println!(\"{}\", TEST == true)";
+    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 37, 48);
+    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// Diagnostic::error("Cannot compare integer with boolean", span1)
+    ///     .add_note("TEST defined here", span2)
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn add_note(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
         self.sub.push(Self::note(message, span));
@@ -399,6 +440,16 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// `self` to allow chaining.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// Diagnostic::error("Unknown keyword 'sttaic'", span)
+    ///     .add_suggestion("Try 'static'", span, "static")
+    ///     .emit();
+    /// ```
     #[inline]
     pub fn add_suggestion(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>, code: impl Into<String>) -> Self {
         self.sub.push(Self::suggestion(message, span, code));
@@ -411,6 +462,14 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// A [`&str`](str) that refers to the message.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// assert_eq!(Diagnostic::error("An example error", span).message(), "An example error");
+    /// ```
     #[inline]
     pub fn message(&self) -> &str { &self.message }
 
@@ -418,8 +477,41 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// A [`&str`](str) that refers to the code, or [`None`] is no code is set.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error", span);
+    /// assert_eq!(diag.code(), None);
+    /// 
+    /// // Set the code and try again
+    /// let diag: Diagnostic<&str, &str> = diag.set_code("E001");
+    /// assert_eq!(diag.code(), Some("E001"));
+    /// ```
     #[inline]
     pub fn code(&self) -> Option<&str> { self.code.as_ref().map(|s| s.as_str()) }
+
+    /// Returns the remark of this diagnostic if there is any.
+    /// 
+    /// # Returns
+    /// A [`&str`](str) that refers to the remark, or [`None`] is no remark is set.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error", span);
+    /// assert_eq!(diag.remark(), None);
+    /// 
+    /// // Set the code and try again
+    /// let diag: Diagnostic<&str, &str> = diag.set_remark("Hello from below the error");
+    /// assert_eq!(diag.remark(), Some("Hello from below the error"));
+    /// ```
+    #[inline]
+    pub fn remark(&self) -> Option<&str> { self.remark.as_ref().map(|s| s.as_str()) }
 
     /// Returns the span of this Diagnostic.
     /// 
@@ -427,6 +519,14 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// A reference to the internal [`Span`].
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// assert_eq!(Diagnostic::error("An example error", span).span(), &span);
+    /// ```
     #[inline]
     pub fn span(&self) -> &Span<F, S> { &self.span }
 
@@ -434,6 +534,13 @@ impl<F, S> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// The [`DiagnosticKind`] describing what kind of diagnostic this is.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
+    /// 
+    /// assert_eq!(Diagnostic::error("Example", Span::new("<example>", "example")).kind(), DiagnosticKind::Error);
+    /// ```
     #[inline]
     pub fn kind(&self) -> DiagnosticKind {
         match &self.kind {
@@ -450,7 +557,15 @@ impl<F, S> Diagnostic<F, S> {
     /// A [`&str`](str) that refers to the new code.
     /// 
     /// # Panics
-    /// This function may panic if we are not a suggestion.
+    /// This function may panic if we are not a suggestion. You can check this using [`Self::kind()`](Diagnostic::kind()).
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// assert_eq!(Diagnostic::suggestion("Try writing 'World' lowercase", span, "world").suggestion_text(), "world");
+    /// ```
     #[inline]
     #[track_caller]
     pub fn suggestion_text(&self) -> &str { if let DiagnosticSpecific::Suggestion { suggestion } = &self.kind { suggestion } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
@@ -460,6 +575,20 @@ impl<F, S: Deref<Target = str>> Diagnostic<F, S> {
     /// 
     /// # Returns
     /// The referred text, as a [`&str`](str).
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Position, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::new("<example>", "Hello, World!");
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello, World!");
+    /// 
+    /// let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello");
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
+    /// ```
     #[inline]
     pub fn text(&self) -> &str { self.span.text() }
 }
@@ -473,7 +602,7 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// # Errors
     /// This function may error if we failed to write to the given `writer`.
     #[track_caller]
-    pub fn _emit_on(&self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
+    fn _emit_on(&self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
         // Match on the kind to find the keyword and colour to show, as well as lines and span
         let (keyword, colour, lines, start, end): (&'static str, Style, Vec<String>, Position, Position) = match &self.kind {
             // For these we just need the colour and junk
@@ -528,8 +657,8 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
             writeln!(writer)?;
         }
         // Write the bottom-level source newline - or the note
-        if let Some(note) = &self.note {
-            writeln!(writer, "{} {} {}: {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("=").blue().bright(), style("note").bold(), note)?;
+        if let Some(remark) = &self.remark {
+            writeln!(writer, "{} {} {}: {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("=").blue().bright(), style("note").bold(), remark)?;
         } else {
             writeln!(writer, "{} {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
         }
@@ -556,6 +685,18 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// 
     /// # Errors
     /// This function may error if we failed to write to the given `writer`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::fs::File;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let path = std::env::temp_dir().join("testfile_emit_on");
+    /// let mut f: File = File::create(path).unwrap();
+    /// 
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// diag.emit_on(&mut f);   // Prints the error to the opened file
+    /// ```
     #[inline]
     #[track_caller]
     pub fn emit_on(&self, writer: &mut impl Write) -> Result<(), std::io::Error> {
@@ -565,6 +706,14 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// Emits the diagnostic (and all of its subsequent ones) on [`stderr`](std::io::Stderr).
     /// 
     /// Note that this function ignores errors (panics on them). Thus, if you expect to fail to write to stderr, please use [`Self::emit_on(std::io::stderr())`](Diagnostic::emit_on()) instead.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// diag.emit();   // Prints the error to stderr
+    /// ```
     #[inline]
     #[track_caller]
     pub fn emit(&self) {
@@ -585,6 +734,22 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// 
     /// # Errors
     /// This function may error if we failed to write to the given `writer`.
+    /// 
+    /// # Example
+    /// ```should_panic
+    /// use std::fs::File;
+    /// use std::io::Write as _;
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let path = std::env::temp_dir().join("testfile_abort_on");
+    /// let mut f: File = File::create(path).unwrap();
+    /// 
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// diag.abort_on(&mut f);   // Prints the error to the opened file
+    /// 
+    /// // Will never run
+    /// writeln!(&mut f, "Hey!").unwrap();
+    /// ```
     #[track_caller]
     pub fn abort_on(&self, writer: &mut impl Write) -> Result<Never, std::io::Error> {
         // Emit first
@@ -599,6 +764,17 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// - The rest will return `0`.
     /// 
     /// Note that this function ignores errors (panics on them). Thus, if you expect to fail to write to stderr, please use [`Self::abort_on(std::io::stderr())`](Diagnostic::abort_on()) instead.
+    /// 
+    /// # Example
+    /// ```should_panic
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// diag.abort();   // Prints the error to stderr
+    /// 
+    /// // Will never run
+    /// eprintln!("Hey!");
+    /// ```
     #[inline]
     #[track_caller]
     pub fn abort(&self) -> ! {

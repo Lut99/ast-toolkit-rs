@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    13 Jul 2023, 11:29:42
+//    17 Jul 2023, 19:33:22
 //  Auto updated?
 //    Yes
 // 
@@ -19,6 +19,35 @@ use std::ops::{Deref, DerefMut};
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_pos() {
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 1));
+        assert_eq!(span.text(), "H");
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+        assert_eq!(span.text(), "Hello");
+
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 1));
+        assert_eq!(span.text(), "H");
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 5));
+        assert_eq!(span.text(), "Hello");
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 1));
+        assert_eq!(span.text(), "W");
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 5));
+        assert_eq!(span.text(), "World");
+        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(2, 6));
+        assert_eq!(span.text(), "Hello\nWorld!");
+    }
+}
+
+
+
 
 
 /***** HELPER MACROS *****/
@@ -258,23 +287,23 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         let (mut rstart, mut rend): (Option<usize>, Option<usize>) = (None, None);
         for (i, c) in source.grapheme_indices(true) {
             // If we've reached the end of any, mark it
-            if istart.line == 0 && istart.col == 0 { rstart = Some(i); }
-            if iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
+            if rstart.is_none() && istart.line == 0 && istart.col == 0 { rstart = Some(i); }
+            if rend.is_none() && iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
 
             // Otherwise, count them down
-            if istart.col > 0 {
+            if istart.line > 0 && c == "\n" {
+                istart.line -= 1;
+            } else if istart.line == 0 && istart.col > 0 {
                 // If we're skipping a newline, the Position is ill-formed
                 if c == "\n" { panic!("Found newline while start.col != 0 (start: {start}, character index: {i})"); }
                 istart.col -= 1;
-            } else if c == "\n" {
-                istart.line -= 1;
             }
-            if iend.col > 0 {
+            if iend.line > 0 && c == "\n" {
+                iend.line -= 1;
+            } else if iend.line == 0 && iend.col > 0 {
                 // If we're skipping a newline, the Position is ill-formed
                 if c == "\n" { panic!("Found newline while end.col != 0 (end: {end}, character index: {i})"); }
                 iend.col -= 1;
-            } else if c == "\n" {
-                iend.line -= 1;
             }
         }
         let start: usize = match rstart { Some(i) => i, None => { panic!("Start {} is out-of-bounds for source of {} characters", start, source.len()); } };

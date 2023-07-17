@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 11:20:29
 //  Last edited:
-//    13 Jul 2023, 11:41:31
+//    17 Jul 2023, 19:10:49
 //  Auto updated?
 //    Yes
 // 
@@ -31,10 +31,10 @@ fn main() {
         .set_code(format!("E00{}", 2))
         .emit();
     Diagnostic::warn("A specific warning", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34))
-        .set_note("`#[warn(last_char)]` is enabled by default")
+        .set_remark("`#[warn(last_char)]` is enabled by default")
         .emit();
     Diagnostic::warn("A specific warning but runtime-dependent", Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34))
-        .set_note(format!("`#[warn({})]` is enabled by default", "runtime_error"))
+        .set_remark(format!("`#[warn({})]` is enabled by default", "runtime_error"))
         .emit();
 
     // Warnings, notes

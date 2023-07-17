@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    16 Jul 2023, 11:15:17
+//    17 Jul 2023, 19:13:48
 //  Auto updated?
 //    Yes
 // 
@@ -34,12 +34,12 @@ pub enum TestError {
 
     #[diag(error, code = "E001")]
     CommonError { span: Span },
-    #[diag(error)]
+    #[diag(error, code = code)]
     CommonErrorRuntime { code: String, span: Span },
-    #[diag(warn, note = "`#[warn(last_char)]` is enabled by default")]
+    #[diag(warn, remark = "`#[warn(last_char)]` is enabled by default")]
     SpecificWarn { span: Span },
-    #[diag(warn)]
-    SpecificWarnRuntime { note: String, span: Span },
+    #[diag(warn, remark = remark)]
+    SpecificWarnRuntime { remark: String, span: Span },
 
     #[diag(warn)]
     Warn { span: Span },
@@ -94,7 +94,7 @@ fn main() {
     Diagnostic::from(TestError::CommonError { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 0, 0) }).emit();
     Diagnostic::from(TestError::CommonErrorRuntime { code: format!("E00{}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 0, 0) }).emit();
     Diagnostic::from(TestError::SpecificWarn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 34, 34) }).emit();
-    Diagnostic::from(TestError::SpecificWarnRuntime { note: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 34, 34) }).emit();
+    Diagnostic::from(TestError::SpecificWarnRuntime { remark: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 34, 34) }).emit();
 
     // Warnings, notes
     Diagnostic::from(TestError::Warn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT".into(), 12, 17) }).emit();

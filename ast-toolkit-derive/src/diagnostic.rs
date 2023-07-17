@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    13 Jul 2023, 11:47:40
+//    17 Jul 2023, 19:12:46
 //  Auto updated?
 //    Yes
 // 
@@ -204,11 +204,11 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
                                 proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
                                 continue;
                             }
-                        } else if nv.path.is_ident("note") {
+                        } else if nv.path.is_ident("remark") {
                             if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.note = Some(StringOrField::String(s.value()));
+                                f.remark = Some(StringOrField::String(s.value()));
                             } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.note = Some(if let Some(path) = path.get_ident() {
+                                f.remark = Some(if let Some(path) = path.get_ident() {
                                     StringOrField::Field(path.clone())
                                 } else {
                                     proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
@@ -313,7 +313,7 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
             None                           => None,
         };
         // Resolve the note
-        let note: Option<DuoStrategy> = match attr.note {
+        let remark: Option<DuoStrategy> = match attr.remark {
             Some(StringOrField::String(s)) => Some(DuoStrategy::String(s)),
             Some(StringOrField::Field(f))  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; Some(DuoStrategy::Field(f)) },
             None                           => None,
@@ -364,7 +364,7 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
             kind : attr.kind,
             message,
             code,
-            note,
+            remark,
             suggestion,
             span,
 
@@ -412,7 +412,7 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
 /// A tuple with the variant for which constructor is created (if any), the fields necessary to build this kind and the [`TokenStream`] with generated code for the constructor.
 fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -> (Option<(Ident, Vec<Ident>)>, TokenStream2) {
     // Unwrap the diagnostic info
-    let DiagnosticInfo { variant, kind, message, code, note, suggestion, span, sub } = info;
+    let DiagnosticInfo { variant, kind, message, code, remark, suggestion, span, sub } = info;
 
     // Resolve the strategies
     let message: TokenStream2 = match message {
@@ -440,8 +440,8 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
         vec![]
     };
     // let code: Option<TokenStream2> = None;
-    let note: Vec<TokenStream2> = if let Some(note) = note {
-        match note {
+    let remark: Vec<TokenStream2> = if let Some(remark) = remark {
+        match remark {
             DuoStrategy::String(s) => vec![ quote! { format!(#s) } ],
             DuoStrategy::Field(f) => match fkind {
                 FieldKind::NamedStruct |
@@ -479,7 +479,7 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
                 #span,
             )
             #(.set_code(#code))*
-            #(.set_note(#note))*
+            #(.set_remark(#remark))*
         },
 
         DiagnosticKind::Warn => quote! {
@@ -488,7 +488,7 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
                 #span,
             )
             #(.set_code(#code))*
-            #(.set_note(#note))*
+            #(.set_remark(#remark))*
         },
 
         DiagnosticKind::Note => quote! {
@@ -497,7 +497,7 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
                 #span,
             )
             #(.set_code(#code))*
-            #(.set_note(#note))*
+            #(.set_remark(#remark))*
         },
 
         DiagnosticKind::Suggestion => {
@@ -509,7 +509,7 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
                     #suggestion,
                 )
                 #(.set_code(#code))*
-                #(.set_note(#note))*
+                #(.set_remark(#remark))*
             }
         },
 
@@ -574,7 +574,7 @@ struct FieldAttributes {
     /// The code to set, if any.
     code       : Option<StringOrField>,
     /// The note to set, if any.
-    note       : Option<StringOrField>,
+    remark     : Option<StringOrField>,
     /// The suggestion to give, if any.
     suggestion : Option<(StringOrField, Span)>,
     /// Any explicit span given by the user, which always refers to a field.
@@ -597,7 +597,7 @@ impl FieldAttributes {
 
             kind       : DiagnosticKind::Unspecified,
             message    : None,
-            note       : None,
+            remark     : None,
             code       : None,
             suggestion : None,
             span       : None,
@@ -640,7 +640,7 @@ struct DiagnosticInfo {
     /// The code to set, if any.
     code       : Option<DuoStrategy>,
     /// The note to set, if any.
-    note       : Option<DuoStrategy>,
+    remark     : Option<DuoStrategy>,
     /// The suggestion to give, if any. Is guaranteed to be `None` if `kind` is _not_ a [`DiagnosticKind::Suggestion`].
     suggestion : Option<DuoStrategy>,
     /// Any explicit span given by the user, which always refers to a field.
