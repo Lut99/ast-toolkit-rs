@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    17 Jul 2023, 19:49:01
+//    17 Jul 2023, 19:54:16
 //  Auto updated?
 //    Yes
 // 
@@ -113,6 +113,33 @@ pub enum DiagnosticKind {
 /// # Generic arguments
 /// - `F`: Decides the type of the filename string embedded in [`Span`]s compatible with this diagnostic.
 /// - `S`: Decides the type of the source string embedded in [`Span`]s compatible with this diagnostic.
+/// 
+/// # Example
+/// To create a new Diagnostic, use [`Diagnostic::error()`], [`Diagnostic::warn()`], [`Diagnostic::note()`] or [`Diagnostic::suggestion()`]:
+/// ```rust
+/// use ast_toolkit::{Diagnostic, Span};
+/// 
+/// let err = Diagnostic::error("Invalid word 'Hlelo'", Span::from_idx("<example>", "Hlelo World!", 0, 4));
+/// let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::from_idx("<example>", "Hlelo World!", 6, 6));
+/// let note = Diagnostic::note("The most classical program in the world is given here", Span::new("<example>", "Hlelo World!"));
+/// let suggest = Diagnostic::suggestion("Consider writing it properly", Span::new("<example>", "Hlelo World!"), "Hello, world!");
+/// ```
+/// To print the diagnostics, check [`Diagnostic::emit()`]:
+/// ```rust
+/// # use ast_toolkit::{Diagnostic, Span};
+/// # 
+/// # let err = Diagnostic::error("Invalid word 'Hlelo'", Span::from_idx("<example>", "Hlelo World!", 0, 4));
+/// # let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::from_idx("<example>", "Hlelo World!", 6, 6));
+/// # let note = Diagnostic::note("The most classical program in the world is given here", Span::new("<example>", "Hlelo World!"));
+/// # let suggest = Diagnostic::suggestion("Consider writing it properly", Span::new("<example>", "Hlelo World!"), "Hello, world!");
+/// # 
+/// err.emit();
+/// warn.emit();
+/// note.emit();
+/// suggest.emit();
+/// ```
+/// 
+/// See this struct's other methods for detailled configuration options.
 #[derive(Clone, Debug)]
 pub struct Diagnostic<F, S> {
     /// The message to show
