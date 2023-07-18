@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    18 Jul 2023, 19:05:05
+//    18 Jul 2023, 19:40:29
 //  Auto updated?
 //    Yes
 // 
@@ -15,7 +15,7 @@
 
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -414,8 +414,26 @@ impl From<&mut Position> for Position {
 /***** LIBRARY *****/
 /// Represents a snippet of parsed source text, which is used to link a node to a particular set of it.
 /// 
-/// # Lifetimes
-/// - `s`: The lifetime of the source text which this Span refers to.
+/// # Generics
+/// - `F`: Decides the type of the filename string embedded in [`Span`]s compatible with this diagnostic.
+/// - `S`: Decides the type of the source string embedded in [`Span`]s compatible with this diagnostic.
+/// 
+/// # Example
+/// ```rust
+/// use std::borrow::Cow;
+/// use std::path::PathBuf;
+/// use ast_toolkit::Span;
+/// 
+/// let _span: Span<&str, &str> = Span::new("<example>", "Hello, world!");
+/// let _span: Span<String, &str> = Span::new(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!");
+/// let span: Span<&str, Cow<str>> = Span::new("<example>", String::from_utf8_lossy(b"Hello, world!"));
+/// 
+/// assert_eq!(span.text(), "Hello, world!");
+/// assert_eq!(span.start().line, 0);
+/// assert_eq!(span.start().col, 0);
+/// assert_eq!(span.end().line, 0);
+/// assert_eq!(span.end().col, 12);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Span<F, S> {
     /// The filename (or other description) of the file we are spanning.
@@ -431,12 +449,25 @@ pub struct Span<F, S> {
 impl<F, S: Deref<Target = str>> Span<F, S> {
     /// Constructor for the Span, which will encompass the entire source.
     /// 
+    /// Note that the Span will be bound to the given filename and source types, and, more importantly, to its lifetimes.
+    /// 
     /// # Arguments
     /// - `file`: The filename (or other description) of the source's origin.
     /// - `source`: The entire source text that we might parse.
     /// 
     /// # Returns
     /// A new instance of Self that spans the entire source.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use std::path::PathBuf;
+    /// use ast_toolkit::Span;
+    /// 
+    /// let _span: Span<&str, &str> = Span::new("<example>", "Hello, world!");
+    /// let _span: Span<String, &str> = Span::new(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!");
+    /// let _span: Span<&str, Cow<str>> = Span::new("<example>", String::from_utf8_lossy(b"Hello, world!"));
+    /// ```
     #[inline]
     #[track_caller]
     pub fn new(file: F, source: S) -> Self {
@@ -452,6 +483,16 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
 
     /// Constructor for the Span that takes a custom range (in [`Position`]s) to span.
     /// 
+    /// The given positions are indices over graphemes, not bytes. For example:
+    /// ```rust
+    /// # use ast_toolkit::{Position, Span};
+    /// let span = Span::from_pos("<example>", "Hÿllo, world!", Position::new0(0, 0), Position::new0(0, 2));
+    /// assert_eq!(span.text(), "Hÿl");
+    /// assert_eq!(span.text().len(), 4);
+    /// ```
+    /// 
+    /// Note that the Span will be bound to the given filename and source types, and, more importantly, to its lifetimes.
+    /// 
     /// # Arguments
     /// - `file`: The filename (or other description) of the source's origin.
     /// - `source`: The entire source text that we might parse.
@@ -463,6 +504,28 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Panics
     /// This function may panic if the given `start` or `end` are out-of-range for the given `source`, or if `start > end`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use std::path::PathBuf;
+    /// use ast_toolkit::{Position, Span};
+    /// 
+    /// let span1: Span<&str, &str> = Span::from_pos("<example>", "Hello, world!", Position::new0(0, 0), Position::new0(0, 4));
+    /// let span2: Span<String, &str> = Span::from_pos(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!", Position::new0(0, 7), Position::new0(0, 11));
+    /// let span3: Span<&str, Cow<str>> = Span::from_pos("<example>", String::from_utf8_lossy(b"Hello, world!"), Position::new0(0, 0), Position::new0(0, 12));
+    /// 
+    /// assert_eq!(span1.text(), "Hello");
+    /// assert_eq!(span2.text(), "world");
+    /// assert_eq!(span3.text(), "Hello, world!");
+    /// ```
+    /// ```should_panic
+    /// # use ast_toolkit::{Position, Span};
+    /// // This will panic!
+    /// Span::from_pos("<builtin>", "Hello, world!", Position::new0(1, 0), Position::new0(1, 12));
+    /// Span::from_pos("<builtin>", "Hello, world!", Position::new0(0, 0), Position::new0(0, 15));
+    /// Span::from_pos("<builtin>", "Hello, world!", Position::new0(0, 8), Position::new0(0, 6));
+    /// ```
     #[track_caller]
     pub fn from_pos(file: F, source: S, start: impl Into<Position>, end: impl Into<Position>) -> Self {
         // Assert start <= end
@@ -481,15 +544,13 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
             if istart.line > 0 && c == "\n" {
                 istart.line -= 1;
             } else if istart.line == 0 && istart.col > 0 {
-                // If we're skipping a newline, the Position is ill-formed
-                if c == "\n" { panic!("Found newline while start.col != 0 (start: {start}, character index: {i})"); }
+                // If we're skipping a (non-terminating) newline, the Position is ill-formed
                 istart.col -= 1;
             }
             if iend.line > 0 && c == "\n" {
                 iend.line -= 1;
             } else if iend.line == 0 && iend.col > 0 {
-                // If we're skipping a newline, the Position is ill-formed
-                if c == "\n" { panic!("Found newline while end.col != 0 (end: {end}, character index: {i})"); }
+                // If we're skipping a (non-terminating) newline, the Position is ill-formed
                 iend.col -= 1;
             }
         }
@@ -507,6 +568,14 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
 
     /// Constructor for the Span that takes a custom range (in character indices) to span.
     /// 
+    /// The given positions are indices over bytes, not graphemes. For example:
+    /// ```rust
+    /// # use ast_toolkit::{Position, Span};
+    /// let span = Span::from_idx("<example>", "Hÿllo, world!", 0, 2);
+    /// assert_eq!(span.text(), "Hÿ");
+    /// assert_eq!(span.text().len(), 3);
+    /// ```
+    /// 
     /// # Arguments
     /// - `file`: The filename (or other description) of the source's origin.
     /// - `source`: The entire source text that we might parse.
@@ -515,6 +584,30 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Returns
     /// A new instance of Self that spans only the given range.
+    /// 
+    /// # Panics
+    /// This function may panic if the given `start` or `end` are out-of-range for the given `source`, or if `start > end`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::borrow::Cow;
+    /// use std::path::PathBuf;
+    /// use ast_toolkit::Span;
+    /// 
+    /// let span1: Span<&str, &str> = Span::from_idx("<example>", "Hello, world!", 0, 4);
+    /// let span2: Span<String, &str> = Span::from_idx(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!", 7, 11);
+    /// let span3: Span<&str, Cow<str>> = Span::from_idx("<example>", String::from_utf8_lossy(b"Hello, world!"), 0, 12);
+    /// 
+    /// assert_eq!(span1.text(), "Hello");
+    /// assert_eq!(span2.text(), "world");
+    /// assert_eq!(span3.text(), "Hello, world!");
+    /// ```
+    /// ```should_panic
+    /// # use ast_toolkit::Span;
+    /// // This will panic!
+    /// Span::from_idx("<builtin>", "Hello, world!", 0, 15);
+    /// Span::from_idx("<builtin>", "Hello, world!", 8, 6);
+    /// ```
     #[inline]
     #[track_caller]
     pub fn from_idx(file: F, source: S, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
@@ -543,6 +636,25 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Panics
     /// This function may panic if the given index is not at the grapheme boundary.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Position, Span};
+    /// 
+    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
+    /// let span2: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 0, 4);
+    /// 
+    /// assert_eq!(span1.pos_of(3), Position::new0(0, 3));
+    /// assert_eq!(span1.pos_of(7), Position::new0(1, 1));
+    /// assert_eq!(span2.pos_of(3), Position::new0(0, 3));
+    /// assert_eq!(span2.pos_of(7), Position::new0(1, 1));
+    /// ```
+    /// ```should_panic
+    /// # use ast_toolkit::Span;
+    /// // This will panic!
+    /// Span::new("<example>", "Hello\nworld!").pos_of(50);
+    /// Span::new("<example>", "Hÿllo\nworld!").pos_of(2);
+    /// ```
     pub fn pos_of(&self, index: impl AsPrimitive<usize>) -> Position {
         let index: usize = index.as_();
 
@@ -569,6 +681,26 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `start` does not point at the unicode grapheme boundary.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Position, Span};
+    /// 
+    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
+    /// let span2: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
+    /// let span3: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
+    /// 
+    /// assert_eq!(span1.start(), Position::new0(0, 0));
+    /// assert_eq!(span2.start(), Position::new0(0, 2));
+    /// assert_eq!(span3.start(), Position::new0(1, 0));
+    /// ```
+    /// ```should_panic
+    /// # use ast_toolkit::Span;
+    /// // This will panic!
+    /// Span::from_idx("<example>", "Hello\nworld!", 0, 50).start();
+    /// Span::from_idx("<example>", "Hello\nworld!", 50, 0).start();
+    /// Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start();
+    /// ```
     #[inline]
     #[track_caller]
     pub fn start(&self) -> Position {
@@ -584,6 +716,28 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `end` does not point at the unicode grapheme boundary.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Position, Span};
+    /// 
+    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello world!");
+    /// let span2: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
+    /// let span3: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
+    /// let span4: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
+    /// 
+    /// assert_eq!(span1.end(), Position::new0(0, 11));
+    /// assert_eq!(span2.end(), Position::new0(1, 5));
+    /// assert_eq!(span3.end(), Position::new0(0, 2));
+    /// assert_eq!(span4.end(), Position::new0(1, 4));
+    /// ```
+    /// ```should_panic
+    /// # use ast_toolkit::Span;
+    /// // This will panic!
+    /// Span::from_idx("<example>", "Hello\nworld!", 0, 50).end();
+    /// Span::from_idx("<example>", "Hello\nworld!", 50, 0).end();
+    /// Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).end();
+    /// ```
     #[inline]
     #[track_caller]
     pub fn end(&self) -> Position {
@@ -599,6 +753,16 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// assert_eq!(Span::new("<example>", "Hello, world!").text(), "Hello, world!");
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 0, 4).text(), "Hello");
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 7, 12).text(), "world!");
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 5, 5).text(), ",");
+    /// ```
     #[inline]
     #[track_caller]
     pub fn text(&self) -> &str {
@@ -611,10 +775,21 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// This can be thought of a [`Self::text()`](Span::text()) but then one that only returns in the line-range.
     /// 
     /// # Returns
-    /// A vector of the individual lines, stipped of newlines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
+    /// A vector of the individual lines, stripped of newlines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
     /// 
     /// # Panics
     /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Position, Span};
+    /// 
+    /// assert_eq!(Span::new("<example>", "Hello world!").lines(), vec![ "Hello world!" ]);
+    /// assert_eq!(Span::new("<example>", "Hello\nworld!").lines(), vec![ "Hello", "world!" ]);
+    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 4)).lines(), vec![ "Hello" ]);
+    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 8)).lines(), vec![ "Hello", "world!" ]);
+    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 5)).lines(), vec![ "Hello" ]);
+    /// ```
     #[track_caller]
     pub fn lines(&self) -> Vec<&str> {
         // Pre-assert that the start is smaller than the end
@@ -645,31 +820,12 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         lines
     }
 }
-impl<F, S: Deref<Target = str> + DerefMut> Span<F, S> {
-    /// Returns the text referred by this span, mutably.
-    /// 
-    /// # Returns
-    /// A mutable [`str`] referring to the source text we span.
-    /// 
-    /// # Panics
-    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
-    #[inline]
-    #[track_caller]
-    pub fn text_mut(&mut self) -> &mut str {
-        assert_range!(self.start, self.end, self.source);
-        &mut self.source[self.start..=self.end]
-    }
-}
 
 impl<F, S: Deref<Target = str>> Deref for Span<F, S> {
     type Target = str;
 
     #[inline]
     fn deref(&self) -> &Self::Target { self.text() }
-}
-impl<F, S: Deref<Target = str> + DerefMut> DerefMut for Span<F, S> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target { self.text_mut() }
 }
 
 impl<F, S> AsRef<Span<F, S>> for Span<F, S> {
