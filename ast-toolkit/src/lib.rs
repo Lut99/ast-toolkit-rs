@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    16 Jul 2023, 11:51:30
+//    19 Jul 2023, 14:26:04
 //  Auto updated?
 //    Yes
 // 
@@ -12,10 +12,7 @@
 //!   A collection of structs and interfaces extremely useful when working
 //!   with compilers that parse text into ASTs.
 //! 
-//!   # Features
-//!   This section lists the specific features contributed by this crate.
-//! 
-//!   ## Diagnostics
+//!   # Diagnostics
 //!   One of the main features this crate contributes is the addition of
 //!   [`struct@Diagnostic`]s, which, much like the one in Rust's own proc_macro
 //!   ecosystem, allows for the formatting of source-related errors, warnings,
@@ -91,8 +88,7 @@
 //! 
 //!   You can refer to the [`examples`](../examples)-folder for a few practical examples.
 //! 
-//! 
-//!   ## Spans
+//!   # Spans
 //!   This crate contributes [`Span`]s for mapping AST nodes/tokens to source
 //!   text. It is very comparable to [`LocatedSpan`](https://docs.rs/nom_locate/latest/nom_locate/struct.LocatedSpan.html)
 //!   in that it slices a given input string according to the parsed source.
@@ -102,7 +98,6 @@
 //! 
 //!   The biggest contribution is that this [`Span`] also carries filename
 //!   information.
-//! 
 //! 
 //!   # Features
 //!   The following features can be enabled in this crate:
