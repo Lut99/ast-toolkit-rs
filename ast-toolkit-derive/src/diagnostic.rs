@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    17 Jul 2023, 19:12:46
+//    20 Jul 2023, 19:45:41
 //  Auto updated?
 //    Yes
 // 
@@ -21,8 +21,9 @@ use proc_macro2::{TokenStream as TokenStream2, Span};
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
 use quote::{quote, quote_spanned};
-use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, Lit, Meta, Token, Visibility};
+use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, GenericParam, Generics, Ident, Lit, Meta, Path, Token, TraitBound, TraitBoundModifier, TypeParam, TypeParamBound, Visibility};
 use syn::parse::ParseBuffer;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 
 
@@ -87,7 +88,7 @@ fn parse_toplevel_attrs(attrs: impl AsRef<[Attribute]>) -> Result<ToplevelAttrib
 
                             // Parse it as the contents of a generics
                             toplevel.generics = match generics.parse::<TokenStream2>() {
-                                Ok(generics) => quote_spanned!(span => #generics),
+                                Ok(generics) => Some(quote_spanned!(span => #generics)),
                                 Err(err) => {
                                     proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, format!("Failed to parse as valid Rust tokens: {err}")).emit();
                                     continue;
@@ -524,6 +525,101 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
     })
 }
 
+/// Takes the generics given to the struct/enum, and adds `Clone` to any `F` or `S` generics.
+/// 
+/// # Arguments
+/// - `generics`: The [`Generics`] given to the struct/enum.
+/// - `span`: The span of the struct/enums's identifier so that we can emit a bit more useful error messages.
+/// 
+/// # Returns
+/// The same generics but `F` and `S` have been added if they haven't, and independently marked as [`Clone`].
+fn add_clone_bound(mut generics: Generics, span: Span) -> Generics {
+    /// A small helper for only this function that adds a new [`GenericParam`] to the given generics.
+    /// 
+    /// # Arguments
+    /// - `name`: The name of the new generic parameter.
+    /// - `span`: The [`Span`] to assign to newly created structs.
+    /// - `generics`: The list of [`Generics`] to add it to with a `Clone`-bound.
+    fn add_generic(name: impl AsRef<str>, span: Span, generics: &mut Generics) {
+        // Create the list of trait bounds
+        let mut punc: Punctuated<TypeParamBound, Token!(+)> = Punctuated::default();
+        punc.push(TypeParamBound::Trait(TraitBound {
+            paren_token : None,
+            modifier    : TraitBoundModifier::None,
+            lifetimes   : None,
+            path        : syn::parse2(quote_spanned!{ span => ::std::clone::Clone }).unwrap()
+        }));
+
+        // Build the type parameter with it
+        let param: TypeParam = TypeParam {
+            attrs       : vec![],
+            ident       : Ident::new(name.as_ref(), span),
+            colon_token : Some(Token!(:)(span)),
+            bounds      : punc,
+            eq_token    : None,
+            default     : None,
+        };
+
+        // And add it to the generics
+        generics.params.push(GenericParam::Type(param));
+    }
+
+
+    // Search for `F` and `S` to insert the clone trait in them
+    let mut has_f: bool = false;
+    let mut has_s: bool = false;
+    for g in &mut generics.params {
+        match g {
+            // Search for the correct types
+            GenericParam::Type(t) => {
+                // Insert it if not already
+                if t.ident == "F" || t.ident == "S" {
+                    // Find if it has a clone
+                    let mut has_clone: bool = false;
+                    for t in &t.bounds {
+                        match t {
+                            TypeParamBound::Trait(t) => if t.path.is_ident("Clone") { has_clone = true; break; },
+                            _ => { continue; },
+                        }
+                    }
+
+                    // Insert clone if it's missing
+                    if !has_clone {
+                        // Construct the path for the `Clone`
+                        let path: Path = syn::parse2(quote_spanned!{ t.span() => ::std::clone::Clone }).unwrap();
+
+                        // Add the trait bound to the type
+                        t.bounds.push(TypeParamBound::Trait(TraitBound {
+                            paren_token : None,
+                            modifier    : TraitBoundModifier::None,
+                            lifetimes   : None,
+                            path,
+                        }));
+                    }
+
+                    // Mark the appropriate one as missing
+                    if t.ident == "F" { has_f = true; }
+                    else { has_s = true; }
+                }
+            },
+
+            // The rest is irrelevant
+            _ => { continue; },
+        }
+    }
+
+    // If not, insert the generics appropriately
+    if !has_f {
+        add_generic("F", span, &mut generics);
+    }
+    if !has_s {
+        add_generic("F", span, &mut generics);
+    }
+
+    // Done!
+    generics
+}
+
 
 
 
@@ -543,7 +639,7 @@ enum FieldKind {
 /// Defines the toplevel attributes we like to learn.
 struct ToplevelAttributes {
     /// The generics to use for `F` and `S`, respectively.
-    generics : TokenStream2,
+    generics : Option<TokenStream2>,
 }
 impl ToplevelAttributes {
     /// Creates an empty instance that can be populated as attributes pop up their heads.
@@ -553,7 +649,7 @@ impl ToplevelAttributes {
     #[inline]
     fn empty() -> Self {
         Self {
-            generics : quote!{ <F, S> },
+            generics : None,
         }
     }
 }
@@ -798,9 +894,15 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
         }
     };
 
+    // Let us preprocess the generics properly
+    let (diag_generics, generics): (TokenStream2, Generics) = if let Some(diag_generics) = top_attrs.generics {
+        (diag_generics, generics)
+    } else {
+        (quote!{ <F, S> }, add_clone_bound(generics, ident.span()))
+    };
+
     // Finally, generate the implementation
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
-    let diag_generics = top_attrs.generics;
     Ok(quote! {
         #[automatically_derived]
         impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {
@@ -810,9 +912,7 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
         #[automatically_derived]
         #[allow(non_snake_case)]
         impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {
-            fn from(#value_ident: &#ident #type_generics) -> Self {
-                #construct
-            }
+            fn from(#value_ident: &#ident #type_generics) -> Self { #construct }
         }
         #[automatically_derived]
         impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #diag_generics #where_clause {

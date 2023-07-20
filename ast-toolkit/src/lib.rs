@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    19 Jul 2023, 14:26:04
+//    20 Jul 2023, 19:49:20
 //  Auto updated?
 //    Yes
 // 
@@ -113,5 +113,101 @@ pub mod diagnostic;
 // Pull the relevant stuff into the global namespace
 pub use span::{Position, Span};
 pub use diagnostic::{Diagnostic, DiagnosticKind};
+
+// Pull any macros into this namespace
+/// Derives [`From<Diagnostic>`] automatically on the annotated struct or enum.
+/// 
+/// You can create diagnostics for the struct or every enum variant by annotating them with `#[diag(...)]`. Toplevel attributes can be set on the struct or enum itself using `#[diagnostic(...)]`.
+/// 
+/// # Goal
+/// The main use-case of this macro is to provide easy-to-use interoparability with standard Rust enum errors. For example, consider the following error:
+/// ```rust
+/// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
+/// #[derive(Debug)]
+/// enum SourceError {
+///     InvalidType { identifier: String, got: DataType, expected: DataType },
+///     UndefinedSymbol { identifier: String, suggestion: String },
+///     DuplicateSymbol { identifier: String },
+/// }
+/// impl std::fmt::Display for SourceError {
+///     #[inline]
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         use SourceError::*;
+///         match self {
+///             InvalidType { identifier, got, expected } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+///             UndefinedSymbol { identifier, suggestion } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+///             DuplicateSymbol { identifier } => write!(f, "Duplicate variable '{identifier}'"),
+///         }
+///     }
+/// }
+/// impl std::error::Error for SourceError {}
+/// ```
+/// By adding spans and minimal annotations, we can turn this error into a real source-referring error:
+/// ```rust
+/// use ast_toolkit::{Diagnostic, Span};
+/// 
+/// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
+/// #[derive(Debug, Diagnostic)]
+/// enum SourceError<F, S> {
+///     #[diag(error)]
+///     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
+///     #[diag(error, message = "Unidentified variable '{identifier}'")]
+///     #[diag(suggestion, message = "Did you mean '{suggestion}'?")]
+///     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
+///     #[diag(error)]
+///     #[diag(note, message = "Previous declaration here", span = prev)]
+///     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
+/// }
+/// impl<F, S> std::fmt::Display for SourceError<F, S> {
+///     #[inline]
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         use SourceError::*;
+///         match self {
+///             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+///             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+///             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
+///         }
+///     }
+/// }
+/// impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
+/// ```
+/// To use:
+/// ```rust
+/// # use ast_toolkit::{Diagnostic, Span};
+/// # 
+/// # #[derive(Debug)] enum DataType { String, UnsignedInt8 } impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { match self { Self::String => write!(f, "string"), Self::UnsignedInt8 => write!(f, "uint8"), } } }
+/// # #[derive(Debug, Diagnostic)]
+/// # enum SourceError<F, S> {
+/// #     #[diag(error)]
+/// #     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
+/// #     #[diag(error, message = "Unidentified variable '{identifier}'")]
+/// #     #[diag(suggestion, message = "Did you mean '{suggestion}'?")]
+/// #     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
+/// #     #[diag(error)]
+/// #     #[diag(note, message = "Previous declaration here", span = prev)]
+/// #     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
+/// # }
+/// # impl<F, S> std::fmt::Display for SourceError<F, S> {
+/// #     #[inline]
+/// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// #         use SourceError::*;
+/// #         match self {
+/// #             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+/// #             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+/// #             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
+/// #         }
+/// #     }
+/// # }
+/// # impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
+/// # 
+/// let span: Span<&str, &str> = Span::from_idx("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40, 43);
+/// let err: SourceError<&str, &str> = SourceError::InvalidType {
+///     identifier: "test".into(),
+///     got: DataType::String,
+///     expected: DataType::UnsignedInt8,
+///     span,
+/// };
+/// Diagnostic::from(err).emit();
+/// ```
 #[cfg(feature = "derive")]
 pub use ast_toolkit_derive::Diagnostic;
