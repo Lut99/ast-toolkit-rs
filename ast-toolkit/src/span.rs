@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    18 Jul 2023, 19:40:29
+//    22 Jul 2023, 13:19:12
 //  Auto updated?
 //    Yes
 // 
@@ -820,6 +820,40 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         lines
     }
 }
+impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
+    /// Constructor for the Span that encapsulates both ranges of the given spans.
+    /// 
+    /// # Arguments
+    /// - `span1`: The first span to take into account.
+    /// - `span2`: The second span to take into account.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans both input spans and everything in between.
+    /// 
+    /// # Panics
+    /// This function panics if the given spans do not have the same `file` or `source`.
+    #[track_caller]
+    pub fn combined(span1: impl Into<Span<F, S>>, span2: impl Into<Span<F, S>>) -> Self {
+        let span1: Span<F, S> = span1.into();
+        let span2: Span<F, S> = span2.into();
+
+        // Assert they talk about the same thing
+        if span1.file != span2.file { panic!("Given spans do not have the same `file`"); }
+        if span1.source != span2.source { panic!("Given spans do not have the same `source`"); }
+
+        // Compute the new range
+        let start: usize = std::cmp::min(span1.start, span2.start);
+        let end: usize = std::cmp::max(span1.end, span2.end);
+
+        // Construct the new self
+        Self {
+            file   : span1.file.clone(),
+            source : span1.source.clone(),
+            start,
+            end,
+        }
+    }
+}
 
 impl<F, S: Deref<Target = str>> Deref for Span<F, S> {
     type Target = str;
@@ -843,4 +877,55 @@ impl<F: Clone, S: Clone> From<&Span<F, S>> for Span<F, S> {
 impl<F: Clone, S: Clone> From<&mut Span<F, S>> for Span<F, S> {
     #[inline]
     fn from(value: &mut Span<F, S>) -> Self { value.clone() }
+}
+
+
+// nom-related things
+#[cfg(feature = "nom")]
+impl<F, S: Deref<Target = str>> nom::AsBytes for Span<F, S> {
+    #[track_caller]
+    fn as_bytes(&self) -> &[u8] {
+        assert_range!(self.start, self.end, self.source);
+        self.source[self.start..=self.end].as_bytes()
+    }
+}
+#[cfg(feature = "nom")]
+impl<F, S> nom::InputLength for Span<F, S> {
+    #[track_caller]
+    fn input_len(&self) -> usize { 1 + (self.end - self.start) }
+}
+#[cfg(feature = "nom")]
+impl<F: Clone, S: Clone + Deref<Target = str>> nom::InputTake for Span<F, S> {
+    #[track_caller]
+    fn take(&self, count: usize) -> Self {
+        let self_len: usize = 1 + (self.end - self.start);
+        if count == 0 { panic!("Cannot take span of length 0"); }
+        if count > self_len { panic!("Cannot take span of length {count} from span of length {self_len}"); }
+        Span {
+            file   : self.file.clone(),
+            source : self.source.clone(),
+            start  : self.start,
+            end    : self.start + (count - 1),
+        }
+    }
+
+    #[track_caller]
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        let self_len: usize = 1 + (self.end - self.start);
+        if count == 0 || count >= self_len { panic!("Cannot split span on index {count} in span of length {self_len}"); }
+        (
+            Span {
+                file   : self.file.clone(),
+                source : self.source.clone(),
+                start  : self.start,
+                end    : self.start + (count - 1),
+            },
+            Span {
+                file   : self.file.clone(),
+                source : self.source.clone(),
+                start  : self.start + count,
+                end    : self.end,
+            },
+        )
+    }
 }
