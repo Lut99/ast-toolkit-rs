@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    22 Jul 2023, 13:19:12
+//    22 Jul 2023, 13:36:44
 //  Auto updated?
 //    Yes
 // 
@@ -43,6 +43,19 @@ mod tests {
         assert_eq!(span.text(), "World");
         let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(2, 6));
         assert_eq!(span.text(), "Hello\nWorld!");
+    }
+}
+
+#[cfg(feature = "nom")]
+#[cfg(test)]
+mod nom_tests {
+    use super::*;
+
+    #[test]
+    fn test_span_nom_as_bytes() {
+        // Create a few spans and see if they byte version equates what we expect
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", )), b"Example text");
     }
 }
 
