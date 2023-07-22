@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 15:47:40
 //  Last edited:
-//    20 Jul 2023, 18:59:28
+//    22 Jul 2023, 12:29:51
 //  Auto updated?
 //    Yes
 // 
@@ -19,7 +19,7 @@ mod diagnostic;
 
 
 /***** LIBRARY *****/
-/// See the documentation of the `Diagnostic` derive macro in the rustdocs.
+/// See the auto-generated documentation at `ast_toolkit::procedural::Diagnostic` for more information.
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_derive(Diagnostic, attributes(diagnostic, diag))]
 pub fn derive_directory(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

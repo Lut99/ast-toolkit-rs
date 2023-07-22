@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    20 Jul 2023, 19:40:49
+//    22 Jul 2023, 12:09:22
 //  Auto updated?
 //    Yes
 // 
@@ -43,14 +43,14 @@ pub enum TestError<F, S> {
     #[diag(note)]
     Note { span: Span<F, S> },
 
-    #[diag(suggestion, suggestion = "text")]
+    #[diag(suggestion, replace = "text")]
     Suggestion { span: Span<F, S> },
     #[diag(suggestion)]
-    SuggestionRuntime { suggestion: String, span: Span<F, S> },
+    SuggestionRuntime { replace: String, span: Span<F, S> },
 
     #[diag(error)]
-    #[diag(suggestion, message = "Replace with '{suggestion}'")]
-    Chained { identifier: String, suggestion: String, span: Span<F, S> },
+    #[diag(suggestion, message = "Replace with '{replace}'")]
+    Chained { identifier: String, replace: String, span: Span<F, S> },
 }
 impl<F, S> Display for TestError<F, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -99,8 +99,8 @@ fn main() {
 
     // Some suggestion
     Diagnostic::from(TestError::Suggestion { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
-    Diagnostic::from(TestError::SuggestionRuntime { suggestion: format!("text {}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
+    Diagnostic::from(TestError::SuggestionRuntime { replace: format!("text {}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
 
     // Chain a few
-    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), suggestion: "source".into(), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5) }).emit();
+    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), replace: "source".into(), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5) }).emit();
 }

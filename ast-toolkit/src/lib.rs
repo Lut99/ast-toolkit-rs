@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    20 Jul 2023, 19:49:20
+//    22 Jul 2023, 12:30:18
 //  Auto updated?
 //    Yes
 // 
@@ -52,7 +52,7 @@
 //!   ```
 //!   (colourized examples can be found [here](https://github.com/Lut99/ast-toolkit-rs))
 //!   
-//!   The interface of the struct is similar to the [`Diagnostic`](https://docs.rs/proc-macro-error/latest/proc_macro_error/struct.Diagnostic.html),
+//!   The interface of the struct is similar to the [`struct@Diagnostic`](https://docs.rs/proc-macro-error/latest/proc_macro_error/struct.Diagnostic.html),
 //!   with minor tweaks to be more convenient. Most notably, though, when the
 //!   `derive`-feature is enabled (see [below](#features)), there is a
 //!   convenient API for automatically creating [`struct@Diagnostic`]s for types
@@ -114,100 +114,312 @@ pub mod diagnostic;
 pub use span::{Position, Span};
 pub use diagnostic::{Diagnostic, DiagnosticKind};
 
-// Pull any macros into this namespace
-/// Derives [`From<Diagnostic>`] automatically on the annotated struct or enum.
-/// 
-/// You can create diagnostics for the struct or every enum variant by annotating them with `#[diag(...)]`. Toplevel attributes can be set on the struct or enum itself using `#[diagnostic(...)]`.
-/// 
-/// # Goal
-/// The main use-case of this macro is to provide easy-to-use interoparability with standard Rust enum errors. For example, consider the following error:
-/// ```rust
-/// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
-/// #[derive(Debug)]
-/// enum SourceError {
-///     InvalidType { identifier: String, got: DataType, expected: DataType },
-///     UndefinedSymbol { identifier: String, suggestion: String },
-///     DuplicateSymbol { identifier: String },
-/// }
-/// impl std::fmt::Display for SourceError {
-///     #[inline]
-///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-///         use SourceError::*;
-///         match self {
-///             InvalidType { identifier, got, expected } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
-///             UndefinedSymbol { identifier, suggestion } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
-///             DuplicateSymbol { identifier } => write!(f, "Duplicate variable '{identifier}'"),
-///         }
-///     }
-/// }
-/// impl std::error::Error for SourceError {}
-/// ```
-/// By adding spans and minimal annotations, we can turn this error into a real source-referring error:
-/// ```rust
-/// use ast_toolkit::{Diagnostic, Span};
-/// 
-/// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
-/// #[derive(Debug, Diagnostic)]
-/// enum SourceError<F, S> {
-///     #[diag(error)]
-///     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
-///     #[diag(error, message = "Unidentified variable '{identifier}'")]
-///     #[diag(suggestion, message = "Did you mean '{suggestion}'?")]
-///     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
-///     #[diag(error)]
-///     #[diag(note, message = "Previous declaration here", span = prev)]
-///     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
-/// }
-/// impl<F, S> std::fmt::Display for SourceError<F, S> {
-///     #[inline]
-///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-///         use SourceError::*;
-///         match self {
-///             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
-///             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
-///             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
-///         }
-///     }
-/// }
-/// impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
-/// ```
-/// To use:
-/// ```rust
-/// # use ast_toolkit::{Diagnostic, Span};
-/// # 
-/// # #[derive(Debug)] enum DataType { String, UnsignedInt8 } impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { match self { Self::String => write!(f, "string"), Self::UnsignedInt8 => write!(f, "uint8"), } } }
-/// # #[derive(Debug, Diagnostic)]
-/// # enum SourceError<F, S> {
-/// #     #[diag(error)]
-/// #     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
-/// #     #[diag(error, message = "Unidentified variable '{identifier}'")]
-/// #     #[diag(suggestion, message = "Did you mean '{suggestion}'?")]
-/// #     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
-/// #     #[diag(error)]
-/// #     #[diag(note, message = "Previous declaration here", span = prev)]
-/// #     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
-/// # }
-/// # impl<F, S> std::fmt::Display for SourceError<F, S> {
-/// #     #[inline]
-/// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-/// #         use SourceError::*;
-/// #         match self {
-/// #             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
-/// #             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
-/// #             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
-/// #         }
-/// #     }
-/// # }
-/// # impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
-/// # 
-/// let span: Span<&str, &str> = Span::from_idx("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40, 43);
-/// let err: SourceError<&str, &str> = SourceError::InvalidType {
-///     identifier: "test".into(),
-///     got: DataType::String,
-///     expected: DataType::UnsignedInt8,
-///     span,
-/// };
-/// Diagnostic::from(err).emit();
-/// ```
+// Pull any procedural macros into this namespace
+/// This module documents the use of the various procedural macros defined in the [`ast_toolkit_derive`]-crate.
+#[cfg(feature = "derive")]
+pub mod procedural {
+    /// The [`Diagnostic`](ast_toolkit_derive::Diagnostic) derive-macro automatically derives [`From<Diagnostic>`] on the annotated struct or enum.
+    /// 
+    /// You can create diagnostics for the struct or every enum variant by annotating them with `#[diag(...)]`. Toplevel attributes can be set on the struct or enum itself using `#[diagnostic(...)]`.
+    /// 
+    /// # Goal
+    /// The main use-case of this macro is to provide easy-to-use interoparability with standard Rust enum errors. For example, consider the following error:
+    /// ```rust
+    /// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
+    /// #[derive(Debug)]
+    /// enum SourceError {
+    ///     InvalidType { identifier: String, got: DataType, expected: DataType },
+    ///     UndefinedSymbol { identifier: String, suggestion: String },
+    ///     DuplicateSymbol { identifier: String },
+    /// }
+    /// impl std::fmt::Display for SourceError {
+    ///     #[inline]
+    ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///         use SourceError::*;
+    ///         match self {
+    ///             InvalidType { identifier, got, expected } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+    ///             UndefinedSymbol { identifier, suggestion } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+    ///             DuplicateSymbol { identifier } => write!(f, "Duplicate variable '{identifier}'"),
+    ///         }
+    ///     }
+    /// }
+    /// impl std::error::Error for SourceError {}
+    /// ```
+    /// By adding spans and minimal annotations, we can turn this error into a real source-referring error:
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
+    /// #[derive(Debug, Diagnostic)]
+    /// enum SourceError<F, S> {
+    ///     #[diag(error)]
+    ///     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
+    ///     #[diag(error, message = "Unidentified variable '{identifier}'")]
+    ///     #[diag(suggestion, message = "Did you mean '{suggestion}'?", replace = suggestion)]
+    ///     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
+    ///     #[diag(error)]
+    ///     #[diag(note, message = "Previous declaration here", span = prev)]
+    ///     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
+    /// }
+    /// impl<F, S> std::fmt::Display for SourceError<F, S> {
+    ///     #[inline]
+    ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///         use SourceError::*;
+    ///         match self {
+    ///             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+    ///             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+    ///             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
+    ///         }
+    ///     }
+    /// }
+    /// impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
+    /// ```
+    /// To use:
+    /// ```rust
+    /// # use ast_toolkit::{Diagnostic, Span};
+    /// # 
+    /// # #[derive(Debug)] enum DataType { String, UnsignedInt8 } impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { match self { Self::String => write!(f, "string"), Self::UnsignedInt8 => write!(f, "uint8"), } } }
+    /// # #[derive(Debug, Diagnostic)]
+    /// # enum SourceError<F, S> {
+    /// #     #[diag(error)]
+    /// #     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<F, S> },
+    /// #     #[diag(error, message = "Unidentified variable '{identifier}'")]
+    /// #     #[diag(suggestion, message = "Did you mean '{suggestion}'?", replace = suggestion)]
+    /// #     UndefinedSymbol { identifier: String, suggestion: String, span: Span<F, S> },
+    /// #     #[diag(error)]
+    /// #     #[diag(note, message = "Previous declaration here", span = prev)]
+    /// #     DuplicateSymbol { identifier: String, span: Span<F, S>, prev: Span<F, S> },
+    /// # }
+    /// # impl<F, S> std::fmt::Display for SourceError<F, S> {
+    /// #     #[inline]
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// #         use SourceError::*;
+    /// #         match self {
+    /// #             InvalidType { identifier, got, expected, .. } => write!(f, "Variable '{identifier}' has type {got}, expected type {expected}"),
+    /// #             UndefinedSymbol { identifier, suggestion, .. } => write!(f, "Undefined variable '{identifier}' (did you mean '{suggestion}'?)"),
+    /// #             DuplicateSymbol { identifier, .. } => write!(f, "Duplicate variable '{identifier}'"),
+    /// #         }
+    /// #     }
+    /// # }
+    /// # impl<F: std::fmt::Debug, S: std::fmt::Debug> std::error::Error for SourceError<F, S> {}
+    /// # 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40, 43);
+    /// let err: SourceError<&str, &str> = SourceError::InvalidType {
+    ///     identifier: "test".into(),
+    ///     got: DataType::String,
+    ///     expected: DataType::UnsignedInt8,
+    ///     span,
+    /// };
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// 
+    /// # Attributes
+    /// ## Toplevel
+    /// To the toplevel struct or enum that you derive you can use `#[diagnostic(...)]` to change any global settings. Specifically:
+    /// - `#[diagnostic(generics = "<FILE_TYPE, STRING_TYPE>")]`: Changes the generics used in the [`Diagnostic`](crate::diagnostic::Diagnostic). By default, this is `"<F, S>"`,
+    ///   which are automatically added to the generics for the derived implementations if any of them is missing from the list in the struct or enum.
+    ///   For example:
+    ///   ```rust
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   # #[derive(Debug)] enum DataType {};
+    ///   #[derive(Debug, Diagnostic)]
+    ///   #[diagnostic(generics = "<String, String>")]
+    ///   enum SourceError {
+    ///       #[diag(error, message = "Unknown identifier '{identifier}'")]
+    ///       InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<String, String> },
+    ///   }
+    /// 
+    /// ## Variant-level
+    /// For every variant (or the struct itself if you are deriving a struct), you can use `#[diag(...)]` to derive a new [`Diagnostic`](crate::diagnostic::Diagnostic) from that variant. Specifically:
+    /// - `#[diag(error)]`, `#[diag(warn)]`, `#[diag(note)]`, `#[diag(suggestion)]`: Derive a new error-, warning-, note- or suggestion-diagnostic from this variant.
+    ///   How to derive it is guided by specifying or omitting any of the other arguments.
+    /// - `#[diag(message = "<MESSAGE>")]` or `#[diag(message = <FIELD>)]`: Specifies the main message to set for this diagnostic. If a string value is given, then that value
+    ///   is used literally; although it is used in a format string with access to all the variant's fields, so you can use those inline. If an identifier is given, then
+    ///   the value of that field is used, which must implement [`Display`](std::fmt::Display). Finally, if omitted, then `format!(self)` is used to rely on the struct or
+    ///   enum's [`Display`](std::fmt::Display) implementation.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use std::fmt::{Display, Formatter, Result as FResult};
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Debug, Diagnostic)]
+    ///   enum Error<F, S> {
+    ///       /// First case, where we specify a (potentially formatted) string as message:
+    ///       #[diag(error, message = "Hello, {world}!")]
+    ///       HelloX { world: String, span: Span<F, S> },
+    ///   
+    ///       /// Second case, where we directly use the value of a field:
+    ///       #[diag(error, message = hello_world)]
+    ///       HelloWorld { hello_world: String, span: Span<F, S> },
+    /// 
+    ///       /// Third case, where we use the [`Display`]-implementation
+    ///       #[diag(error)]
+    ///       HelloDisplay { span: Span<F, S> },
+    ///   }
+    ///   impl<F, S> Display for Error<F, S> {
+    ///       fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///           write!(f, "Hello, display!")
+    ///       }
+    ///   }
+    ///   ```
+    /// - `#[diag(code = "<CODE>")]` or `#[diag(code = <FIELD>)]` or `#[diag(code)]`: Specifies an optional error-code-like identifier for this [`Diagnostic`](crate::diagnostic::Diagnostic). If a
+    ///   string value is given, then it is used literally (no formatting); if an identifier is given, then the value of that field is used; or optionally, if no
+    ///   value is given at all, then a default field name of `code` is assumed.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use std::fmt::{Display, Formatter, Result as FResult};
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Debug, Diagnostic)]
+    ///   enum Error<F, S> {
+    ///       /// First case, where we specify a string as code:
+    ///       #[diag(error, code = "err1")]
+    ///       LiteralCode { span: Span<F, S> },
+    ///   
+    ///       /// Second case, where we use the value of a field:
+    ///       #[diag(error, code = warn_code)]
+    ///       FieldCode { warn_code: String, span: Span<F, S> },
+    /// 
+    ///       /// Third case, where we use the value of a the default `code`-field:
+    ///       #[diag(error, code)]
+    ///       AutoCode { code: String, span: Span<F, S> },
+    /// 
+    ///       /// And, of course, the fourth case, which has no code:
+    ///       #[diag(error)]
+    ///       NoCode { span: Span<F, S> },
+    ///   }
+    ///   // ...
+    ///   # impl<F, S> Display for Error<F, S> {
+    ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///   #         write!(f, "Some message")
+    ///   #     }
+    ///   # }
+    ///   ```
+    /// - `#[diag(remark = "<REMARK>")]` or `#[diag(remark = <FIELD>)]` or `#[diag(remark)]`: Specifies an optional small remark or note at the bottom of this
+    ///   [`Diagnostic`](crate::diagnostic::Diagnostic). Note that this is significantly different from specifying a second `#[diag(note)]` derivation, and is subsequently less expressive.
+    ///   
+    ///   If a string value is given, then it is used literally (no formatting); if an identifier is given, then the value of that field is used; or optionally,
+    ///   if no value is given at all, then a default field name of `remark` is assumed.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use std::fmt::{Display, Formatter, Result as FResult};
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Debug, Diagnostic)]
+    ///   enum Error<F, S> {
+    ///       /// First case, where we specify a string as remark:
+    ///       #[diag(error, remark = "Additional information")]
+    ///       LiteralRemark { span: Span<F, S> },
+    ///   
+    ///       /// Second case, where we use the value of a field:
+    ///       #[diag(error, remark = note)]
+    ///       FieldRemark { note: String, span: Span<F, S> },
+    /// 
+    ///       /// Third case, where we use the value of a the default `remark`-field:
+    ///       #[diag(error, remark)]
+    ///       AutoRemark { remark: String, span: Span<F, S> },
+    /// 
+    ///       /// And, of course, the fourth case, which has no remark:
+    ///       #[diag(error)]
+    ///       NoRemark { span: Span<F, S> },
+    ///   }
+    ///   // ...
+    ///   # impl<F, S> Display for Error<F, S> {
+    ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///   #         write!(f, "Some message")
+    ///   #     }
+    ///   # }
+    ///   ```
+    /// - `#[diag(replace = "<NEW SOURCE>")]` or `#[diag(replace = <FIELD>)]` or `#[diag(replace)]`: Specifies a replacement for the spanned source text to give as a
+    ///   suggestion. *NOTE*: This field is only available for `#[diag(suggestion)]`-diagnostics.
+    ///   
+    ///   If a string value is given, then it is used literally (with field formatting); if an identifier is given, then the value of that field is used; or optionally,
+    ///   if no value is given at all, then a default field name of `replace` is assumed.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use std::fmt::{Display, Formatter, Result as FResult};
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Debug, Diagnostic)]
+    ///   enum Error<F, S> {
+    ///       /// First case, where we specify a (potentially formatted) string as remark:
+    ///       #[diag(suggestion, replace = "let {ident} = \"Hello, there!\"")]
+    ///       LiteralReplace { ident: String, span: Span<F, S> },
+    ///   
+    ///       /// Second case, where we use the value of a field:
+    ///       #[diag(suggestion, replace = new_code)]
+    ///       FieldReplace { new_code: String, span: Span<F, S> },
+    /// 
+    ///       /// Third case, where we use the value of a the default `remark`-field:
+    ///       #[diag(suggestion, replace)]
+    ///       AutoReplace { replace: String, span: Span<F, S> },
+    ///       /// This is equivalent to omitting it altogether for `#[diag(suggestion)]`-diagnostics:
+    ///       #[diag(suggestion)]
+    ///       NoReplace { replace: String, span: Span<F, S> },
+    ///   }
+    ///   // ...
+    ///   # impl<F, S> Display for Error<F, S> {
+    ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///   #         write!(f, "Some message")
+    ///   #     }
+    ///   # }
+    ///   ```
+    /// - `#[diag(span = <FIELD>)]` or `#[diag(span)]`: Specifies the fieldname of the [`Span`](crate::span::Span) that links the diagnostic to the source text. If not value is given, then
+    ///   a default fieldname of `span` is used. Omitting the attribute altogether will yield the same result.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use std::fmt::{Display, Formatter, Result as FResult};
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Debug, Diagnostic)]
+    ///   enum Error<F, S> {
+    ///       /// First case, where we specify the field manually:
+    ///       #[diag(error, span = main_span)]
+    ///       FieldSpan { main_span: Span<F, S> },
+    ///   
+    ///       /// Second case, where we use the default fieldname:
+    ///       #[diag(error, span)]
+    ///       AutoSpan { new_code: String, span: Span<F, S> },
+    ///       /// This is equivalent to omitting it altogether:
+    ///       #[diag(error)]
+    ///       NoSpan { replace: String, span: Span<F, S> },
+    ///   }
+    ///   // ...
+    ///   # impl<F, S> Display for Error<F, S> {
+    ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///   #         write!(f, "Some message")
+    ///   #     }
+    ///   # }
+    ///   ```
+    /// 
+    /// # Chaining
+    /// A key feature of the API is that multipe [`Diagnostic`](crate::diagnostic::Diagnostic) can be derived per struct or variant:
+    /// ```rust
+    /// use std::fmt::{Debug, Display, Formatter, Result as FResult};
+    /// use ast_toolkit::{Diagnostic, Span};
+    /// 
+    /// #[derive(Debug, Diagnostic)]
+    /// #[diag(error, code = "bad", span = main_span)]
+    /// #[diag(note, message = "See here for more information", span = note_span)]
+    /// struct Error<F, S> {
+    ///     main_span : Span<F, S>,
+    ///     note_span : Span<F, S>,
+    /// }
+    /// impl<F, S> Display for Error<F, S> {
+    ///     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+    ///         write!(f, "Oh no! A fatal error has occurred!")
+    ///     }
+    /// }
+    /// impl<F: Debug, S: Debug> std::error::Error for Error<F, S> {}
+    /// ```
+    #[allow(non_snake_case)]
+    pub mod Diagnostic {}
+}
 #[cfg(feature = "derive")]
 pub use ast_toolkit_derive::Diagnostic;

@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    17 Jul 2023, 19:54:16
+//    22 Jul 2023, 11:57:21
 //  Auto updated?
 //    Yes
 // 
@@ -37,7 +37,7 @@ enum DiagnosticSpecific {
     /// A suggestion.
     Suggestion {
         /// Provides a replacement for the [`Span`]ned area.
-        suggestion : String,
+        replace : String,
     },
 }
 
@@ -260,7 +260,7 @@ impl<F, S> Diagnostic<F, S> {
     /// # Arguments
     /// - `message`: The message to show to the user.
     /// - `span`: The [`Span`] that relates this diagnostic to the source text.
-    /// - `suggestion`: An alternative source code to show instead of the `span`ned source text.
+    /// - `replacement`: An alternative source code to show instead of the `span`ned source text.
     /// 
     /// # Returns
     /// A new Diagnostic that will emit a suggestion.
@@ -275,13 +275,13 @@ impl<F, S> Diagnostic<F, S> {
     /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::suggestion("An example suggestion.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()), "A better example.");
     /// ```
     #[inline]
-    pub fn suggestion(message: impl Into<String>, span: impl Into<Span<F, S>>, suggestion: impl Into<String>) -> Self {
+    pub fn suggestion(message: impl Into<String>, span: impl Into<Span<F, S>>, replacement: impl Into<String>) -> Self {
         Self {
             message : message.into(),
             code    : None,
             remark  : None,
             span    : span.into(),
-            kind    : DiagnosticSpecific::Suggestion { suggestion: suggestion.into() },
+            kind    : DiagnosticSpecific::Suggestion { replace: replacement.into() },
             sub     : vec![],
         }
     }
@@ -578,7 +578,7 @@ impl<F, S> Diagnostic<F, S> {
         }
     }
 
-    /// Returns the new code to display.
+    /// Returns the new code to suggest instead of the currently highlighted code.
     /// 
     /// # Returns
     /// A [`&str`](str) that refers to the new code.
@@ -591,11 +591,11 @@ impl<F, S> Diagnostic<F, S> {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
-    /// assert_eq!(Diagnostic::suggestion("Try writing 'World' lowercase", span, "world").suggestion_text(), "world");
+    /// assert_eq!(Diagnostic::suggestion("Try writing 'World' lowercase", span, "world").replacement(), "world");
     /// ```
     #[inline]
     #[track_caller]
-    pub fn suggestion_text(&self) -> &str { if let DiagnosticSpecific::Suggestion { suggestion } = &self.kind { suggestion } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
+    pub fn replacement(&self) -> &str { if let DiagnosticSpecific::Suggestion { replace } = &self.kind { replace } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
 }
 impl<F, S: Deref<Target = str>> Diagnostic<F, S> {
     /// Returns the text referred to by the span in this Diagnostic.
@@ -638,16 +638,16 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
             DiagnosticSpecific::Note    => ("note", Style::new().bold().green(), self.span.lines().into_iter().map(|s| s.into()).collect(), self.span.start(), self.span.end()),
 
             // Suggestions, however, have a different thing to write too
-            DiagnosticSpecific::Suggestion { suggestion } => {
+            DiagnosticSpecific::Suggestion { replace } => {
                 // First, collect the source to show
                 let source: String = self.span.lines().join("\n");
                 // Replace the part with the code
-                let source: String = source.replace(self.span.text(), suggestion);
+                let source: String = source.replace(self.span.text(), replace);
                 // Store again as a Lines
                 let lines: Vec<String> = source.split('\n').map(|s| s.into()).collect();
 
                 // Now get the adapted start and end and return
-                let (start, end): (Position, Position) = (self.span.start(), self.span.pos_of(self.span.start + suggestion.graphemes(true).map(|c| c.len()).sum::<usize>() - 1));
+                let (start, end): (Position, Position) = (self.span.start(), self.span.pos_of(self.span.start + replace.graphemes(true).map(|c| c.len()).sum::<usize>() - 1));
                 ("suggestion", Style::new().cyan().bold(), lines, start, end)
             },
         };

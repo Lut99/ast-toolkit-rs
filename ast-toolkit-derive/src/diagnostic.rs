@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    20 Jul 2023, 19:45:41
+//    22 Jul 2023, 12:12:31
 //  Auto updated?
 //    Yes
 // 
@@ -35,6 +35,130 @@ use syn::spanned::Spanned as _;
 #[inline]
 fn generate_random_identifier() -> String {
     format!("___{}", rand::thread_rng().sample_iter(Alphanumeric).take(16).map(char::from).collect::<String>())
+}
+
+
+
+/// Parses the given expression as if it was a value for the `message`-attribute.
+/// 
+/// # Arguments
+/// - `expr`: The [`Expr`] to parse. If [`None`], then a value of [`StringOrField::Field("message")`] is returned.
+/// - `span`: The [`Span`] of the `message`-identifier to pass to any newly created fields.
+/// 
+/// # Returns
+/// The parsed value, as a [`StringOrField`].
+/// 
+/// # Errors
+/// This function may error if the given `expr` was not value for a `message` at all.
+fn parse_message_value(expr: Option<Expr>, span: Span) -> Result<StringOrField, proc_macro_error::Diagnostic> {
+    // Parse the value as a string literal or a direct identifier
+    match expr {
+        Some(Expr::Lit(ExprLit { lit: Lit::Str(s), .. })) => Ok(StringOrField::String(s.value())),
+        Some(Expr::Path(ExprPath { path, qself: None, .. })) => if let Some(ident) = path.get_ident() {
+            Ok(StringOrField::Field(ident.clone()))
+        } else {
+            Err(proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()))
+        },
+        Some(expr) => Err(proc_macro_error::Diagnostic::spanned(expr.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into())),
+        None => Ok(StringOrField::Field(Ident::new("message", span))),
+    }
+}
+
+/// Parses the given expression as if it was a value for the `code`-attribute.
+/// 
+/// # Arguments
+/// - `expr`: The [`Expr`] to parse. If [`None`], then a value of [`StringOrField::Field("code")`] is returned.
+/// - `span`: The [`Span`] of the `code`-identifier to pass to any newly created fields.
+/// 
+/// # Returns
+/// The parsed value, as a [`StringOrField`].
+/// 
+/// # Errors
+/// This function may error if the given `expr` was not value for a `code` at all.
+fn parse_code_value(expr: Option<Expr>, span: Span) -> Result<StringOrField, proc_macro_error::Diagnostic> {
+    // Parse the value as a string literal or a direct identifier
+    match expr {
+        Some(Expr::Lit(ExprLit { lit: Lit::Str(s), .. })) => Ok(StringOrField::String(s.value())),
+        Some(Expr::Path(ExprPath { path, qself: None, .. })) => if let Some(ident) = path.get_ident() {
+            Ok(StringOrField::Field(ident.clone()))
+        } else {
+            Err(proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()))
+        },
+        Some(expr) => Err(proc_macro_error::Diagnostic::spanned(expr.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into())),
+        None => Ok(StringOrField::Field(Ident::new("code", span))),
+    }
+}
+
+/// Parses the given expression as if it was a value for the `remark`-attribute.
+/// 
+/// # Arguments
+/// - `expr`: The [`Expr`] to parse. If [`None`], then a value of [`StringOrField::Field("remark")`] is returned.
+/// - `span`: The [`Span`] of the `remark`-identifier to pass to any newly created fields.
+/// 
+/// # Returns
+/// The parsed value, as a [`StringOrField`].
+/// 
+/// # Errors
+/// This function may error if the given `expr` was not value for a `remark` at all.
+fn parse_remark_value(expr: Option<Expr>, span: Span) -> Result<StringOrField, proc_macro_error::Diagnostic> {
+    // Parse the value as a string literal or a direct identifier
+    match expr {
+        Some(Expr::Lit(ExprLit { lit: Lit::Str(s), .. })) => Ok(StringOrField::String(s.value())),
+        Some(Expr::Path(ExprPath { path, qself: None, .. })) => if let Some(ident) = path.get_ident() {
+            Ok(StringOrField::Field(ident.clone()))
+        } else {
+            Err(proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()))
+        },
+        Some(expr) => Err(proc_macro_error::Diagnostic::spanned(expr.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into())),
+        None => Ok(StringOrField::Field(Ident::new("remark", span))),
+    }
+}
+
+/// Parses the given expression as if it was a value for the `replace`-attribute.
+/// 
+/// # Arguments
+/// - `expr`: The [`Expr`] to parse. If [`None`], then a value of [`StringOrField::Field("replace")`] is returned.
+/// - `span`: The [`Span`] of the `replace`-identifier to pass to any newly created fields.
+/// 
+/// # Returns
+/// The parsed value, as a [`StringOrField`].
+/// 
+/// # Errors
+/// This function may error if the given `expr` was not value for a `replace` at all.
+fn parse_replace_value(expr: Option<Expr>, span: Span) -> Result<(StringOrField, Span), proc_macro_error::Diagnostic> {
+    match expr {
+        Some(Expr::Lit(ExprLit { lit: Lit::Str(s), .. })) => Ok((StringOrField::String(s.value()), span)),
+        Some(Expr::Path(ExprPath { path, qself: None, .. })) => if let Some(ident) = path.get_ident() {
+            Ok((StringOrField::Field(ident.clone()), span))
+        } else {
+            Err(proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()))
+        },
+        Some(expr) => Err(proc_macro_error::Diagnostic::spanned(expr.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into())),
+        None => Ok((StringOrField::Field(Ident::new("replace", span)), span)),
+    }
+}
+
+/// Parses the given expression as if it was a value for the `span`-attribute.
+/// 
+/// # Arguments
+/// - `expr`: The [`Expr`] to parse. If [`None`], then a value of [`StringOrField::Field("span")`] is returned.
+/// - `span`: The [`Span`] of the `span`-identifier to pass to any newly created fields.
+/// 
+/// # Returns
+/// The parsed field name.
+/// 
+/// # Errors
+/// This function may error if the given `expr` was not value for a `span` at all.
+fn parse_span_value(expr: Option<Expr>, span: Span) -> Result<Ident, proc_macro_error::Diagnostic> {
+    match expr {
+        Some(Expr::Path(ExprPath { path, qself: None, .. })) => if let Some(ident) = path.get_ident() {
+            Ok(ident.clone())
+        } else {
+            Err(proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected identifier".into()))
+        },
+        Some(expr) => Err(proc_macro_error::Diagnostic::spanned(expr.span(), proc_macro_error::Level::Error, "Expected identifier".into())),
+        None => Ok(Ident::new("span", span)),
+    }
 }
 
 
@@ -171,80 +295,60 @@ fn parse_field_attrs(attrs: impl AsRef<[Attribute]>, span: Span) -> Result<Vec<F
                         } else if p.is_ident("suggestion") {
                             // Note down the type of the attribute
                             f.kind = DiagnosticKind::Suggestion;
+                        } else if p.is_ident("message") {
+                            f.message = match parse_message_value(None, p.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
+                        } else if p.is_ident("code") {
+                            f.code = match parse_code_value(None, p.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
+                        } else if p.is_ident("remark") {
+                            f.remark = match parse_remark_value(None, p.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
+                        } else if p.is_ident("replace") {
+                            f.replace = match parse_replace_value(None, p.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            }
+                        } else if p.is_ident("span") {
+                            f.span = match parse_span_value(None, p.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
                         } else {
                             proc_macro_error::Diagnostic::spanned(p.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", p.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
                         },
                         
                         Meta::NameValue(nv) => if nv.path.is_ident("message") {
-                            // Parse the value as a string literal or a direct identifier
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.message = Some(StringOrField::String(s.value()));
-                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.message = Some(if let Some(path) = path.get_ident() {
-                                    StringOrField::Field(path.clone())
-                                } else {
-                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                    continue;
-                                });
-                            } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                continue;
-                            }
+                            f.message = match parse_message_value(Some(nv.value), nv.path.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
                         } else if nv.path.is_ident("code") {
-                            // Parse the value as a string literal or a direct identifier
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.code = Some(StringOrField::String(s.value()));
-                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.code = Some(if let Some(path) = path.get_ident() {
-                                    StringOrField::Field(path.clone())
-                                } else {
-                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                    continue;
-                                });
-                            } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                continue;
-                            }
+                            f.code = match parse_code_value(Some(nv.value), nv.path.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
                         } else if nv.path.is_ident("remark") {
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.remark = Some(StringOrField::String(s.value()));
-                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.remark = Some(if let Some(path) = path.get_ident() {
-                                    StringOrField::Field(path.clone())
-                                } else {
-                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                    continue;
-                                });
-                            } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                continue;
-                            }
-                        } else if nv.path.is_ident("suggestion") {
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
-                                f.suggestion = Some((StringOrField::String(s.value()), nv.path.span()));
-                            } else if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.suggestion = Some(if let Some(path) = path.get_ident() {
-                                    (StringOrField::Field(path.clone()), nv.path.span())
-                                } else {
-                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                    continue;
-                                });
-                            } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected string literal or identifier".into()).emit();
-                                continue;
+                            f.remark = match parse_remark_value(Some(nv.value), nv.path.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
+                        } else if nv.path.is_ident("replace") {
+                            f.replace = match parse_replace_value(Some(nv.value), nv.path.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
                             }
                         } else if nv.path.is_ident("span") {
-                            if let Expr::Path(ExprPath { path, qself: None, .. }) = nv.value {
-                                f.span = Some(if let Some(path) = path.get_ident() {
-                                    path.clone()
-                                } else {
-                                    proc_macro_error::Diagnostic::spanned(path.span(), proc_macro_error::Level::Error, "Expected identifier".into()).emit();
-                                    continue;
-                                });
-                            } else {
-                                proc_macro_error::Diagnostic::spanned(nv.value.span(), proc_macro_error::Level::Error, "Expected identifier".into()).emit();
-                                continue;
-                            }
+                            f.span = match parse_span_value(Some(nv.value), nv.path.span()) {
+                                Ok(res) => Some(res),
+                                Err(err) => { err.emit(); continue; },
+                            };
                         } else {
                             proc_macro_error::Diagnostic::spanned(nv.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diag(...)]'", nv.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
                         },
@@ -320,25 +424,25 @@ fn parse_fields(fkind: FieldKind, _tattrs: &ToplevelAttributes, fattrs: Vec<Fiel
             None                           => None,
         };
         // Resolve the suggestion
-        let suggestion: Option<DuoStrategy> = match attr.suggestion {
+        let suggestion: Option<DuoStrategy> = match attr.replace {
             Some((suggestion, span)) => if attr.kind == DiagnosticKind::Suggestion {
                 match suggestion {
                     StringOrField::String(s) => Some(DuoStrategy::String(s)),
                     StringOrField::Field(f)  => { if fs.iter().find(|f2| f.to_string() == f2.to_string()).is_none() { return Err(proc_macro_error::Diagnostic::spanned(f.span(), proc_macro_error::Level::Error, format!("Field `{}` not found", f.to_string()))); }; Some(DuoStrategy::Field(f)) },
                 }
             } else {
-                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Warning, "`suggestion` field is ignored for non-Suggestion diagnostics".into()).emit();
+                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Warning, "`replace` field is ignored for non-Suggestion diagnostics".into()).emit();
                 None
             },
             None => if attr.kind == DiagnosticKind::Suggestion {
                 // See if there is an identifier to set
-                match fs.iter().find(|f| f.to_string() == "suggestion") {
+                match fs.iter().find(|f| f.to_string() == "replace") {
                     Some(f) => Some(DuoStrategy::Field(f.clone())),
                     None => {
                         let full_span: Option<Span> = attr.diag.join(attr.lparen);
-                        return Err(proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `suggestion`-field defined in struct".into())
-                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = \"<message>\"` argument to set the message manually", if full_span.is_some() { "diag(suggestion = \"foo()\", ".into() } else { "(suggestion = \"foo()\", ".into() })
-                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `suggestion = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(suggestion = foo, ".into() } else { "(suggestion = foo, ".into() }));
+                        return Err(proc_macro_error::Diagnostic::spanned(attr.diag, proc_macro_error::Level::Error, "No `replace`-field defined in struct".into())
+                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `replace = \"<message>\"` argument to set the message manually", if full_span.is_some() { "diag(replace = \"foo()\", ".into() } else { "(replace = \"foo()\", ".into() })
+                            .span_suggestion(full_span.unwrap_or_else(|| attr.lparen), "Add a `replace = <field>` argument to refer to one of the struct's fields", if full_span.is_some() { "diag(replace = foo, ".into() } else { "(replace = foo, ".into() }));
                     }
                 }
             } else {
@@ -664,17 +768,17 @@ struct FieldAttributes {
     lparen : Span,
 
     /// The kind of diagnostic we are parsing.
-    kind       : DiagnosticKind,
+    kind    : DiagnosticKind,
     /// The message given by the user.
-    message    : Option<StringOrField>,
+    message : Option<StringOrField>,
     /// The code to set, if any.
-    code       : Option<StringOrField>,
+    code    : Option<StringOrField>,
     /// The note to set, if any.
-    remark     : Option<StringOrField>,
+    remark  : Option<StringOrField>,
     /// The suggestion to give, if any.
-    suggestion : Option<(StringOrField, Span)>,
+    replace : Option<(StringOrField, Span)>,
     /// Any explicit span given by the user, which always refers to a field.
-    span       : Option<Ident>,
+    span    : Option<Ident>,
 }
 impl FieldAttributes {
     /// Creates an empty attributes that can be populated as attributes pop up their heads.
@@ -695,7 +799,7 @@ impl FieldAttributes {
             message    : None,
             remark     : None,
             code       : None,
-            suggestion : None,
+            replace : None,
             span       : None,
         }
     }
