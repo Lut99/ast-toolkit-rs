@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    22 Jul 2023, 13:36:44
+//    06 Aug 2023, 16:29:18
 //  Auto updated?
 //    Yes
 // 
@@ -55,7 +55,38 @@ mod nom_tests {
     fn test_span_nom_as_bytes() {
         // Create a few spans and see if they byte version equates what we expect
         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", )), b"Example text");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
+    }
+    #[test]
+    fn test_span_nom_input_length() {
+        // Create a few spans and see if their length matches with what we expect
+        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
+        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 0, 6)), 7);
+        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 8, 11)), 4);
+        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 3, 9)), 7);
+    }
+    #[test]
+    fn test_span_nom_input_take() {
+        // See if we can take and split how we expect
+        assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
+        assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
+        assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+
+        // Now compare the split
+        assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
+        assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
+        assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+    }
+    #[test]
+    fn test_span_nom_compare() {
+        // Do some comparisons
+        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
+        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 0, 6), "Example"), nom::CompareResult::Ok);
+        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 8, 11), "text"), nom::CompareResult::Ok);
+        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
+        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
     }
 }
 
@@ -78,6 +109,18 @@ macro_rules! assert_range {
 
 
 /***** AUXILLARY *****/
+/// Defines an iterator over the characters in a span.
+#[derive(Clone, Copy, Debug)]
+pub struct IntoChars<F, S> {
+    /// The string to iterate over
+    s : ,
+}
+
+
+
+
+
+/***** LIBRARY *****/
 /// Defines the position of a character in the source text.
 /// 
 /// # Example
@@ -422,9 +465,6 @@ impl From<&mut Position> for Position {
 
 
 
-
-
-/***** LIBRARY *****/
 /// Represents a snippet of parsed source text, which is used to link a node to a particular set of it.
 /// 
 /// # Generics
@@ -903,6 +943,27 @@ impl<F, S: Deref<Target = str>> nom::AsBytes for Span<F, S> {
     }
 }
 #[cfg(feature = "nom")]
+impl<F, S: Deref<Target = str>> nom::InputIter for Span<F, S> {
+    type Item = ();
+    type Iter = CharIndices;
+    type IterElem = Chars;
+
+    fn iter_elements(&self) -> Self::IterElem {
+        
+    }
+    fn iter_indices(&self) -> Self::Iter {
+        
+    }
+    fn position<P>(&self, predicate: P) -> Option<usize>
+      where
+        P: Fn(Self::Item) -> bool {
+        
+    }
+    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+        
+    }
+}
+#[cfg(feature = "nom")]
 impl<F, S> nom::InputLength for Span<F, S> {
     #[track_caller]
     fn input_len(&self) -> usize { 1 + (self.end - self.start) }
@@ -940,5 +1001,17 @@ impl<F: Clone, S: Clone + Deref<Target = str>> nom::InputTake for Span<F, S> {
                 end    : self.end,
             },
         )
+    }
+}
+#[cfg(feature = "nom")]
+impl<F, S: Deref<Target = str>, S2: Deref<Target = str>> nom::Compare<S2> for Span<F, S> {
+    #[inline]
+    fn compare(&self, t: S2) -> nom::CompareResult {
+        <&str as nom::Compare<&str>>::compare(&&**self, &*t)
+    }
+
+    #[inline]
+    fn compare_no_case(&self, t: S2) -> nom::CompareResult {
+        <&str as nom::Compare<&str>>::compare_no_case(&&**self, &*t)
     }
 }
