@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    06 Aug 2023, 16:29:18
+//    07 Aug 2023, 16:53:36
 //  Auto updated?
 //    Yes
 // 
@@ -113,7 +113,25 @@ macro_rules! assert_range {
 #[derive(Clone, Copy, Debug)]
 pub struct IntoChars<F, S> {
     /// The string to iterate over
-    s : ,
+    s : Span<F, S>,
+    /// The length of the string, in characters.
+    c : usize,
+    /// The index of iteration
+    i : usize,
+}
+impl<F, S: Deref<Target = str>> Iterator for IntoChars<F, S> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i >= self.c { return None; }
+        match (*self.s.source)[self.s.start + self.i..=self.s.end].char_indices().next() {
+            Some((_, c)) => { self.i = i; }
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.c, Some(self.c))
+    }
 }
 
 
