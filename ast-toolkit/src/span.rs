@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    08 Aug 2023, 16:14:37
+//    08 Aug 2023, 16:57:48
 //  Auto updated?
 //    Yes
 // 
@@ -47,27 +47,27 @@ mod tests {
     }
 }
 
-// #[cfg(feature = "nom")]
-// #[cfg(test)]
-// mod nom_tests {
-//     use super::*;
+#[cfg(feature = "nom")]
+#[cfg(test)]
+mod nom_tests {
+    use super::*;
 
-//     #[test]
-//     fn test_span_nom_as_bytes() {
-//         // Create a few spans and see if they byte version equates what we expect
-//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
-//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
-//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
-//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
-//     }
-//     #[test]
-//     fn test_span_nom_input_iter() {
-//         // Try some iterations
-//         let target: &str = "Example text";
-//         for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
-//             assert_eq!(b, target.as_bytes()[i]);
-//         }
-//     }
+    #[test]
+    fn test_span_nom_as_bytes() {
+        // Create a few spans and see if they byte version equates what we expect
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
+        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
+    }
+    #[test]
+    fn test_span_nom_input_iter() {
+        // Try some iterations
+        let target: &str = "Example text";
+        for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
+            assert_eq!(b, target.as_bytes()[i]);
+        }
+    }
 //     #[test]
 //     fn test_span_nom_input_length() {
 //         // Create a few spans and see if their length matches with what we expect
@@ -97,7 +97,7 @@ mod tests {
 //         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
 //         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
 //     }
-// }
+}
 
 
 
@@ -793,15 +793,18 @@ impl<F: Clone, S: Clone> From<&mut Span<F, S>> for Span<F, S> {
 }
 
 
-// // nom-related things
-// #[cfg(feature = "nom")]
-// impl<F, S: Deref<Target = str>> nom::AsBytes for Span<F, S> {
-//     #[track_caller]
-//     fn as_bytes(&self) -> &[u8] {
-//         assert_range!(self.start, self.end, self.source);
-//         self.source[self.start..=self.end].as_bytes()
-//     }
-// }
+// nom-related things
+#[cfg(feature = "nom")]
+impl<'s, F, S: 's + Spannable> nom::AsBytes for Span<F, S>
+where
+    S::Subset<'s>: nom::AsBytes,
+{
+    #[track_caller]
+    fn as_bytes(&self) -> &[u8] {
+        assert_range!(self.start, self.end, self.source);
+        self.source.subset(self.start, self.end).as_bytes()
+    }
+}
 
 // #[cfg(feature = "nom")]
 // impl<F, S: Deref<Target = str>> nom::ExtendInto for Span<F, S> {
