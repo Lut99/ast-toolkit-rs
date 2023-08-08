@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    07 Aug 2023, 16:53:36
+//    08 Aug 2023, 16:14:37
 //  Auto updated?
 //    Yes
 // 
@@ -13,12 +13,13 @@
 //!   track of a node's position in the source text.
 // 
 
-use std::cmp::Ordering;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::Display;
 use std::ops::Deref;
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
+
+use crate::position::Position;
 
 
 /***** TESTS *****/
@@ -46,49 +47,57 @@ mod tests {
     }
 }
 
-#[cfg(feature = "nom")]
-#[cfg(test)]
-mod nom_tests {
-    use super::*;
+// #[cfg(feature = "nom")]
+// #[cfg(test)]
+// mod nom_tests {
+//     use super::*;
 
-    #[test]
-    fn test_span_nom_as_bytes() {
-        // Create a few spans and see if they byte version equates what we expect
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
-    }
-    #[test]
-    fn test_span_nom_input_length() {
-        // Create a few spans and see if their length matches with what we expect
-        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
-        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 0, 6)), 7);
-        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 8, 11)), 4);
-        assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 3, 9)), 7);
-    }
-    #[test]
-    fn test_span_nom_input_take() {
-        // See if we can take and split how we expect
-        assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
-        assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
-        assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+//     #[test]
+//     fn test_span_nom_as_bytes() {
+//         // Create a few spans and see if they byte version equates what we expect
+//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
+//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
+//         assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
+//     }
+//     #[test]
+//     fn test_span_nom_input_iter() {
+//         // Try some iterations
+//         let target: &str = "Example text";
+//         for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
+//             assert_eq!(b, target.as_bytes()[i]);
+//         }
+//     }
+//     #[test]
+//     fn test_span_nom_input_length() {
+//         // Create a few spans and see if their length matches with what we expect
+//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
+//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 0, 6)), 7);
+//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 8, 11)), 4);
+//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 3, 9)), 7);
+//     }
+//     #[test]
+//     fn test_span_nom_input_take() {
+//         // See if we can take and split how we expect
+//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
+//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
+//         assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
 
-        // Now compare the split
-        assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
-        assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
-        assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
-    }
-    #[test]
-    fn test_span_nom_compare() {
-        // Do some comparisons
-        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
-        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 0, 6), "Example"), nom::CompareResult::Ok);
-        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 8, 11), "text"), nom::CompareResult::Ok);
-        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
-        assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
-    }
-}
+//         // Now compare the split
+//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
+//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
+//         assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+//     }
+//     #[test]
+//     fn test_span_nom_compare() {
+//         // Do some comparisons
+//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
+//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 0, 6), "Example"), nom::CompareResult::Ok);
+//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 8, 11), "text"), nom::CompareResult::Ok);
+//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
+//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
+//     }
+// }
 
 
 
@@ -109,29 +118,184 @@ macro_rules! assert_range {
 
 
 /***** AUXILLARY *****/
-/// Defines an iterator over the characters in a span.
+/// Defines an iterator that cuts elements of an iterator that gives elements.
+/// 
+/// This behaves exactly the same as [`EnumerateRange`], except it does not yield the indices.
 #[derive(Clone, Copy, Debug)]
-pub struct IntoChars<F, S> {
-    /// The string to iterate over
-    s : Span<F, S>,
-    /// The length of the string, in characters.
-    c : usize,
-    /// The index of iteration
-    i : usize,
+pub struct Range<I> {
+    /// The iterator to cut.
+    iter  : I,
+    /// Our custom enumeration
+    i     : usize,
+    /// The start index (zero-indexed) of the first element to allow
+    start : usize,
+    /// The end index (zero-indexed) of the last element to allow
+    end   : usize,
 }
-impl<F, S: Deref<Target = str>> Iterator for IntoChars<F, S> {
-    type Item = char;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.i >= self.c { return None; }
-        match (*self.s.source)[self.s.start + self.i..=self.s.end].char_indices().next() {
-            Some((_, c)) => { self.i = i; }
+impl<I> Range<I> {
+    /// Constructor for the Range.
+    /// 
+    /// # Arguments
+    /// - `iter`: The iterator to enumerate over.
+    /// - `start`: The start index (zero-indexed) of the first element to allow.
+    /// - `end`: The end index (zero-indexed) of the last element to allow.
+    #[inline]
+    fn new(iter: I, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
+        Self {
+            iter,
+            i     : 0,
+            start : start.as_(),
+            end   : end.as_(),
         }
     }
+}
+impl<I: Iterator> Iterator for Range<I> {
+    type Item = I::Item;
+
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.c, Some(self.c))
+    fn next(&mut self) -> Option<Self::Item> {
+        // Filter the next element in the iterator
+        self.iter.next().map(|e| {
+            // Only allow if we're within range
+            if self.i >= self.start && self.i <= self.end {
+                self.i += 1;
+                Some(e)
+            } else {
+                None
+            }
+        }).flatten()
     }
+}
+
+/// Defines an iterator that cuts elements of an iterator that gives elements.
+/// 
+/// Note that the return indices are not the ones in the iterator. Rather, it returns them as if it was a new `Enumerate`.
+#[derive(Clone, Copy, Debug)]
+pub struct EnumerateRange<I> {
+    /// The iterator to cut.
+    iter  : I,
+    /// Our custom enumeration
+    i     : usize,
+    /// The start index (zero-indexed) of the first element to allow
+    start : usize,
+    /// The end index (zero-indexed) of the last element to allow
+    end   : usize,
+}
+impl<I> EnumerateRange<I> {
+    /// Constructor for the EnumerateRange.
+    /// 
+    /// # Arguments
+    /// - `iter`: The iterator to enumerate over.
+    /// - `start`: The start index (zero-indexed) of the first element to allow.
+    /// - `end`: The end index (zero-indexed) of the last element to allow.
+    #[inline]
+    fn new(iter: I, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
+        Self {
+            iter,
+            i     : 0,
+            start : start.as_(),
+            end   : end.as_(),
+        }
+    }
+}
+impl<I: Iterator> Iterator for EnumerateRange<I> {
+    type Item = (usize, I::Item);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Filter the next element in the iterator
+        self.iter.next().map(|e| {
+            let i: usize = self.i;
+
+            // Only allow if we're within range
+            if i >= self.start && i <= self.end {
+                self.i += 1;
+                Some((i, e))
+            } else {
+                None
+            }
+        }).flatten()
+    }
+}
+
+
+
+/// Abstracts over valid units in containers that are [`Spannable`].
+pub trait SpannableUnit: Display {
+    /// Returns if this unit is a newline.
+    /// 
+    /// # Returns
+    /// True if it is, of false otherwise.
+    fn is_newline(&self) -> bool;
+}
+impl SpannableUnit for u8 {
+    fn is_newline(&self) -> bool { *self == b'\n' }
+}
+impl SpannableUnit for char {
+    fn is_newline(&self) -> bool { *self == '\n' }
+}
+impl<'s> SpannableUnit for &'s str {
+    fn is_newline(&self) -> bool { *self == "\n" }
+}
+
+/// Abstracts over types valid for use in a [`Span`].
+pub trait Spannable: Clone {
+    /// Defines the logical units in the Spannable.
+    type Item<'s>: SpannableUnit where Self: 's;
+    /// Defines which iterator to use to iterate over the logical units of the Spannable.
+    type Iter<'s>: Iterator<Item = Self::Item<'s>> where Self: 's;
+    /// Defines which iterator to use to iterate over the physical-position-annotated logical units of the Spannable.
+    type IndicesIter<'s>: Iterator<Item = (usize, Self::Item<'s>)> where Self: 's;
+    /// Defines the return value of the [`subset()`](Spannable::subset()) function.
+    type Subset<'s>: Spannable where Self: 's;
+
+    /// Returns a subset of this range.
+    /// 
+    /// # Arguments
+    /// - `start`: The start index of the new Span over the logical units. Zero-indexed, inclusive.
+    /// - `end`: The end index of the new Span over the logical units. Zero-indexed, inclusive.
+    /// 
+    /// # Returns
+    /// A new [`Spannable`] that is probably the same as Self, but doesn't have.
+    /// 
+    /// # Panics
+    /// This function is allowed to panic if:
+    /// - `start` > `end`;
+    /// - `start` >= [`self.len()`](Spannable::len()); or
+    /// - `end` >= [`self.len()`](Spannable::len()).
+    fn subset<'s>(&'s self, start: usize, end: usize) -> Self::Subset<'s>;
+    /// Returns an iterator over the logical units in this Spannable.
+    /// 
+    /// # Returns
+    /// A new `Self::Iter` that can iterate over the logical units.
+    fn iter<'s>(&'s self) -> Self::Iter<'s>;
+    /// Returns an iterator over the logical units in this Spannable, but annotated with their physical positions in the Spannable.
+    /// 
+    /// Typically, this index corresponds one-to-one to the elements already produced. The exception to this is in cases as with unicode graphemes, where the indices of logical units and physical units don't align. The iterator must yield logical units, but index them in physical units.
+    /// 
+    /// # Returns
+    /// A new `Self::IndicesIter` that can iterate over the logical units.
+    fn iter_indices<'s>(&'s self) -> Self::IndicesIter<'s>;
+    /// Gets the length of the spannable in logical indices.
+    /// 
+    /// # Returns
+    /// The count of logical units in this Spannable, e.g., the count of graphemes.
+    fn len(&self) -> usize;
+}
+impl<T: Clone + Deref<Target = str>> Spannable for T {
+    type Item<'s> = &'s str where Self: 's;
+    type Iter<'s> = unicode_segmentation::Graphemes<'s> where Self: 's;
+    type IndicesIter<'s> = unicode_segmentation::GraphemeIndices<'s> where Self: 's;
+    type Subset<'s> = &'s str where Self: 's;
+
+    #[inline]
+    fn subset<'s>(&'s self, start: usize, end: usize) -> Self::Subset<'s> { &(**self)[start..=end] }
+    #[inline]
+    fn iter<'s>(&'s self) -> Self::Iter<'s> { self.graphemes(true) }
+    #[inline]
+    fn iter_indices<'s>(&'s self) -> Self::IndicesIter<'s> { self.grapheme_indices(true) }
+    #[inline]
+    fn len(&self) -> usize { self.graphemes(true).count() }
 }
 
 
@@ -139,350 +303,6 @@ impl<F, S: Deref<Target = str>> Iterator for IntoChars<F, S> {
 
 
 /***** LIBRARY *****/
-/// Defines the position of a character in the source text.
-/// 
-/// # Example
-/// ```rust
-/// use ast_toolkit::Position;
-/// 
-/// // First character in a text
-/// assert_eq!(Position::new0(0, 0).to_string(), "1:1");
-/// assert_eq!(Position::new1(1, 1).to_string(), "1:1");
-/// 
-/// // First character on the fourth line
-/// assert_eq!(Position::new0(3, 0).to_string(), "4:1");
-/// assert_eq!(Position::new1(4, 1).to_string(), "4:1");
-/// ```
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct Position {
-    /// The line-part of the position. Note that this number is zero-indexed.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).line, 0);
-    /// assert_eq!(Position::new1(1, 1).line, 0);
-    /// assert_eq!(Position::new1(4, 1).line, 3);
-    /// 
-    /// let mut pos: Position = Position::new1(4, 1);
-    /// pos.line = 2;
-    /// assert_eq!(pos.to_string(), "3:1");
-    /// ```
-    pub line : usize,
-    /// The column-part of the position. Note that this number is zero-indexed.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).col, 0);
-    /// assert_eq!(Position::new1(1, 1).col, 0);
-    /// assert_eq!(Position::new1(1, 4).col, 3);
-    /// 
-    /// let mut pos: Position = Position::new1(1, 4);
-    /// pos.col = 2;
-    /// assert_eq!(pos.to_string(), "1:3");
-    /// ```
-    pub col : usize,
-}
-
-impl Position {
-    /// Constructor for the Position that accepts zero-indexed input.
-    /// 
-    /// # Arguments
-    /// - `line`: A [`usize`]-like number representing the _zero-indexed_ line number of the character.
-    /// - `col`: A [`usize`]-like number representing the _zero-indexed_ column number of the character.
-    /// 
-    /// # Returns
-    /// A new Position instance.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).to_string(), "1:1");
-    /// assert_eq!(Position::new0(3, 0).to_string(), "4:1");
-    /// assert_eq!(Position::new0(0, 41).to_string(), "1:42");
-    /// ```
-    #[inline]
-    pub fn new0(line: impl AsPrimitive<usize>, col: impl AsPrimitive<usize>) -> Self {
-        Self {
-            line : line.as_(),
-            col  : col.as_(),
-        }
-    }
-
-    /// Constructor for the Position that accepts one-indexed input.
-    /// 
-    /// # Arguments
-    /// - `line`: A [`usize`]-like number representing the _one-indexed_ line number of the character.
-    /// - `col`: A [`usize`]-like number representing the _one-indexed_ column number of the character.
-    /// 
-    /// # Returns
-    /// A new Position instance.
-    /// 
-    /// # Panics
-    /// This function may panic if the given `line` or `col` is `0`.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new1(1, 1).to_string(), "1:1");
-    /// assert_eq!(Position::new1(4, 1).to_string(), "4:1");
-    /// assert_eq!(Position::new1(1, 42).to_string(), "1:42");
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Position;
-    /// // This will panic!
-    /// Position::new1(0, 0);
-    /// Position::new1(0, 1);
-    /// Position::new1(1, 0);
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn new1(line: impl AsPrimitive<usize>, col: impl AsPrimitive<usize>) -> Self {
-        Self {
-            line : line.as_() - 1,
-            col  : col.as_() - 1,
-        }
-    }
-
-
-
-    /// Returns the line coordinate of this position as a zero-indexed number.
-    /// 
-    /// This is exactly the same as simply accessing the internal `line`-field.
-    /// 
-    /// # Returns
-    /// The line coordinate in this position, zero-indexed.
-    /// 
-    /// # Examples
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).line0(), 0);
-    /// assert_eq!(Position::new1(1, 1).line0(), 0);
-    /// assert_eq!(Position::new1(4, 1).line0(), 3);
-    /// ```
-    #[inline]
-    pub fn line0(&self) -> usize { self.line }
-
-    /// Returns the line coordinate of this position as a one-indexed number.
-    /// 
-    /// This is exactly the same as simply accessing the internal `line`-field and adding `1` to it.
-    /// 
-    /// # Returns
-    /// The line coordinate in this position, one-indexed.
-    /// 
-    /// # Panics
-    /// This function may panic if the internal `line` is [`usize::MAX`](usize).
-    /// 
-    /// # Examples
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).line1(), 1);
-    /// assert_eq!(Position::new1(1, 1).line1(), 1);
-    /// assert_eq!(Position::new1(4, 1).line1(), 4);
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Position;
-    /// // This will panic!
-    /// Position::new0(usize::MAX, 0).line1();
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn line1(&self) -> usize { self.line + 1 }
-
-    /// Returns the column coordinate of this position as a zero-indexed number.
-    /// 
-    /// This is exactly the same as simply accessing the internal `col`-field.
-    /// 
-    /// # Returns
-    /// The column coordinate in this position, zero-indexed.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).col0(), 0);
-    /// assert_eq!(Position::new1(1, 1).col0(), 0);
-    /// assert_eq!(Position::new1(1, 4).col0(), 3);
-    /// ```
-    #[inline]
-    pub fn col0(&self) -> usize { self.col }
-
-    /// Returns the column coordinate of this position as a one-indexed number.
-    /// 
-    /// This is exactly the same as simply accessing the internal `col`-field and adding `1` to it.
-    /// 
-    /// # Returns
-    /// The column coordinate in this position, one-indexed.
-    /// 
-    /// # Panics
-    /// This function may panic if the internal `col` is [`usize::MAX`](usize).
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).col1(), 1);
-    /// assert_eq!(Position::new1(1, 1).col1(), 1);
-    /// assert_eq!(Position::new1(1, 4).col1(), 4);
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Position;
-    /// // This will panic!
-    /// Position::new0(0, usize::MAX).col1();
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn col1(&self) -> usize { self.col + 1 }
-
-    /// Returns the this position as a tuple.
-    /// 
-    /// This is exactly the same as simply accessing the internal `line`- and `col`-fields and tupleizing them.
-    /// 
-    /// # Returns
-    /// A tuple with the line number first, and column number second, zero-indexed.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).pair0(), (0, 0));
-    /// assert_eq!(Position::new1(1, 1).pair0(), (0, 0));
-    /// assert_eq!(Position::new1(1, 4).pair0(), (0, 3));
-    /// ```
-    #[inline]
-    pub fn pair0(&self) -> (usize, usize) { (self.line, self.col) }
-
-    /// Returns the this position as a tuple.
-    /// 
-    /// This is exactly the same as simply accessing the internal `line`- and `col`-fields, adding 1 to either and tupleizing them.
-    /// 
-    /// # Returns
-    /// A tuple with the line number first, and column number second, one-indexed.
-    /// 
-    /// # Panics
-    /// This function may panic if either the internal `line` or `col` is [`usize::MAX`](usize).
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(0, 0).pair1(), (1, 1));
-    /// assert_eq!(Position::new1(1, 1).pair1(), (1, 1));
-    /// assert_eq!(Position::new1(1, 4).pair1(), (1, 4));
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Position;
-    /// // This will panic!
-    /// Position::new0(usize::MAX, usize::MAX).pair1();
-    /// Position::new0(usize::MAX, 0).pair1();
-    /// Position::new0(0, usize::MAX).pair1();
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn pair1(&self) -> (usize, usize) { (self.line + 1, self.col + 1) }
-}
-impl Display for Position {
-    /// Formats the Position as a colon-separated pair of the line and the column numbers, one-indexed.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(format!("{}", Position::new0(3, 0)), "4:1");
-    /// assert_eq!(format!("{}", Position::new1(4, 1)), "4:1");
-    /// ```
-    #[track_caller]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "{}:{}", self.line + 1, self.col + 1)
-    }
-}
-
-impl PartialEq<(usize, usize)> for Position {
-    /// Compares this Position with a `(line, col)` pair.
-    /// 
-    /// # Returns
-    /// True if the line and column numbers are the same, respectively.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(3, 0) == (3, 0), true);
-    /// assert_eq!(Position::new0(3, 0) == (3, 1), false);
-    /// assert_eq!(Position::new0(3, 0) == (2, 0), false);
-    /// assert_eq!(Position::new0(3, 0) == (0, 3), false);
-    /// assert_eq!(Position::new1(4, 1) == (3, 0), true);
-    /// ```
-    #[inline]
-    fn eq(&self, other: &(usize, usize)) -> bool { self.line == other.0 && self.col == other.1 }
-}
-impl PartialOrd for Position {
-    /// Computes if this position is before or after the other one.
-    /// 
-    /// The comparison is performed by first comparing the lines, and if those are equal, comparing the column numbers.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(4, 0), true);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(2, 0), false);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 3), true);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 1), false);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 2), false);
-    /// ```
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
-}
-impl Ord for Position {
-    /// Computes if this position is before or after the other one.
-    /// 
-    /// The comparison is performed by first comparing the lines, and if those are equal, comparing the column numbers.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::Position;
-    /// 
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(4, 0), true);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(2, 0), false);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 3), true);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 1), false);
-    /// assert_eq!(Position::new0(3, 2) < Position::new0(3, 2), false);
-    /// ```
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.line < other.line { Ordering::Less }
-        else if self.line > other.line { Ordering::Greater }
-        else { self.col.cmp(&other.col) }
-    }
-}
-
-impl AsRef<Position> for Position {
-    #[inline]
-    fn as_ref(&self) -> &Self { self }
-}
-impl AsMut<Position> for Position {
-    #[inline]
-    fn as_mut(&mut self) -> &mut Self { self }
-}
-impl From<&Position> for Position {
-    #[inline]
-    fn from(value: &Position) -> Self { *value }
-}
-impl From<&mut Position> for Position {
-    #[inline]
-    fn from(value: &mut Position) -> Self { *value }
-}
-
-
-
 /// Represents a snippet of parsed source text, which is used to link a node to a particular set of it.
 /// 
 /// # Generics
@@ -517,7 +337,7 @@ pub struct Span<F, S> {
     pub end    : usize,
 }
 
-impl<F, S: Deref<Target = str>> Span<F, S> {
+impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// Constructor for the Span, which will encompass the entire source.
     /// 
     /// Note that the Span will be bound to the given filename and source types, and, more importantly, to its lifetimes.
@@ -606,19 +426,19 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
         // Examine the source to find the end
         let (mut istart, mut iend): (Position, Position) = (start, end);
         let (mut rstart, mut rend): (Option<usize>, Option<usize>) = (None, None);
-        for (i, c) in source.grapheme_indices(true) {
+        for (i, c) in source.iter_indices() {
             // If we've reached the end of any, mark it
             if rstart.is_none() && istart.line == 0 && istart.col == 0 { rstart = Some(i); }
             if rend.is_none() && iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
 
             // Otherwise, count them down
-            if istart.line > 0 && c == "\n" {
+            if istart.line > 0 && c.is_newline() {
                 istart.line -= 1;
             } else if istart.line == 0 && istart.col > 0 {
                 // If we're skipping a (non-terminating) newline, the Position is ill-formed
                 istart.col -= 1;
             }
-            if iend.line > 0 && c == "\n" {
+            if iend.line > 0 && c.is_newline() {
                 iend.line -= 1;
             } else if iend.line == 0 && iend.col > 0 {
                 // If we're skipping a (non-terminating) newline, the Position is ill-formed
@@ -731,13 +551,13 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
 
         // Iterate over the source to find the line & column
         let (mut line, mut col): (usize, usize) = (0, 0);
-        for (i, c) in self.source.grapheme_indices(true) {
+        for (i, c) in self.source.iter_indices() {
             // If we reached it, we done
             if i == index { break; }
             else if i > index { panic!("Index {} does not point to grapheme boundary", index); }
 
             // Otherwise, count
-            if c == "\n" { line += 1; col = 0; }
+            if c.is_newline() { line += 1; col = 0; }
             else { col += 1; }
         }
 
@@ -836,14 +656,14 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn text(&self) -> &str {
+    pub fn text<'t>(&'t self) -> S::Subset<'t> where 's: 't {
         assert_range!(self.start, self.end, self.source);
-        &self.source[self.start..=self.end]
+        self.source.subset(self.start, self.end)
     }
 
     /// Returns the lines referred by this span.
     /// 
-    /// This can be thought of a [`Self::text()`](Span::text()) but then one that only returns in the line-range.
+    /// This can be thought of a [`Self::text()`](Span::text()) but then one that only returns in the line axis.
     /// 
     /// # Returns
     /// A vector of the individual lines, stripped of newlines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
@@ -855,41 +675,68 @@ impl<F, S: Deref<Target = str>> Span<F, S> {
     /// ```rust
     /// use ast_toolkit::{Position, Span};
     /// 
-    /// assert_eq!(Span::new("<example>", "Hello world!").lines(), vec![ "Hello world!" ]);
+    /// // assert_eq!(Span::new("<example>", "Hello world!").lines(), vec![ "Hello world!" ]);
     /// assert_eq!(Span::new("<example>", "Hello\nworld!").lines(), vec![ "Hello", "world!" ]);
     /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 4)).lines(), vec![ "Hello" ]);
     /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 8)).lines(), vec![ "Hello", "world!" ]);
     /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 5)).lines(), vec![ "Hello" ]);
     /// ```
     #[track_caller]
-    pub fn lines(&self) -> Vec<&str> {
+    pub fn lines<'t>(&'t self) -> Vec<S::Subset<'t>> where 's: 't {
         // Pre-assert that the start is smaller than the end
         assert_range!(self.start, self.end, self.source);
 
         // Fetch the start & end lines in the source text
         let mut start : usize = 0;
-        let mut lines : Vec<&str> = Vec::with_capacity(1);
-        for (i, c) in self.source.grapheme_indices(true) {
+        let mut lines : Vec<S::Subset<'t>> = Vec::with_capacity(1);
+        for (i, c) in self.source.iter_indices() {
             // If it's a newline, then we potentially store and reset
-            if c == "\n" {
+            if c.is_newline() {
                 // Check if this line overlaps with the span
                 if self.start < i && self.end >= start {
                     // Note the line (excluding newline)
-                    lines.push(&self.source[start..i]);
+                    lines.push(self.source.subset(start, i - 1));
                 }
                 // Reset
                 start = i + 1;
             }
         }
 
-        // If the current start is within the range, then add it as well
+        // If the current start is within the range, then add the final line as well (there was no newline to separate it)
         if self.start < self.source.len() && self.end >= start {
-            lines.push(&self.source[start..]);
+            lines.push(self.source.subset(start, self.source.len() - 1));
         }
 
         // Return the lines
         lines
     }
+
+
+
+    /// Returns an iterator over the logical units in this Span.
+    /// 
+    /// # Returns
+    /// A [`Range<S::Iter>`] iterator that returns only the spanned characters.
+    #[inline]
+    pub fn iter<'t>(&'t self) -> Range<S::Iter<'t>> where 's: 't { Range::new(self.source.iter(), self.start, self.end) }
+
+    /// Returns an iterator over the logical units in this Span, annotating them with their physical index.
+    /// 
+    /// Note that for spans this is trivial, since it views the logical units of the underlying [`Spannable`] as its physical units (so they always align 1-to-1).
+    /// 
+    /// Therefore, this is equivalent to (but slightly more efficient that) calling [`self.iter().enumerate()`](Span::iter()).
+    /// 
+    /// # Returns
+    /// A [`EnumerateRange<S::Iter>`] iterator that returns only the spanned characters.
+    #[inline]
+    pub fn iter_indices<'t>(&'t self) -> EnumerateRange<S::Iter<'t>> where 's: 't { EnumerateRange::new(self.source.iter(), self.start, self.end) }
+
+    /// Returns the number of logical units that this Span spans.
+    /// 
+    /// # Returns
+    /// The number of characters.
+    #[inline]
+    pub fn len(&self) -> usize { self.end + 1 - self.start }
 }
 impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
     /// Constructor for the Span that encapsulates both ranges of the given spans.
@@ -900,6 +747,8 @@ impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
     /// 
     /// # Returns
     /// A new instance of Self that spans both input spans and everything in between.
+    /// 
+    /// Note that, for lifetime purposes, the file and source text from the first span are referenced.
     /// 
     /// # Panics
     /// This function panics if the given spans do not have the same `file` or `source`.
@@ -918,19 +767,12 @@ impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
 
         // Construct the new self
         Self {
-            file   : span1.file.clone(),
-            source : span1.source.clone(),
+            file   : span1.file,
+            source : span1.source,
             start,
             end,
         }
     }
-}
-
-impl<F, S: Deref<Target = str>> Deref for Span<F, S> {
-    type Target = str;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target { self.text() }
 }
 
 impl<F, S> AsRef<Span<F, S>> for Span<F, S> {
@@ -951,85 +793,112 @@ impl<F: Clone, S: Clone> From<&mut Span<F, S>> for Span<F, S> {
 }
 
 
-// nom-related things
-#[cfg(feature = "nom")]
-impl<F, S: Deref<Target = str>> nom::AsBytes for Span<F, S> {
-    #[track_caller]
-    fn as_bytes(&self) -> &[u8] {
-        assert_range!(self.start, self.end, self.source);
-        self.source[self.start..=self.end].as_bytes()
-    }
-}
-#[cfg(feature = "nom")]
-impl<F, S: Deref<Target = str>> nom::InputIter for Span<F, S> {
-    type Item = ();
-    type Iter = CharIndices;
-    type IterElem = Chars;
+// // nom-related things
+// #[cfg(feature = "nom")]
+// impl<F, S: Deref<Target = str>> nom::AsBytes for Span<F, S> {
+//     #[track_caller]
+//     fn as_bytes(&self) -> &[u8] {
+//         assert_range!(self.start, self.end, self.source);
+//         self.source[self.start..=self.end].as_bytes()
+//     }
+// }
 
-    fn iter_elements(&self) -> Self::IterElem {
-        
-    }
-    fn iter_indices(&self) -> Self::Iter {
-        
-    }
-    fn position<P>(&self, predicate: P) -> Option<usize>
-      where
-        P: Fn(Self::Item) -> bool {
-        
-    }
-    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-        
-    }
-}
-#[cfg(feature = "nom")]
-impl<F, S> nom::InputLength for Span<F, S> {
-    #[track_caller]
-    fn input_len(&self) -> usize { 1 + (self.end - self.start) }
-}
-#[cfg(feature = "nom")]
-impl<F: Clone, S: Clone + Deref<Target = str>> nom::InputTake for Span<F, S> {
-    #[track_caller]
-    fn take(&self, count: usize) -> Self {
-        let self_len: usize = 1 + (self.end - self.start);
-        if count == 0 { panic!("Cannot take span of length 0"); }
-        if count > self_len { panic!("Cannot take span of length {count} from span of length {self_len}"); }
-        Span {
-            file   : self.file.clone(),
-            source : self.source.clone(),
-            start  : self.start,
-            end    : self.start + (count - 1),
-        }
-    }
+// #[cfg(feature = "nom")]
+// impl<F, S: Deref<Target = str>> nom::ExtendInto for Span<F, S> {
+//     type Item = Span<F, S>;
+//     type Extender = ();
 
-    #[track_caller]
-    fn take_split(&self, count: usize) -> (Self, Self) {
-        let self_len: usize = 1 + (self.end - self.start);
-        if count == 0 || count >= self_len { panic!("Cannot split span on index {count} in span of length {self_len}"); }
-        (
-            Span {
-                file   : self.file.clone(),
-                source : self.source.clone(),
-                start  : self.start,
-                end    : self.start + (count - 1),
-            },
-            Span {
-                file   : self.file.clone(),
-                source : self.source.clone(),
-                start  : self.start + count,
-                end    : self.end,
-            },
-        )
-    }
-}
-#[cfg(feature = "nom")]
-impl<F, S: Deref<Target = str>, S2: Deref<Target = str>> nom::Compare<S2> for Span<F, S> {
-    #[inline]
-    fn compare(&self, t: S2) -> nom::CompareResult {
-        <&str as nom::Compare<&str>>::compare(&&**self, &*t)
-    }
+//     fn new_builder(&self) -> Self::Extender {
+        
+//     }
+//     fn extend_into(&self, acc: &mut Self::Extender) {
+        
+//     }
+// }
 
-    #[inline]
-    fn compare_no_case(&self, t: S2) -> nom::CompareResult {
-        <&str as nom::Compare<&str>>::compare_no_case(&&**self, &*t)
-    }
-}
+// #[cfg(feature = "nom")]
+// impl<F, S: Deref<Target = str>> nom::FindSubstring for Span<F, S> {
+    
+// }
+
+// #[cfg(feature = "nom")]
+// impl<F, S: Deref<Target = str>> nom::InputIter for Span<F, S> {
+//     type Item = u8;
+//     type Iter = std::iter::Enumerate<std::vec::IntoIter<u8>>;
+//     type IterElem = std::vec::IntoIter<u8>;
+
+//     #[inline]
+//     fn iter_indices(&self) -> Self::Iter { self.text().as_bytes().to_vec().into_iter().enumerate() }
+//     fn iter_elements(&self) -> Self::IterElem { self.text().as_bytes().to_vec().into_iter() }
+
+//     #[inline]
+//     fn position<P>(&self, predicate: P) -> Option<usize>
+//     where
+//         P: Fn(Self::Item) -> bool,
+//     {
+//         self.iter_indices().find_map(|(i, b)| if predicate(b) { Some(i) } else { None })
+//     }
+//     fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+//         use std::num::NonZeroUsize;
+
+//         match self.iter_indices().nth(count) {
+//             Some((i, _)) => Ok(i),
+//             None => Err(match NonZeroUsize::new(self.len() - 1 - count) {
+//                 Some(res) => nom::Needed::Size(res),
+//                 None => nom::Needed::Unknown,
+//             }),
+//         }
+//     }
+// }
+// #[cfg(feature = "nom")]
+// impl<F, S> nom::InputLength for Span<F, S> {
+//     #[track_caller]
+//     fn input_len(&self) -> usize { 1 + (self.end - self.start) }
+// }
+// #[cfg(feature = "nom")]
+// impl<F: Clone, S: Clone + Deref<Target = str>> nom::InputTake for Span<F, S> {
+//     #[track_caller]
+//     fn take(&self, count: usize) -> Self {
+//         let self_len: usize = 1 + (self.end - self.start);
+//         if count == 0 { panic!("Cannot take span of length 0"); }
+//         if count > self_len { panic!("Cannot take span of length {count} from span of length {self_len}"); }
+//         Span {
+//             file   : self.file.clone(),
+//             source : self.source.clone(),
+//             start  : self.start,
+//             end    : self.start + (count - 1),
+//         }
+//     }
+
+//     #[track_caller]
+//     fn take_split(&self, count: usize) -> (Self, Self) {
+//         let self_len: usize = 1 + (self.end - self.start);
+//         if count == 0 || count >= self_len { panic!("Cannot split span on index {count} in span of length {self_len}"); }
+//         (
+//             Span {
+//                 file   : self.file.clone(),
+//                 source : self.source.clone(),
+//                 start  : self.start,
+//                 end    : self.start + (count - 1),
+//             },
+//             Span {
+//                 file   : self.file.clone(),
+//                 source : self.source.clone(),
+//                 start  : self.start + count,
+//                 end    : self.end,
+//             },
+//         )
+//     }
+// }
+// #[cfg(feature = "nom")]
+// impl<F, S: Deref<Target = str>, S2: Deref<Target = str>> nom::Compare<S2> for Span<F, S> {
+//     #[inline]
+//     fn compare(&self, t: S2) -> nom::CompareResult {
+//         <&str as nom::Compare<&str>>::compare(&&**self, &*t)
+//     }
+
+//     #[inline]
+//     fn compare_no_case(&self, t: S2) -> nom::CompareResult {
+//         <&str as nom::Compare<&str>>::compare_no_case(&&**self, &*t)
+//     }
+// }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    22 Jul 2023, 12:30:18
+//    08 Aug 2023, 10:21:33
 //  Auto updated?
 //    Yes
 // 
@@ -106,13 +106,15 @@
 // 
 
 // Define the submodules
-pub mod span;
 pub mod diagnostic;
+pub mod position;
+pub mod span;
 
 
 // Pull the relevant stuff into the global namespace
-pub use span::{Position, Span};
 pub use diagnostic::{Diagnostic, DiagnosticKind};
+pub use position::Position;
+pub use span::{Span, Spannable};
 
 // Pull any procedural macros into this namespace
 /// This module documents the use of the various procedural macros defined in the [`ast_toolkit_derive`]-crate.

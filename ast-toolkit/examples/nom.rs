@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    06 Aug 2023, 16:02:44
+//    08 Aug 2023, 15:59:09
 //  Auto updated?
 //    Yes
 // 
@@ -176,25 +176,25 @@ type Output<F, S, T> = IResult<Span<F, S>, T, nom::error::Error<Span<F, S>>>;
 
 // }
 
-/// Parses an integer literal for our simple language
-/// 
-/// # Arguments
-/// - `input`: The input [`Span`] to parse.
-/// 
-/// # Returns
-/// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
-/// 
-/// # Errors
-/// This function can error if we failed to parse any particular input text.
-fn parse_integer<F: Clone, S: Clone + Deref<Target = str>>(input: Input<F, S>) -> Output<F, S, i64> {
-    comb::map(
-        comb::recognize(seq::pair(
-            comb::opt(bc::tag("-")),
-            cc::digit0,
-        )),
-        |parsed: Span<F, S>| -> i64 { i64::from_str(&parsed).unwrap() }
-    )(input)
-}
+// /// Parses an integer literal for our simple language
+// /// 
+// /// # Arguments
+// /// - `input`: The input [`Span`] to parse.
+// /// 
+// /// # Returns
+// /// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
+// /// 
+// /// # Errors
+// /// This function can error if we failed to parse any particular input text.
+// fn parse_integer<F: Clone, S: Clone + Deref<Target = str>>(input: Input<F, S>) -> Output<F, S, i64> {
+//     comb::map(
+//         comb::recognize(seq::pair(
+//             comb::opt(bc::tag("-")),
+//             cc::digit0,
+//         )),
+//         |parsed: Span<F, S>| -> i64 { i64::from_str(&parsed).unwrap() }
+//     )(input)
+// }
 
 
 

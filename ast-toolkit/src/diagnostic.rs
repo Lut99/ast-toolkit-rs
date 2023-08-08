@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    22 Jul 2023, 11:57:21
+//    08 Aug 2023, 16:24:52
 //  Auto updated?
 //    Yes
 // 
@@ -13,15 +13,16 @@
 //!   prettily formatting an error.
 // 
 
+use std::fmt::Display;
 use std::io::Write;
-use std::ops::Deref;
 
 use console::{style, Style};
 use enum_debug::EnumDebug;
 use never_say_never::Never;
 use unicode_segmentation::UnicodeSegmentation as _;
 
-use crate::span::{Position, Span};
+use crate::position::Position;
+use crate::span::{Span, Spannable};
 
 
 /***** HELPERS *****/
@@ -597,7 +598,7 @@ impl<F, S> Diagnostic<F, S> {
     #[track_caller]
     pub fn replacement(&self) -> &str { if let DiagnosticSpecific::Suggestion { replace } = &self.kind { replace } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
 }
-impl<F, S: Deref<Target = str>> Diagnostic<F, S> {
+impl<F: Clone, S: Spannable> Diagnostic<F, S> {
     /// Returns the text referred to by the span in this Diagnostic.
     /// 
     /// # Returns
@@ -617,9 +618,9 @@ impl<F, S: Deref<Target = str>> Diagnostic<F, S> {
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
     /// ```
     #[inline]
-    pub fn text(&self) -> &str { self.span.text() }
+    pub fn text<'s>(&'s self) -> S::Subset<'s> { self.span.text() }
 }
-impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
+impl<F: Clone + Display, S: Spannable> Diagnostic<F, S> {
     /// Function that *actually* implements `emit_on`, but uses indirection to only print on toplevel diagnostic.
     /// 
     /// # Arguments
@@ -629,26 +630,106 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
     /// # Errors
     /// This function may error if we failed to write to the given `writer`.
     #[track_caller]
-    fn _emit_on(&self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
+    fn _emit_on<'t>(&'t self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
         // Match on the kind to find the keyword and colour to show, as well as lines and span
-        let (keyword, colour, lines, start, end): (&'static str, Style, Vec<String>, Position, Position) = match &self.kind {
+        let (keyword, colour, lines, start, end): (&'static str, Style, Vec<S::Subset<'t>>, Position, Position) = match &self.kind {
             // For these we just need the colour and junk
-            DiagnosticSpecific::Error   => ("error", Style::new().bold().red(), self.span.lines().into_iter().map(|s| s.into()).collect(), self.span.start(), self.span.end()),
-            DiagnosticSpecific::Warning => ("warning", Style::new().bold().yellow(), self.span.lines().into_iter().map(|s| s.into()).collect(), self.span.start(), self.span.end()),
-            DiagnosticSpecific::Note    => ("note", Style::new().bold().green(), self.span.lines().into_iter().map(|s| s.into()).collect(), self.span.start(), self.span.end()),
+            DiagnosticSpecific::Error   => ("error", Style::new().bold().red(), self.span.lines(), self.span.start(), self.span.end()),
+            DiagnosticSpecific::Warning => ("warning", Style::new().bold().yellow(), self.span.lines(), self.span.start(), self.span.end()),
+            DiagnosticSpecific::Note    => ("note", Style::new().bold().green(), self.span.lines(), self.span.start(), self.span.end()),
 
             // Suggestions, however, have a different thing to write too
             DiagnosticSpecific::Suggestion { replace } => {
-                // First, collect the source to show
-                let source: String = self.span.lines().join("\n");
-                // Replace the part with the code
-                let source: String = source.replace(self.span.text(), replace);
-                // Store again as a Lines
-                let lines: Vec<String> = source.split('\n').map(|s| s.into()).collect();
+                // Define the keyword & colour for suggestions
+                let keyword: &str = "suggestion";
+                let colour: Style = Style::new().bold().cyan();
 
-                // Now get the adapted start and end and return
-                let (start, end): (Position, Position) = (self.span.start(), self.span.pos_of(self.span.start + replace.graphemes(true).map(|c| c.len()).sum::<usize>() - 1));
-                ("suggestion", Style::new().cyan().bold(), lines, start, end)
+                // Find the latest possible line number
+                let n_replace_lines: usize = replace.lines().count();
+                let max_line_width: usize = (((self.span.start().line1() + (n_replace_lines - 1)) as f32).log10()) as usize + 1;
+
+                // Get the original source lines
+                let lines: Vec<S::Subset<'t>> = self.span.lines();
+
+                // Now write the header part of the error
+                writeln!(writer, "{}{}{}{}", colour.apply_to(keyword), if let Some(code) = &self.code { colour.apply_to(format!("[{code}]")).to_string() } else { String::new() }, style(": ").bold(), style(&self.message).bold())?;
+                writeln!(writer, "{}{} {}:{}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("-->").blue().bright(), self.span.file, self.span.start())?;
+
+                // Write the toplevel source newline
+                writeln!(writer, "{} {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
+                for (l, line) in replace.lines().enumerate() {
+                    let mut n_spaces  : usize = 0;
+                    let mut n_markers : usize = 0;
+                    write!(writer, "{} {} ", style(format!("{}{}", (0..(max_line_width - ((((l + 1) as f32).log10()) as usize + 1))).map(|_| ' ').collect::<String>(), l + 1)).blue().bright(), style("|").blue().bright())?;
+                    if l == 0 {
+                        // If it's the first line, then write the original source first before the selected area begins
+                        for (c, ch) in lines.first().unwrap().iter_indices() {
+                            if c >= self.span.start().col { break; }
+                            write!(writer, "{ch}")?;
+                            n_spaces += 1;
+                        }
+                        // Then write the remainder of the line
+                        for ch in line.graphemes(true) {
+                            if ch == "\n" { break; }
+                            write!(writer, "{}", colour.apply_to(ch))?;
+                            n_markers += 1;
+                        }
+                    }
+                    if l > 0 && l < n_replace_lines - 1 {
+                        // Just write the entire line, marked with colour
+                        for ch in line.graphemes(true) {
+                            if ch == "\n" { break; }
+                            write!(writer, "{}", colour.apply_to(ch))?;
+                            n_markers += 1;
+                        }
+                    }
+                    if l > 0 && l >= n_replace_lines - 1 {
+                        // Write the final line first (but only if we haven't for the first line)...
+                        for ch in line.graphemes(true) {
+                            if ch == "\n" { break; }
+                            write!(writer, "{}", colour.apply_to(ch))?;
+                            n_markers += 1;
+                        }
+                    }
+                    if l >= n_replace_lines - 1 {
+                        // ...and then the text of the original source text that isn't marked
+                        for (c, ch) in lines.last().unwrap().iter_indices() {
+                            if c <= self.span.end().col { continue; }
+                            write!(writer, "{ch}")?;
+                        }
+                    }
+                    writeln!(writer)?;
+
+                    // After the text, always write a line with markers
+                    write!(writer, "{} {} ", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
+                    for _ in 0..n_spaces {
+                        // Write the thing only if within range
+                        write!(writer, " ")?;
+                    }
+                    for _ in 0..n_markers {
+                        // Write the thing only if within range
+                        write!(writer, "{}", colour.apply_to('^'))?;
+                    }
+                    writeln!(writer)?;
+                }
+                // Write the bottom-level source newline - or the note
+                if let Some(remark) = &self.remark {
+                    writeln!(writer, "{} {} {}: {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("=").blue().bright(), style("note").bold(), remark)?;
+                } else {
+                    writeln!(writer, "{} {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
+                }
+
+                // OK, wrote the suggestion! Then emit the nested ones
+                for diagnostic in &self.sub {
+                    diagnostic._emit_on(writer, false)?;
+                }
+
+                // Done!
+                if toplevel {
+                    writeln!(writer)?;
+                    writeln!(writer)?;
+                }
+                return Ok(());
             },
         };
 
@@ -657,7 +738,7 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
 
         // Now write the header part of the error
         writeln!(writer, "{}{}{}{}", colour.apply_to(keyword), if let Some(code) = &self.code { colour.apply_to(format!("[{code}]")).to_string() } else { String::new() }, style(": ").bold(), style(&self.message).bold())?;
-        writeln!(writer, "{}{} {}:{}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("-->").blue().bright(), &*self.span.file, start)?;
+        writeln!(writer, "{}{} {}:{}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("-->").blue().bright(), self.span.file, start)?;
 
         // Write the toplevel source newline
         writeln!(writer, "{} {}", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
@@ -667,7 +748,7 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
 
             // Write the first line with the (adapted) source text
             write!(writer, "{} {} ", style(format!("{}{}", (0..(max_line_width - ((((l + 1) as f32).log10()) as usize + 1))).map(|_| ' ').collect::<String>(), l + 1)).blue().bright(), style("|").blue().bright())?;
-            for (c, ch) in line.grapheme_indices(true) {
+            for (c, ch) in line.iter_indices() {
                 // Write it with accent colour is spanned by the new text
                 if (l == start.line && c >= start.col && (l < end.line || c <= end.col)) || (l > start.line && l < end.line) || (l == end.line && c <= end.col && (l > start.line || c >= start.col)) { write!(writer, "{}", colour.apply_to(ch))?; }
                 else { write!(writer, "{ch}")?; }
@@ -676,7 +757,7 @@ impl<F: Deref<Target = str>, S: Deref<Target = str>> Diagnostic<F, S> {
 
             // Write the second line with the line highlight
             write!(writer, "{} {} ", (0..max_line_width).map(|_| ' ').collect::<String>(), style("|").blue().bright())?;
-            for (c, _) in line.grapheme_indices(true) {
+            for (c, _) in line.iter_indices() {
                 // Write the thing only if within range
                 if (l == start.line && c >= start.col && (l < end.line || c <= end.col)) || (l > start.line && l < end.line) || (l == end.line && c <= end.col && (l > start.line || c >= start.col)) { write!(writer, "{}", colour.apply_to('^'))?; }
                 else { write!(writer, " ")?; }
