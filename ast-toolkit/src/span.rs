@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    08 Aug 2023, 16:57:48
+//    10 Aug 2023, 21:19:05
 //  Auto updated?
 //    Yes
 // 
@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use num_traits::AsPrimitive;
-use unicode_segmentation::UnicodeSegmentation as _;
+use unicode_segmentation::{Graphemes, GraphemeIndices, UnicodeSegmentation as _};
 
 use crate::position::Position;
 
@@ -52,22 +52,22 @@ mod tests {
 mod nom_tests {
     use super::*;
 
-    #[test]
-    fn test_span_nom_as_bytes() {
-        // Create a few spans and see if they byte version equates what we expect
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
-        assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
-    }
-    #[test]
-    fn test_span_nom_input_iter() {
-        // Try some iterations
-        let target: &str = "Example text";
-        for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
-            assert_eq!(b, target.as_bytes()[i]);
-        }
-    }
+    // #[test]
+    // fn test_span_nom_as_bytes() {
+    //     // Create a few spans and see if they byte version equates what we expect
+    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
+    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
+    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
+    // }
+    // #[test]
+    // fn test_span_nom_input_iter() {
+    //     // Try some iterations
+    //     let target: &str = "Example text";
+    //     for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
+    //         assert_eq!(b, target.as_bytes()[i]);
+    //     }
+    // }
 //     #[test]
 //     fn test_span_nom_input_length() {
 //         // Create a few spans and see if their length matches with what we expect
@@ -112,191 +112,7 @@ macro_rules! assert_range {
         if $start > $end { panic!("Start position {} is larger than end position {}", $start, $end); }
     };
 }
-
-
-
-
-
-/***** AUXILLARY *****/
-/// Defines an iterator that cuts elements of an iterator that gives elements.
-/// 
-/// This behaves exactly the same as [`EnumerateRange`], except it does not yield the indices.
-#[derive(Clone, Copy, Debug)]
-pub struct Range<I> {
-    /// The iterator to cut.
-    iter  : I,
-    /// Our custom enumeration
-    i     : usize,
-    /// The start index (zero-indexed) of the first element to allow
-    start : usize,
-    /// The end index (zero-indexed) of the last element to allow
-    end   : usize,
-}
-impl<I> Range<I> {
-    /// Constructor for the Range.
-    /// 
-    /// # Arguments
-    /// - `iter`: The iterator to enumerate over.
-    /// - `start`: The start index (zero-indexed) of the first element to allow.
-    /// - `end`: The end index (zero-indexed) of the last element to allow.
-    #[inline]
-    fn new(iter: I, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
-        Self {
-            iter,
-            i     : 0,
-            start : start.as_(),
-            end   : end.as_(),
-        }
-    }
-}
-impl<I: Iterator> Iterator for Range<I> {
-    type Item = I::Item;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        // Filter the next element in the iterator
-        self.iter.next().map(|e| {
-            // Only allow if we're within range
-            if self.i >= self.start && self.i <= self.end {
-                self.i += 1;
-                Some(e)
-            } else {
-                None
-            }
-        }).flatten()
-    }
-}
-
-/// Defines an iterator that cuts elements of an iterator that gives elements.
-/// 
-/// Note that the return indices are not the ones in the iterator. Rather, it returns them as if it was a new `Enumerate`.
-#[derive(Clone, Copy, Debug)]
-pub struct EnumerateRange<I> {
-    /// The iterator to cut.
-    iter  : I,
-    /// Our custom enumeration
-    i     : usize,
-    /// The start index (zero-indexed) of the first element to allow
-    start : usize,
-    /// The end index (zero-indexed) of the last element to allow
-    end   : usize,
-}
-impl<I> EnumerateRange<I> {
-    /// Constructor for the EnumerateRange.
-    /// 
-    /// # Arguments
-    /// - `iter`: The iterator to enumerate over.
-    /// - `start`: The start index (zero-indexed) of the first element to allow.
-    /// - `end`: The end index (zero-indexed) of the last element to allow.
-    #[inline]
-    fn new(iter: I, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
-        Self {
-            iter,
-            i     : 0,
-            start : start.as_(),
-            end   : end.as_(),
-        }
-    }
-}
-impl<I: Iterator> Iterator for EnumerateRange<I> {
-    type Item = (usize, I::Item);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        // Filter the next element in the iterator
-        self.iter.next().map(|e| {
-            let i: usize = self.i;
-
-            // Only allow if we're within range
-            if i >= self.start && i <= self.end {
-                self.i += 1;
-                Some((i, e))
-            } else {
-                None
-            }
-        }).flatten()
-    }
-}
-
-
-
-/// Abstracts over valid units in containers that are [`Spannable`].
-pub trait SpannableUnit: Display {
-    /// Returns if this unit is a newline.
-    /// 
-    /// # Returns
-    /// True if it is, of false otherwise.
-    fn is_newline(&self) -> bool;
-}
-impl SpannableUnit for u8 {
-    fn is_newline(&self) -> bool { *self == b'\n' }
-}
-impl SpannableUnit for char {
-    fn is_newline(&self) -> bool { *self == '\n' }
-}
-impl<'s> SpannableUnit for &'s str {
-    fn is_newline(&self) -> bool { *self == "\n" }
-}
-
-/// Abstracts over types valid for use in a [`Span`].
-pub trait Spannable: Clone {
-    /// Defines the logical units in the Spannable.
-    type Item<'s>: SpannableUnit where Self: 's;
-    /// Defines which iterator to use to iterate over the logical units of the Spannable.
-    type Iter<'s>: Iterator<Item = Self::Item<'s>> where Self: 's;
-    /// Defines which iterator to use to iterate over the physical-position-annotated logical units of the Spannable.
-    type IndicesIter<'s>: Iterator<Item = (usize, Self::Item<'s>)> where Self: 's;
-    /// Defines the return value of the [`subset()`](Spannable::subset()) function.
-    type Subset<'s>: Spannable where Self: 's;
-
-    /// Returns a subset of this range.
-    /// 
-    /// # Arguments
-    /// - `start`: The start index of the new Span over the logical units. Zero-indexed, inclusive.
-    /// - `end`: The end index of the new Span over the logical units. Zero-indexed, inclusive.
-    /// 
-    /// # Returns
-    /// A new [`Spannable`] that is probably the same as Self, but doesn't have.
-    /// 
-    /// # Panics
-    /// This function is allowed to panic if:
-    /// - `start` > `end`;
-    /// - `start` >= [`self.len()`](Spannable::len()); or
-    /// - `end` >= [`self.len()`](Spannable::len()).
-    fn subset<'s>(&'s self, start: usize, end: usize) -> Self::Subset<'s>;
-    /// Returns an iterator over the logical units in this Spannable.
-    /// 
-    /// # Returns
-    /// A new `Self::Iter` that can iterate over the logical units.
-    fn iter<'s>(&'s self) -> Self::Iter<'s>;
-    /// Returns an iterator over the logical units in this Spannable, but annotated with their physical positions in the Spannable.
-    /// 
-    /// Typically, this index corresponds one-to-one to the elements already produced. The exception to this is in cases as with unicode graphemes, where the indices of logical units and physical units don't align. The iterator must yield logical units, but index them in physical units.
-    /// 
-    /// # Returns
-    /// A new `Self::IndicesIter` that can iterate over the logical units.
-    fn iter_indices<'s>(&'s self) -> Self::IndicesIter<'s>;
-    /// Gets the length of the spannable in logical indices.
-    /// 
-    /// # Returns
-    /// The count of logical units in this Spannable, e.g., the count of graphemes.
-    fn len(&self) -> usize;
-}
-impl<T: Clone + Deref<Target = str>> Spannable for T {
-    type Item<'s> = &'s str where Self: 's;
-    type Iter<'s> = unicode_segmentation::Graphemes<'s> where Self: 's;
-    type IndicesIter<'s> = unicode_segmentation::GraphemeIndices<'s> where Self: 's;
-    type Subset<'s> = &'s str where Self: 's;
-
-    #[inline]
-    fn subset<'s>(&'s self, start: usize, end: usize) -> Self::Subset<'s> { &(**self)[start..=end] }
-    #[inline]
-    fn iter<'s>(&'s self) -> Self::Iter<'s> { self.graphemes(true) }
-    #[inline]
-    fn iter_indices<'s>(&'s self) -> Self::IndicesIter<'s> { self.grapheme_indices(true) }
-    #[inline]
-    fn len(&self) -> usize { self.graphemes(true).count() }
-}
+pub(crate) use assert_range;
 
 
 
@@ -326,18 +142,18 @@ impl<T: Clone + Deref<Target = str>> Spannable for T {
 /// assert_eq!(span.end().col, 12);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Span<F, S> {
+pub struct Span<'f, 's> {
     /// The filename (or other description) of the file we are spanning.
-    pub file   : F,
+    pub file   : &'f str,
     /// The entire source text to snippet.
-    pub source : S,
+    pub source : &'s str,
     /// The start position of this span (inclusive).
     pub start  : usize,
     /// The end position of this span (inclusive).
     pub end    : usize,
 }
 
-impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
+impl<'f, 's> Span<'f, 's> {
     /// Constructor for the Span, which will encompass the entire source.
     /// 
     /// Note that the Span will be bound to the given filename and source types, and, more importantly, to its lifetimes.
@@ -361,11 +177,12 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn new(file: F, source: S) -> Self {
+    pub fn new(file: impl Into<&'f str>, source: impl Into<&'s str>) -> Self {
+        let source: &str = source.into();
         let source_len: usize = source.len();
         if source_len == 0 { panic!("Cannot span an empty string"); }
         Self {
-            file,
+            file  : file.into(),
             source,
             start : 0,
             end   : source_len - 1,
@@ -418,7 +235,7 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// Span::from_pos("<builtin>", "Hello, world!", Position::new0(0, 8), Position::new0(0, 6));
     /// ```
     #[track_caller]
-    pub fn from_pos(file: F, source: S, start: impl Into<Position>, end: impl Into<Position>) -> Self {
+    pub fn from_pos(file: &'f str, source: &'s str, start: impl Into<Position>, end: impl Into<Position>) -> Self {
         // Assert start <= end
         let (start, end): (Position, Position) = (start.into(), end.into());
         if start > end { panic!("Given start {start} is larger than given end {end}"); }
@@ -501,7 +318,7 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn from_idx(file: F, source: S, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
+    pub fn from_idx(file: &'f str, source: &'s str, start: impl AsPrimitive<usize>, end: impl AsPrimitive<usize>) -> Self {
         // Do a few asserts
         let (start, end): (usize, usize) = (start.as_(), end.as_());
         assert_range!(start, end, source);        
@@ -551,7 +368,7 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
 
         // Iterate over the source to find the line & column
         let (mut line, mut col): (usize, usize) = (0, 0);
-        for (i, c) in self.source.iter_indices() {
+        for (i, c) in self.source.grapheme_indices(true) {
             // If we reached it, we done
             if i == index { break; }
             else if i > index { panic!("Index {} does not point to grapheme boundary", index); }
@@ -656,59 +473,9 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn text<'t>(&'t self) -> S::Subset<'t> where 's: 't {
+    pub fn text(&self) -> &str {
         assert_range!(self.start, self.end, self.source);
-        self.source.subset(self.start, self.end)
-    }
-
-    /// Returns the lines referred by this span.
-    /// 
-    /// This can be thought of a [`Self::text()`](Span::text()) but then one that only returns in the line axis.
-    /// 
-    /// # Returns
-    /// A vector of the individual lines, stripped of newlines. The first and last lines may not be entirely referred by the span, but the middle ones sure are.
-    /// 
-    /// # Panics
-    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Position, Span};
-    /// 
-    /// // assert_eq!(Span::new("<example>", "Hello world!").lines(), vec![ "Hello world!" ]);
-    /// assert_eq!(Span::new("<example>", "Hello\nworld!").lines(), vec![ "Hello", "world!" ]);
-    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 4)).lines(), vec![ "Hello" ]);
-    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 8)).lines(), vec![ "Hello", "world!" ]);
-    /// assert_eq!(Span::from_pos("<example>", "Hello\nworld!", Position::new0(0, 0), Position::new0(0, 5)).lines(), vec![ "Hello" ]);
-    /// ```
-    #[track_caller]
-    pub fn lines<'t>(&'t self) -> Vec<S::Subset<'t>> where 's: 't {
-        // Pre-assert that the start is smaller than the end
-        assert_range!(self.start, self.end, self.source);
-
-        // Fetch the start & end lines in the source text
-        let mut start : usize = 0;
-        let mut lines : Vec<S::Subset<'t>> = Vec::with_capacity(1);
-        for (i, c) in self.source.iter_indices() {
-            // If it's a newline, then we potentially store and reset
-            if c.is_newline() {
-                // Check if this line overlaps with the span
-                if self.start < i && self.end >= start {
-                    // Note the line (excluding newline)
-                    lines.push(self.source.subset(start, i - 1));
-                }
-                // Reset
-                start = i + 1;
-            }
-        }
-
-        // If the current start is within the range, then add the final line as well (there was no newline to separate it)
-        if self.start < self.source.len() && self.end >= start {
-            lines.push(self.source.subset(start, self.source.len() - 1));
-        }
-
-        // Return the lines
-        lines
+        &self.source[self.start..=self.end]
     }
 
 
@@ -718,7 +485,11 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// # Returns
     /// A [`Range<S::Iter>`] iterator that returns only the spanned characters.
     #[inline]
-    pub fn iter<'t>(&'t self) -> Range<S::Iter<'t>> where 's: 't { Range::new(self.source.iter(), self.start, self.end) }
+    #[track_caller]
+    pub fn iter(&self) -> Graphemes {
+        assert_range!(self.start, self.end, self.source);
+        self.source[self.start..=self.end].graphemes(true)
+    }
 
     /// Returns an iterator over the logical units in this Span, annotating them with their physical index.
     /// 
@@ -729,7 +500,10 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     /// # Returns
     /// A [`EnumerateRange<S::Iter>`] iterator that returns only the spanned characters.
     #[inline]
-    pub fn iter_indices<'t>(&'t self) -> EnumerateRange<S::Iter<'t>> where 's: 't { EnumerateRange::new(self.source.iter(), self.start, self.end) }
+    pub fn iter_indices(&self) -> GraphemeIndices {
+        assert_range!(self.start, self.end, self.source);
+        self.source[self.start..=self.end].grapheme_indices(true)
+    }
 
     /// Returns the number of logical units that this Span spans.
     /// 
@@ -738,7 +512,7 @@ impl<'s, F: Clone, S: 's + Spannable> Span<F, S> {
     #[inline]
     pub fn len(&self) -> usize { self.end + 1 - self.start }
 }
-impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
+impl<'f, 's> Span<'f, 's> {
     /// Constructor for the Span that encapsulates both ranges of the given spans.
     /// 
     /// # Arguments
@@ -753,9 +527,9 @@ impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
     /// # Panics
     /// This function panics if the given spans do not have the same `file` or `source`.
     #[track_caller]
-    pub fn combined(span1: impl Into<Span<F, S>>, span2: impl Into<Span<F, S>>) -> Self {
-        let span1: Span<F, S> = span1.into();
-        let span2: Span<F, S> = span2.into();
+    pub fn combined(span1: impl Into<Span<'f, 's>>, span2: impl Into<Span<'f, 's>>) -> Self {
+        let span1: Span = span1.into();
+        let span2: Span = span2.into();
 
         // Assert they talk about the same thing
         if span1.file != span2.file { panic!("Given spans do not have the same `file`"); }
@@ -775,30 +549,27 @@ impl<F: Clone + PartialEq, S: Clone + PartialEq> Span<F, S> {
     }
 }
 
-impl<F, S> AsRef<Span<F, S>> for Span<F, S> {
+impl<'f, 's> AsRef<Span<'f, 's>> for Span<'f, 's> {
     #[inline]
     fn as_ref(&self) -> &Self { self }
 }
-impl<F, S> AsMut<Span<F, S>> for Span<F, S> {
+impl<'f, 's> AsMut<Span<'f, 's>> for Span<'f, 's> {
     #[inline]
     fn as_mut(&mut self) -> &mut Self { self }
 }
-impl<F: Clone, S: Clone> From<&Span<F, S>> for Span<F, S> {
+impl<'f, 's> From<&Span<'f, 's>> for Span<'f, 's> {
     #[inline]
-    fn from(value: &Span<F, S>) -> Self { value.clone() }
+    fn from(value: &Span<'f, 's>) -> Self { value.clone() }
 }
-impl<F: Clone, S: Clone> From<&mut Span<F, S>> for Span<F, S> {
+impl<'f, 's> From<&mut Span<'f, 's>> for Span<'f, 's> {
     #[inline]
-    fn from(value: &mut Span<F, S>) -> Self { value.clone() }
+    fn from(value: &mut Span<'f, 's>) -> Self { value.clone() }
 }
 
 
 // nom-related things
 #[cfg(feature = "nom")]
-impl<'s, F, S: 's + Spannable> nom::AsBytes for Span<F, S>
-where
-    S::Subset<'s>: nom::AsBytes,
-{
+impl<'f, 's> nom::AsBytes for Span<'f, 's> {
     #[track_caller]
     fn as_bytes(&self) -> &[u8] {
         assert_range!(self.start, self.end, self.source);

@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    08 Aug 2023, 16:58:04
+//    10 Aug 2023, 21:28:36
 //  Auto updated?
 //    Yes
 // 
@@ -22,7 +22,7 @@ use never_say_never::Never;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
-use crate::span::{Span, Spannable};
+use crate::span::{assert_range, Span};
 
 
 /***** HELPERS *****/
@@ -106,6 +106,88 @@ pub enum DiagnosticKind {
 
 
 
+/// A counterpart to a [`Span`] which is not dependent on, but instead takes ownership of, its two containing strings.
+/// 
+/// This is useful for errors, where we typically do not want the error to depend on the source anymore lifetime-wise.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DiagnosticSpan {
+    /// The filename or other identifier that lets the user identify the source text.
+    pub file   : String,
+    /// The lines that mark the text we want to show with this span.
+    pub source : String,
+    /// The start column of this span `source` (inclusive).
+    pub start  : usize,
+    /// The end column of this span `source` (inclusive).
+    pub end    : usize,
+}
+
+impl DiagnosticSpan {
+    /// Returns the text contained in this [`Span`].
+    /// 
+    /// # Returns
+    /// A reference to the internally stored string.
+    #[inline]
+    pub fn text(&self) -> &str { &self.source }
+}
+
+impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
+    #[inline]
+    fn from(value: Span<'f, 's>) -> Self {
+        // Pre-assert that the value's start is smaller than its end
+        assert_range!(value.start, value.end, value.source);
+
+        // Select the range to select
+        let mut line_start : usize = 0;
+        let mut start      : Option<usize> = None;
+        let mut end        : Option<usize> = None;
+        for (i, c) in value.source.grapheme_indices(true) {
+            // If it's a newline, then potentially update
+            if c == "\n" {
+                // Check if this line overlaps with the span
+                if value.start < i && value.end >= line_start {
+                    // Note the line (excluding newline)
+                    if start.is_none() { start = Some(line_start); }
+                    start = Some(line_start);
+                    end   = Some(i);
+                }
+
+                // Reset anyways
+                line_start = i + 1;
+            }
+        }
+
+        // Fetch the start & end lines in the source text
+        let mut start : usize = 0;
+        let mut lines : Vec<String> = Vec::with_capacity(1);
+        for (i, c) in value.source.grapheme_indices(true) {
+            // If it's a newline, then we potentially store and reset
+            if c == "\n" {
+                // Check if this line overlaps with the span
+                if value.start < i && value.end >= start {
+                    // Note the line (excluding newline)
+                    lines.push(value.source[start..=i - 1].into());
+                }
+                // Reset
+                start = i + 1;
+            }
+        }
+        // If the current start is within the range, then add the final line as well (there was no newline to separate it)
+        if value.start < value.source.len() && value.end >= start {
+            lines.push(value.source[start..=value.source.len() - 1].into());
+        }
+
+        // We can now return ourselves
+        Self {
+            file    : value.file.into(),
+            source  : lines,
+            start_c : value.pos_of(value.start).col,
+            end_c   : value.pos_of(value.end).col,
+        }
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -142,7 +224,7 @@ pub enum DiagnosticKind {
 /// 
 /// See this struct's other methods for detailled configuration options.
 #[derive(Clone, Debug)]
-pub struct Diagnostic<F, S> {
+pub struct Diagnostic {
     /// The message to show
     message : String,
     /// Some code identifier for distinguishing errors machine-wise.
@@ -150,14 +232,14 @@ pub struct Diagnostic<F, S> {
     /// The in-diagnostic note to display, if any.
     remark  : Option<String>,
     /// The span that relates this message to the source text.
-    span    : Span<F, S>,
+    span    : DiagnosticSpan,
     /// Anything kind-specific.
     kind    : DiagnosticSpecific,
     /// Any other diagnostics to print in succession after this one
     sub     : Vec<Self>,
 }
 
-impl<F, S> Diagnostic<F, S> {
+impl Diagnostic {
     /// Constructor for an error.
     /// 
     /// Note that the diagnostic's generics -`F` and `S`- are decuded from the span you give here, so if you are using references in the [`Span`] it means that the diagnostic inherits their lifetimes.
@@ -179,7 +261,7 @@ impl<F, S> Diagnostic<F, S> {
     /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::error("An example error.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
     /// ```
     #[inline]
-    pub fn error(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn error(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         Self {
             message : message.into(),
             code    : None,
@@ -211,7 +293,7 @@ impl<F, S> Diagnostic<F, S> {
     /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::warn("An example warning.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
     /// ```
     #[inline]
-    pub fn warn(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn warn(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         Self {
             message : message.into(),
             code    : None,
@@ -243,7 +325,7 @@ impl<F, S> Diagnostic<F, S> {
     /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::note("An example note.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
     /// ```
     #[inline]
-    pub fn note(message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn note(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         Self {
             message : message.into(),
             code    : None,
@@ -276,7 +358,7 @@ impl<F, S> Diagnostic<F, S> {
     /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::suggestion("An example suggestion.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()), "A better example.");
     /// ```
     #[inline]
-    pub fn suggestion(message: impl Into<String>, span: impl Into<Span<F, S>>, replacement: impl Into<String>) -> Self {
+    pub fn suggestion(message: impl Into<String>, span: impl Into<DiagnosticSpan>, replacement: impl Into<String>) -> Self {
         Self {
             message : message.into(),
             code    : None,
@@ -356,7 +438,7 @@ impl<F, S> Diagnostic<F, S> {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add(mut self, diagnostic: impl Into<Diagnostic<F, S>>) -> Self {
+    pub fn add(mut self, diagnostic: impl Into<Diagnostic>) -> Self {
         self.sub.push(diagnostic.into());
         self
     }
@@ -387,7 +469,7 @@ impl<F, S> Diagnostic<F, S> {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_error(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn add_error(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         self.sub.push(Self::error(message, span));
         self
     }
@@ -418,7 +500,7 @@ impl<F, S> Diagnostic<F, S> {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_warn(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn add_warn(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         self.sub.push(Self::warn(message, span));
         self
     }
@@ -449,7 +531,7 @@ impl<F, S> Diagnostic<F, S> {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_note(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>) -> Self {
+    pub fn add_note(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
         self.sub.push(Self::note(message, span));
         self
     }
@@ -479,7 +561,7 @@ impl<F, S> Diagnostic<F, S> {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_suggestion(mut self, message: impl Into<String>, span: impl Into<Span<F, S>>, code: impl Into<String>) -> Self {
+    pub fn add_suggestion(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>, code: impl Into<String>) -> Self {
         self.sub.push(Self::suggestion(message, span, code));
         self
     }
@@ -556,7 +638,28 @@ impl<F, S> Diagnostic<F, S> {
     /// assert_eq!(Diagnostic::error("An example error", span).span(), &span);
     /// ```
     #[inline]
-    pub fn span(&self) -> &Span<F, S> { &self.span }
+    pub fn span(&self) -> &DiagnosticSpan { &self.span }
+
+    /// Returns the text referred to by the span in this Diagnostic.
+    /// 
+    /// # Returns
+    /// The referred text, as a [`&str`](str).
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Diagnostic, Position, Span};
+    /// 
+    /// let span: Span<&str, &str> = Span::new("<example>", "Hello, World!");
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello, World!");
+    /// 
+    /// let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello");
+    /// 
+    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
+    /// ```
+    #[inline]
+    pub fn text(&self) -> &str { self.span.text() }
 
     /// Returns the kind of this Diagnostic.
     /// 
@@ -597,30 +700,7 @@ impl<F, S> Diagnostic<F, S> {
     #[inline]
     #[track_caller]
     pub fn replacement(&self) -> &str { if let DiagnosticSpecific::Suggestion { replace } = &self.kind { replace } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
-}
-impl<F: Clone, S: Spannable> Diagnostic<F, S> {
-    /// Returns the text referred to by the span in this Diagnostic.
-    /// 
-    /// # Returns
-    /// The referred text, as a [`&str`](str).
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Diagnostic, Position, Span};
-    /// 
-    /// let span: Span<&str, &str> = Span::new("<example>", "Hello, World!");
-    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello, World!");
-    /// 
-    /// let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
-    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello");
-    /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
-    /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
-    /// ```
-    #[inline]
-    pub fn text<'s>(&'s self) -> S::Subset<'s> { self.span.text() }
-}
-impl<F: Clone + Display, S: Spannable> Diagnostic<F, S> {
+
     /// Function that *actually* implements `emit_on`, but uses indirection to only print on toplevel diagnostic.
     /// 
     /// # Arguments
@@ -630,9 +710,9 @@ impl<F: Clone + Display, S: Spannable> Diagnostic<F, S> {
     /// # Errors
     /// This function may error if we failed to write to the given `writer`.
     #[track_caller]
-    fn _emit_on<'t>(&'t self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
+    fn _emit_on(&self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
         // Match on the kind to find the keyword and colour to show, as well as lines and span
-        let (keyword, colour, lines, start, end): (&'static str, Style, Vec<S::Subset<'t>>, Position, Position) = match &self.kind {
+        let (keyword, colour, lines, start, end): (&'static str, Style, Vec<&str>, Position, Position) = match &self.kind {
             // For these we just need the colour and junk
             DiagnosticSpecific::Error   => ("error", Style::new().bold().red(), self.span.lines(), self.span.start(), self.span.end()),
             DiagnosticSpecific::Warning => ("warning", Style::new().bold().yellow(), self.span.lines(), self.span.start(), self.span.end()),
@@ -649,7 +729,7 @@ impl<F: Clone + Display, S: Spannable> Diagnostic<F, S> {
                 let max_line_width: usize = (((self.span.start().line1() + (n_replace_lines - 1)) as f32).log10()) as usize + 1;
 
                 // Get the original source lines
-                let lines: Vec<S::Subset<'t>> = self.span.lines();
+                let lines: Vec<&str> = self.span.lines();
 
                 // Now write the header part of the error
                 writeln!(writer, "{}{}{}{}", colour.apply_to(keyword), if let Some(code) = &self.code { colour.apply_to(format!("[{code}]")).to_string() } else { String::new() }, style(": ").bold(), style(&self.message).bold())?;
@@ -890,19 +970,19 @@ impl<F: Clone + Display, S: Spannable> Diagnostic<F, S> {
     }
 }
 
-impl<F, S> AsRef<Diagnostic<F, S>> for Diagnostic<F, S> {
+impl AsRef<Diagnostic> for Diagnostic {
     #[inline]
     fn as_ref(&self) -> &Self { self }
 }
-impl<F, S> AsMut<Diagnostic<F, S>> for Diagnostic<F, S> {
+impl AsMut<Diagnostic> for Diagnostic {
     #[inline]
     fn as_mut(&mut self) -> &mut Self { self }
 }
-impl<F: Clone, S: Clone> From<&Diagnostic<F, S>> for Diagnostic<F, S> {
+impl From<&Diagnostic> for Diagnostic {
     #[inline]
-    fn from(value: &Diagnostic<F, S>) -> Self { value.clone() }
+    fn from(value: &Diagnostic) -> Self { value.clone() }
 }
-impl<F: Clone, S: Clone> From<&mut Diagnostic<F, S>> for Diagnostic<F, S> {
+impl From<&mut Diagnostic> for Diagnostic {
     #[inline]
-    fn from(value: &mut Diagnostic<F, S>) -> Self { value.clone() }
+    fn from(value: &mut Diagnostic) -> Self { value.clone() }
 }
