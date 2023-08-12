@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    22 Jul 2023, 12:09:22
+//    12 Aug 2023, 12:09:57
 //  Auto updated?
 //    Yes
 // 
@@ -15,44 +15,44 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit::{Diagnostic, Span};
+use ast_toolkit::{Diagnostic, DiagnosticSpan, Span};
 
 
 /***** ERRORS *****/
 /// Defines an error... that is also a diagnostic!
 #[derive(Debug, Diagnostic)]
-pub enum TestError<F, S> {
+pub enum TestError {
     #[diag(error)]
-    SingleLine { span: Span<F, S> },
+    SingleLine { span: DiagnosticSpan },
     #[diag(error)]
-    SingleInMultiLine { span: Span<F, S> },
+    SingleInMultiLine { span: DiagnosticSpan },
     #[diag(error)]
-    MultiLine { span: Span<F, S> },
+    MultiLine { span: DiagnosticSpan },
 
     #[diag(error, code = "E001")]
-    CommonError { span: Span<F, S> },
+    CommonError { span: DiagnosticSpan },
     #[diag(error, code = code)]
-    CommonErrorRuntime { code: String, span: Span<F, S> },
+    CommonErrorRuntime { code: String, span: DiagnosticSpan },
     #[diag(warn, remark = "`#[warn(last_char)]` is enabled by default")]
-    SpecificWarn { span: Span<F, S> },
+    SpecificWarn { span: DiagnosticSpan },
     #[diag(warn, remark = remark)]
-    SpecificWarnRuntime { remark: String, span: Span<F, S> },
+    SpecificWarnRuntime { remark: String, span: DiagnosticSpan },
 
     #[diag(warn)]
-    Warn { span: Span<F, S> },
+    Warn { span: DiagnosticSpan },
     #[diag(note)]
-    Note { span: Span<F, S> },
+    Note { span: DiagnosticSpan },
 
     #[diag(suggestion, replace = "text")]
-    Suggestion { span: Span<F, S> },
+    Suggestion { span: DiagnosticSpan },
     #[diag(suggestion)]
-    SuggestionRuntime { replace: String, span: Span<F, S> },
+    SuggestionRuntime { replace: String, span: DiagnosticSpan },
 
     #[diag(error)]
     #[diag(suggestion, message = "Replace with '{replace}'")]
-    Chained { identifier: String, replace: String, span: Span<F, S> },
+    Chained { identifier: String, replace: String, span: DiagnosticSpan },
 }
-impl<F, S> Display for TestError<F, S> {
+impl Display for TestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use TestError::*;
         match self {
@@ -75,7 +75,7 @@ impl<F, S> Display for TestError<F, S> {
         }
     }
 }
-impl<F: Debug, S: Debug> Error for TestError<F, S> {}
+impl Error for TestError {}
 
 
 
@@ -83,24 +83,24 @@ impl<F: Debug, S: Debug> Error for TestError<F, S> {}
 
 /***** ENTRYPOINT *****/
 fn main() {
-    Diagnostic::from(TestError::SingleLine{ span: Span::from_idx("<builtin>", "SOURCE TEXT SOURCE TEXT SOURCE TEXT", 0, 10) }).emit();
-    Diagnostic::from(TestError::SingleInMultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 22) }).emit();
-    Diagnostic::from(TestError::MultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 29) }).emit();
+    Diagnostic::from(TestError::SingleLine{ span: Span::from_idx("<builtin>", "SOURCE TEXT SOURCE TEXT SOURCE TEXT", 0, 10).into() }).emit();
+    Diagnostic::from(TestError::SingleInMultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 22).into() }).emit();
+    Diagnostic::from(TestError::MultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 29).into() }).emit();
 
     // Codes, notes
-    Diagnostic::from(TestError::CommonError { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0) }).emit();
-    Diagnostic::from(TestError::CommonErrorRuntime { code: format!("E00{}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0) }).emit();
-    Diagnostic::from(TestError::SpecificWarn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34) }).emit();
-    Diagnostic::from(TestError::SpecificWarnRuntime { remark: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34) }).emit();
+    Diagnostic::from(TestError::CommonError { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0).into() }).emit();
+    Diagnostic::from(TestError::CommonErrorRuntime { code: format!("E00{}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0).into() }).emit();
+    Diagnostic::from(TestError::SpecificWarn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34).into() }).emit();
+    Diagnostic::from(TestError::SpecificWarnRuntime { remark: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34).into() }).emit();
 
     // Warnings, notes
-    Diagnostic::from(TestError::Warn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 17) }).emit();
-    Diagnostic::from(TestError::Note { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
+    Diagnostic::from(TestError::Warn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 17).into() }).emit();
+    Diagnostic::from(TestError::Note { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
 
     // Some suggestion
-    Diagnostic::from(TestError::Suggestion { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
-    Diagnostic::from(TestError::SuggestionRuntime { replace: format!("text {}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22) }).emit();
+    Diagnostic::from(TestError::Suggestion { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
+    Diagnostic::from(TestError::SuggestionRuntime { replace: format!("text {}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
 
     // Chain a few
-    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), replace: "source".into(), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5) }).emit();
+    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), replace: "source".into(), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5).into() }).emit();
 }

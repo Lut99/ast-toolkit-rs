@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    08 Aug 2023, 15:59:09
+//    12 Aug 2023, 12:17:33
 //  Auto updated?
 //    Yes
 // 
@@ -46,31 +46,31 @@ mod ast {
 
     /// Defines the toplevel program node.
     #[derive(Clone, Debug)]
-    pub struct Program<F, S> {
+    pub struct Program<'f, 's> {
         /// The list of function calls we parsed.
-        pub calls : Vec<FunctionCall<F, S>>,
+        pub calls : Vec<FunctionCall<'f, 's>>,
         /// The span for the entire (parsed) program
-        pub span  : Option<Span<F, S>>,
+        pub span  : Option<Span<'f, 's>>,
     }
 
     /// Defines a statement in our highly simple language, which is a function call over literals
     #[derive(Clone, Debug)]
-    pub struct FunctionCall<F, S> {
+    pub struct FunctionCall<'f, 's> {
         /// The name of the function to call
         pub name : String,
         /// The arguments of the call
-        pub args : Vec<Literal<F, S>>,
+        pub args : Vec<Literal<'f, 's>>,
         /// The span for this call
-        pub span : Span<F, S>,
+        pub span : Span<'f, 's>,
     }
 
     /// Defines the literals we can parse.
     #[derive(Clone, Debug)]
-    pub struct Literal<F, S> {
+    pub struct Literal<'f, 's> {
         /// Any variant specifics
         pub variant : LiteralVariant,
         /// The span for this literal
-        pub span    : Span<F, S>,
+        pub span    : Span<'f, 's>,
     }
 
     /// Actually defines the possible literal variants
@@ -89,10 +89,10 @@ mod ast {
 
 /***** PARSING FUNCTIONS *****/
 /// Defines the input of the parsing functions.
-type Input<F, S> = Span<F, S>;
+type Input<'f, 's> = Span<'f, 's>;
 
 /// Defines the output of the parsing functions.
-type Output<F, S, T> = IResult<Span<F, S>, T, nom::error::Error<Span<F, S>>>;
+type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>>>;
 
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    10 Aug 2023, 21:19:05
+//    12 Aug 2023, 12:31:48
 //  Auto updated?
 //    Yes
 // 
@@ -12,9 +12,6 @@
 //!   Defines the [`Span`] (and [`Position`]) structs which we use to keep
 //!   track of a node's position in the source text.
 // 
-
-use std::fmt::Display;
-use std::ops::Deref;
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::{Graphemes, GraphemeIndices, UnicodeSegmentation as _};
@@ -29,20 +26,20 @@ mod tests {
 
     #[test]
     fn test_from_pos() {
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 1));
+        let span: Span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 1));
         assert_eq!(span.text(), "H");
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+        let span: Span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
         assert_eq!(span.text(), "Hello");
 
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 1));
+        let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 1));
         assert_eq!(span.text(), "H");
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 5));
+        let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 5));
         assert_eq!(span.text(), "Hello");
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 1));
+        let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 1));
         assert_eq!(span.text(), "W");
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 5));
+        let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 5));
         assert_eq!(span.text(), "World");
-        let span: Span<&str, &str> = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(2, 6));
+        let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(2, 6));
         assert_eq!(span.text(), "Hello\nWorld!");
     }
 }
@@ -243,19 +240,19 @@ impl<'f, 's> Span<'f, 's> {
         // Examine the source to find the end
         let (mut istart, mut iend): (Position, Position) = (start, end);
         let (mut rstart, mut rend): (Option<usize>, Option<usize>) = (None, None);
-        for (i, c) in source.iter_indices() {
+        for (i, c) in source.grapheme_indices(true) {
             // If we've reached the end of any, mark it
             if rstart.is_none() && istart.line == 0 && istart.col == 0 { rstart = Some(i); }
             if rend.is_none() && iend.line == 0 && iend.col == 0 { rend = Some(i); break; }
 
             // Otherwise, count them down
-            if istart.line > 0 && c.is_newline() {
+            if istart.line > 0 && c == "\n" {
                 istart.line -= 1;
             } else if istart.line == 0 && istart.col > 0 {
                 // If we're skipping a (non-terminating) newline, the Position is ill-formed
                 istart.col -= 1;
             }
-            if iend.line > 0 && c.is_newline() {
+            if iend.line > 0 && c == "\n" {
                 iend.line -= 1;
             } else if iend.line == 0 && iend.col > 0 {
                 // If we're skipping a (non-terminating) newline, the Position is ill-formed
@@ -349,8 +346,8 @@ impl<'f, 's> Span<'f, 's> {
     /// ```rust
     /// use ast_toolkit::{Position, Span};
     /// 
-    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
-    /// let span2: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 0, 4);
+    /// let span1 = Span::new("<example>", "Hello\nworld!");
+    /// let span2 = Span::from_idx("<example>", "Hello\nworld!", 0, 4);
     /// 
     /// assert_eq!(span1.pos_of(3), Position::new0(0, 3));
     /// assert_eq!(span1.pos_of(7), Position::new0(1, 1));
@@ -374,7 +371,7 @@ impl<'f, 's> Span<'f, 's> {
             else if i > index { panic!("Index {} does not point to grapheme boundary", index); }
 
             // Otherwise, count
-            if c.is_newline() { line += 1; col = 0; }
+            if c == "\n" { line += 1; col = 0; }
             else { col += 1; }
         }
 
@@ -394,9 +391,9 @@ impl<'f, 's> Span<'f, 's> {
     /// ```rust
     /// use ast_toolkit::{Position, Span};
     /// 
-    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
-    /// let span2: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
-    /// let span3: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
+    /// let span1 = Span::new("<example>", "Hello\nworld!");
+    /// let span2 = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
+    /// let span3 = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
     /// 
     /// assert_eq!(span1.start(), Position::new0(0, 0));
     /// assert_eq!(span2.start(), Position::new0(0, 2));
@@ -429,10 +426,10 @@ impl<'f, 's> Span<'f, 's> {
     /// ```rust
     /// use ast_toolkit::{Position, Span};
     /// 
-    /// let span1: Span<&str, &str> = Span::new("<example>", "Hello world!");
-    /// let span2: Span<&str, &str> = Span::new("<example>", "Hello\nworld!");
-    /// let span3: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
-    /// let span4: Span<&str, &str> = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
+    /// let span1 = Span::new("<example>", "Hello world!");
+    /// let span2 = Span::new("<example>", "Hello\nworld!");
+    /// let span3 = Span::from_idx("<example>", "Hello\nworld!", 2, 2);
+    /// let span4 = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
     /// 
     /// assert_eq!(span1.end(), Position::new0(0, 11));
     /// assert_eq!(span2.end(), Position::new0(1, 5));
@@ -573,7 +570,7 @@ impl<'f, 's> nom::AsBytes for Span<'f, 's> {
     #[track_caller]
     fn as_bytes(&self) -> &[u8] {
         assert_range!(self.start, self.end, self.source);
-        self.source.subset(self.start, self.end).as_bytes()
+        self.source[self.start..=self.end].as_bytes()
     }
 }
 
