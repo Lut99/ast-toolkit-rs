@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    21 Aug 2023, 14:42:51
+//    21 Aug 2023, 23:43:39
 //  Auto updated?
 //    Yes
 // 
@@ -22,7 +22,64 @@ use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
-use crate::span::{assert_range, Span};
+use crate::span::{Span, SpanRange};
+
+
+/***** HELPER FUNCTIONS *****/
+/// Writes the header of an error message to the given writer.
+/// 
+/// # Arguments
+/// - `writer`: The [`Write`]r to write on.
+/// - `accent_colour`: The colour to write accents with.
+/// - `kind`: The error message to show.
+/// - `code`: Any error code to show.
+/// - `message`: The error message to show.
+/// 
+/// # Errors
+/// This function may error if we failed to write on the given writer.
+#[inline]
+fn emit_diagnostic_header(writer: &mut impl Write, accent_colour: Style, kind: &str, code: Option<&str>, message: &str) -> Result<(), std::io::Error> {
+    writeln!(writer, "{}{}{}", accent_colour.apply_to(kind), if let Some(code) = code { accent_colour.apply_to(code) } else { accent_colour.apply_to("") }, message)
+}
+
+/// Writes the line that gives the source location.
+/// 
+/// # Arguments
+/// - `writer`: The [`Write`]r to write on.
+/// - `indent`: The number of spaces that the line number will be at most.
+/// - `file`: The filename (or other source identifier) to write.
+/// - `pos`: The position of the source start.
+/// 
+/// # Errors
+/// This function may error if we failed to write on the given writer.
+#[inline]
+fn emit_diagnostic_source_pos(writer: &mut impl Write, indent: usize, file: &str, pos: Position) -> Result<(), std::io::Error> {
+    writeln!(writer, "{}{} {}:{}", (0..indent).map(|_| ' ').collect::<String>(), style("-->").bold().blue(), file, pos)
+}
+
+/// Writes a single source line.
+/// 
+/// # Arguments
+/// - `writer`: The [`Write`]r to write on.
+/// - `accent_colour`: The colour to write accents with.
+/// - `indent`: The number of spaces that the line number will be at most.
+/// - `line`: The line number to write (one-indexed).
+/// - `source`: The actual source line to write.
+/// - `offset`: The offset of this line w.r.t. the whole source.
+/// - `accent`: The total access range of this line, ignoring newlines for a sec.
+/// 
+/// # Errors
+/// This function may error if we failed to write on the given writer.
+#[inline]
+fn emit_diagnostic_source_line(writer: &mut impl Write, accent_colour: Style, indent: usize, line: usize, source: &str, offset: usize, accent: SpanRange) -> Result<(), std::io::Error> {
+    // Write the empty line first
+    writeln!(writer, "{} {}", (0..indent).map(|_| ' ').collect::<String>(), style('|').bold().blue())?;
+
+    // Next, write the source line
+}
+
+
+
 
 
 /***** HELPERS *****/
@@ -129,10 +186,8 @@ pub struct DiagnosticSpan {
     pub file    : String,
     /// The lines that mark the text we want to show with this span.
     pub source  : String,
-    /// The start position of this span in the `source` (inclusive).
-    pub start   : usize,
-    /// The end position of this span in the `source` (inclusive).
-    pub end     : usize,
+    /// The range spanned in this (limited) source.
+    pub range   : SpanRange,
     /// Keeps track of how many lines are skipped before we get to this span.
     pub skipped : usize,
 }
@@ -151,10 +206,7 @@ impl DiagnosticSpan {
     /// assert_eq!(span.text(), "Example text");
     /// ```
     #[inline]
-    pub fn text(&self) -> &str {
-        assert_range!(self.start, self.end, self.source);
-        &self.source[self.start..=self.end]
-    }
+    pub fn text(&self) -> &str { self.range.slice(&self.source) }
 
     /// Converts a character index to a [`Position`] within this span's source text.
     /// 
@@ -185,8 +237,6 @@ impl DiagnosticSpan {
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
     /// // This will panic!
-    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 0, 4)).pos_of(4);
-    /// DiagnosticSpan::from(Span::new("<example>", "Hello\nworld!")).pos_of(50);
     /// DiagnosticSpan::from(Span::new("<example>", "Hÿllo\nworld!")).pos_of(2);
     /// ```
     #[track_caller]
@@ -215,10 +265,10 @@ impl DiagnosticSpan {
     /// Returns the start position of this span as a [`Position`].
     /// 
     /// # Returns
-    /// A [`Position`] describing the start position in the source text.
+    /// A [`Position`] describing the start position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `start` does not point at the unicode grapheme boundary.
+    /// This function may panic if `start` does not point at the unicode grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -227,33 +277,29 @@ impl DiagnosticSpan {
     /// let span1: DiagnosticSpan = Span::new("<example>", "Hello\nworld!").into();
     /// let span2: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 2, 2).into();
     /// let span3: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 6, 10).into();
+    /// let span4: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 10, 9).into();
     /// 
-    /// assert_eq!(span1.start(), Position::new0(0, 0));
-    /// assert_eq!(span2.start(), Position::new0(0, 2));
-    /// assert_eq!(span3.start(), Position::new0(1, 0));
+    /// assert_eq!(span1.start(), Some(Position::new0(0, 0)));
+    /// assert_eq!(span2.start(), Some(Position::new0(0, 2)));
+    /// assert_eq!(span3.start(), Some(Position::new0(1, 0)));
+    /// assert_eq!(span4.start(), None);
     /// ```
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
     /// // This will panic!
-    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 0, 50)).start();
-    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 50, 0)).start();
     /// DiagnosticSpan::from(Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6)).start();
     /// ```
     #[inline]
     #[track_caller]
-    pub fn start(&self) -> Position {
-        // Assert some things
-        assert_range!(self.start, self.end, self.source);
-        self.pos_of(self.start)
-    }
+    pub fn start(&self) -> Option<Position> { self.range.resolve_start().map(|idx| self.pos_of(idx)) }
 
     /// Returns the end position of this span as a [`Position`].
     /// 
     /// # Returns
-    /// A [`Position`] describing the end position in the source text.
+    /// A [`Position`] describing the end position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `end` does not point at the unicode grapheme boundary.
+    /// This function may panic if `end` does not point at the unicode grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -263,39 +309,33 @@ impl DiagnosticSpan {
     /// let span2: DiagnosticSpan = Span::new("<example>", "Hello\nworld!").into();
     /// let span3: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 2, 2).into();
     /// let span4: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 6, 10).into();
+    /// let span5: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 10, 9).into();
     /// 
-    /// assert_eq!(span1.end(), Position::new0(0, 11));
-    /// assert_eq!(span2.end(), Position::new0(1, 5));
-    /// assert_eq!(span3.end(), Position::new0(0, 2));
-    /// assert_eq!(span4.end(), Position::new0(1, 4));
+    /// assert_eq!(span1.end(), Some(Position::new0(0, 11)));
+    /// assert_eq!(span2.end(), Some(Position::new0(1, 5)));
+    /// assert_eq!(span3.end(), Some(Position::new0(0, 2)));
+    /// assert_eq!(span4.end(), Some(Position::new0(1, 4)));
+    /// assert_eq!(span5.start(), None);
     /// ```
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
     /// // This will panic!
-    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 0, 50)).end();
-    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 50, 0)).end();
     /// DiagnosticSpan::from(Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6)).end();
     /// ```
     #[inline]
     #[track_caller]
-    pub fn end(&self) -> Position {
-        // Assert some things
-        assert_range!(self.start, self.end, self.source);
-        self.pos_of(self.end)
-    }
+    pub fn end(&self) -> Option<Position> { self.range.resolve_end(self.source.len()).map(|idx| self.pos_of(idx)) }
 }
 
 impl<'f, 's> PartialEq<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
     fn eq(&self, other: &Span<'f, 's>) -> bool {
-        println!("DIAGNOSTICSPAN == SPAN: '{}' == '{}'?", self.text(), other.text());
         self.file == other.file && self.text() == other.text()
     }
 }
 impl<'f, 's> PartialEq<DiagnosticSpan> for Span<'f, 's> {
     #[inline]
     fn eq(&self, other: &DiagnosticSpan) -> bool {
-        println!("SPAN == DIAGNOSTICSPAN: '{}' == '{}'?", self.text(), other.text());
         self.file == other.file && self.text() == other.text()
     }
 }
@@ -303,43 +343,56 @@ impl<'f, 's> PartialEq<DiagnosticSpan> for Span<'f, 's> {
 impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
     fn from(value: Span<'f, 's>) -> Self {
-        // Pre-assert that the value's start is smaller than its end
-        assert_range!(value.start, value.end, value.source);
+        // Get the slice
+        let mut lines_range: SpanRange = value.range;
 
-        // Select the range to select
-        let mut line_start : usize = 0;
-        let mut start      : Option<usize> = None;
-        let mut end        : Option<usize> = None;    /* Note: exclusive */
-        for (i, c) in value.source.grapheme_indices(true) {
-            // If it's a newline, then potentially update
-            if c == "\n" {
-                // Check if this line overlaps with the span
-                if value.start < i && value.end >= line_start {
-                    // Note the line (excluding newline)
-                    if start.is_none() { start = Some(line_start); }
-                    end = Some(i);
+        // Find the first newline starting backwards from the start
+        match &mut lines_range {
+            // We need to search for anything bounded on the left
+            SpanRange::Bounded { left, .. } | SpanRange::LBounded { left } => {
+                for (i, c) in value.source[..*left].grapheme_indices(true).rev() {
+                    if c == "\n" {
+                        // We start from here to catch the entire line
+                        *left = i + 1;
+                    }
                 }
+            },
 
-                // Reset anyways
-                line_start = i + 1;
-            }
+            // The rest doesn't need any work
+            SpanRange::Unbounded | SpanRange::RBounded { .. } | SpanRange::Empty => {},
         }
-        // If the current start is within the range, then add the final line as well (there was no newline to separate it)
-        if value.start < value.source.len() && value.end >= line_start {
-            if start.is_none() { start = Some(line_start); }
-            end = Some(value.source.len());
+
+        // Find the first newline starting forwards from the end
+        match &mut lines_range {
+            // We need to search for anything bounded on the right
+            SpanRange::Bounded { right, .. } | SpanRange::RBounded { right } => {
+                for (i, c) in value.source[*right..].grapheme_indices(true) {
+                    if c == "\n" {
+                        // We start from here to catch the entire line
+                        *right = i;
+                    }
+                }
+            },
+
+            // The rest doesn't need any work
+            SpanRange::Unbounded | SpanRange::LBounded { .. } | SpanRange::Empty => {},
         }
-        // Unwrap start and end now
-        let start : usize = start.unwrap();
-        let end   : usize = end.unwrap();
+
+        // Now create a version of the range that has the ranges adjusted for the lines skipped by left
+        let mut range: SpanRange = lines_range;
+        let mut skipped: usize = 0;
+        match &mut range {
+            SpanRange::Bounded { left, right } => { skipped = value.pos_of(*left).line; *right -= *left; *left = 0; },
+            SpanRange::LBounded { left } => { skipped = value.pos_of(*left).line; *left = 0; }
+            SpanRange::Unbounded | SpanRange::RBounded { .. } | SpanRange::Empty => {},
+        }
 
         // Extract that piece of text and return ourselves
         Self {
-            file    : value.file.into(),
-            source  : value.source[start..end].into(),
-            start   : value.start - start,
-            end     : (value.start - start) + (value.end - value.start),
-            skipped : value.pos_of(value.start).line,
+            file   : value.file.into(),
+            source : lines_range.slice(value.source).into(),
+            range,
+            skipped,
         }
     }
 }
@@ -874,6 +927,17 @@ impl Diagnostic {
     /// This function may error if we failed to write to the given `writer`.
     #[track_caller]
     fn _emit_on(&self, writer: &mut impl Write, toplevel: bool) -> Result<(), std::io::Error> {
+        // Decide which part of the text to show, coloured
+        match self.span.range {
+            // Show everything
+            SpanRange::Unbounded => {
+                
+            },
+
+            // Show partially everything
+            SpanRange::LBounded { left } => {},
+        }
+
         // Match on the kind to find the keyword and colour to show, as well as lines and span
         let (keyword, colour, lines, start, end): (&'static str, Style, Vec<&str>, Position, Position) = match &self.kind {
             // For these we just need the colour and junk
