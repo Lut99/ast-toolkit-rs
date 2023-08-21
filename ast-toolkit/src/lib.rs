@@ -215,6 +215,10 @@ pub mod procedural {
     /// Diagnostic::from(err).emit();
     /// ```
     /// 
+    /// # [`Span`](crate::span::Span)s VS [`DiagnosticSpan`](crate::diagnostic::DiagnosticSpan)s
+    /// The macro makes use of [`DiagnosticSpan`](crate::diagnostic::DiagnosticSpan)s instead of [`Span`](crate::span::Span)s because they do not implement references. Instead, they copy
+    /// part of the source text which makes the errors much more portable. You can easily convert from the latter to the first using `DiagnosticSpan::from()` or `Span::into()`.
+    /// 
     /// # Attributes
     /// ## Toplevel
     /// There are no toplevel attributes for this macro.
@@ -358,7 +362,7 @@ pub mod procedural {
     ///   #     }
     ///   # }
     ///   ```
-    /// - `#[diag(span = <FIELD>)]` or `#[diag(span)]`: Specifies the fieldname of the [`Span`](crate::span::Span) that links the diagnostic to the source text. If not value is given, then
+    /// - `#[diag(span = <FIELD>)]` or `#[diag(span)]`: Specifies the fieldname of the [`DiagnosticSpan`](crate::diagnostic::DiagnosticSpan) that links the diagnostic to the source text. If not value is given, then
     ///   a default fieldname of `span` is used. Omitting the attribute altogether will yield the same result.
     ///   
     ///   For example:
@@ -388,7 +392,7 @@ pub mod procedural {
     ///   ```
     /// 
     /// # Chaining
-    /// A key feature of the API is that multipe [`Diagnostic`](crate::diagnostic::Diagnostic) can be derived per struct or variant:
+    /// A key feature of the API is that multiple [`Diagnostic`](crate::diagnostic::Diagnostic) can be derived per struct or variant:
     /// ```rust
     /// use std::fmt::{Display, Formatter, Result as FResult};
     /// use ast_toolkit::{Diagnostic, DiagnosticSpan};
