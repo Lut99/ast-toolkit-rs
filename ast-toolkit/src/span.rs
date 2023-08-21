@@ -47,53 +47,159 @@ mod tests {
 #[cfg(feature = "nom")]
 #[cfg(test)]
 mod nom_tests {
+    use itertools::Itertools as _;
     use super::*;
 
-    // #[test]
-    // fn test_span_nom_as_bytes() {
-    //     // Create a few spans and see if they byte version equates what we expect
-    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
-    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
-    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
-    //     assert_eq!(<Span<&str, &str> as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
-    // }
-    // #[test]
-    // fn test_span_nom_input_iter() {
-    //     // Try some iterations
-    //     let target: &str = "Example text";
-    //     for (i, b) in <Span<&str, &str> as nom::InputIter>::iter_indices(&Span::new("<example>", target)) {
-    //         assert_eq!(b, target.as_bytes()[i]);
-    //     }
-    // }
-//     #[test]
-//     fn test_span_nom_input_length() {
-//         // Create a few spans and see if their length matches with what we expect
-//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
-//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 0, 6)), 7);
-//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 8, 11)), 4);
-//         assert_eq!(<Span<&str, &str> as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 3, 9)), 7);
-//     }
-//     #[test]
-//     fn test_span_nom_input_take() {
-//         // See if we can take and split how we expect
-//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
-//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
-//         assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+    #[test]
+    fn test_span_nom_as_bytes() {
+        // Create a few spans and see if they byte version equates what we expect
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 0, 6)), b"Example");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 8, 11)), b"text");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::from_idx("<example>", "Example text", 3, 9)), b"mple te");
+    }
+    #[test]
+    fn test_span_nom_compare() {
+        // Do some comparisons
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 0, 6), "Example"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 8, 11), "text"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
+    }
+    #[test]
+    fn test_span_nom_extend_into() {
+        let file: &str = "<test>";
+        let code: &str = "let test: &str = \"Hello, there!\"\nprintln!(\"{test}\");";
 
-//         // Now compare the split
-//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
-//         assert_eq!(<Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
-//         assert!(std::panic::catch_unwind(|| <Span<&str, &str> as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
-//     }
-//     #[test]
-//     fn test_span_nom_compare() {
-//         // Do some comparisons
-//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
-//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 0, 6), "Example"), nom::CompareResult::Ok);
-//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::from_idx("<example>", "Example text", 8, 11), "text"), nom::CompareResult::Ok);
-//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
-//         assert_eq!(<Span<&str, &str> as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
-//     }
+        // Attempt to combine a few spans
+        let spans = vec![
+            Span::from_idx(file, code, 0, 2),
+            Span::from_idx(file, code, 4, 7),
+            Span::from_idx(file, code, 11, 13),
+            Span::from_idx(file, code, 18, 22),
+            Span::from_idx(file, code, 25, 29),
+            Span::from_idx(file, code, 32, 39),
+            Span::from_idx(file, code, 44, 47),
+        ];
+
+        // Try various combinations
+        for spans in spans.iter().combinations(2) {
+            assert_eq!(spans.len(), 2);
+            let span1: &Span = spans[0];
+            let span2: &Span = spans[1];
+
+            // Compare them
+            let mut builder = <Span as nom::ExtendInto>::new_builder(&span1);
+            <Span as nom::ExtendInto>::extend_into(&span2, &mut builder);
+            assert_eq!(builder.text(), &code[std::cmp::min(span1.start, span2.start)..=std::cmp::max(span1.end, span2.end)]);
+        }
+    }
+    #[test]
+    fn test_span_nom_find_substring() {
+        // Find substrings as indices in the source
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Hello"), Some(0));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "world"), Some(7));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "!"), Some(12));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Bananas"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Helol"), None);
+
+        // Do the same but with limited source
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::from_idx("<example>", "Hello, world!", 7, 12), "Hello"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::from_idx("<example>", "Hello, world!", 7, 12), "world"), Some(7));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::from_idx("<example>", "Hello, world!", 7, 12), "!"), Some(12));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::from_idx("<example>", "Hello, world!", 7, 12), "Bananas"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::from_idx("<example>", "Hello, world!", 7, 12), "Helol"), None);
+    }
+    #[test]
+    fn test_span_nom_find_token() {
+        let file: &str = "<test>";
+        let text: &str = "Hello there!ÿ";
+
+        // Find some bytes in full source...
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'H'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'o'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'!'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'q'), false);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::from_idx(file, text, 6, 13), b'H'), false);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::from_idx(file, text, 6, 13), b'o'), false);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::from_idx(file, text, 6, 13), b'!'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::from_idx(file, text, 6, 13), b'q'), false);
+
+        // Find some characters in full source...
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'H'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'o'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), '!'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'q'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'ÿ'), true);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::from_idx(file, text, 6, 13), 'H'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::from_idx(file, text, 6, 13), 'o'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::from_idx(file, text, 6, 13), '!'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::from_idx(file, text, 6, 13), 'q'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::from_idx(file, text, 6, 13), 'ÿ'), true);
+
+        // Find some graphemes in full source...
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "H"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "o"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "!"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "q"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "ÿ"), true);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::from_idx(file, text, 6, 13), "H"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::from_idx(file, text, 6, 13), "o"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::from_idx(file, text, 6, 13), "!"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::from_idx(file, text, 6, 13), "q"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::from_idx(file, text, 6, 13), "ÿ"), true);
+    }
+    #[test]
+    fn test_span_nom_input_iter() {
+        let target: &str = "Example text";
+        let span = Span::new("<example>", target);
+
+        // Try to iterate index/element-wise
+        for (i, b) in <Span as nom::InputIter>::iter_indices(&span) {
+            assert_eq!(b, target.as_bytes()[i]);
+        }
+
+        // Try to iterate element-wise
+        let mut chars = target.bytes();
+        for b in <Span as nom::InputIter>::iter_elements(&span) {
+            let c: u8 = if let Some(c) = chars.next() { c } else { panic!("Too many bytes in iter_elements()"); };
+            assert_eq!(b, c);
+        }
+
+        // Take the position
+        assert_eq!(<Span as nom::InputIter>::position(&span, |b: u8| b == b'l'), Some(5));
+        assert_eq!(<Span as nom::InputIter>::position(&span, |b: u8| b == b't'), Some(8));
+
+        // Take the slice
+        match <Span as nom::InputIter>::slice_index(&span, 5) {
+            Ok(idx)  => { assert_eq!(idx, 5); },
+            Err(err) => { panic!("Taking the slice index of Span failed: {err:?}"); },
+        }
+    }
+    #[test]
+    fn test_span_nom_input_length() {
+        // Create a few spans and see if their length matches with what we expect
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 0, 6)), 7);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 8, 11)), 4);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::from_idx("<example>", "Example text", 3, 9)), 7);
+    }
+    #[test]
+    fn test_span_nom_input_take() {
+        // See if we can take and split how we expect
+        assert_eq!(<Span as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
+        assert_eq!(<Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+
+        // Now compare the split
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+    }
 }
 
 
@@ -144,7 +250,7 @@ pub(crate) use assert_range;
 /// assert_eq!(span.end().line, 0);
 /// assert_eq!(span.end().col, 12);
 /// ```
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Span<'f, 's> {
     /// The filename (or other description) of the file we are spanning.
     pub file   : &'f str,
@@ -346,6 +452,94 @@ impl<'f, 's> Span<'f, 's> {
         }
     }
 
+    /// Constructor for the Span that encapsulates both ranges of the given spans.
+    /// 
+    /// # Arguments
+    /// - `span1`: The first span to take into account.
+    /// - `span2`: The second span to take into account.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans both input spans and everything in between.
+    /// 
+    /// Note that, for lifetime purposes, the file and source text from the first span are referenced.
+    /// 
+    /// # Panics
+    /// This function panics if the given spans do not have the same `file` or `source`. Note that this goes by *pointer equality*.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let span1 = Span::from_idx(file, text, 0, 4);
+    /// let span2 = Span::from_idx(file, text, 7, 12);
+    /// 
+    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
+    /// ```
+    #[track_caller]
+    pub fn combined<'f2, 's2>(span1: impl AsRef<Span<'f, 's>>, span2: impl AsRef<Span<'f2, 's2>>) -> Self {
+        let span1: &Span = span1.as_ref();
+        let span2: &Span = span2.as_ref();
+
+        // Assert they talk about the same thing
+        if !std::ptr::eq(span1.file as *const str, span2.file as *const str) { panic!("Given spans do not have the same `file`"); }
+        if !std::ptr::eq(span1.source as *const str, span2.source as *const str) { panic!("Given spans do not have the same `source`"); }
+
+        // Compute the new range
+        let start: usize = std::cmp::min(span1.start, span2.start);
+        let end: usize = std::cmp::max(span1.end, span2.end);
+
+        // Construct the new self
+        Self {
+            file   : span1.file,
+            source : span1.source,
+            start,
+            end,
+        }
+    }
+
+
+
+    /// Will expand the range in this Span to include the given Span.
+    /// 
+    /// # Arguments
+    /// - `other`: The other Span to consume.
+    /// 
+    /// # Returns
+    /// A reference to self for chaining.
+    /// 
+    /// # Panics
+    /// This function panics if the given spans do not have the same `file` or `source`. Note that this goes by *pointer equality*.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let mut span1 = Span::from_idx(file, text, 0, 4);
+    /// let span2 = Span::from_idx(file, text, 7, 12);
+    /// 
+    /// span1.consume(span2);
+    /// assert_eq!(span1.text(), "Hello, world!");
+    /// ```
+    #[track_caller]
+    pub fn consume(&mut self, other: impl AsRef<Span<'f, 's>>) -> &mut Self {
+        let other: &Span = other.as_ref();
+
+        // Assert they talk about the same thing
+        if !std::ptr::eq(self.file as *const str, other.file as *const str) { panic!("Given spans do not have the same `file`"); }
+        if !std::ptr::eq(self.source as *const str, other.source as *const str) { panic!("Given spans do not have the same `source`"); }
+
+        // Compute the new range
+        self.start = std::cmp::min(self.start, other.start);
+        self.end = std::cmp::max(self.end, other.end);
+
+        // Finally return self for chaining
+        self
+    }
+
 
 
     /// Converts a character index to a [`Position`] within this span's source text.
@@ -531,42 +725,6 @@ impl<'f, 's> Span<'f, 's> {
     #[inline]
     pub fn len(&self) -> usize { self.end + 1 - self.start }
 }
-impl<'f, 's> Span<'f, 's> {
-    /// Constructor for the Span that encapsulates both ranges of the given spans.
-    /// 
-    /// # Arguments
-    /// - `span1`: The first span to take into account.
-    /// - `span2`: The second span to take into account.
-    /// 
-    /// # Returns
-    /// A new instance of Self that spans both input spans and everything in between.
-    /// 
-    /// Note that, for lifetime purposes, the file and source text from the first span are referenced.
-    /// 
-    /// # Panics
-    /// This function panics if the given spans do not have the same `file` or `source`.
-    #[track_caller]
-    pub fn combined(span1: impl Into<Span<'f, 's>>, span2: impl Into<Span<'f, 's>>) -> Self {
-        let span1: Span = span1.into();
-        let span2: Span = span2.into();
-
-        // Assert they talk about the same thing
-        if span1.file != span2.file { panic!("Given spans do not have the same `file`"); }
-        if span1.source != span2.source { panic!("Given spans do not have the same `source`"); }
-
-        // Compute the new range
-        let start: usize = std::cmp::min(span1.start, span2.start);
-        let end: usize = std::cmp::max(span1.end, span2.end);
-
-        // Construct the new self
-        Self {
-            file   : span1.file,
-            source : span1.source,
-            start,
-            end,
-        }
-    }
-}
 
 impl<'f, 's> AsRef<Span<'f, 's>> for Span<'f, 's> {
     #[inline]
@@ -585,6 +743,11 @@ impl<'f, 's> From<&mut Span<'f, 's>> for Span<'f, 's> {
     fn from(value: &mut Span<'f, 's>) -> Self { value.clone() }
 }
 
+impl<'f, 's> AsRef<str> for Span<'f, 's> {
+    #[inline]
+    fn as_ref(&self) -> &str { self.text() }
+}
+
 
 // nom-related things
 #[cfg(feature = "nom")]
@@ -595,103 +758,207 @@ impl<'f, 's> nom::AsBytes for Span<'f, 's> {
         self.source[self.start..=self.end].as_bytes()
     }
 }
+#[cfg(feature = "nom")]
+impl<'f, 's, S: AsRef<str>> nom::Compare<S> for Span<'f, 's> {
+    #[inline]
+    #[track_caller]
+    fn compare(&self, t: S) -> nom::CompareResult {
+        assert_range!(self.start, self.end, self.source);
+        let s: &str = &self.source[self.start..=self.end];
+        let t: &str = t.as_ref();
 
-// #[cfg(feature = "nom")]
-// impl<F, S: Deref<Target = str>> nom::ExtendInto for Span<F, S> {
-//     type Item = Span<F, S>;
-//     type Extender = ();
+        // Compare string-wise
+        let mut ss = s.graphemes(true);
+        for tc in t.graphemes(true) {
+            let sc: &str = if let Some(sc) = ss.next() { sc } else { return nom::CompareResult::Incomplete; };
+            if sc != tc { return nom::CompareResult::Error; }
+        }
+        nom::CompareResult::Ok
+    }
 
-//     fn new_builder(&self) -> Self::Extender {
+    #[inline]
+    fn compare_no_case(&self, t: S) -> nom::CompareResult {
+        assert_range!(self.start, self.end, self.source);
+        let s: &str = &self.source[self.start..=self.end];
+        let t: &str = t.as_ref();
+
+        // Compare string-wise
+        let mut ss = s.graphemes(true);
+        for tc in t.graphemes(true) {
+            let sc: &str = if let Some(sc) = ss.next() { sc } else { return nom::CompareResult::Incomplete; };
+
+            // Equalize the case
+            let sc: String = sc.to_lowercase();
+            let tc: String = tc.to_lowercase();
+
+            // Compare now
+            if sc != tc { return nom::CompareResult::Error; }
+        }
+        nom::CompareResult::Ok
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::ExtendInto for Span<'f, 's> {
+    type Item = Self;
+    type Extender = Self;
+
+    #[inline]
+    fn new_builder(&self) -> Self::Extender { *self }
+    #[inline]
+    fn extend_into(&self, acc: &mut Self::Extender) { acc.consume(self); }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::FindToken<u8> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: u8) -> bool {
+        assert_range!(self.start, self.end, self.source);
+        for b in self.source[self.start..=self.end].bytes() {
+            if b == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::FindToken<char> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: char) -> bool {
+        assert_range!(self.start, self.end, self.source);
+        for c in self.source[self.start..=self.end].chars() {
+            if c == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, 's2> nom::FindToken<&'s2 str> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: &'s2 str) -> bool {
+        assert_range!(self.start, self.end, self.source);
+        for c in self.source[self.start..=self.end].graphemes(true) {
+            if c == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, T: AsRef<str>> nom::FindSubstring<T> for Span<'f, 's> {
+    /// NOTE: We return the full index in the source so that it's compatible as idx for Spans.
+    fn find_substring(&self, substr: T) -> Option<usize> {
+        let source: &str = self.text();
+        let substr: &str = substr.as_ref();
+        for (i, _) in source.grapheme_indices(true) {
+            if i + substr.len() <= source.len() && &source[i..i + substr.len()] == substr {
+                return Some(self.start + i);
+            }
+        }
+        None
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputIter for Span<'f, 's> {
+    type Item = u8;
+    type Iter = std::iter::Enumerate<std::vec::IntoIter<u8>>;
+    type IterElem = std::vec::IntoIter<u8>;
+
+    #[inline]
+    fn iter_indices(&self) -> Self::Iter { self.text().as_bytes().to_vec().into_iter().enumerate() }
+    fn iter_elements(&self) -> Self::IterElem { self.text().as_bytes().to_vec().into_iter() }
+
+    #[inline]
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        <Span as nom::InputIter>::iter_indices(self).find_map(|(i, b)| if predicate(b) { Some(i) } else { None })
+    }
+    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+        use std::num::NonZeroUsize;
+
+        match <Span as nom::InputIter>::iter_indices(self).nth(count) {
+            Some((i, _)) => Ok(i),
+            None => Err(match NonZeroUsize::new(self.len() - 1 - count) {
+                Some(res) => nom::Needed::Size(res),
+                None => nom::Needed::Unknown,
+            }),
+        }
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputLength for Span<'f, 's> {
+    #[track_caller]
+    fn input_len(&self) -> usize { 1 + (self.end - self.start) }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputTake for Span<'f, 's> {
+    #[track_caller]
+    fn take(&self, count: usize) -> Self {
+        let self_len: usize = 1 + (self.end - self.start);
+        if count == 0 { panic!("Cannot take span of length 0"); }
+        if count > self_len { panic!("Cannot take span of length {count} from span of length {self_len}"); }
+        Span {
+            file   : self.file.clone(),
+            source : self.source.clone(),
+            start  : self.start,
+            end    : self.start + (count - 1),
+        }
+    }
+
+    #[track_caller]
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        let self_len: usize = 1 + (self.end - self.start);
+        if count == 0 || count >= self_len { panic!("Cannot split span on index {count} in span of length {self_len}"); }
+        (
+            Span {
+                file   : self.file.clone(),
+                source : self.source.clone(),
+                start  : self.start,
+                end    : self.start + (count - 1),
+            },
+            Span {
+                file   : self.file.clone(),
+                source : self.source.clone(),
+                start  : self.start + count,
+                end    : self.end,
+            },
+        )
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
+    type Item = char;
+
+    fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        for (i, c) in self.source[self.start..=self.end].char_indices() {
+            if predicate(c) { return Ok((Span::from_idx(self.file, self.source, self.start, i - 1), Span::from_idx(self.file, self.source, i, self.end))); }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
+    fn split_at_position1<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        for (i, c) in self.source[self.start..=self.end].char_indices() {
+            if predicate(c) {
+                if self.start == i || self.end == i { return Err(nom::Err::Failure(E::from_error_kind(*self, e))) }
+                return Ok((Span::from_idx(self.file, self.source, self.start, i - 1), Span::from_idx(self.file, self.source, i, self.end)));
+            }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
+
+    fn split_at_position1_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
         
-//     }
-//     fn extend_into(&self, acc: &mut Self::Extender) {
+    }
+    fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
         
-//     }
-// }
-
-// #[cfg(feature = "nom")]
-// impl<F, S: Deref<Target = str>> nom::FindSubstring for Span<F, S> {
-    
-// }
-
-// #[cfg(feature = "nom")]
-// impl<F, S: Deref<Target = str>> nom::InputIter for Span<F, S> {
-//     type Item = u8;
-//     type Iter = std::iter::Enumerate<std::vec::IntoIter<u8>>;
-//     type IterElem = std::vec::IntoIter<u8>;
-
-//     #[inline]
-//     fn iter_indices(&self) -> Self::Iter { self.text().as_bytes().to_vec().into_iter().enumerate() }
-//     fn iter_elements(&self) -> Self::IterElem { self.text().as_bytes().to_vec().into_iter() }
-
-//     #[inline]
-//     fn position<P>(&self, predicate: P) -> Option<usize>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-//         self.iter_indices().find_map(|(i, b)| if predicate(b) { Some(i) } else { None })
-//     }
-//     fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-//         use std::num::NonZeroUsize;
-
-//         match self.iter_indices().nth(count) {
-//             Some((i, _)) => Ok(i),
-//             None => Err(match NonZeroUsize::new(self.len() - 1 - count) {
-//                 Some(res) => nom::Needed::Size(res),
-//                 None => nom::Needed::Unknown,
-//             }),
-//         }
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl<F, S> nom::InputLength for Span<F, S> {
-//     #[track_caller]
-//     fn input_len(&self) -> usize { 1 + (self.end - self.start) }
-// }
-// #[cfg(feature = "nom")]
-// impl<F: Clone, S: Clone + Deref<Target = str>> nom::InputTake for Span<F, S> {
-//     #[track_caller]
-//     fn take(&self, count: usize) -> Self {
-//         let self_len: usize = 1 + (self.end - self.start);
-//         if count == 0 { panic!("Cannot take span of length 0"); }
-//         if count > self_len { panic!("Cannot take span of length {count} from span of length {self_len}"); }
-//         Span {
-//             file   : self.file.clone(),
-//             source : self.source.clone(),
-//             start  : self.start,
-//             end    : self.start + (count - 1),
-//         }
-//     }
-
-//     #[track_caller]
-//     fn take_split(&self, count: usize) -> (Self, Self) {
-//         let self_len: usize = 1 + (self.end - self.start);
-//         if count == 0 || count >= self_len { panic!("Cannot split span on index {count} in span of length {self_len}"); }
-//         (
-//             Span {
-//                 file   : self.file.clone(),
-//                 source : self.source.clone(),
-//                 start  : self.start,
-//                 end    : self.start + (count - 1),
-//             },
-//             Span {
-//                 file   : self.file.clone(),
-//                 source : self.source.clone(),
-//                 start  : self.start + count,
-//                 end    : self.end,
-//             },
-//         )
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl<F, S: Deref<Target = str>, S2: Deref<Target = str>> nom::Compare<S2> for Span<F, S> {
-//     #[inline]
-//     fn compare(&self, t: S2) -> nom::CompareResult {
-//         <&str as nom::Compare<&str>>::compare(&&**self, &*t)
-//     }
-
-//     #[inline]
-//     fn compare_no_case(&self, t: S2) -> nom::CompareResult {
-//         <&str as nom::Compare<&str>>::compare_no_case(&&**self, &*t)
-//     }
-// }
+    }
+}
