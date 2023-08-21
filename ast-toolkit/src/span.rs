@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    12 Aug 2023, 12:31:48
+//    21 Aug 2023, 14:41:46
 //  Auto updated?
 //    Yes
 // 
@@ -128,10 +128,16 @@ pub(crate) use assert_range;
 /// use std::path::PathBuf;
 /// use ast_toolkit::Span;
 /// 
-/// let _span: Span<&str, &str> = Span::new("<example>", "Hello, world!");
-/// let _span: Span<String, &str> = Span::new(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!");
-/// let span: Span<&str, Cow<str>> = Span::new("<example>", String::from_utf8_lossy(b"Hello, world!"));
+/// // Create some strings
+/// let file: String = PathBuf::from("/tmp/test").display().to_string();
+/// let bytes: Cow<str> = String::from_utf8_lossy(b"Hello, world!");
 /// 
+/// // Build spans over them!
+/// let _span = Span::new("<example>", "Hello, world!");
+/// let _span = Span::new(file.as_str(), "Hello, world!");
+/// let span = Span::new("<example>", bytes.as_ref());
+/// 
+/// // Which can then be queried to be informed over the spanned text
 /// assert_eq!(span.text(), "Hello, world!");
 /// assert_eq!(span.start().line, 0);
 /// assert_eq!(span.start().col, 0);
@@ -168,9 +174,14 @@ impl<'f, 's> Span<'f, 's> {
     /// use std::path::PathBuf;
     /// use ast_toolkit::Span;
     /// 
-    /// let _span: Span<&str, &str> = Span::new("<example>", "Hello, world!");
-    /// let _span: Span<String, &str> = Span::new(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!");
-    /// let _span: Span<&str, Cow<str>> = Span::new("<example>", String::from_utf8_lossy(b"Hello, world!"));
+    /// // Create some strings
+    /// let file: String = PathBuf::from("/tmp/test").display().to_string();
+    /// let bytes: Cow<str> = String::from_utf8_lossy(b"Hello, world!");
+    /// 
+    /// // Build spans over them!
+    /// let _span = Span::new("<example>", "Hello, world!");
+    /// let _span = Span::new(file.as_str(), "Hello, world!");
+    /// let span = Span::new("<example>", bytes.as_ref());
     /// ```
     #[inline]
     #[track_caller]
@@ -216,9 +227,12 @@ impl<'f, 's> Span<'f, 's> {
     /// use std::path::PathBuf;
     /// use ast_toolkit::{Position, Span};
     /// 
-    /// let span1: Span<&str, &str> = Span::from_pos("<example>", "Hello, world!", Position::new0(0, 0), Position::new0(0, 4));
-    /// let span2: Span<String, &str> = Span::from_pos(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!", Position::new0(0, 7), Position::new0(0, 11));
-    /// let span3: Span<&str, Cow<str>> = Span::from_pos("<example>", String::from_utf8_lossy(b"Hello, world!"), Position::new0(0, 0), Position::new0(0, 12));
+    /// let file: String = PathBuf::from("/tmp/test").display().to_string();
+    /// let bytes: Cow<str> = String::from_utf8_lossy(b"Hello, world!");
+    /// 
+    /// let span1 = Span::from_pos("<example>", "Hello, world!", Position::new0(0, 0), Position::new0(0, 4));
+    /// let span2 = Span::from_pos(file.as_str(), "Hello, world!", Position::new0(0, 7), Position::new0(0, 11));
+    /// let span3 = Span::from_pos("<example>", bytes.as_ref(), Position::new0(0, 0), Position::new0(0, 12));
     /// 
     /// assert_eq!(span1.text(), "Hello");
     /// assert_eq!(span2.text(), "world");
@@ -299,9 +313,12 @@ impl<'f, 's> Span<'f, 's> {
     /// use std::path::PathBuf;
     /// use ast_toolkit::Span;
     /// 
-    /// let span1: Span<&str, &str> = Span::from_idx("<example>", "Hello, world!", 0, 4);
-    /// let span2: Span<String, &str> = Span::from_idx(PathBuf::from("/tmp/test").display().to_string(), "Hello, world!", 7, 11);
-    /// let span3: Span<&str, Cow<str>> = Span::from_idx("<example>", String::from_utf8_lossy(b"Hello, world!"), 0, 12);
+    /// let file: String = PathBuf::from("/tmp/test").display().to_string();
+    /// let bytes: Cow<str> = String::from_utf8_lossy(b"Hello, world!");
+    /// 
+    /// let span1 = Span::from_idx("<example>", "Hello, world!", 0, 4);
+    /// let span2 = Span::from_idx(file.as_str(), "Hello, world!", 7, 11);
+    /// let span3 = Span::from_idx("<example>", bytes.as_ref(), 0, 12);
     /// 
     /// assert_eq!(span1.text(), "Hello");
     /// assert_eq!(span2.text(), "world");
@@ -333,6 +350,8 @@ impl<'f, 's> Span<'f, 's> {
 
     /// Converts a character index to a [`Position`] within this span's source text.
     /// 
+    /// Note that the position given is an absolute index of the source text; this function ignores the spanned area.
+    /// 
     /// # Arguments
     /// - `index`: The index to translate.
     /// 
@@ -362,6 +381,9 @@ impl<'f, 's> Span<'f, 's> {
     /// ```
     pub fn pos_of(&self, index: impl AsPrimitive<usize>) -> Position {
         let index: usize = index.as_();
+
+        // Assert it is correctly sized
+        if index >= self.source.len() { panic!("Given index '{}' is out-of-bounds for Span of length {}", index, self.source.len()); }
 
         // Iterate over the source to find the line & column
         let (mut line, mut col): (usize, usize) = (0, 0);

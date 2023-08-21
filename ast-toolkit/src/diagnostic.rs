@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    12 Aug 2023, 12:31:44
+//    21 Aug 2023, 14:42:51
 //  Auto updated?
 //    Yes
 // 
@@ -57,7 +57,7 @@ enum DiagnosticSpecific {
 /// ```rust
 /// use ast_toolkit::{Diagnostic, DiagnosticKind, Span};
 /// 
-/// fn foo(raw: &str) -> Diagnostic<&str, &str> {
+/// fn foo(raw: &str) -> Diagnostic {
 ///     Diagnostic::error("Invalid input", Span::new("<example>", raw))
 /// }
 /// 
@@ -151,9 +151,14 @@ impl DiagnosticSpan {
     /// assert_eq!(span.text(), "Example text");
     /// ```
     #[inline]
-    pub fn text(&self) -> &str { &self.source }
+    pub fn text(&self) -> &str {
+        assert_range!(self.start, self.end, self.source);
+        &self.source[self.start..=self.end]
+    }
 
     /// Converts a character index to a [`Position`] within this span's source text.
+    /// 
+    /// Note that the position given is _relative_ to the source text, but line-wise; this function ignores the spanned area but only up a sense. If this sounds confusing, don't worry, as long as you use indices coming from this DiagnosticSpan itself you're fine.
     /// 
     /// # Arguments
     /// - `index`: The index to translate.
@@ -170,20 +175,26 @@ impl DiagnosticSpan {
     /// 
     /// let span1: DiagnosticSpan = Span::new("<example>", "Hello\nworld!").into();
     /// let span2: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 0, 4).into();
+    /// let span3: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 6, 10).into();
     /// 
     /// assert_eq!(span1.pos_of(3), Position::new0(0, 3));
     /// assert_eq!(span1.pos_of(7), Position::new0(1, 1));
     /// assert_eq!(span2.pos_of(3), Position::new0(0, 3));
-    /// assert_eq!(span2.pos_of(7), Position::new0(1, 1));
+    /// assert_eq!(span3.pos_of(3), Position::new0(1, 3));
     /// ```
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
     /// // This will panic!
+    /// DiagnosticSpan::from(Span::from_idx("<example>", "Hello\nworld!", 0, 4)).pos_of(4);
     /// DiagnosticSpan::from(Span::new("<example>", "Hello\nworld!")).pos_of(50);
     /// DiagnosticSpan::from(Span::new("<example>", "Hÿllo\nworld!")).pos_of(2);
     /// ```
+    #[track_caller]
     pub fn pos_of(&self, index: impl AsPrimitive<usize>) -> Position {
         let index: usize = index.as_();
+
+        // Assert it is correctly sized
+        if index >= self.source.len() { panic!("Given index '{}' is out-of-bounds for DiagnosticSpan of length {}", index, self.source.len()); }
 
         // Iterate over the source to find the line & column
         let (mut line, mut col): (usize, usize) = (0, 0);
@@ -211,7 +222,7 @@ impl DiagnosticSpan {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::{Position, Span};
+    /// use ast_toolkit::{DiagnosticSpan, Position, Span};
     /// 
     /// let span1: DiagnosticSpan = Span::new("<example>", "Hello\nworld!").into();
     /// let span2: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 2, 2).into();
@@ -246,7 +257,7 @@ impl DiagnosticSpan {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::{Position, Span};
+    /// use ast_toolkit::{DiagnosticSpan, Position, Span};
     /// 
     /// let span1: DiagnosticSpan = Span::new("<example>", "Hello world!").into();
     /// let span2: DiagnosticSpan = Span::new("<example>", "Hello\nworld!").into();
@@ -271,6 +282,21 @@ impl DiagnosticSpan {
         // Assert some things
         assert_range!(self.start, self.end, self.source);
         self.pos_of(self.end)
+    }
+}
+
+impl<'f, 's> PartialEq<Span<'f, 's>> for DiagnosticSpan {
+    #[inline]
+    fn eq(&self, other: &Span<'f, 's>) -> bool {
+        println!("DIAGNOSTICSPAN == SPAN: '{}' == '{}'?", self.text(), other.text());
+        self.file == other.file && self.text() == other.text()
+    }
+}
+impl<'f, 's> PartialEq<DiagnosticSpan> for Span<'f, 's> {
+    #[inline]
+    fn eq(&self, other: &DiagnosticSpan) -> bool {
+        println!("SPAN == DIAGNOSTICSPAN: '{}' == '{}'?", self.text(), other.text());
+        self.file == other.file && self.text() == other.text()
     }
 }
 
@@ -402,12 +428,9 @@ impl Diagnostic {
     /// 
     /// # Example
     /// ```rust
-    /// use std::borrow::Cow;
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// // Note the propagation of the span types, but not the message.
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
-    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::error("An example error.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// let diag = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
     pub fn error(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
@@ -434,12 +457,9 @@ impl Diagnostic {
     /// 
     /// # Example
     /// ```rust
-    /// use std::borrow::Cow;
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// // Note the propagation of the span types, but not the message.
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::warn("An example warning.", Span::new("<example>", "Example"));
-    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::warn("An example warning.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// let diag: Diagnostic = Diagnostic::warn("An example warning.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
     pub fn warn(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
@@ -466,12 +486,9 @@ impl Diagnostic {
     /// 
     /// # Example
     /// ```rust
-    /// use std::borrow::Cow;
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// // Note the propagation of the span types, but not the message.
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::note("An example note.", Span::new("<example>", "Example"));
-    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::note("An example note.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()));
+    /// let diag: Diagnostic = Diagnostic::note("An example note.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
     pub fn note(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
@@ -499,12 +516,9 @@ impl Diagnostic {
     /// 
     /// # Example
     /// ```rust
-    /// use std::borrow::Cow;
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// // Note the propagation of the span types, but not the message or the suggestion.
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::suggestion("An example suggestion.", Span::new("<example>", "Example"), "A better example.");
-    /// let diag: Diagnostic<Cow<str>, String> = Diagnostic::suggestion("An example suggestion.", Span::new(String::from_utf8_lossy(b"<example>"), "Example".to_string()), "A better example.");
+    /// let diag: Diagnostic = Diagnostic::suggestion("An example suggestion.", Span::new("<example>", "Example"), "A better example.");
     /// ```
     #[inline]
     pub fn suggestion(message: impl Into<String>, span: impl Into<DiagnosticSpan>, replacement: impl Into<String>) -> Self {
@@ -581,7 +595,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// let span = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
     /// Diagnostic::error("Unknown keyword 'sttaic'", span)
     ///     .add(Diagnostic::suggestion("Try 'static'", span, "static"))
     ///     .emit();
@@ -611,8 +625,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pbu static TEST = 42;";
-    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 0, 2);
-    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::from_idx("<example>", source, 0, 2);
+    /// let span2 = Span::from_idx("<example>", source, 11, 14);
     /// Diagnostic::error("Unknown keyword 'pbu'", span1)
     ///     .add_error("'TEST' is therefore not publicly accessible", span2)
     ///     .emit();
@@ -642,8 +656,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pbu static TeST = 42;";
-    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 0, 2);
-    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::from_idx("<example>", source, 0, 2);
+    /// let span2 = Span::from_idx("<example>", source, 11, 14);
     /// Diagnostic::error("Unknown keyword 'pbu'", span1)
     ///     .add_warn("Statics are conventionally spelled using full-caps", span2)
     ///     .emit();
@@ -673,8 +687,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pub static TEST = 42; println!(\"{}\", TEST == true)";
-    /// let span1: Span<&str, &str> = Span::from_idx("<example>", source, 37, 48);
-    /// let span2: Span<&str, &str> = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::from_idx("<example>", source, 37, 48);
+    /// let span2 = Span::from_idx("<example>", source, 11, 14);
     /// Diagnostic::error("Cannot compare integer with boolean", span1)
     ///     .add_note("TEST defined here", span2)
     ///     .emit();
@@ -704,7 +718,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// let span = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
     /// Diagnostic::error("Unknown keyword 'sttaic'", span)
     ///     .add_suggestion("Try 'static'", span, "static")
     ///     .emit();
@@ -726,7 +740,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
     /// assert_eq!(Diagnostic::error("An example error", span).message(), "An example error");
     /// ```
     #[inline]
@@ -741,12 +755,12 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error", span);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let diag: Diagnostic = Diagnostic::error("An example error", span);
     /// assert_eq!(diag.code(), None);
     /// 
     /// // Set the code and try again
-    /// let diag: Diagnostic<&str, &str> = diag.set_code("E001");
+    /// let diag: Diagnostic = diag.set_code("E001");
     /// assert_eq!(diag.code(), Some("E001"));
     /// ```
     #[inline]
@@ -761,12 +775,12 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error", span);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let diag: Diagnostic = Diagnostic::error("An example error", span);
     /// assert_eq!(diag.remark(), None);
     /// 
     /// // Set the code and try again
-    /// let diag: Diagnostic<&str, &str> = diag.set_remark("Hello from below the error");
+    /// let diag: Diagnostic = diag.set_remark("Hello from below the error");
     /// assert_eq!(diag.remark(), Some("Hello from below the error"));
     /// ```
     #[inline]
@@ -783,7 +797,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
     /// assert_eq!(Diagnostic::error("An example error", span).span(), &span);
     /// ```
     #[inline]
@@ -798,13 +812,13 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Position, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::new("<example>", "Hello, World!");
+    /// let span = Span::new("<example>", "Hello, World!");
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello, World!");
     /// 
-    /// let span: Span<&str, &str> = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+    /// let span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello");
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
     /// ```
     #[inline]
@@ -843,7 +857,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span: Span<&str, &str> = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
     /// assert_eq!(Diagnostic::suggestion("Try writing 'World' lowercase", span, "world").replacement(), "world");
     /// ```
     #[inline]
@@ -1031,7 +1045,7 @@ impl Diagnostic {
     /// let path = std::env::temp_dir().join("testfile_emit_on");
     /// let mut f: File = File::create(path).unwrap();
     /// 
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// diag.emit_on(&mut f);   // Prints the error to the opened file
     /// ```
     #[inline]
@@ -1048,7 +1062,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// diag.emit();   // Prints the error to stderr
     /// ```
     #[inline]
@@ -1081,7 +1095,7 @@ impl Diagnostic {
     /// let path = std::env::temp_dir().join("testfile_abort_on");
     /// let mut f: File = File::create(path).unwrap();
     /// 
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// let diag: Diagnostic = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// diag.abort_on(&mut f);   // Prints the error to the opened file
     /// 
     /// // Will never run
@@ -1106,7 +1120,7 @@ impl Diagnostic {
     /// ```should_panic
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let diag: Diagnostic<&str, &str> = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
+    /// let diag = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// diag.abort();   // Prints the error to stderr
     /// 
     /// // Will never run

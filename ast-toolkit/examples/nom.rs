@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    12 Aug 2023, 12:17:33
+//    21 Aug 2023, 14:43:45
 //  Auto updated?
 //    Yes
 // 
@@ -192,7 +192,7 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 //             comb::opt(bc::tag("-")),
 //             cc::digit0,
 //         )),
-//         |parsed: Span<F, S>| -> i64 { i64::from_str(&parsed).unwrap() }
+//         |parsed| -> i64 { i64::from_str(&parsed).unwrap() }
 //     )(input)
 // }
 
