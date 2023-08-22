@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    22 Aug 2023, 13:42:22
+//    22 Aug 2023, 18:06:32
 //  Auto updated?
 //    Yes
 // 
@@ -196,26 +196,46 @@ mod nom_tests {
         // See if we can take and split how we expect
         assert_eq!(<Span as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::from_idx("<example>", "Example text", 0, 6));
         assert_eq!(<Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 3), Span::from_idx("<example>", "Example text", 8, 10));
-        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+        assert_eq!(<Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 0), Span::empty("<example>", "Example text"));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take(&Span::from_idx("<example>", "Example text", 8, 11), 5)).is_err());
 
         // Now compare the split
         assert_eq!(<Span as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::from_idx("<example>", "Example text", 0, 6), Span::from_idx("<example>", "Example text", 7, 11)));
         assert_eq!(<Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
-        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0), (Span::empty("<example>", "Example text"), Span::from_idx("<example>", "Example text", 8, 11)));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 5)).is_err());
     }
     #[test]
     fn test_span_nom_input_take_at_position() {
         use nom::InputTakeAtPosition as _;
+        use nom::error::{ErrorKind, ParseError as _, VerboseError};
         type I<'f, 's> = (Span<'f, 's>, Span<'f, 's>);
-        type E<'f, 's> = nom::Err<nom::error::VerboseError<Span<'f, 's>>>;
+        type E<'f, 's> = nom::Err<VerboseError<Span<'f, 's>>>;
 
         // Attempt to split at some points
-        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
-        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == 't'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
-        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == '!'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+        let span = Span::new("<example>", "Example text!");
+        assert_eq!(span.split_at_position(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
+        assert_eq!(span.split_at_position(|c| c == 't'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position(|c| c == '!'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position(|c| c == '_'), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
 
-        /* TODO */
-        panic!("LOL");
+        // Do it again with a different function
+        assert_eq!(span.split_at_position1(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position1(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position1(|c| c == '_', ErrorKind::Many0), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
+
+        // And complete counterpart 1
+        assert_eq!(span.split_at_position1_complete(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1_complete(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position1_complete(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position1_complete(|c| c == '_', ErrorKind::Many0), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
+
+        // Finally, complete counterpart lenient.
+        assert_eq!(span.split_at_position_complete(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
+        assert_eq!(span.split_at_position_complete(|c| c == 't'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position_complete(|c| c == '!'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position_complete(|c| c == '_'), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
     }
 }
 
@@ -230,7 +250,7 @@ mod nom_tests {
 /// ```rust
 /// use ast_toolkit::span::Length;
 /// 
-/// assert_eq!(<usize as Length>::len(42), 42);
+/// assert_eq!(<usize as Length>::len(&42), 42);
 /// assert_eq!(<str as Length>::len(""), 0);
 /// assert_eq!(<str as Length>::len("Hello there!"), 12);
 /// ```
@@ -244,7 +264,7 @@ pub trait Length {
     /// ```rust
     /// use ast_toolkit::span::Length;
     /// 
-    /// assert_eq!(<usize as Length>::len(42), 42);
+    /// assert_eq!(<usize as Length>::len(&42), 42);
     /// assert_eq!(<str as Length>::len(""), 0);
     /// assert_eq!(<str as Length>::len("Hello there!"), 12);
     /// ```
@@ -255,9 +275,13 @@ impl Length for usize {
     #[inline]
     fn len(&self) -> usize { *self }
 }
-impl<'s> Length for &'s str {
+impl Length for str {
     #[inline]
     fn len(&self) -> usize { str::len(self) }
+}
+impl<'s> Length for &'s str {
+    #[inline]
+    fn len(&self) -> usize { str::len(*self) }
 }
 
 
@@ -410,8 +434,8 @@ impl SpanRange {
     /// ```rust
     /// use ast_toolkit::span::{SpanBound, SpanRange};
     /// 
-    /// assert_eq!(SpanRange::start_unbounded(9), SpanRange::new(SpanBound::Unbounded, SpanBound::Bounded(9)));
-    /// assert_eq!(SpanRange::start_unbounded(SpanBound::Unbounded), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::start_unbounded(9), SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(9)));
+    /// assert_eq!(SpanRange::start_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
     /// ```
     #[inline]
     pub fn start_unbounded(end: impl Into<SpanBound>) -> Self { Self::Range(SpanBound::Unbounded, end.into()) }
@@ -428,8 +452,8 @@ impl SpanRange {
     /// ```rust
     /// use ast_toolkit::span::{SpanBound, SpanRange};
     /// 
-    /// assert_eq!(SpanRange::end_unbounded(9), SpanRange::new(SpanBound::Bounded(9), SpanBound::Unbounded));
-    /// assert_eq!(SpanRange::end_unbounded(SpanBound::Unbounded), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::end_unbounded(9), SpanRange::Range(SpanBound::Bounded(9), SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::end_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
     /// ```
     #[inline]
     pub fn end_unbounded(start: impl Into<SpanBound>) -> Self { Self::Range(start.into(), SpanBound::Unbounded) }
@@ -443,7 +467,7 @@ impl SpanRange {
     /// ```rust
     /// use ast_toolkit::span::{SpanBound, SpanRange};
     /// 
-    /// assert_eq!(SpanRange::unbounded(), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::unbounded(), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
     /// ```
     #[inline]
     pub fn unbounded() -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
@@ -457,8 +481,7 @@ impl SpanRange {
     /// ```rust
     /// use ast_toolkit::span::{SpanBound, SpanRange};
     /// 
-    /// let range: SpanRange::empty();
-    /// assert_eq!(range, SpanRange::Empty);
+    /// assert_eq!(SpanRange::empty(), SpanRange::Empty);
     /// ```
     #[inline]
     pub fn empty() -> Self { Self::Empty }
@@ -508,7 +531,6 @@ impl SpanRange {
             (Self::Range(start1, end1), Self::Range(start2, end2)) => (start1, end1, start2, end2),
             (range1, Self::Empty)                                  => { return range1; },
             (Self::Empty, range2)                                  => { return range2; },
-            (Self::Empty, Self::Empty)                             => { return Self::Empty; },
         };
 
         // Match a new start range
@@ -527,7 +549,10 @@ impl SpanRange {
         };
 
         // Create a new range out of it
-        Self::Range(start, end)
+        match (start, end) {
+            (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty },
+            (start, end) => Self::Range(start, end),
+        }
     }
 
 
@@ -575,11 +600,11 @@ impl SpanRange {
     /// 
     /// let text = "Hello, world!";
     /// assert_eq!(SpanRange::new(0, 4).slice(text), "Hello");
-    /// assert_eq!(SpanRange::new(6, 11).slice(text), "world");
+    /// assert_eq!(SpanRange::new(7, 11).slice(text), "world");
     /// assert_eq!(SpanRange::new(12, 12).slice(text), "!");
     /// assert_eq!(SpanRange::new(0, 255).slice(text), "Hello, world!");
     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text), "Hello");
-    /// assert_eq!(SpanRange::new(6, SpanBound::Unbounded).slice(text), "world!");
+    /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).slice(text), "world!");
     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text), "Hello, world!");
     /// assert_eq!(SpanRange::empty().slice(text), "");
     /// ```
@@ -626,8 +651,8 @@ impl SpanRange {
     /// 
     /// assert_eq!(SpanRange::new(0, 9).start(), SpanBound::Bounded(0));
     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).start(), SpanBound::Unbounded);
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().start()).is_err());
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).start()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().start()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).start()).is_err());
     /// ```
     #[inline]
     pub fn start(&self) -> SpanBound { if let Self::Range(start, _) = self { *start } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
@@ -645,8 +670,8 @@ impl SpanRange {
     /// 
     /// assert_eq!(SpanRange::new(0, 9).end(), SpanBound::Bounded(9));
     /// assert_eq!(SpanRange::new(0, SpanBound::Unbounded).end(), SpanBound::Unbounded);
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().end()).is_err());
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).end()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().end()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).end()).is_err());
     /// ```
     #[inline]
     pub fn end(&self) -> SpanBound { if let Self::Range(_, end) = self { *end } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
@@ -664,8 +689,8 @@ impl SpanRange {
     /// 
     /// assert_eq!(SpanRange::new(0, 9).range(), (SpanBound::Bounded(0), SpanBound::Bounded(9)));
     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).range(), (SpanBound::Unbounded, SpanBound::Bounded(9)));
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().range()).is_err());
-    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).range()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().range()).is_err());
+    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).range()).is_err());
     /// ```
     #[inline]
     pub fn range(&self) -> (SpanBound, SpanBound) { if let Self::Range(start, end) = self { (*start, *end) } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
@@ -700,14 +725,14 @@ impl SpanRange {
     /// use ast_toolkit::span::{SpanBound, SpanRange};
     /// 
     /// let text = "Hello, world!";
-    /// assert_eq!(SpanRange::new(0, 4).slice(text.len()), 5);
-    /// assert_eq!(SpanRange::new(6, 11).slice(text), 5);
-    /// assert_eq!(SpanRange::new(12, 12).slice(text.len()), 1);
-    /// assert_eq!(SpanRange::new(0, 255).slice(text), 13);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text.len()), 5);
-    /// assert_eq!(SpanRange::new(6, SpanBound::Unbounded).slice(text), 6);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text.len()), 13);
-    /// assert_eq!(SpanRange::empty().slice(text), 0);
+    /// assert_eq!(SpanRange::new(0, 4).len(text.len()), 5);
+    /// assert_eq!(SpanRange::new(7, 11).len(text), 5);
+    /// assert_eq!(SpanRange::new(12, 12).len(text.len()), 1);
+    /// assert_eq!(SpanRange::new(0, 255).len(text), 13);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).len(text.len()), 5);
+    /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).len(text), 6);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).len(text.len()), 13);
+    /// assert_eq!(SpanRange::empty().len(text), 0);
     /// ```
     #[inline]
     pub fn len(&self, length: impl Length) -> usize {
@@ -739,11 +764,18 @@ impl<I: AsPrimitive<usize>> From<RangeFrom<I>> for SpanRange {
 }
 impl From<RangeFull> for SpanRange {
     #[inline]
-    fn from(value: RangeFull) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
+    fn from(_value: RangeFull) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
 }
 impl<I: AsPrimitive<usize>> From<RangeInclusive<I>> for SpanRange {
     #[inline]
-    fn from(value: RangeInclusive<I>) -> Self { Self::Range(SpanBound::Bounded(value.start().as_()), SpanBound::Bounded(value.end().as_())) }
+    fn from(value: RangeInclusive<I>) -> Self {
+        let (start, end): (usize, usize) = (value.start().as_(), value.end().as_());
+        if start <= end {
+            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end))
+        } else {
+            Self::Empty
+        }
+    }
 }
 impl<I: AsPrimitive<usize>> From<RangeToInclusive<I>> for SpanRange {
     #[inline]
@@ -782,7 +814,7 @@ impl From<&mut SpanRange> for SpanRange {
 /// ```rust
 /// use std::borrow::Cow;
 /// use std::path::PathBuf;
-/// use ast_toolkit::Span;
+/// use ast_toolkit::{Position, Span};
 /// 
 /// // Create some strings
 /// let file: String = PathBuf::from("/tmp/test").display().to_string();
@@ -793,14 +825,18 @@ impl From<&mut SpanRange> for SpanRange {
 /// let _span = Span::new(file.as_str(), "Hello, world!");
 /// let span = Span::new("<example>", bytes.as_ref());
 /// 
-/// // Which can then be queried to be informed over the spanned text
+/// // Which can then be queried to be informed over the spanned text...
 /// assert_eq!(span.text(), "Hello, world!");
-/// assert_eq!(span.start().line, 0);
-/// assert_eq!(span.start().col, 0);
-/// assert_eq!(span.end().line, 0);
-/// assert_eq!(span.end().col, 12);
+/// 
+/// // ...or, if the span is non-empty, about coordinate information:
+/// let start: Position = span.start().unwrap();
+/// let end: Position = span.end().unwrap();
+/// assert_eq!(start.line, 0);
+/// assert_eq!(start.col, 0);
+/// assert_eq!(end.line, 0);
+/// assert_eq!(end.col, 12);
 /// ```
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash)]
 pub struct Span<'f, 's> {
     /// The filename (or other description) of the file we are spanning.
     pub file   : &'f str,
@@ -839,12 +875,10 @@ impl<'f, 's> Span<'f, 's> {
     /// ```
     #[inline]
     pub fn new(file: impl Into<&'f str>, source: impl Into<&'s str>) -> Self {
-        let source: &str = source.into();
-        let source_len: usize = source.len();
         Self {
-            file  : file.into(),
-            source,
-            range : SpanRange::unbounded(),
+            file   : file.into(),
+            source : source.into(),
+            range  : SpanRange::unbounded(),
         }
     }
 
@@ -966,7 +1000,7 @@ impl<'f, 's> Span<'f, 's> {
     /// let span1 = Span::from_idx("<example>", "Hello, world!", 0, 4);
     /// let span2 = Span::from_idx(file.as_str(), "Hello, world!", 7, 11);
     /// let span3 = Span::from_idx("<example>", bytes.as_ref(), 0, 12);
-    /// let span3 = Span::from_idx("<example>", bytes.as_ref(), 1, 0);
+    /// let span4 = Span::from_idx("<example>", bytes.as_ref(), 1, 0);
     /// 
     /// assert_eq!(span1.text(), "Hello");
     /// assert_eq!(span2.text(), "world");
@@ -984,12 +1018,12 @@ impl<'f, 's> Span<'f, 's> {
 
     /// Constructor for the Span that takes a custom range to span.
     /// 
-    /// The given positions are indices over graphemes, not bytes. For example:
+    /// The given positions are indices over bytes, not graphemes. For example:
     /// ```rust
     /// # use ast_toolkit::{Position, Span};
-    /// let span = Span::from_range("<example>", "Hÿllo, world!", 0..=2);
-    /// assert_eq!(span.text(), "Hÿl");
-    /// assert_eq!(span.text().len(), 4);
+    /// let span = Span::from_idx("<example>", "Hÿllo, world!", 0, 2);
+    /// assert_eq!(span.text(), "Hÿ");
+    /// assert_eq!(span.text().len(), 3);
     /// ```
     /// 
     /// # Arguments
@@ -1007,7 +1041,7 @@ impl<'f, 's> Span<'f, 's> {
     /// let span1 = Span::from_range("<example>", "Hello, world!", 0..=4);
     /// let span2 = Span::from_range("<example>", "Hello, world!", ..=4);
     /// let span3 = Span::from_range("<example>", "Hello, world!", 7..);
-    /// let span3 = Span::from_range("<example>", "Hello, world!", ..);
+    /// let span4 = Span::from_range("<example>", "Hello, world!", ..);
     /// 
     /// assert_eq!(span1.text(), "Hello");
     /// assert_eq!(span2.text(), "Hello");
@@ -1015,7 +1049,7 @@ impl<'f, 's> Span<'f, 's> {
     /// assert_eq!(span4.text(), "Hello, world!");
     /// ```
     #[inline]
-    fn from_range(file: impl Into<&'f str>, source: impl Into<&'s str>, range: impl Into<SpanRange>) -> Self {
+    pub fn from_range(file: impl Into<&'f str>, source: impl Into<&'s str>, range: impl Into<SpanRange>) -> Self {
         Self {
             file   : file.into(),
             source : source.into(),
@@ -1116,7 +1150,7 @@ impl<'f, 's> Span<'f, 's> {
     /// A new [`Position`] representing the index as a (line, column) coordinate.
     /// 
     /// # Panics
-    /// This function may panic if the given index is not at the grapheme boundary.
+    /// This function may panic if the given index is out-of-bounds or it is not at the grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -1129,11 +1163,10 @@ impl<'f, 's> Span<'f, 's> {
     /// assert_eq!(span1.pos_of(7), Position::new0(1, 1));
     /// assert_eq!(span2.pos_of(3), Position::new0(0, 3));
     /// assert_eq!(span2.pos_of(7), Position::new0(1, 1));
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Span;
-    /// // This will panic!
-    /// Span::new("<example>", "Hÿllo\nworld!").pos_of(2);
+    /// 
+    /// assert!(std::panic::catch_unwind(|| span1.pos_of(50)).is_err());
+    /// assert!(std::panic::catch_unwind(|| span1.pos_of(50)).is_err());
+    /// assert!(std::panic::catch_unwind(|| Span::new("<example>", "Hÿllo\nworld!").pos_of(2)).is_err());
     /// ```
     pub fn pos_of(&self, index: impl AsPrimitive<usize>) -> Position {
         let index: usize = index.as_();
@@ -1163,7 +1196,7 @@ impl<'f, 's> Span<'f, 's> {
     /// A [`Position`] describing the start position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if `start` does not point at the unicode grapheme boundary.
+    /// This function may panic if `start` is out-of-bounds or it is not at the grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -1176,19 +1209,17 @@ impl<'f, 's> Span<'f, 's> {
     /// 
     /// assert_eq!(span1.start(), Some(Position::new0(0, 0)));
     /// assert_eq!(span2.start(), Some(Position::new0(0, 2)));
-    /// assert_eq!(span3.start(), None);
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Span;
-    /// // This will panic!
-    /// Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start();
+    /// assert_eq!(span3.start(), Some(Position::new0(1, 0)));
+    /// assert_eq!(span4.start(), None);
+    /// 
+    /// assert!(std::panic::catch_unwind(|| Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start()).is_err());
     /// ```
     #[inline]
     #[track_caller]
     pub fn start(&self) -> Option<Position> {
         match self.range {
             SpanRange::Range(start, _) => if let SpanBound::Bounded(start) = start { Some(self.pos_of(start)) } else if self.source.len() > 0 { Some(self.pos_of(0)) } else { None },
-            _ => None,
+            SpanRange::Empty => None,
         }
     }
 
@@ -1198,7 +1229,7 @@ impl<'f, 's> Span<'f, 's> {
     /// A [`Position`] describing the end position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if the internal `start`- or `end`-fields are not within bounds of the internal `source`, or if `start > end`. It may also panic if `end` does not point at the unicode grapheme boundary.
+    /// This function may panic if `end` is out-of-bounds or it is not at the grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -1215,11 +1246,8 @@ impl<'f, 's> Span<'f, 's> {
     /// assert_eq!(span3.end(), Some(Position::new0(0, 2)));
     /// assert_eq!(span4.end(), Some(Position::new0(1, 4)));
     /// assert_eq!(span5.end(), None);
-    /// ```
-    /// ```should_panic
-    /// # use ast_toolkit::Span;
-    /// // This will panic!
-    /// Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).end();
+    /// 
+    /// assert!(std::panic::catch_unwind(|| Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start()).is_err());
     /// ```
     #[inline]
     #[track_caller]
@@ -1260,6 +1288,13 @@ impl<'f, 's> Span<'f, 's> {
     /// The number of characters.
     #[inline]
     pub fn len(&self) -> usize { self.range.len(self.source) }
+}
+
+impl<'f, 's> PartialEq for Span<'f, 's> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.file == other.file && self.text() == other.text()
+    }
 }
 
 impl<'f, 's> AsRef<Span<'f, 's>> for Span<'f, 's> {
@@ -1376,7 +1411,9 @@ impl<'f, 's, T: AsRef<str>> nom::FindSubstring<T> for Span<'f, 's> {
         for (i, _) in source.grapheme_indices(true) {
             if i + substr.len() <= source.len() && &source[i..i + substr.len()] == substr {
                 // NOTE: We can safely unwrap because this loops never loops if the string is empty.
-                return Some(self.range.start().bound() + i);
+                let bound: SpanBound = self.range.start();
+                // However, resolve the bound before we return
+                return Some(if bound.is_bounded() { bound.bound() } else { 0 } + i);
             }
         }
         None
@@ -1421,11 +1458,16 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
     #[inline]
     #[track_caller]
     fn take(&self, count: usize) -> Self {
+        if count > self.range.len(self.source.len()) { panic!("Given count {} is out-of-range for Span of size {}", count, self.range.len(self.source.len())); }
         if count > 0 {
             Self {
                 file   : self.file,
                 source : self.source,
-                range  : SpanRange::from(..=count - 1),
+                range  : match self.range {
+                    SpanRange::Range(SpanBound::Bounded(start), _) => SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(start + count - 1)),
+                    SpanRange::Range(SpanBound::Unbounded, _)      => SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(count - 1)),
+                    SpanRange::Empty                               => { unreachable!(); },
+                },
             }
         } else {
             Self {
@@ -1445,7 +1487,13 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
             Self {
                 file   : self.file,
                 source : self.source,
-                range  : SpanRange::from(count..),
+                range  : match self.range {
+                    SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => { let count: usize = start + count; if count <= end { SpanRange::Range(SpanBound::Bounded(count), SpanBound::Bounded(end)) } else { SpanRange::Empty } },
+                    SpanRange::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => { let count: usize = start + count; SpanRange::Range(SpanBound::Bounded(count), SpanBound::Unbounded) },
+                    SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if count <= end { SpanRange::Range(SpanBound::Bounded(count), SpanBound::Bounded(end)) } else { SpanRange::Empty },
+                    SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => SpanRange::Range(SpanBound::Bounded(count), SpanBound::Unbounded),
+                    SpanRange::Empty                                                     => { unreachable!(); },
+                },
             }
         )
     }
