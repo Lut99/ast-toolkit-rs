@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    21 Aug 2023, 23:17:37
+//    22 Aug 2023, 13:42:22
 //  Auto updated?
 //    Yes
 // 
@@ -203,69 +203,331 @@ mod nom_tests {
         assert_eq!(<Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 3), (Span::from_idx("<example>", "Example text", 8, 10), Span::from_idx("<example>", "Example text", 11, 11)));
         assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take_split(&Span::from_idx("<example>", "Example text", 8, 11), 0)).is_err());
     }
+    #[test]
+    fn test_span_nom_input_take_at_position() {
+        use nom::InputTakeAtPosition as _;
+        type I<'f, 's> = (Span<'f, 's>, Span<'f, 's>);
+        type E<'f, 's> = nom::Err<nom::error::VerboseError<Span<'f, 's>>>;
+
+        // Attempt to split at some points
+        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
+        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == 't'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
+        assert_eq!(Span::new("<example>", "Example text!").split_at_position(|c| c == '!'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
+
+        /* TODO */
+        panic!("LOL");
+    }
 }
 
 
 
 
 
-/***** HELPERS *****/
-/// Helper enum that enumerates the possible [`Span`] states.
+/***** AUXILLARY *****/
+/// Helper trait that abstracts over a string or a direct length.
+/// 
+/// # Example
+/// ```rust
+/// use ast_toolkit::span::Length;
+/// 
+/// assert_eq!(<usize as Length>::len(42), 42);
+/// assert_eq!(<str as Length>::len(""), 0);
+/// assert_eq!(<str as Length>::len("Hello there!"), 12);
+/// ```
+pub trait Length {
+    /// Returns the length that Self represents.
+    /// 
+    /// # Returns
+    /// The length as an unsigned integer.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::Length;
+    /// 
+    /// assert_eq!(<usize as Length>::len(42), 42);
+    /// assert_eq!(<str as Length>::len(""), 0);
+    /// assert_eq!(<str as Length>::len("Hello there!"), 12);
+    /// ```
+    fn len(&self) -> usize;
+}
+
+impl Length for usize {
+    #[inline]
+    fn len(&self) -> usize { *self }
+}
+impl<'s> Length for &'s str {
+    #[inline]
+    fn len(&self) -> usize { str::len(self) }
+}
+
+
+
+/// Defines a start- or end bound.
+/// 
+/// A start- or end bound can be either [`Bounded`](SpanBound::Bounded) (i.e., a specific index) or [`Unbounded`](SpanBound::Unbounded) (i.e., until the end of the range in this direction).
+/// 
+/// See the [`SpanRange`] for more details on how to use this enum.
+/// ```
+#[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
+pub enum SpanBound {
+    /// There is a specific index to which this bound runs. The index is always zero-indexed, inclusive.
+    Bounded(usize),
+    /// This bound runs for the remainder of the spanned text.
+    Unbounded,
+}
+
+impl SpanBound {
+    /// Returns whether this SpanBound is [`Bounded`](SpanBound::Bounded).
+    /// 
+    /// # Returns
+    /// True if it is, false if it is another variant.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::SpanBound;
+    /// 
+    /// assert_eq!(SpanBound::Bounded(42).is_bounded(), true);
+    /// assert_eq!(SpanBound::Unbounded.is_bounded(), false);
+    /// ```
+    #[inline]
+    pub fn is_bounded(&self) -> bool { matches!(self, Self::Bounded(_)) }
+    /// Returns the internal bounded index.
+    /// 
+    /// # Returns
+    /// The bounded index in this SpanBound.
+    /// 
+    /// # Panics
+    /// This function panics if the SpanBound is not [`Bounded`](SpanBound::Bounded).
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::SpanBound;
+    /// 
+    /// assert_eq!(SpanBound::Bounded(42).bound(), 42);
+    /// assert!(std::panic::catch_unwind(|| SpanBound::Unbounded.bound()).is_err());
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn bound(&self) -> usize { if let Self::Bounded(bound) = self { *bound } else { panic!("Cannot unwrap a {:?} as a SpanBound::Bounded", self.variant()); } }
+
+    /// Returns whether this SpanBound is [`Unbounded`](SpanBound::Unbounded).
+    /// 
+    /// # Returns
+    /// True if it is, false if it is another variant.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::SpanBound;
+    /// 
+    /// assert_eq!(SpanBound::Bounded(42).is_unbounded(), false);
+    /// assert_eq!(SpanBound::Unbounded.is_unbounded(), true);
+    /// ```
+    #[inline]
+    pub fn is_unbounded(&self) -> bool { matches!(self, Self::Unbounded) }
+}
+
+impl<N: AsPrimitive<usize>> From<N> for SpanBound {
+    #[inline]
+    fn from(value: N) -> Self { Self::Bounded(value.as_()) }
+}
+
+impl AsRef<SpanBound> for SpanBound {
+    #[inline]
+    fn as_ref(&self) -> &Self { self }
+}
+impl AsMut<SpanBound> for SpanBound {
+    #[inline]
+    fn as_mut(&mut self) -> &mut Self { self }
+}
+impl From<&SpanBound> for SpanBound {
+    #[inline]
+    fn from(value: &Self) -> Self { *value }
+}
+impl From<&mut SpanBound> for SpanBound {
+    #[inline]
+    fn from(value: &mut Self) -> Self { *value }
+}
+
+
+
+/// Properly defines the possible ranges that a [`Span`] can span over.
+/// 
+/// This takes into account the fact that spans might be unbounded _or_ empty.
+/// 
+/// # Example
+/// ```rust
+/// /* TODO */
+/// ```
 #[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
 pub enum SpanRange {
-    /// The span is unbounded on both sides, i.e., entire source.
-    Unbounded,
-    /// The span is bounded left, unbounded right.
-    LBounded { left: usize },
-    /// The span is unbounded left, bounded right.
-    RBounded { right: usize },
-    /// The span is bounded both left and right.
-    Bounded { left: usize, right: usize },
-    /// The span is empty.
+    /// There is some range to span over, given as a (start, end)-tuple.
+    Range(SpanBound, SpanBound),
+    /// The range is empty.
     Empty,
 }
 
 impl SpanRange {
-    /// Constructor for a SpanRange that ranges both the given ranges.
+    /// Constructor for a SpanRange.
+    /// 
+    /// # Arguments
+    /// - `start`: The start [`SpanBound`].
+    /// - `end`: The end [`SpanBound`].
+    /// 
+    /// # Returns
+    /// A new SpanRange with the given start and end ranges. If they are both [`Bounded`](SpanBound::Bounded) and `start` > `end`, then the range is empty.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let range = SpanRange::new(SpanBound::Bounded(0), SpanBound::Unbounded);
+    /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Unbounded));
+    /// 
+    /// let range = SpanRange::new(0, 9);
+    /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Bounded(9)));
+    /// 
+    /// let range = SpanRange::new(SpanBound::Bounded(1), SpanBound::Bounded(0));
+    /// assert_eq!(range, SpanRange::Empty);
+    /// ```
+    #[inline]
+    pub fn new(start: impl Into<SpanBound>, end: impl Into<SpanBound>) -> Self {
+        let (start, end): (SpanBound, SpanBound) = (start.into(), end.into());
+        match (start, end) {
+            (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty },
+            (start, end) => Self::Range(start, end),
+        }
+    }
+
+    /// Constructor for a SpanRange that assumes the start is unbounded.
+    /// 
+    /// # Arguments
+    /// - `end`: The end [`SpanBound`].
+    /// 
+    /// # Returns
+    /// A new SpanRange with the start unbounded and the given end range.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::start_unbounded(9), SpanRange::new(SpanBound::Unbounded, SpanBound::Bounded(9)));
+    /// assert_eq!(SpanRange::start_unbounded(SpanBound::Unbounded), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// ```
+    #[inline]
+    pub fn start_unbounded(end: impl Into<SpanBound>) -> Self { Self::Range(SpanBound::Unbounded, end.into()) }
+
+    /// Constructor for a SpanRange that assumes the end is unbounded.
+    /// 
+    /// # Arguments
+    /// - `start`: The start [`SpanBound`].
+    /// 
+    /// # Returns
+    /// A new SpanRange with the given start and unbounded end.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::end_unbounded(9), SpanRange::new(SpanBound::Bounded(9), SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::end_unbounded(SpanBound::Unbounded), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// ```
+    #[inline]
+    pub fn end_unbounded(start: impl Into<SpanBound>) -> Self { Self::Range(start.into(), SpanBound::Unbounded) }
+
+    /// Constructor for a SpanRange that assumes both the start and end are unbounded.
+    /// 
+    /// # Returns
+    /// A new SpanRange with an unbounded start and end.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::unbounded(), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// ```
+    #[inline]
+    pub fn unbounded() -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
+
+    /// Constructor for a SpanRange that initializes it as empty.
+    /// 
+    /// # Returns
+    /// A new SpanRange that is initialized as empty.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let range: SpanRange::empty();
+    /// assert_eq!(range, SpanRange::Empty);
+    /// ```
+    #[inline]
+    pub fn empty() -> Self { Self::Empty }
+
+    /// Constructor for a SpanRange that encapsulates the given two ranges.
     /// 
     /// Some remarks:
-    /// - An unbounded side always travels (e.g., any range has an unbounded left side, the result will also be unbounded left)
+    /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
     /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
     /// 
     /// # Arguments
-    /// - `range1`: The first range to span over.
-    /// - `range2`: The second range to span over.
+    /// - `range1`: The first SpanRange to span over.
+    /// - `range2`: The second SpanRange to span over.
     /// 
     /// # Returns
     /// A new instance of Self which contains a continious area that snugly spans both `range1` and `range2`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let range1 = SpanRange::new(0, 9);
+    /// let range2 = SpanRange::new(15, 30);
+    /// let range3 = SpanRange::new(SpanBound::Unbounded, 9);
+    /// let range4 = SpanRange::new(9, SpanBound::Unbounded);
+    /// let range5 = SpanRange::empty();
+    /// 
+    /// // If everything is bounded, then the range snugly fits the result (communitatively).
+    /// assert_eq!(SpanRange::combined(range1, range2), SpanRange::new(0, 30));
+    /// assert_eq!(SpanRange::combined(range2, range1), SpanRange::new(0, 30));
+    /// 
+    /// // If either side is unbounded, it propagates
+    /// assert_eq!(SpanRange::combined(range1, range3), SpanRange::new(SpanBound::Unbounded, 9));
+    /// assert_eq!(SpanRange::combined(range1, range4), SpanRange::new(0, SpanBound::Unbounded));
+    /// assert_eq!(SpanRange::combined(range3, range4), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+    /// 
+    /// // Finally, empty does not do anything
+    /// assert_eq!(SpanRange::combined(range5, range1), range1);
+    /// assert_eq!(SpanRange::combined(range3, range5), range3);
+    /// assert_eq!(SpanRange::combined(range5, range5), SpanRange::empty());
+    /// ```
     pub fn combined(range1: impl Into<SpanRange>, range2: impl Into<SpanRange>) -> Self {
         let (range1, range2): (SpanRange, SpanRange) = (range1.into(), range2.into());
 
-        // Match to fit their boundedness.
-        match (range1, range2) {
-            // Any unboundedness takes precedence
-            (SpanRange::Unbounded, _) => SpanRange::Unbounded,
-            (_, SpanRange::Unbounded) => SpanRange::Unbounded,
+        // Unpack the ranges and process any empty ranges
+        let (start1, end1, start2, end2): (SpanBound, SpanBound, SpanBound, SpanBound) = match (range1, range2) {
+            (Self::Range(start1, end1), Self::Range(start2, end2)) => (start1, end1, start2, end2),
+            (range1, Self::Empty)                                  => { return range1; },
+            (Self::Empty, range2)                                  => { return range2; },
+            (Self::Empty, Self::Empty)                             => { return Self::Empty; },
+        };
 
-            // Any emptyness gives the other an easy pass
-            (SpanRange::Empty, range2) => range2,
-            (range1, SpanRange::Empty) => range1,
+        // Match a new start range
+        let start: SpanBound = match (start1, start2) {
+            (SpanBound::Bounded(start1), SpanBound::Bounded(start2)) => SpanBound::Bounded(std::cmp::min(start1, start2)),
+            (SpanBound::Bounded(_), SpanBound::Unbounded)            => SpanBound::Unbounded,
+            (SpanBound::Unbounded, SpanBound::Bounded(_))            => SpanBound::Unbounded,
+            (SpanBound::Unbounded, SpanBound::Unbounded)             => SpanBound::Unbounded,
+        };
+        // Match a new end range
+        let end: SpanBound = match (end1, end2) {
+            (SpanBound::Bounded(end1), SpanBound::Bounded(end2)) => SpanBound::Bounded(std::cmp::max(end1, end2)),
+            (SpanBound::Bounded(_), SpanBound::Unbounded)        => SpanBound::Unbounded,
+            (SpanBound::Unbounded, SpanBound::Bounded(_))        => SpanBound::Unbounded,
+            (SpanBound::Unbounded, SpanBound::Unbounded)         => SpanBound::Unbounded,
+        };
 
-            // Next, let's do both bounded
-            (SpanRange::Bounded { left: left1, right: right1 }, SpanRange::Bounded { left: left2, right: right2 }) => SpanRange::Bounded { left: std::cmp::min(left1, left2), right: std::cmp::max(right1, right2) },
-
-            // Then everything with LBounded on one side
-            (SpanRange::Bounded { left: left1, .. }, SpanRange::LBounded { left: left2 })  => SpanRange::LBounded { left: std::cmp::min(left1, left2) },
-            (SpanRange::LBounded { left: left1 }, SpanRange::Bounded { left: left2, .. }) => SpanRange::LBounded { left: std::cmp::min(left1, left2) },
-            (SpanRange::LBounded { left: left1 }, SpanRange::LBounded { left: left2 }) => SpanRange::LBounded { left: std::cmp::min(left1, left2) },
-            (SpanRange::RBounded { .. }, SpanRange::LBounded { .. }) => SpanRange::Unbounded,
-            (SpanRange::LBounded { .. }, SpanRange::RBounded { .. }) => SpanRange::Unbounded,
-
-            // Any (remaining) RBounded on one side
-            (SpanRange::Bounded { right: right1, .. }, SpanRange::RBounded { right: right2 }) => SpanRange::RBounded { right: std::cmp::max(right1, right2) },
-            (SpanRange::RBounded { right: right1 }, SpanRange::Bounded { right: right2, .. }) => SpanRange::RBounded { right: std::cmp::max(right1, right2) },
-            (SpanRange::RBounded { right: right1 }, SpanRange::RBounded { right: right2 }) => SpanRange::RBounded { right: std::cmp::max(right1, right2) },
-        }
+        // Create a new range out of it
+        Self::Range(start, end)
     }
 
 
@@ -274,155 +536,188 @@ impl SpanRange {
     /// 
     /// `self` will become a continious area that snugle spans both `self` and `other`.
     /// 
+    /// Some remarks:
+    /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
+    /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
+    /// 
     /// # Arguments
-    /// - `other`: The other SpanRange to swallow.
+    /// - `other`: The other SpanRange to consume.
     /// 
     /// # Returns
     /// A mutable reference to self for chaining.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let mut range1 = SpanRange::new(0, 9);
+    /// range1.consume(SpanRange::new(15, 30));
+    /// assert_eq!(range1, SpanRange::new(0, 30));
+    /// ```
+    /// (See [`Self::combined()`](SpanRange::combined()) for more examples about this function's behaviour)
     #[inline]
     pub fn consume(&mut self, other: impl Into<SpanRange>) -> &mut Self {
         *self = Self::combined(*self, other);
         self
     }
 
-    /// Indexes the given string appropriately.
+    /// Slices a given string appropriately for this SpanRange.
     /// 
     /// # Arguments
     /// - `text`: The string to slice.
     /// 
     /// # Returns
-    /// A slice of the given string, or else a static empty one if it's... well, empty.
+    /// A slice of the given string, or else a static empty `""` if the range is... well, empty.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let text = "Hello, world!";
+    /// assert_eq!(SpanRange::new(0, 4).slice(text), "Hello");
+    /// assert_eq!(SpanRange::new(6, 11).slice(text), "world");
+    /// assert_eq!(SpanRange::new(12, 12).slice(text), "!");
+    /// assert_eq!(SpanRange::new(0, 255).slice(text), "Hello, world!");
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text), "Hello");
+    /// assert_eq!(SpanRange::new(6, SpanBound::Unbounded).slice(text), "world!");
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text), "Hello, world!");
+    /// assert_eq!(SpanRange::empty().slice(text), "");
+    /// ```
     #[inline]
     pub fn slice<'s>(&'_ self, text: &'s str) -> &'s str {
         match self {
-            Self::Unbounded               => text,
-            Self::LBounded { left }       => if *left < text.len() { &text[*left..] } else { "" },
-            Self::RBounded { right }      => if *right < text.len() { &text[..=*right] } else { text },
-            Self::Bounded { left, right } => if *left < text.len() { if *right < text.len() { &text[*left..=*right] } else { &text[*left..] } } else { "" },
-            Self::Empty                   => "",
+            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < text.len() { if *end < text.len() { &text[*start..=*end] } else { &text[*start..] } } else { "" },
+            Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < text.len() { &text[*start..] } else { "" },
+            Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < text.len() { &text[..=*end] } else { text },
+            Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => text,
+            Self::Empty                                                     => "",
         }
     }
 
 
+
+    /// Returns if this SpanRange is a [`Range`](SpanRange::Range) (i.e., non-empty).
+    /// 
+    /// # Returns
+    /// True if it is, or false otherwise.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::new(0, 9).is_range(), true);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_range(), true);
+    /// assert_eq!(SpanRange::empty().is_range(), false);
+    /// assert_eq!(SpanRange::new(9, 0).is_range(), false);
+    /// ```
+    #[inline]
+    pub fn is_range(&self) -> bool { matches!(self, Self::Range(_, _)) }
+    /// Returns the internal start bound.
+    /// 
+    /// # Returns
+    /// The start [`SpanBound`].
+    /// 
+    /// # Panics
+    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::new(0, 9).start(), SpanBound::Bounded(0));
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).start(), SpanBound::Unbounded);
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().start()).is_err());
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).start()).is_err());
+    /// ```
+    #[inline]
+    pub fn start(&self) -> SpanBound { if let Self::Range(start, _) = self { *start } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
+    /// Returns the internal end bound.
+    /// 
+    /// # Returns
+    /// The end [`SpanBound`].
+    /// 
+    /// # Panics
+    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::new(0, 9).end(), SpanBound::Bounded(9));
+    /// assert_eq!(SpanRange::new(0, SpanBound::Unbounded).end(), SpanBound::Unbounded);
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().end()).is_err());
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).end()).is_err());
+    /// ```
+    #[inline]
+    pub fn end(&self) -> SpanBound { if let Self::Range(_, end) = self { *end } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
+    /// Returns the internal start- and end bounds.
+    /// 
+    /// # Returns
+    /// A tuple with the start- and end [`SpanBound`]s, respectively.
+    /// 
+    /// # Panics
+    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::new(0, 9).range(), (SpanBound::Bounded(0), SpanBound::Bounded(9)));
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).range(), (SpanBound::Unbounded, SpanBound::Bounded(9)));
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::empty().range()).is_err());
+    /// assert_eq!(std::panic::catch_unwind(|| SpanRange::new(9, 0).range()).is_err());
+    /// ```
+    #[inline]
+    pub fn range(&self) -> (SpanBound, SpanBound) { if let Self::Range(start, end) = self { (*start, *end) } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
 
     /// Returns if this SpanRange is [`Empty`](SpanRange::Empty).
     /// 
     /// # Returns
     /// True if it is, or false otherwise.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// assert_eq!(SpanRange::new(0, 9).is_empty(), false);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_empty(), false);
+    /// assert_eq!(SpanRange::empty().is_empty(), true);
+    /// assert_eq!(SpanRange::new(9, 0).is_empty(), true);
+    /// ```
     #[inline]
     pub fn is_empty(&self) -> bool { matches!(self, Self::Empty) }
-
-    /// Returns the left range if this SpanRange has any.
-    /// 
-    /// If it does not, it can be one of two things:
-    /// 1. The SpanRange is unbounded on the left.
-    /// 2. The SpanRange is empty.
-    /// 
-    /// To distinguish, check [`Self::is_empty()`](SpanRange::is_empty()) and  [`Self::is_lbounded()`](SpanRange::is_lbounded())
-    /// 
-    /// This function is an alias of [`Self::start()`](SpanRange::start()).
-    /// 
-    /// # Returns
-    /// The left index, or [`None`] if any of the two given conditions is true.
-    #[inline]
-    pub fn left(&self) -> Option<usize> {
-        match self {
-            Self::Bounded { left, .. } | Self::LBounded { left }  => Some(*left),
-            Self::Unbounded | Self::RBounded { .. } | Self::Empty => None,
-        }
-    }
-    /// Returns the start range if this SpanRange has any.
-    /// 
-    /// If it does not, it can be one of two things:
-    /// 1. The SpanRange is unbounded on the left.
-    /// 2. The SpanRange is empty.
-    /// 
-    /// To distinguish, check [`Self::is_empty()`](SpanRange::is_empty()) and  [`Self::is_lbounded()`](SpanRange::is_lbounded())
-    /// 
-    /// This function is an alias of [`Self::left()`](SpanRange::left()).
-    /// 
-    /// # Returns
-    /// The start index, or [`None`] if any of the two given conditions is true.
-    #[inline]
-    pub fn start(&self) -> Option<usize> { self.left() }
-    /// Resolves this SpanRange's left/start index to a concrete number.
-    /// 
-    /// # Returns
-    /// The start index if this span was bounded, `0` if it wasn't or [`None`] if it was [`Empty`](SpanRange::Empty).
-    #[inline]
-    pub fn resolve_start(&self) -> Option<usize> {
-        match self {
-            Self::Bounded { left, .. } | Self::LBounded { left } => Some(*left),
-            Self::Unbounded | Self::RBounded { .. }              => Some(0),
-            Self::Empty                                          => None,
-        }
-    }
-
-    /// Returns the right range if this SpanRange has any.
-    /// 
-    /// If it does not, it can be one of two things:
-    /// 1. The SpanRange is unbounded on the right.
-    /// 2. The SpanRange is empty.
-    /// 
-    /// To distinguish, check [`Self::is_empty()`](SpanRange::is_empty()) and  [`Self::is_rbounded()`](SpanRange::is_rbounded())
-    /// 
-    /// This function is an alias of [`Self::end()`](SpanRange::end()).
-    /// 
-    /// # Returns
-    /// The right index, or [`None`] if any of the two given conditions is true.
-    #[inline]
-    pub fn right(&self) -> Option<usize> {
-        match self {
-            Self::Bounded { right, .. } | Self::RBounded { right } => Some(*right),
-            Self::Unbounded | Self::LBounded { .. } | Self::Empty  => None,
-        }
-    }
-    /// Returns the end range if this SpanRange has any.
-    /// 
-    /// If it does not, it can be one of two things:
-    /// 1. The SpanRange is unbounded on the left.
-    /// 2. The SpanRange is empty.
-    /// 
-    /// To distinguish, check [`Self::is_empty()`](SpanRange::is_empty()) and  [`Self::is_rbounded()`](SpanRange::is_rbounded())
-    /// 
-    /// This function is an alias of [`Self::left()`](SpanRange::left()).
-    /// 
-    /// # Returns
-    /// The end index, or [`None`] if any of the two given conditions is true.
-    #[inline]
-    pub fn end(&self) -> Option<usize> { self.right() }
-    /// Resolves this SpanRange's right/end index to a concrete number.
-    /// 
-    /// # Arguments
-    /// - `length`: The length to which the index should resolve if unbounded on the right (i.e., source size).
-    /// 
-    /// # Returns
-    /// The end index if this span was bounded, `length` if it wasn't or [`None`] if it was [`Empty`](SpanRange::Empty).
-    #[inline]
-    pub fn resolve_end(&self, length: impl AsPrimitive<usize>) -> Option<usize> {
-        match self {
-            Self::Bounded { right, .. } | Self::RBounded { right } => Some(*right),
-            Self::Unbounded | Self::LBounded { .. }                => Some(length.as_()),
-            Self::Empty                                            => None,
-        }
-    }
 
     /// Returns the length of the range, i.e., the "number of graphemes" it catches.
     /// 
     /// # Arguments
-    /// - `length`: The length of the span for which we are calling this. This determins the 'maximum' of things to return.
+    /// - `length`: Something that gives us the size of the thing we're ranging over. This can be either a number, or the string itself. See [`Length`] for more details.
     /// 
     /// # Returns
     /// The number of things captured by this range.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::{SpanBound, SpanRange};
+    /// 
+    /// let text = "Hello, world!";
+    /// assert_eq!(SpanRange::new(0, 4).slice(text.len()), 5);
+    /// assert_eq!(SpanRange::new(6, 11).slice(text), 5);
+    /// assert_eq!(SpanRange::new(12, 12).slice(text.len()), 1);
+    /// assert_eq!(SpanRange::new(0, 255).slice(text), 13);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text.len()), 5);
+    /// assert_eq!(SpanRange::new(6, SpanBound::Unbounded).slice(text), 6);
+    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text.len()), 13);
+    /// assert_eq!(SpanRange::empty().slice(text), 0);
+    /// ```
     #[inline]
-    pub fn len(&self, length: impl AsPrimitive<usize>) -> usize {
-        let length: usize = length.as_();
+    pub fn len(&self, length: impl Length) -> usize {
+        let length: usize = length.len();
         match self {
-            Self::Unbounded               => length,
-            Self::LBounded { left }       => if *left < length { length - *left } else { 0 },
-            Self::RBounded { right }      => if *right < length { *right } else { 0 },
-            Self::Bounded { left, right } => { let len: usize = 1 + *right - *left; if len < length { len } else { length } },
-            Self::Empty                   => 0,
+            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < length { if *end < length { 1 + *end - *start } else { length - *start } } else { 0 },
+            Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < length { length - *start } else { 0 },
+            Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < length { 1 + *end } else { length },
+            Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => length,
+            Self::Empty                                                     => 0,
         }
     }
 }
@@ -440,26 +735,19 @@ impl<I: AsPrimitive<usize>> From<(Option<I>, Option<I>)> for SpanRange {
 }
 impl<I: AsPrimitive<usize>> From<RangeFrom<I>> for SpanRange {
     #[inline]
-    fn from(value: RangeFrom<I>) -> Self { Self::LBounded { left: value.start.as_() } }
+    fn from(value: RangeFrom<I>) -> Self { Self::Range(SpanBound::Bounded(value.start.as_()), SpanBound::Unbounded) }
 }
 impl From<RangeFull> for SpanRange {
     #[inline]
-    fn from(value: RangeFull) -> Self { Self::Unbounded }
+    fn from(value: RangeFull) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
 }
 impl<I: AsPrimitive<usize>> From<RangeInclusive<I>> for SpanRange {
     #[inline]
-    fn from(value: RangeInclusive<I>) -> Self {
-        let (left, right): (usize, usize) = (value.start().as_(), value.end().as_());
-        if left <= right {
-            Self::Bounded { left, right }
-        } else {
-            Self::Empty
-        }
-    }
+    fn from(value: RangeInclusive<I>) -> Self { Self::Range(SpanBound::Bounded(value.start().as_()), SpanBound::Bounded(value.end().as_())) }
 }
 impl<I: AsPrimitive<usize>> From<RangeToInclusive<I>> for SpanRange {
     #[inline]
-    fn from(value: RangeToInclusive<I>) -> Self { Self::RBounded { right: value.end.as_() } }
+    fn from(value: RangeToInclusive<I>) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Bounded(value.end.as_())) }
 }
 
 impl AsRef<SpanRange> for SpanRange {
@@ -556,7 +844,7 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file  : file.into(),
             source,
-            range : SpanRange::Unbounded,
+            range : SpanRange::unbounded(),
         }
     }
 
@@ -898,7 +1186,10 @@ impl<'f, 's> Span<'f, 's> {
     #[inline]
     #[track_caller]
     pub fn start(&self) -> Option<Position> {
-        self.range.resolve_start().map(|idx| self.pos_of(idx))
+        match self.range {
+            SpanRange::Range(start, _) => if let SpanBound::Bounded(start) = start { Some(self.pos_of(start)) } else if self.source.len() > 0 { Some(self.pos_of(0)) } else { None },
+            _ => None,
+        }
     }
 
     /// Returns the end position of this span as a [`Position`].
@@ -933,7 +1224,10 @@ impl<'f, 's> Span<'f, 's> {
     #[inline]
     #[track_caller]
     pub fn end(&self) -> Option<Position> {
-        self.range.resolve_end(self.source.len()).map(|idx| self.pos_of(idx))
+        match self.range {
+            SpanRange::Range(_, end) => if let SpanBound::Bounded(end) = end { Some(self.pos_of(end)) } else if self.source.len() > 0 { Some(self.pos_of(self.source.len() - 1)) } else { None },
+            _ => None,
+        }
     }
 
     /// Returns the text referred by this span.
@@ -956,15 +1250,7 @@ impl<'f, 's> Span<'f, 's> {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn text(&self) -> &str {
-        match (self.range.resolve_start(), self.range.resolve_end(self.source.len())) {
-            (Some(start), Some(end)) => &self.source[start..=end],
-            (None, None)             => "",
-
-            // Otherwise, should never happen
-            (_, _) => { unreachable!(); },
-        }
-    }
+    pub fn text(&self) -> &str { self.range.slice(self.source) }
 
 
 
@@ -973,7 +1259,7 @@ impl<'f, 's> Span<'f, 's> {
     /// # Returns
     /// The number of characters.
     #[inline]
-    pub fn len(&self) -> usize { self.range.len(self.source.len()) }
+    pub fn len(&self) -> usize { self.range.len(self.source) }
 }
 
 impl<'f, 's> AsRef<Span<'f, 's>> for Span<'f, 's> {
@@ -1090,7 +1376,7 @@ impl<'f, 's, T: AsRef<str>> nom::FindSubstring<T> for Span<'f, 's> {
         for (i, _) in source.grapheme_indices(true) {
             if i + substr.len() <= source.len() && &source[i..i + substr.len()] == substr {
                 // NOTE: We can safely unwrap because this loops never loops if the string is empty.
-                return Some(self.range.start().unwrap() + i);
+                return Some(self.range.start().bound() + i);
             }
         }
         None
@@ -1164,42 +1450,115 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
         )
     }
 }
-// #[cfg(feature = "nom")]
-// impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
-//     type Item = char;
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
+    type Item = char;
 
-//     fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-//         for (i, c) in self.source[self.start..=self.end].char_indices() {
-//             if predicate(c) { return Ok((Span::from_idx(self.file, self.source, self.start, i - 1), Span::from_idx(self.file, self.source, i, self.end))); }
-//         }
-//         Err(nom::Err::Incomplete(nom::Needed::Unknown))
-//     }
-//     fn split_at_position1<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-//         for (i, c) in self.source[self.start..=self.end].char_indices() {
-//             if predicate(c) {
-//                 if self.start == i || self.end == i { return Err(nom::Err::Failure(E::from_error_kind(*self, e))) }
-//                 return Ok((Span::from_idx(self.file, self.source, self.start, i - 1), Span::from_idx(self.file, self.source, i, self.end)));
-//             }
-//         }
-//         Err(nom::Err::Incomplete(nom::Needed::Unknown))
-//     }
+    fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                return Ok((
+                    // We create a new span if it's non-empty
+                    if i > 0 {
+                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
+                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
+                    } else {
+                        Span { file: self.file, source: self.source, range: SpanRange::Empty }
+                    },
+                    // This one will never be empty because the c is part of the split
+                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
+                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
+                ));
+            }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
+    fn split_at_position1<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                return Ok((
+                    // We create a new span if it's non-empty
+                    if i > 0 {
+                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
+                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
+                    } else {
+                        // We don't want no empty slices! Instead, fail
+                        return Err(nom::Err::Failure(E::from_error_kind(*self, e)));
+                    },
+                    // This one will never be empty because the c is part of the split
+                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
+                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
+                ));
+            }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
 
-//     fn split_at_position1_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-        
-//     }
-//     fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-        
-//     }
-// }
+    fn split_at_position1_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                return Ok((
+                    // We create a new span if it's non-empty
+                    if i > 0 {
+                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
+                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
+                    } else {
+                        // We don't want no empty slices! Instead, fail
+                        return Err(nom::Err::Failure(E::from_error_kind(*self, e)));
+                    },
+                    // This one will never be empty because the c is part of the split
+                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
+                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
+                ));
+            }
+        }
+
+        // Instead of crashing, return the full slice
+        Ok((*self, Span::empty(self.file, self.source)))
+    }
+    fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                return Ok((
+                    // We create a new span if it's non-empty
+                    if i > 0 {
+                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
+                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
+                    } else {
+                        Span { file: self.file, source: self.source, range: SpanRange::Empty }
+                    },
+                    // This one will never be empty because the c is part of the split
+                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
+                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
+                ));
+            }
+        }
+
+        // Instead of crashing, return the full slice
+        Ok((*self, Span::empty(self.file, self.source)))
+    }
+}

@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    21 Aug 2023, 23:43:39
+//    22 Aug 2023, 13:52:29
 //  Auto updated?
 //    Yes
 // 
@@ -63,19 +63,31 @@ fn emit_diagnostic_source_pos(writer: &mut impl Write, indent: usize, file: &str
 /// - `writer`: The [`Write`]r to write on.
 /// - `accent_colour`: The colour to write accents with.
 /// - `indent`: The number of spaces that the line number will be at most.
-/// - `line`: The line number to write (one-indexed).
-/// - `source`: The actual source line to write.
-/// - `offset`: The offset of this line w.r.t. the whole source.
+/// - `lines`: The line number of the first line to write (one-indexed).
+/// - `source`: The actual source to write.
 /// - `accent`: The total access range of this line, ignoring newlines for a sec.
 /// 
 /// # Errors
 /// This function may error if we failed to write on the given writer.
 #[inline]
-fn emit_diagnostic_source_line(writer: &mut impl Write, accent_colour: Style, indent: usize, line: usize, source: &str, offset: usize, accent: SpanRange) -> Result<(), std::io::Error> {
+fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: Style, indent: usize, line: usize, source: &str, accent: SpanRange) -> Result<(), std::io::Error> {
     // Write the empty line first
     writeln!(writer, "{} {}", (0..indent).map(|_| ' ').collect::<String>(), style('|').bold().blue())?;
 
-    // Next, write the source line
+    // Next, write the source lines
+    let max_l_width: usize = ((line + source.chars().filter(|c| *c == '\n').count()) as f64).log10().ceil() as usize;
+    for (l, source_line) in source.lines().enumerate() {
+        let l: usize = line + l;
+
+        // Write the prefix with the line number
+        write!(writer, "{}{} {} ", (0..max_l_width - ((l as f64).log10().ceil() as usize)).map(|_| ' ').collect::<String>(), style(l).blue().bold(), style('|').blue().bold())?;
+
+        // Write the part of the line that is highlighted by the access
+        
+    }
+
+    // Cool, done!
+    Ok(())
 }
 
 
