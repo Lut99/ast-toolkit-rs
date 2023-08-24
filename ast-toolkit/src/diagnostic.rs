@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    22 Aug 2023, 18:11:21
+//    24 Aug 2023, 16:00:53
 //  Auto updated?
 //    Yes
 // 
@@ -91,7 +91,7 @@ fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, 
 
     // Next, write the source lines
     let mut l: usize = line;
-    let mut first_accent: bool = false;
+    let mut first_accent: bool = true;
     let mut line_buffer: String = String::new();
     let mut mark_buffer: String = String::new();
     for (i, c) in source.grapheme_indices(true) {
@@ -124,6 +124,12 @@ fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, 
             mark_buffer.clear();
             l += 1;
         }
+    }
+
+    // If there's still anything in the buffers, flush it
+    if !line_buffer.is_empty() {
+        writeln!(writer, "{}{} {} {}", (0..max_line - n_digits!(l)).map(|_| ' ').collect::<String>(), style(l).blue().bold(), style('|').blue().bold(), line_buffer)?;
+        writeln!(writer, "{} {} {}", (0..max_line).map(|_| ' ').collect::<String>(), style('|').blue().bold(), mark_buffer)?;
     }
 
     // Write the final one _or_ a note and we're done
@@ -1044,10 +1050,10 @@ impl Diagnostic {
             };
 
             // Write the source stuff
-            let max_line: usize = n_digits!(self.span.skipped + source.chars().filter(|c| *c == '\n').count());
+            let max_line: usize = n_digits!(1 + self.span.skipped + source.chars().filter(|c| *c == '\n').count());
             // NOTE: We can safely unwrap because we assert the range is not empty
             emit_diagnostic_source_pos(writer, max_line, &self.span.file, self.span.start().unwrap())?;
-            emit_diagnostic_source_lines(writer, &accent_colour, max_line, self.span.skipped, source.as_ref(), accent_range, self.remark.as_ref().map(|r| r.as_str()))?;
+            emit_diagnostic_source_lines(writer, &accent_colour, max_line, self.span.skipped + 1, source.as_ref(), accent_range, self.remark.as_ref().map(|r| r.as_str()))?;
         }
 
         // Recursively write child diagnostics
