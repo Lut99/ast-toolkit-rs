@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    21 Aug 2023, 14:43:45
+//    24 Aug 2023, 16:36:03
 //  Auto updated?
 //    Yes
 // 
@@ -176,25 +176,25 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 
 // }
 
-// /// Parses an integer literal for our simple language
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_integer<F: Clone, S: Clone + Deref<Target = str>>(input: Input<F, S>) -> Output<F, S, i64> {
-//     comb::map(
-//         comb::recognize(seq::pair(
-//             comb::opt(bc::tag("-")),
-//             cc::digit0,
-//         )),
-//         |parsed| -> i64 { i64::from_str(&parsed).unwrap() }
-//     )(input)
-// }
+/// Parses an integer literal for our simple language
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
+    comb::map(
+        comb::recognize(seq::pair(
+            comb::opt(bc::tag("-")),
+            cc::digit0,
+        )),
+        |parsed: Span<'f, 's>| -> i64 { i64::from_str(parsed.text()).unwrap() }
+    )(input)
+}
 
 
 
@@ -202,5 +202,11 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 
 /***** ENTYRPOINT *****/
 fn main() {
-    
+    let file: &str = "<hardcoded>";
+    let source: &str = "hello_world();\nhello_x(\"world\");\nadd(42, 42);";
+    let input: Span = Span::new(file, source);
+
+    // Parse it
+    let (rem, value) = parse_integer(Span::new("<test>", "42")).unwrap();
+    println!("{value}");
 }

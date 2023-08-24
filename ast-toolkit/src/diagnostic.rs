@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    24 Aug 2023, 16:02:22
+//    24 Aug 2023, 16:29:47
 //  Auto updated?
 //    Yes
 // 
@@ -101,7 +101,7 @@ fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, 
             SpanRange::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => start <= i,
             SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => end <= i,
             SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => true,
-            SpanRange::Empty                                                     => false,
+            SpanRange::Empty(_)                                                  => false,
         };
 
         // Write it either highlighted or not to the line buffer
@@ -420,7 +420,7 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
             return Self {
                 file    : value.file.into(),
                 source  : String::new(),
-                range   : SpanRange::Empty,
+                range   : value.range,
                 skipped : 0,
             }
         }
