@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    24 Aug 2023, 16:54:01
+//    25 Aug 2023, 18:38:56
 //  Auto updated?
 //    Yes
 // 
@@ -1691,21 +1691,21 @@ impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
     #[track_caller]
     fn slice(&self, range: R) -> Self {
         // Obtain the range
-        let range: SpanRange = match (range.start_bound(), range.end_bound()) {
-            (Bound::Included(i1), Bound::Included(i2)) => SpanRange::Range(SpanBound::Bounded(*i1), SpanBound::Bounded(*i2)),
-            (Bound::Included(i1), Bound::Excluded(i2)) => if *i2 > 0 { SpanRange::Range(SpanBound::Bounded(*i1), SpanBound::Bounded(*i2 - 1)) } else { SpanRange::Empty(Some(*i1)) },
-            (Bound::Included(i1), Bound::Unbounded)    => SpanRange::Range(SpanBound::Bounded(*i1), SpanBound::Unbounded),
-            (Bound::Excluded(i1), Bound::Included(i2)) => SpanRange::Range(SpanBound::Bounded(*i1 + 1), SpanBound::Bounded(*i2)),
-            (Bound::Excluded(i1), Bound::Excluded(i2)) => if *i2 > 0 { SpanRange::Range(SpanBound::Bounded(*i1 + 1), SpanBound::Bounded(*i2 - 1)) } else { SpanRange::Empty(Some(*i1 + 1)) },
-            (Bound::Excluded(i1), Bound::Unbounded)    => SpanRange::Range(SpanBound::Bounded(*i1 + 1), SpanBound::Unbounded),
-            (Bound::Unbounded, Bound::Included(i2))    => SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(*i2)),
-            (Bound::Unbounded, Bound::Excluded(i2))    => if *i2 > 0 { SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(*i2 - 1)) } else { SpanRange::Empty(Some(0)) },
-            (Bound::Unbounded, Bound::Unbounded)       => SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded),
+        let range: (usize, Option<usize>) = match (range.start_bound(), range.end_bound()) {
+            (Bound::Included(i1), Bound::Included(i2)) => (*i1, Some(*i2)),
+            (Bound::Included(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1, Some(*i2 - 1)) } else { (*i1, None) },
+            (Bound::Included(i1), Bound::Unbounded)    => (*i1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+            (Bound::Excluded(i1), Bound::Included(i2)) => (*i1 + 1, Some(*i2)),
+            (Bound::Excluded(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1 + 1, Some(*i2 - 1)) } else { (*i1 + 1, None) },
+            (Bound::Excluded(i1), Bound::Unbounded)    => (*i1 + 1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+            (Bound::Unbounded, Bound::Included(i2))    => (0, Some(*i2)),
+            (Bound::Unbounded, Bound::Excluded(i2))    => if *i2 > 0 { if !self.source.is_empty() { (0, Some(*i2 - 1)) } else { (0, None) } } else { (0, None) },
+            (Bound::Unbounded, Bound::Unbounded)       => (0, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
         };
 
         // Now scale that down within context of our own range
         let range: SpanRange = match (self.range, range) => {
-            (SpanRange::Range(SpanBound::Bounded(start1), SpanBound::Bounded(end1)), SpanRange::Range(SpanBound::Bounded(start2), SpanBound::Bounded(end2))) => ,
+            (SpanRange::Range(SpanBound::Bounded(start1), SpanBound::Bounded(end1)), (start2, Some(end2))) => SpanRange::Range(SpanBound::Bounded(())),
         },
 
         // Create outselves with it
