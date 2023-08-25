@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    25 Aug 2023, 18:45:42
+//    25 Aug 2023, 22:45:26
 //  Auto updated?
 //    Yes
 // 
@@ -13,6 +13,7 @@
 //!   track of a node's position in the source text.
 // 
 
+use std::slice::SliceIndex;
 use std::ops::{Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
 use enum_debug::EnumDebug;
@@ -243,49 +244,38 @@ mod nom_tests {
 
 
 
+/***** HELPER FUNCTIONS *****/
+/// Resolves a [`SpanRange`] to a concrete set of indices.
+/// 
+/// # Arguments
+/// - `span`: The [`SpanRange`] to resolve.
+/// - `max_len`: The length of the thing is spans. This is needed to resolve unbounded.
+/// 
+/// # Returns
+/// A tuple with the start (inclusive), end (inclusive). May be out-of-range.
+fn resolve_span(span: impl Into<SpanRange>, max_len: impl AsPrimitive<usize>) -> (usize, usize) {
+    let span: SpanRange = span.into();
+    let max_len: usize = max_len.as_();
+
+    // Just match the possible bounds
+    match (span.start_bound(), span.end_bound()) {
+        (Bound::Excluded(start), Bound::Excluded(end)) => (if *start > 0 { *start - 1 } else { 0 }, if *end > 0 { *end - 1 } else { 0 }),
+        (Bound::Excluded(start), Bound::Included(end)) => (if *start > 0 { *start - 1 } else { 0 }, *end),
+        (Bound::Excluded(start), Bound::Unbounded)     => (if *start > 0 { *start - 1 } else { 0 }, if max_len > 0 { max_len - 1 } else { 0 }),
+        (Bound::Included(start), Bound::Excluded(end)) => (*start, if *end > 0 { *end - 1 } else { 0 }),
+        (Bound::Included(start), Bound::Included(end)) => (*start, *end),
+        (Bound::Included(start), Bound::Unbounded)     => (*start, if max_len > 0 { max_len - 1 } else { 0 }),
+        (Bound::Unbounded, Bound::Excluded(end))       => (0, if *end > 0 { *end - 1 } else { 0 }),
+        (Bound::Unbounded, Bound::Included(end))       => (0, *end),
+        (Bound::Unbounded, Bound::Unbounded)           => (0, if max_len > 0 { max_len - 1 } else { 0 }),
+    }
+}
+
+
+
+
+
 /***** AUXILLARY *****/
-/// Helper trait that abstracts over a string or a direct length.
-/// 
-/// # Example
-/// ```rust
-/// use ast_toolkit::span::Length;
-/// 
-/// assert_eq!(<usize as Length>::len(&42), 42);
-/// assert_eq!(<str as Length>::len(""), 0);
-/// assert_eq!(<str as Length>::len("Hello there!"), 12);
-/// ```
-pub trait Length {
-    /// Returns the length that Self represents.
-    /// 
-    /// # Returns
-    /// The length as an unsigned integer.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::Length;
-    /// 
-    /// assert_eq!(<usize as Length>::len(&42), 42);
-    /// assert_eq!(<str as Length>::len(""), 0);
-    /// assert_eq!(<str as Length>::len("Hello there!"), 12);
-    /// ```
-    fn len(&self) -> usize;
-}
-
-impl Length for usize {
-    #[inline]
-    fn len(&self) -> usize { *self }
-}
-impl Length for str {
-    #[inline]
-    fn len(&self) -> usize { str::len(self) }
-}
-impl<'s> Length for &'s str {
-    #[inline]
-    fn len(&self) -> usize { str::len(*self) }
-}
-
-
-
 // /// Defines a start- or end bound.
 // /// 
 // /// A start- or end bound can be either [`Bounded`](SpanBound::Bounded) (i.e., a specific index) or [`Unbounded`](SpanBound::Unbounded) (i.e., until the end of the range in this direction).
@@ -822,13 +812,191 @@ impl<'s> Length for &'s str {
 pub enum SpanRange {
     /// Unofficially unpacks to a [`Range`]. This means that `start` is inclusive, `end` exclusive.
     Range { start: usize, end: usize },
+    /// Unofficially unpacks to a [`RangeFrom`]. This means that `start` is inclusive, and the end is unbounded.
+    RangeFrom { start: usize },
+    /// Unofficially unpacks to a [`RangeFull`]. This means that `start` is unbounded, `end` unbounded.
+    RangeFull,
+    /// Unofficially unpacks to a [`RangeInclusive`]. This means that `start` is inclusive, `end` inclusive.
+    RangeInclusive { start: usize, end: usize },
+    /// Unofficially unpacks to a [`RangeTo`]. This means that `start` is unbounded, `end` exclusive.
+    RangeTo { end: usize },
+    /// Unofficially unpacks to a [`RangeToInclusive`]. This means that `start` is unbounded, `end` inclusive.
+    RangeToInclusive { end: usize },
 }
 
+impl SpanRange {
+    /// Slices the given `str` according to this range.
+    /// 
+    /// # Arguments
+    /// - `text`: The `str` to slice.
+    /// 
+    /// # Returns
+    /// A new `str` that is slices appropriately.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::SpanRange;
+    /// 
+    /// let text: &str = "Hello, world!";
+    /// assert_eq!(SpanRange::from(0..5).slice(text), "Hello");
+    /// assert_eq!(SpanRange::from(..5).slice(text), "Hello");
+    /// assert_eq!(SpanRange::from(..=5).slice(text), "Hello,");
+    /// assert_eq!(SpanRange::from(7..).slice(text), "world!");
+    /// assert_eq!(SpanRange::from(7..12).slice(text), "world");
+    /// assert_eq!(SpanRange::from(7..=12).slice(text), "world!");
+    /// assert_eq!(SpanRange::from(7..42).slice(text), "world!");
+    /// assert_eq!(SpanRange::from(42..42).slice(text), "");
+    /// assert_eq!(SpanRange::from(1..=0).slice(text), "");
+    /// ```
+    #[inline]
+    pub fn slice<'s>(&'_ self, text: &'s str) -> &'s str {
+        match (self.start_bound(), self.end_bound()) {
+            (Bound::Included(start), Bound::Excluded(end)) => &text[*start..*end],
+            (Bound::Included(start), Bound::Included(end)) => &text[*start..=*end],
+            (Bound::Included(start), Bound::Unbounded)     => &text[*start..],
+            (Bound::Unbounded, Bound::Excluded(end))       => &text[..*end],
+            (Bound::Unbounded, Bound::Included(end))       => &text[..=*end],
+            (Bound::Unbounded, Bound::Unbounded)           => &text[..],
+
+            // Dunno what to do with these
+            (Bound::Excluded(start), _) => { panic!("Rust does not appear to support ranges with exclusive starts at the time of writing"); },
+        }
+    }
+
+    /// Computes the number of elements in this range.
+    /// 
+    /// # Arguments
+    /// - `max_len`: The length of the thing is spans. This is needed to resolve unbounded.
+    /// 
+    /// # Returns
+    /// The number of characters or w/e this range denotes.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::span::SpanRange;
+    /// 
+    /// let text: &str = "Hello, world!";
+    /// assert_eq!(SpanRange::from(0..5).len(text.len()), 5);
+    /// assert_eq!(SpanRange::from(..5).len(text.len()), 5);
+    /// assert_eq!(SpanRange::from(..=5).len(text.len()), 6);
+    /// assert_eq!(SpanRange::from(7..).len(text.len()), 6);
+    /// assert_eq!(SpanRange::from(7..12).len(text.len()), 5);
+    /// assert_eq!(SpanRange::from(7..=12).len(text.len()), 6);
+    /// assert_eq!(SpanRange::from(7..42).len(text.len()), 6);
+    /// assert_eq!(SpanRange::from(42..42).len(text.len()), 0);
+    /// assert_eq!(SpanRange::from(1..=0).len(text.len()), 0);
+    /// ```
+    #[inline]
+    pub fn len(&self, max_len: impl AsPrimitive<usize>) -> usize {
+        let max_len: usize = max_len.as_();
+        match (self.start_bound(), self.end_bound()) {
+            (Bound::Included(start), Bound::Excluded(end)) => if *start < *end { if *end - *start < max_len { *end - *start } else { max_len } } else { 0 },
+            (Bound::Included(start), Bound::Included(end)) => if *start < *end { if 1 + *end - *start < max_len { 1 + *end - *start } else { max_len } } else { 0 },
+            (Bound::Included(start), Bound::Unbounded)     => if *start < max_len { max_len - *start } else { 0 },
+            (Bound::Unbounded, Bound::Excluded(end))       => *end,
+            (Bound::Unbounded, Bound::Included(end))       => if *end < usize::MAX { *end + 1 } else { panic!("Cannot express length of a range that has an inclusive `usize::MAX` as end (will overflow)"); },
+            (Bound::Unbounded, Bound::Unbounded)           => max_len,
+
+            // Dunno what to do with these
+            (Bound::Excluded(start), _) => { panic!("Rust does not appear to support ranges with exclusive starts at the time of writing"); },
+        }
+    }
+}
+
+impl RangeBounds<usize> for SpanRange {
+    fn start_bound(&self) -> Bound<&usize> {
+        use SpanRange::*;
+        match self {
+            Range { start, end }          => (start..end).start_bound(),
+            RangeFrom { start }           => (start..).start_bound(),
+            RangeFull                     => (..).start_bound(),
+            RangeInclusive { start, end } => (start..=end).start_bound(),
+            RangeTo { end }               => (..end).start_bound(),
+            RangeToInclusive { end }      => (..=end).start_bound(),
+        }
+    }
+    fn end_bound(&self) -> Bound<&usize> {
+        use SpanRange::*;
+        match self {
+            Range { start, end }          => (start..end).end_bound(),
+            RangeFrom { start }           => (start..).end_bound(),
+            RangeFull                     => (..).end_bound(),
+            RangeInclusive { start, end } => (start..=end).end_bound(),
+            RangeTo { end }               => (..end).end_bound(),
+            RangeToInclusive { end }      => (..=end).end_bound(),
+        }
+    }
+}
+
+impl From<(Bound<usize>, Bound<usize>)> for SpanRange {
+    #[inline]
+    #[track_caller]
+    fn from(value: (Bound<usize>, Bound<usize>)) -> Self {
+        match value {
+            (Bound::Included(start), Bound::Excluded(end)) => Self::from(start..end),
+            (Bound::Included(start), Bound::Included(end)) => Self::from(start..=end),
+            (Bound::Included(start), Bound::Unbounded)     => Self::from(start..),
+            (Bound::Unbounded, Bound::Excluded(end))       => Self::from(..end),
+            (Bound::Unbounded, Bound::Included(end))       => Self::from(..=end),
+            (Bound::Unbounded, Bound::Unbounded)           => Self::from(..),
+
+            // Dunno what to do with these
+            (Bound::Excluded(start), _) => { panic!("Rust does not appear to support ranges with exclusive starts at the time of writing"); },
+        }
+    }
+}
 impl From<Range<usize>> for SpanRange {
     #[inline]
     fn from(value: Range<usize>) -> Self {
         Self::Range { start: value.start, end: value.end }
     }
+}
+impl From<RangeFrom<usize>> for SpanRange {
+    #[inline]
+    fn from(value: RangeFrom<usize>) -> Self {
+        Self::RangeFrom { start: value.start }
+    }
+}
+impl From<RangeFull> for SpanRange {
+    #[inline]
+    fn from(_value: RangeFull) -> Self {
+        Self::RangeFull
+    }
+}
+impl From<RangeInclusive<usize>> for SpanRange {
+    #[inline]
+    fn from(value: RangeInclusive<usize>) -> Self {
+        Self::RangeInclusive { start: *value.start(), end: *value.end() }
+    }
+}
+impl From<RangeTo<usize>> for SpanRange {
+    #[inline]
+    fn from(value: RangeTo<usize>) -> Self {
+        Self::RangeTo { end: value.end }
+    }
+}
+impl From<RangeToInclusive<usize>> for SpanRange {
+    #[inline]
+    fn from(value: RangeToInclusive<usize>) -> Self {
+        Self::RangeToInclusive { end: value.end }
+    }
+}
+
+impl AsRef<SpanRange> for SpanRange {
+    #[inline]
+    fn as_ref(&self) -> &SpanRange { self }
+}
+impl AsMut<SpanRange> for SpanRange {
+    #[inline]
+    fn as_mut(&mut self) -> &mut SpanRange { self }
+}
+impl From<&SpanRange> for SpanRange {
+    #[inline]
+    fn from(value: &Self) -> Self { *value }
+}
+impl From<&mut SpanRange> for SpanRange {
+    #[inline]
+    fn from(value: &mut Self) -> Self { *value }
 }
 
 
@@ -875,7 +1043,7 @@ pub struct Span<'f, 's> {
     /// The entire source text to snippet.
     pub source : &'s str,
     /// The start & end position of this span, both inclusive.
-    pub range  : Box<dyn RangeBounds<usize>>,
+    pub range  : SpanRange,
 }
 
 impl<'f, 's> Span<'f, 's> {
@@ -910,7 +1078,7 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file   : file.into(),
             source : source.into(),
-            range  : SpanRange::unbounded(),
+            range  : SpanRange::from(..),
         }
     }
 
@@ -933,7 +1101,7 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file   : file.into(),
             source : source.into(),
-            range  : SpanRange::Empty(None),
+            range  : (1..0).into(),
         }
     }
     /// Creates an empty Span, but one that is tied to a particular position.
@@ -958,7 +1126,7 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file   : file.into(),
             source : source.into(),
-            range  : SpanRange::Empty(Some(start.as_())),
+            range  : (start.as_()..0).into(),
         }
     }
 
@@ -1028,11 +1196,19 @@ impl<'f, 's> Span<'f, 's> {
             }
         }
 
+        // Unpack the options to something out-of-scope
+        let (rstart, rend): (usize, usize) = match (rstart, rend) {
+            (Some(rstart), Some(rend)) => (rstart, rend),
+            (Some(rstart), None)       => (rstart, source.len()),
+            (None, Some(rend))         => (source.len(), rend),
+            (None, None)               => (source.len(), source.len()),
+        };
+
         // Create self
         Self {
             file,
             source,
-            range : SpanRange::from((rstart, rend)),
+            range : (rstart..=rend).into(),
         }
     }
 
@@ -1079,7 +1255,7 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file   : file.into(),
             source : source.into(),
-            range  : SpanRange::from(start.as_()..=end.as_()),
+            range  : (start.as_()..=end.as_()).into(),
         }
     }
 
@@ -1158,11 +1334,42 @@ impl<'f, 's> Span<'f, 's> {
         if !std::ptr::eq(span1.file as *const str, span2.file as *const str) { panic!("Given spans do not have the same `file`"); }
         if !std::ptr::eq(span1.source as *const str, span2.source as *const str) { panic!("Given spans do not have the same `source`"); }
 
+        // Combine the start into a new bound
+        let start: Bound<usize> = match (span1.range.start_bound(), span2.range.start_bound()) {
+            (Bound::Excluded(start1), Bound::Excluded(start2)) => Bound::Excluded(std::cmp::min(*start1, *start2)),
+            // NOTE: This below works because we're changing the included start to an excluded start, e.g.,
+            //   `0, 1, [2, 3, ...]` to `0, (1, 2, 3, ...]`
+            // Thus, we have to -1. If the start is already at the 0, then we can instead safely assume it will be the smallest number out of the two.
+            (Bound::Excluded(start1), Bound::Included(start2)) => Bound::Excluded(if *start2 > 0 { std::cmp::min(*start1, *start2 - 1) } else { *start2 }),
+            (Bound::Excluded(start1), Bound::Unbounded)        => Bound::Unbounded,
+            (Bound::Included(start1), Bound::Excluded(start2)) => Bound::Excluded(if *start1 > 0 { std::cmp::min(*start1 - 1, *start2) } else { *start1 }),
+            (Bound::Included(start1), Bound::Included(start2)) => Bound::Included(std::cmp::min(*start1, *start2)),
+            (Bound::Included(start1), Bound::Unbounded)        => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Excluded(start2))        => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Included(start2))        => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Unbounded)               => Bound::Unbounded,
+        };
+        // Combine the end into a new bound
+        let end: Bound<usize> = match (span1.range.end_bound(), span2.range.end_bound()) {
+            (Bound::Excluded(end1), Bound::Excluded(end2)) => Bound::Excluded(std::cmp::max(*end1, *end2)),
+            // NOTE: This below works because we're changing the included end to an excluded end, e.g.,
+            //   `[..., 4, 5], 6, 7` to `[..., 4, 5, 6), 7`
+            // Thus, we have to +1. If the start is already at the max (`usize::MAX`), then we can instead safely assume it will be the largest number out of the two.
+            (Bound::Excluded(end1), Bound::Included(end2)) => Bound::Excluded(if *end2 < usize::MAX { std::cmp::max(*end1, *end2 + 1) } else { *end2 }),
+            (Bound::Excluded(end1), Bound::Unbounded)      => Bound::Unbounded,
+            (Bound::Included(end1), Bound::Excluded(end2)) => Bound::Excluded(if *end1 < usize::MAX { std::cmp::max(*end1 + 1, *end2) } else { *end1 }),
+            (Bound::Included(end1), Bound::Included(end2)) => Bound::Included(std::cmp::max(*end1, *end2)),
+            (Bound::Included(end1), Bound::Unbounded)      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Excluded(end2))      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Included(end2))      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Unbounded)           => Bound::Unbounded,
+        };
+
         // Construct a new self out of it
         Self {
             file   : span1.file,
             source : span1.source,
-            range  : SpanRange::combined(span1.range, span2.range),
+            range  : ((start, end)).into(),
         }
     }
 
@@ -1191,16 +1398,11 @@ impl<'f, 's> Span<'f, 's> {
     /// span1.consume(span2);
     /// assert_eq!(span1.text(), "Hello, world!");
     /// ```
+    #[inline]
     #[track_caller]
     pub fn consume(&mut self, other: impl AsRef<Span<'f, 's>>) -> &mut Self {
-        let other: &Span = other.as_ref();
-
-        // Assert they talk about the same thing
-        if !std::ptr::eq(self.file as *const str, other.file as *const str) { panic!("Given spans do not have the same `file`"); }
-        if !std::ptr::eq(self.source as *const str, other.source as *const str) { panic!("Given spans do not have the same `source`"); }
-
-        // Compute the new range and we're done
-        self.range.consume(other.range);
+        // Define in terms of combined
+        *self = Span::combined(*self, other);
         self
     }
 
@@ -1263,7 +1465,7 @@ impl<'f, 's> Span<'f, 's> {
     /// A [`Position`] describing the start position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if `start` is out-of-bounds or it is not at the grapheme boundary.
+    /// This function may panic if the internal start is exclusive and [`usize::MAX`]; start is out-of-bounds; or start is not at the grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -1274,19 +1476,20 @@ impl<'f, 's> Span<'f, 's> {
     /// let span3 = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
     /// let span4 = Span::from_idx("<example>", "Hello\nworld!", 1, 0);
     /// 
-    /// assert_eq!(span1.start(), Some(Position::new0(0, 0)));
-    /// assert_eq!(span2.start(), Some(Position::new0(0, 2)));
-    /// assert_eq!(span3.start(), Some(Position::new0(1, 0)));
-    /// assert_eq!(span4.start(), None);
+    /// assert_eq!(span1.start(), Position::new0(0, 0));
+    /// assert_eq!(span2.start(), Position::new0(0, 2));
+    /// assert_eq!(span3.start(), Position::new0(1, 0));
+    /// assert_eq!(span4.start(), Position::new0(0, 1));
     /// 
     /// assert!(std::panic::catch_unwind(|| Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start()).is_err());
     /// ```
     #[inline]
     #[track_caller]
-    pub fn start(&self) -> Option<Position> {
-        match self.range {
-            SpanRange::Range(start, _) => if let SpanBound::Bounded(start) = start { Some(self.pos_of(start)) } else if self.source.len() > 0 { Some(self.pos_of(0)) } else { None },
-            SpanRange::Empty(start)    => if let Some(start) = start { Some(self.pos_of(start)) } else { None },
+    pub fn start(&self) -> Position {
+        match self.range.start_bound() {
+            Bound::Excluded(start)  => if *start < usize::MAX { self.pos_of(*start + 1) } else { panic!("Cannot rescale start position to beyond usize::MAX (i.e., start is usize::MAX and exclusive)") },
+            Bound::Included(start)  => self.pos_of(*start),
+            Bound::Unbounded        => self.pos_of(0),
         }
     }
 
@@ -1296,7 +1499,7 @@ impl<'f, 's> Span<'f, 's> {
     /// A [`Position`] describing the end position in the source text, or [`None`] if we are empty.
     /// 
     /// # Panics
-    /// This function may panic if `end` is out-of-bounds or it is not at the grapheme boundary.
+    /// This function may panic if the internal end is exclusive and `0`; end is out-of-bounds; or end is not at the grapheme boundary.
     /// 
     /// # Example
     /// ```rust
@@ -1308,20 +1511,21 @@ impl<'f, 's> Span<'f, 's> {
     /// let span4 = Span::from_idx("<example>", "Hello\nworld!", 6, 10);
     /// let span5 = Span::from_idx("<example>", "Hello\nworld!", 1, 0);
     /// 
-    /// assert_eq!(span1.end(), Some(Position::new0(0, 11)));
-    /// assert_eq!(span2.end(), Some(Position::new0(1, 5)));
-    /// assert_eq!(span3.end(), Some(Position::new0(0, 2)));
-    /// assert_eq!(span4.end(), Some(Position::new0(1, 4)));
-    /// assert_eq!(span5.end(), None);
+    /// assert_eq!(span1.end(), Position::new0(0, 11));
+    /// assert_eq!(span2.end(), Position::new0(1, 5));
+    /// assert_eq!(span3.end(), Position::new0(0, 2));
+    /// assert_eq!(span4.end(), Position::new0(1, 4));
+    /// assert_eq!(span5.end(), Position::new0(0, 1));
     /// 
     /// assert!(std::panic::catch_unwind(|| Span::from_idx("<example>", "Hÿllo\nworld!", 2, 6).start()).is_err());
     /// ```
     #[inline]
     #[track_caller]
-    pub fn end(&self) -> Option<Position> {
-        match self.range {
-            SpanRange::Range(_, end) => if let SpanBound::Bounded(end) = end { Some(self.pos_of(end)) } else if self.source.len() > 0 { Some(self.pos_of(self.source.len() - 1)) } else { None },
-            SpanRange::Empty(_)      => None,
+    pub fn end(&self) -> Position {
+        match self.range.end_bound() {
+            Bound::Excluded(end)  => if *end > 0 { self.pos_of(*end - 1) } else { panic!("Cannot rescale end position to before 0 (i.e., end is 0 and exclusive)") },
+            Bound::Included(end)  => self.pos_of(*end),
+            Bound::Unbounded      => if self.source.len() > 0 { self.pos_of(self.source.len() - 1) } else { panic!("Cannot rescale end position to before 0 (i.e., end is unbounded and self.source is empty)") },
         }
     }
 
@@ -1353,8 +1557,19 @@ impl<'f, 's> Span<'f, 's> {
     /// 
     /// # Returns
     /// The number of characters.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// assert_eq!(Span::new("<example>", "Hello, world!").len(), 13);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 0, 4).len(), 5);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 7, 12).len(), 6);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 5, 5).len(), 1);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 6, 5).len(), 0);
+    /// ```
     #[inline]
-    pub fn len(&self) -> usize { self.range.len(self.source) }
+    pub fn len(&self) -> usize { self.range.len(self.source.len()) }
 }
 
 impl<'f, 's> PartialEq for Span<'f, 's> {
@@ -1471,16 +1686,12 @@ impl<'f, 's, 's2> nom::FindToken<&'s2 str> for Span<'f, 's> {
 }
 #[cfg(feature = "nom")]
 impl<'f, 's, T: AsRef<str>> nom::FindSubstring<T> for Span<'f, 's> {
-    /// NOTE: We return the full index in the source so that it's compatible as idx for Spans.
     fn find_substring(&self, substr: T) -> Option<usize> {
         let source: &str = self.range.slice(self.source);
         let substr: &str = substr.as_ref();
         for (i, _) in source.grapheme_indices(true) {
             if i + substr.len() <= source.len() && &source[i..i + substr.len()] == substr {
-                // NOTE: We can safely unwrap because this loops never loops if the string is empty.
-                let bound: SpanBound = self.range.start();
-                // However, resolve the bound before we return
-                return Some(if bound.is_bounded() { bound.bound() } else { 0 } + i);
+                return Some(i);
             }
         }
         None
