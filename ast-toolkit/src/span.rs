@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    25 Aug 2023, 18:38:56
+//    25 Aug 2023, 18:45:42
 //  Auto updated?
 //    Yes
 // 
@@ -13,7 +13,7 @@
 //!   track of a node's position in the source text.
 // 
 
-use std::ops::{Bound, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeToInclusive};
+use std::ops::{Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
 use enum_debug::EnumDebug;
 use num_traits::AsPrimitive;
@@ -286,530 +286,549 @@ impl<'s> Length for &'s str {
 
 
 
-/// Defines a start- or end bound.
-/// 
-/// A start- or end bound can be either [`Bounded`](SpanBound::Bounded) (i.e., a specific index) or [`Unbounded`](SpanBound::Unbounded) (i.e., until the end of the range in this direction).
-/// 
-/// See the [`SpanRange`] for more details on how to use this enum.
-/// ```
-#[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
-pub enum SpanBound {
-    /// There is a specific index to which this bound runs. The index is always zero-indexed, inclusive.
-    Bounded(usize),
-    /// This bound runs for the remainder of the spanned text.
-    Unbounded,
-}
+// /// Defines a start- or end bound.
+// /// 
+// /// A start- or end bound can be either [`Bounded`](SpanBound::Bounded) (i.e., a specific index) or [`Unbounded`](SpanBound::Unbounded) (i.e., until the end of the range in this direction).
+// /// 
+// /// See the [`SpanRange`] for more details on how to use this enum.
+// /// ```
+// #[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
+// pub enum SpanBound {
+//     /// There is a specific index to which this bound runs. The index is always zero-indexed, inclusive.
+//     Bounded(usize),
+//     /// This bound runs for the remainder of the spanned text.
+//     Unbounded,
+// }
 
-impl SpanBound {
-    /// Returns whether this SpanBound is [`Bounded`](SpanBound::Bounded).
-    /// 
-    /// # Returns
-    /// True if it is, false if it is another variant.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::SpanBound;
-    /// 
-    /// assert_eq!(SpanBound::Bounded(42).is_bounded(), true);
-    /// assert_eq!(SpanBound::Unbounded.is_bounded(), false);
-    /// ```
-    #[inline]
-    pub fn is_bounded(&self) -> bool { matches!(self, Self::Bounded(_)) }
-    /// Returns the internal bounded index.
-    /// 
-    /// # Returns
-    /// The bounded index in this SpanBound.
-    /// 
-    /// # Panics
-    /// This function panics if the SpanBound is not [`Bounded`](SpanBound::Bounded).
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::SpanBound;
-    /// 
-    /// assert_eq!(SpanBound::Bounded(42).bound(), 42);
-    /// assert!(std::panic::catch_unwind(|| SpanBound::Unbounded.bound()).is_err());
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn bound(&self) -> usize { if let Self::Bounded(bound) = self { *bound } else { panic!("Cannot unwrap a {:?} as a SpanBound::Bounded", self.variant()); } }
+// impl SpanBound {
+//     /// Returns whether this SpanBound is [`Bounded`](SpanBound::Bounded).
+//     /// 
+//     /// # Returns
+//     /// True if it is, false if it is another variant.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::SpanBound;
+//     /// 
+//     /// assert_eq!(SpanBound::Bounded(42).is_bounded(), true);
+//     /// assert_eq!(SpanBound::Unbounded.is_bounded(), false);
+//     /// ```
+//     #[inline]
+//     pub fn is_bounded(&self) -> bool { matches!(self, Self::Bounded(_)) }
+//     /// Returns the internal bounded index.
+//     /// 
+//     /// # Returns
+//     /// The bounded index in this SpanBound.
+//     /// 
+//     /// # Panics
+//     /// This function panics if the SpanBound is not [`Bounded`](SpanBound::Bounded).
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::SpanBound;
+//     /// 
+//     /// assert_eq!(SpanBound::Bounded(42).bound(), 42);
+//     /// assert!(std::panic::catch_unwind(|| SpanBound::Unbounded.bound()).is_err());
+//     /// ```
+//     #[inline]
+//     #[track_caller]
+//     pub fn bound(&self) -> usize { if let Self::Bounded(bound) = self { *bound } else { panic!("Cannot unwrap a {:?} as a SpanBound::Bounded", self.variant()); } }
 
-    /// Returns whether this SpanBound is [`Unbounded`](SpanBound::Unbounded).
-    /// 
-    /// # Returns
-    /// True if it is, false if it is another variant.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::SpanBound;
-    /// 
-    /// assert_eq!(SpanBound::Bounded(42).is_unbounded(), false);
-    /// assert_eq!(SpanBound::Unbounded.is_unbounded(), true);
-    /// ```
-    #[inline]
-    pub fn is_unbounded(&self) -> bool { matches!(self, Self::Unbounded) }
-}
+//     /// Returns whether this SpanBound is [`Unbounded`](SpanBound::Unbounded).
+//     /// 
+//     /// # Returns
+//     /// True if it is, false if it is another variant.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::SpanBound;
+//     /// 
+//     /// assert_eq!(SpanBound::Bounded(42).is_unbounded(), false);
+//     /// assert_eq!(SpanBound::Unbounded.is_unbounded(), true);
+//     /// ```
+//     #[inline]
+//     pub fn is_unbounded(&self) -> bool { matches!(self, Self::Unbounded) }
+// }
 
-impl<N: AsPrimitive<usize>> From<N> for SpanBound {
-    #[inline]
-    fn from(value: N) -> Self { Self::Bounded(value.as_()) }
-}
+// impl<N: AsPrimitive<usize>> From<N> for SpanBound {
+//     #[inline]
+//     fn from(value: N) -> Self { Self::Bounded(value.as_()) }
+// }
 
-impl AsRef<SpanBound> for SpanBound {
-    #[inline]
-    fn as_ref(&self) -> &Self { self }
-}
-impl AsMut<SpanBound> for SpanBound {
-    #[inline]
-    fn as_mut(&mut self) -> &mut Self { self }
-}
-impl From<&SpanBound> for SpanBound {
-    #[inline]
-    fn from(value: &Self) -> Self { *value }
-}
-impl From<&mut SpanBound> for SpanBound {
-    #[inline]
-    fn from(value: &mut Self) -> Self { *value }
-}
+// impl AsRef<SpanBound> for SpanBound {
+//     #[inline]
+//     fn as_ref(&self) -> &Self { self }
+// }
+// impl AsMut<SpanBound> for SpanBound {
+//     #[inline]
+//     fn as_mut(&mut self) -> &mut Self { self }
+// }
+// impl From<&SpanBound> for SpanBound {
+//     #[inline]
+//     fn from(value: &Self) -> Self { *value }
+// }
+// impl From<&mut SpanBound> for SpanBound {
+//     #[inline]
+//     fn from(value: &mut Self) -> Self { *value }
+// }
 
 
 
-/// Properly defines the possible ranges that a [`Span`] can span over.
-/// 
-/// This takes into account the fact that spans might be unbounded _or_ empty.
+// /// Properly defines the possible ranges that a [`Span`] can span over.
+// /// 
+// /// This takes into account the fact that spans might be unbounded _or_ empty.
+// /// 
+// /// # Example
+// /// ```rust
+// /// /* TODO */
+// /// ```
+// #[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
+// pub enum SpanRange {
+//     /// There is some range to span over, given as a (start, end)-tuple.
+//     Range(SpanBound, SpanBound),
+//     /// The range is empty, but it can still have a particular position.
+//     Empty(Option<usize>),
+// }
+
+// impl SpanRange {
+//     /// Constructor for a SpanRange.
+//     /// 
+//     /// # Arguments
+//     /// - `start`: The start [`SpanBound`].
+//     /// - `end`: The end [`SpanBound`].
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange with the given start and end ranges. If they are both [`Bounded`](SpanBound::Bounded) and `start` > `end`, then the range is empty.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// let range = SpanRange::new(SpanBound::Bounded(0), SpanBound::Unbounded);
+//     /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Unbounded));
+//     /// 
+//     /// let range = SpanRange::new(0, 9);
+//     /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Bounded(9)));
+//     /// 
+//     /// let range = SpanRange::new(SpanBound::Bounded(1), SpanBound::Bounded(0));
+//     /// assert_eq!(range, SpanRange::Empty);
+//     /// ```
+//     #[inline]
+//     pub fn new(start: impl Into<SpanBound>, end: impl Into<SpanBound>) -> Self {
+//         let (start, end): (SpanBound, SpanBound) = (start.into(), end.into());
+//         match (start, end) {
+//             (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty(Some(start)) },
+//             (start, end) => Self::Range(start, end),
+//         }
+//     }
+
+//     /// Constructor for a SpanRange that assumes the start is unbounded.
+//     /// 
+//     /// # Arguments
+//     /// - `end`: The end [`SpanBound`].
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange with the start unbounded and the given end range.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::start_unbounded(9), SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(9)));
+//     /// assert_eq!(SpanRange::start_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
+//     /// ```
+//     #[inline]
+//     pub fn start_unbounded(end: impl Into<SpanBound>) -> Self { Self::Range(SpanBound::Unbounded, end.into()) }
+
+//     /// Constructor for a SpanRange that assumes the end is unbounded.
+//     /// 
+//     /// # Arguments
+//     /// - `start`: The start [`SpanBound`].
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange with the given start and unbounded end.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::end_unbounded(9), SpanRange::Range(SpanBound::Bounded(9), SpanBound::Unbounded));
+//     /// assert_eq!(SpanRange::end_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
+//     /// ```
+//     #[inline]
+//     pub fn end_unbounded(start: impl Into<SpanBound>) -> Self { Self::Range(start.into(), SpanBound::Unbounded) }
+
+//     /// Constructor for a SpanRange that assumes both the start and end are unbounded.
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange with an unbounded start and end.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::unbounded(), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
+//     /// ```
+//     #[inline]
+//     pub fn unbounded() -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
+
+//     /// Constructor for a SpanRange that initializes it as empty.
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange that is initialized as empty.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::empty(), SpanRange::Empty(None));
+//     /// ```
+//     #[inline]
+//     pub fn empty() -> Self { Self::Empty(None) }
+//     /// Constructor for a SpanRange that initializes it as empty, but with a position.
+//     /// 
+//     /// # Returns
+//     /// A new SpanRange that is initialized as empty, but with a set start index.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::empty_with_idx(42), SpanRange::Empty(Some(42)));
+//     /// ```
+//     #[inline]
+//     pub fn empty_with_idx(start: impl AsPrimitive<usize>) -> Self { Self::Empty(Some(start.as_())) }
+
+//     /// Constructor for a SpanRange that encapsulates the given two ranges.
+//     /// 
+//     /// Some remarks:
+//     /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
+//     /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
+//     /// 
+//     /// # Arguments
+//     /// - `range1`: The first SpanRange to span over.
+//     /// - `range2`: The second SpanRange to span over.
+//     /// 
+//     /// # Returns
+//     /// A new instance of Self which contains a continious area that snugly spans both `range1` and `range2`.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// let range1 = SpanRange::new(0, 9);
+//     /// let range2 = SpanRange::new(15, 30);
+//     /// let range3 = SpanRange::new(SpanBound::Unbounded, 9);
+//     /// let range4 = SpanRange::new(9, SpanBound::Unbounded);
+//     /// let range5 = SpanRange::empty();
+//     /// 
+//     /// // If everything is bounded, then the range snugly fits the result (communitatively).
+//     /// assert_eq!(SpanRange::combined(range1, range2), SpanRange::new(0, 30));
+//     /// assert_eq!(SpanRange::combined(range2, range1), SpanRange::new(0, 30));
+//     /// 
+//     /// // If either side is unbounded, it propagates
+//     /// assert_eq!(SpanRange::combined(range1, range3), SpanRange::new(SpanBound::Unbounded, 9));
+//     /// assert_eq!(SpanRange::combined(range1, range4), SpanRange::new(0, SpanBound::Unbounded));
+//     /// assert_eq!(SpanRange::combined(range3, range4), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
+//     /// 
+//     /// // Finally, empty does not do anything
+//     /// assert_eq!(SpanRange::combined(range5, range1), range1);
+//     /// assert_eq!(SpanRange::combined(range3, range5), range3);
+//     /// assert_eq!(SpanRange::combined(range5, range5), SpanRange::empty());
+//     /// ```
+//     pub fn combined(range1: impl Into<SpanRange>, range2: impl Into<SpanRange>) -> Self {
+//         let (range1, range2): (SpanRange, SpanRange) = (range1.into(), range2.into());
+
+//         // Unpack the ranges and process any empty ranges
+//         let (start1, end1, start2, end2): (SpanBound, SpanBound, SpanBound, SpanBound) = match (range1, range2) {
+//             (Self::Range(start1, end1), Self::Range(start2, end2)) => (start1, end1, start2, end2),
+//             (range1, Self::Empty(_))                               => { return range1; },
+//             (Self::Empty(_), range2)                               => { return range2; },
+//         };
+
+//         // Match a new start range
+//         let start: SpanBound = match (start1, start2) {
+//             (SpanBound::Bounded(start1), SpanBound::Bounded(start2)) => SpanBound::Bounded(std::cmp::min(start1, start2)),
+//             (SpanBound::Bounded(_), SpanBound::Unbounded)            => SpanBound::Unbounded,
+//             (SpanBound::Unbounded, SpanBound::Bounded(_))            => SpanBound::Unbounded,
+//             (SpanBound::Unbounded, SpanBound::Unbounded)             => SpanBound::Unbounded,
+//         };
+//         // Match a new end range
+//         let end: SpanBound = match (end1, end2) {
+//             (SpanBound::Bounded(end1), SpanBound::Bounded(end2)) => SpanBound::Bounded(std::cmp::max(end1, end2)),
+//             (SpanBound::Bounded(_), SpanBound::Unbounded)        => SpanBound::Unbounded,
+//             (SpanBound::Unbounded, SpanBound::Bounded(_))        => SpanBound::Unbounded,
+//             (SpanBound::Unbounded, SpanBound::Unbounded)         => SpanBound::Unbounded,
+//         };
+
+//         // Create a new range out of it
+//         match (start, end) {
+//             (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty(Some(start)) },
+//             (start, end) => Self::Range(start, end),
+//         }
+//     }
+
+
+
+//     /// Makes this SpanRange "swallow" the given one.
+//     /// 
+//     /// `self` will become a continious area that snugle spans both `self` and `other`.
+//     /// 
+//     /// Some remarks:
+//     /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
+//     /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
+//     /// 
+//     /// # Arguments
+//     /// - `other`: The other SpanRange to consume.
+//     /// 
+//     /// # Returns
+//     /// A mutable reference to self for chaining.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// let mut range1 = SpanRange::new(0, 9);
+//     /// range1.consume(SpanRange::new(15, 30));
+//     /// assert_eq!(range1, SpanRange::new(0, 30));
+//     /// ```
+//     /// (See [`Self::combined()`](SpanRange::combined()) for more examples about this function's behaviour)
+//     #[inline]
+//     pub fn consume(&mut self, other: impl Into<SpanRange>) -> &mut Self {
+//         *self = Self::combined(*self, other);
+//         self
+//     }
+
+//     /// Slices a given string appropriately for this SpanRange.
+//     /// 
+//     /// # Arguments
+//     /// - `text`: The string to slice.
+//     /// 
+//     /// # Returns
+//     /// A slice of the given string, or else a static empty `""` if the range is... well, empty.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// let text = "Hello, world!";
+//     /// assert_eq!(SpanRange::new(0, 4).slice(text), "Hello");
+//     /// assert_eq!(SpanRange::new(7, 11).slice(text), "world");
+//     /// assert_eq!(SpanRange::new(12, 12).slice(text), "!");
+//     /// assert_eq!(SpanRange::new(0, 255).slice(text), "Hello, world!");
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text), "Hello");
+//     /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).slice(text), "world!");
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text), "Hello, world!");
+//     /// assert_eq!(SpanRange::empty().slice(text), "");
+//     /// ```
+//     #[inline]
+//     pub fn slice<'s>(&'_ self, text: &'s str) -> &'s str {
+//         match self {
+//             Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < text.len() { if *end < text.len() { &text[*start..=*end] } else { &text[*start..] } } else { "" },
+//             Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < text.len() { &text[*start..] } else { "" },
+//             Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < text.len() { &text[..=*end] } else { text },
+//             Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => text,
+//             Self::Empty(_)                                                  => "",
+//         }
+//     }
+
+
+
+//     /// Returns if this SpanRange is a [`Range`](SpanRange::Range) (i.e., non-empty).
+//     /// 
+//     /// # Returns
+//     /// True if it is, or false otherwise.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::new(0, 9).is_range(), true);
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_range(), true);
+//     /// assert_eq!(SpanRange::empty().is_range(), false);
+//     /// assert_eq!(SpanRange::new(9, 0).is_range(), false);
+//     /// ```
+//     #[inline]
+//     pub fn is_range(&self) -> bool { matches!(self, Self::Range(_, _)) }
+//     /// Returns the internal start bound.
+//     /// 
+//     /// # Returns
+//     /// The start [`SpanBound`].
+//     /// 
+//     /// # Panics
+//     /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::new(0, 9).start(), SpanBound::Bounded(0));
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).start(), SpanBound::Unbounded);
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::empty().start()).is_err());
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).start()).is_err());
+//     /// ```
+//     #[inline]
+//     pub fn start(&self) -> SpanBound { if let Self::Range(start, _) = self { *start } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
+//     /// Returns the internal end bound.
+//     /// 
+//     /// # Returns
+//     /// The end [`SpanBound`].
+//     /// 
+//     /// # Panics
+//     /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::new(0, 9).end(), SpanBound::Bounded(9));
+//     /// assert_eq!(SpanRange::new(0, SpanBound::Unbounded).end(), SpanBound::Unbounded);
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::empty().end()).is_err());
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).end()).is_err());
+//     /// ```
+//     #[inline]
+//     pub fn end(&self) -> SpanBound { if let Self::Range(_, end) = self { *end } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
+//     /// Returns the internal start- and end bounds.
+//     /// 
+//     /// # Returns
+//     /// A tuple with the start- and end [`SpanBound`]s, respectively.
+//     /// 
+//     /// # Panics
+//     /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::new(0, 9).range(), (SpanBound::Bounded(0), SpanBound::Bounded(9)));
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).range(), (SpanBound::Unbounded, SpanBound::Bounded(9)));
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::empty().range()).is_err());
+//     /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).range()).is_err());
+//     /// ```
+//     #[inline]
+//     pub fn range(&self) -> (SpanBound, SpanBound) { if let Self::Range(start, end) = self { (*start, *end) } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
+
+//     /// Returns if this SpanRange is [`Empty`](SpanRange::Empty).
+//     /// 
+//     /// # Returns
+//     /// True if it is, or false otherwise.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// assert_eq!(SpanRange::new(0, 9).is_empty(), false);
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_empty(), false);
+//     /// assert_eq!(SpanRange::empty().is_empty(), true);
+//     /// assert_eq!(SpanRange::new(9, 0).is_empty(), true);
+//     /// ```
+//     #[inline]
+//     pub fn is_empty(&self) -> bool { matches!(self, Self::Empty(_)) }
+
+//     /// Returns the length of the range, i.e., the "number of graphemes" it catches.
+//     /// 
+//     /// # Arguments
+//     /// - `length`: Something that gives us the size of the thing we're ranging over. This can be either a number, or the string itself. See [`Length`] for more details.
+//     /// 
+//     /// # Returns
+//     /// The number of things captured by this range.
+//     /// 
+//     /// # Example
+//     /// ```rust
+//     /// use ast_toolkit::span::{SpanBound, SpanRange};
+//     /// 
+//     /// let text = "Hello, world!";
+//     /// assert_eq!(SpanRange::new(0, 4).len(text.len()), 5);
+//     /// assert_eq!(SpanRange::new(7, 11).len(text), 5);
+//     /// assert_eq!(SpanRange::new(12, 12).len(text.len()), 1);
+//     /// assert_eq!(SpanRange::new(0, 255).len(text), 13);
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).len(text.len()), 5);
+//     /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).len(text), 6);
+//     /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).len(text.len()), 13);
+//     /// assert_eq!(SpanRange::empty().len(text), 0);
+//     /// ```
+//     #[inline]
+//     pub fn len(&self, length: impl Length) -> usize {
+//         let length: usize = length.len();
+//         match self {
+//             Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < length { if *end < length { 1 + *end - *start } else { length - *start } } else { 0 },
+//             Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < length { length - *start } else { 0 },
+//             Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < length { 1 + *end } else { length },
+//             Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => length,
+//             Self::Empty(_)                                                  => 0,
+//         }
+//     }
+// }
+
+// impl<I: AsPrimitive<usize>> From<(Option<I>, Option<I>)> for SpanRange {
+//     #[inline]
+//     fn from(value: (Option<I>, Option<I>)) -> Self {
+//         match value {
+//             (Some(left), Some(right)) => Self::from(left..=right),
+//             (Some(left), None)        => Self::from(left..),
+//             (None, Some(right))       => Self::from(..=right),
+//             (None, None)              => Self::from(..),
+//         }
+//     }
+// }
+// impl<I: AsPrimitive<usize>> From<RangeFrom<I>> for SpanRange {
+//     #[inline]
+//     fn from(value: RangeFrom<I>) -> Self { Self::Range(SpanBound::Bounded(value.start.as_()), SpanBound::Unbounded) }
+// }
+// impl From<RangeFull> for SpanRange {
+//     #[inline]
+//     fn from(_value: RangeFull) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
+// }
+// impl<I: AsPrimitive<usize>> From<RangeInclusive<I>> for SpanRange {
+//     #[inline]
+//     fn from(value: RangeInclusive<I>) -> Self {
+//         let (start, end): (usize, usize) = (value.start().as_(), value.end().as_());
+//         if start <= end {
+//             Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end))
+//         } else {
+//             Self::Empty(Some(start))
+//         }
+//     }
+// }
+// impl<I: AsPrimitive<usize>> From<RangeToInclusive<I>> for SpanRange {
+//     #[inline]
+//     fn from(value: RangeToInclusive<I>) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Bounded(value.end.as_())) }
+// }
+
+// impl AsRef<SpanRange> for SpanRange {
+//     #[inline]
+//     fn as_ref(&self) -> &Self { self }
+// }
+// impl AsMut<SpanRange> for SpanRange {
+//     #[inline]
+//     fn as_mut(&mut self) -> &mut Self { self }
+// }
+// impl From<&SpanRange> for SpanRange {
+//     #[inline]
+//     fn from(value: &Self) -> Self { *value }
+// }
+// impl From<&mut SpanRange> for SpanRange {
+//     #[inline]
+//     fn from(value: &mut Self) -> Self { *value }
+// }
+
+/// Abstracts over Rust's (current set of) ranges such that we won't need a dynamic trait object when referring to all of them (and can thus still support [`Copy`]).
 /// 
 /// # Example
 /// ```rust
-/// /* TODO */
+/// 
 /// ```
 #[derive(Clone, Copy, Debug, EnumDebug, Eq, Hash, PartialEq)]
 pub enum SpanRange {
-    /// There is some range to span over, given as a (start, end)-tuple.
-    Range(SpanBound, SpanBound),
-    /// The range is empty, but it can still have a particular position.
-    Empty(Option<usize>),
+    /// Unofficially unpacks to a [`Range`]. This means that `start` is inclusive, `end` exclusive.
+    Range { start: usize, end: usize },
 }
 
-impl SpanRange {
-    /// Constructor for a SpanRange.
-    /// 
-    /// # Arguments
-    /// - `start`: The start [`SpanBound`].
-    /// - `end`: The end [`SpanBound`].
-    /// 
-    /// # Returns
-    /// A new SpanRange with the given start and end ranges. If they are both [`Bounded`](SpanBound::Bounded) and `start` > `end`, then the range is empty.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// let range = SpanRange::new(SpanBound::Bounded(0), SpanBound::Unbounded);
-    /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Unbounded));
-    /// 
-    /// let range = SpanRange::new(0, 9);
-    /// assert_eq!(range, SpanRange::Range(SpanBound::Bounded(0), SpanBound::Bounded(9)));
-    /// 
-    /// let range = SpanRange::new(SpanBound::Bounded(1), SpanBound::Bounded(0));
-    /// assert_eq!(range, SpanRange::Empty);
-    /// ```
+impl From<Range<usize>> for SpanRange {
     #[inline]
-    pub fn new(start: impl Into<SpanBound>, end: impl Into<SpanBound>) -> Self {
-        let (start, end): (SpanBound, SpanBound) = (start.into(), end.into());
-        match (start, end) {
-            (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty(Some(start)) },
-            (start, end) => Self::Range(start, end),
-        }
+    fn from(value: Range<usize>) -> Self {
+        Self::Range { start: value.start, end: value.end }
     }
-
-    /// Constructor for a SpanRange that assumes the start is unbounded.
-    /// 
-    /// # Arguments
-    /// - `end`: The end [`SpanBound`].
-    /// 
-    /// # Returns
-    /// A new SpanRange with the start unbounded and the given end range.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::start_unbounded(9), SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(9)));
-    /// assert_eq!(SpanRange::start_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
-    /// ```
-    #[inline]
-    pub fn start_unbounded(end: impl Into<SpanBound>) -> Self { Self::Range(SpanBound::Unbounded, end.into()) }
-
-    /// Constructor for a SpanRange that assumes the end is unbounded.
-    /// 
-    /// # Arguments
-    /// - `start`: The start [`SpanBound`].
-    /// 
-    /// # Returns
-    /// A new SpanRange with the given start and unbounded end.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::end_unbounded(9), SpanRange::Range(SpanBound::Bounded(9), SpanBound::Unbounded));
-    /// assert_eq!(SpanRange::end_unbounded(SpanBound::Unbounded), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
-    /// ```
-    #[inline]
-    pub fn end_unbounded(start: impl Into<SpanBound>) -> Self { Self::Range(start.into(), SpanBound::Unbounded) }
-
-    /// Constructor for a SpanRange that assumes both the start and end are unbounded.
-    /// 
-    /// # Returns
-    /// A new SpanRange with an unbounded start and end.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::unbounded(), SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded));
-    /// ```
-    #[inline]
-    pub fn unbounded() -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
-
-    /// Constructor for a SpanRange that initializes it as empty.
-    /// 
-    /// # Returns
-    /// A new SpanRange that is initialized as empty.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::empty(), SpanRange::Empty(None));
-    /// ```
-    #[inline]
-    pub fn empty() -> Self { Self::Empty(None) }
-    /// Constructor for a SpanRange that initializes it as empty, but with a position.
-    /// 
-    /// # Returns
-    /// A new SpanRange that is initialized as empty, but with a set start index.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::empty_with_idx(42), SpanRange::Empty(Some(42)));
-    /// ```
-    #[inline]
-    pub fn empty_with_idx(start: impl AsPrimitive<usize>) -> Self { Self::Empty(Some(start.as_())) }
-
-    /// Constructor for a SpanRange that encapsulates the given two ranges.
-    /// 
-    /// Some remarks:
-    /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
-    /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
-    /// 
-    /// # Arguments
-    /// - `range1`: The first SpanRange to span over.
-    /// - `range2`: The second SpanRange to span over.
-    /// 
-    /// # Returns
-    /// A new instance of Self which contains a continious area that snugly spans both `range1` and `range2`.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// let range1 = SpanRange::new(0, 9);
-    /// let range2 = SpanRange::new(15, 30);
-    /// let range3 = SpanRange::new(SpanBound::Unbounded, 9);
-    /// let range4 = SpanRange::new(9, SpanBound::Unbounded);
-    /// let range5 = SpanRange::empty();
-    /// 
-    /// // If everything is bounded, then the range snugly fits the result (communitatively).
-    /// assert_eq!(SpanRange::combined(range1, range2), SpanRange::new(0, 30));
-    /// assert_eq!(SpanRange::combined(range2, range1), SpanRange::new(0, 30));
-    /// 
-    /// // If either side is unbounded, it propagates
-    /// assert_eq!(SpanRange::combined(range1, range3), SpanRange::new(SpanBound::Unbounded, 9));
-    /// assert_eq!(SpanRange::combined(range1, range4), SpanRange::new(0, SpanBound::Unbounded));
-    /// assert_eq!(SpanRange::combined(range3, range4), SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded));
-    /// 
-    /// // Finally, empty does not do anything
-    /// assert_eq!(SpanRange::combined(range5, range1), range1);
-    /// assert_eq!(SpanRange::combined(range3, range5), range3);
-    /// assert_eq!(SpanRange::combined(range5, range5), SpanRange::empty());
-    /// ```
-    pub fn combined(range1: impl Into<SpanRange>, range2: impl Into<SpanRange>) -> Self {
-        let (range1, range2): (SpanRange, SpanRange) = (range1.into(), range2.into());
-
-        // Unpack the ranges and process any empty ranges
-        let (start1, end1, start2, end2): (SpanBound, SpanBound, SpanBound, SpanBound) = match (range1, range2) {
-            (Self::Range(start1, end1), Self::Range(start2, end2)) => (start1, end1, start2, end2),
-            (range1, Self::Empty(_))                               => { return range1; },
-            (Self::Empty(_), range2)                               => { return range2; },
-        };
-
-        // Match a new start range
-        let start: SpanBound = match (start1, start2) {
-            (SpanBound::Bounded(start1), SpanBound::Bounded(start2)) => SpanBound::Bounded(std::cmp::min(start1, start2)),
-            (SpanBound::Bounded(_), SpanBound::Unbounded)            => SpanBound::Unbounded,
-            (SpanBound::Unbounded, SpanBound::Bounded(_))            => SpanBound::Unbounded,
-            (SpanBound::Unbounded, SpanBound::Unbounded)             => SpanBound::Unbounded,
-        };
-        // Match a new end range
-        let end: SpanBound = match (end1, end2) {
-            (SpanBound::Bounded(end1), SpanBound::Bounded(end2)) => SpanBound::Bounded(std::cmp::max(end1, end2)),
-            (SpanBound::Bounded(_), SpanBound::Unbounded)        => SpanBound::Unbounded,
-            (SpanBound::Unbounded, SpanBound::Bounded(_))        => SpanBound::Unbounded,
-            (SpanBound::Unbounded, SpanBound::Unbounded)         => SpanBound::Unbounded,
-        };
-
-        // Create a new range out of it
-        match (start, end) {
-            (SpanBound::Bounded(start), SpanBound::Bounded(end)) => if start <= end { Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) } else { Self::Empty(Some(start)) },
-            (start, end) => Self::Range(start, end),
-        }
-    }
-
-
-
-    /// Makes this SpanRange "swallow" the given one.
-    /// 
-    /// `self` will become a continious area that snugle spans both `self` and `other`.
-    /// 
-    /// Some remarks:
-    /// - An unbounded side always travels (e.g., any range has an unbounded start, the result will also be unbounded start)
-    /// - An empty range counts as no change (e.g., if `range1` is empty, `range2` is passed as-is; only if both are empty is empty returned)
-    /// 
-    /// # Arguments
-    /// - `other`: The other SpanRange to consume.
-    /// 
-    /// # Returns
-    /// A mutable reference to self for chaining.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// let mut range1 = SpanRange::new(0, 9);
-    /// range1.consume(SpanRange::new(15, 30));
-    /// assert_eq!(range1, SpanRange::new(0, 30));
-    /// ```
-    /// (See [`Self::combined()`](SpanRange::combined()) for more examples about this function's behaviour)
-    #[inline]
-    pub fn consume(&mut self, other: impl Into<SpanRange>) -> &mut Self {
-        *self = Self::combined(*self, other);
-        self
-    }
-
-    /// Slices a given string appropriately for this SpanRange.
-    /// 
-    /// # Arguments
-    /// - `text`: The string to slice.
-    /// 
-    /// # Returns
-    /// A slice of the given string, or else a static empty `""` if the range is... well, empty.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// let text = "Hello, world!";
-    /// assert_eq!(SpanRange::new(0, 4).slice(text), "Hello");
-    /// assert_eq!(SpanRange::new(7, 11).slice(text), "world");
-    /// assert_eq!(SpanRange::new(12, 12).slice(text), "!");
-    /// assert_eq!(SpanRange::new(0, 255).slice(text), "Hello, world!");
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).slice(text), "Hello");
-    /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).slice(text), "world!");
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).slice(text), "Hello, world!");
-    /// assert_eq!(SpanRange::empty().slice(text), "");
-    /// ```
-    #[inline]
-    pub fn slice<'s>(&'_ self, text: &'s str) -> &'s str {
-        match self {
-            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < text.len() { if *end < text.len() { &text[*start..=*end] } else { &text[*start..] } } else { "" },
-            Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < text.len() { &text[*start..] } else { "" },
-            Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < text.len() { &text[..=*end] } else { text },
-            Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => text,
-            Self::Empty(_)                                                  => "",
-        }
-    }
-
-
-
-    /// Returns if this SpanRange is a [`Range`](SpanRange::Range) (i.e., non-empty).
-    /// 
-    /// # Returns
-    /// True if it is, or false otherwise.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::new(0, 9).is_range(), true);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_range(), true);
-    /// assert_eq!(SpanRange::empty().is_range(), false);
-    /// assert_eq!(SpanRange::new(9, 0).is_range(), false);
-    /// ```
-    #[inline]
-    pub fn is_range(&self) -> bool { matches!(self, Self::Range(_, _)) }
-    /// Returns the internal start bound.
-    /// 
-    /// # Returns
-    /// The start [`SpanBound`].
-    /// 
-    /// # Panics
-    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::new(0, 9).start(), SpanBound::Bounded(0));
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).start(), SpanBound::Unbounded);
-    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().start()).is_err());
-    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).start()).is_err());
-    /// ```
-    #[inline]
-    pub fn start(&self) -> SpanBound { if let Self::Range(start, _) = self { *start } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
-    /// Returns the internal end bound.
-    /// 
-    /// # Returns
-    /// The end [`SpanBound`].
-    /// 
-    /// # Panics
-    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::new(0, 9).end(), SpanBound::Bounded(9));
-    /// assert_eq!(SpanRange::new(0, SpanBound::Unbounded).end(), SpanBound::Unbounded);
-    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().end()).is_err());
-    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).end()).is_err());
-    /// ```
-    #[inline]
-    pub fn end(&self) -> SpanBound { if let Self::Range(_, end) = self { *end } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
-    /// Returns the internal start- and end bounds.
-    /// 
-    /// # Returns
-    /// A tuple with the start- and end [`SpanBound`]s, respectively.
-    /// 
-    /// # Panics
-    /// This function panics if we are not a [`Range`](SpanRange::Range) but empty instead.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::new(0, 9).range(), (SpanBound::Bounded(0), SpanBound::Bounded(9)));
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).range(), (SpanBound::Unbounded, SpanBound::Bounded(9)));
-    /// assert!(std::panic::catch_unwind(|| SpanRange::empty().range()).is_err());
-    /// assert!(std::panic::catch_unwind(|| SpanRange::new(9, 0).range()).is_err());
-    /// ```
-    #[inline]
-    pub fn range(&self) -> (SpanBound, SpanBound) { if let Self::Range(start, end) = self { (*start, *end) } else { panic!("Cannot unwrap {:?} as a SpanRange::Range", self.variant()); } }
-
-    /// Returns if this SpanRange is [`Empty`](SpanRange::Empty).
-    /// 
-    /// # Returns
-    /// True if it is, or false otherwise.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// assert_eq!(SpanRange::new(0, 9).is_empty(), false);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 9).is_empty(), false);
-    /// assert_eq!(SpanRange::empty().is_empty(), true);
-    /// assert_eq!(SpanRange::new(9, 0).is_empty(), true);
-    /// ```
-    #[inline]
-    pub fn is_empty(&self) -> bool { matches!(self, Self::Empty(_)) }
-
-    /// Returns the length of the range, i.e., the "number of graphemes" it catches.
-    /// 
-    /// # Arguments
-    /// - `length`: Something that gives us the size of the thing we're ranging over. This can be either a number, or the string itself. See [`Length`] for more details.
-    /// 
-    /// # Returns
-    /// The number of things captured by this range.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::span::{SpanBound, SpanRange};
-    /// 
-    /// let text = "Hello, world!";
-    /// assert_eq!(SpanRange::new(0, 4).len(text.len()), 5);
-    /// assert_eq!(SpanRange::new(7, 11).len(text), 5);
-    /// assert_eq!(SpanRange::new(12, 12).len(text.len()), 1);
-    /// assert_eq!(SpanRange::new(0, 255).len(text), 13);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, 4).len(text.len()), 5);
-    /// assert_eq!(SpanRange::new(7, SpanBound::Unbounded).len(text), 6);
-    /// assert_eq!(SpanRange::new(SpanBound::Unbounded, SpanBound::Unbounded).len(text.len()), 13);
-    /// assert_eq!(SpanRange::empty().len(text), 0);
-    /// ```
-    #[inline]
-    pub fn len(&self, length: impl Length) -> usize {
-        let length: usize = length.len();
-        match self {
-            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => if *start <= *end && *start < length { if *end < length { 1 + *end - *start } else { length - *start } } else { 0 },
-            Self::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => if *start < length { length - *start } else { 0 },
-            Self::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if *end < length { 1 + *end } else { length },
-            Self::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => length,
-            Self::Empty(_)                                                  => 0,
-        }
-    }
-}
-
-impl<I: AsPrimitive<usize>> From<(Option<I>, Option<I>)> for SpanRange {
-    #[inline]
-    fn from(value: (Option<I>, Option<I>)) -> Self {
-        match value {
-            (Some(left), Some(right)) => Self::from(left..=right),
-            (Some(left), None)        => Self::from(left..),
-            (None, Some(right))       => Self::from(..=right),
-            (None, None)              => Self::from(..),
-        }
-    }
-}
-impl<I: AsPrimitive<usize>> From<RangeFrom<I>> for SpanRange {
-    #[inline]
-    fn from(value: RangeFrom<I>) -> Self { Self::Range(SpanBound::Bounded(value.start.as_()), SpanBound::Unbounded) }
-}
-impl From<RangeFull> for SpanRange {
-    #[inline]
-    fn from(_value: RangeFull) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Unbounded) }
-}
-impl<I: AsPrimitive<usize>> From<RangeInclusive<I>> for SpanRange {
-    #[inline]
-    fn from(value: RangeInclusive<I>) -> Self {
-        let (start, end): (usize, usize) = (value.start().as_(), value.end().as_());
-        if start <= end {
-            Self::Range(SpanBound::Bounded(start), SpanBound::Bounded(end))
-        } else {
-            Self::Empty(Some(start))
-        }
-    }
-}
-impl<I: AsPrimitive<usize>> From<RangeToInclusive<I>> for SpanRange {
-    #[inline]
-    fn from(value: RangeToInclusive<I>) -> Self { Self::Range(SpanBound::Unbounded, SpanBound::Bounded(value.end.as_())) }
-}
-
-impl AsRef<SpanRange> for SpanRange {
-    #[inline]
-    fn as_ref(&self) -> &Self { self }
-}
-impl AsMut<SpanRange> for SpanRange {
-    #[inline]
-    fn as_mut(&mut self) -> &mut Self { self }
-}
-impl From<&SpanRange> for SpanRange {
-    #[inline]
-    fn from(value: &Self) -> Self { *value }
-}
-impl From<&mut SpanRange> for SpanRange {
-    #[inline]
-    fn from(value: &mut Self) -> Self { *value }
 }
 
 
@@ -856,7 +875,7 @@ pub struct Span<'f, 's> {
     /// The entire source text to snippet.
     pub source : &'s str,
     /// The start & end position of this span, both inclusive.
-    pub range  : SpanRange,
+    pub range  : Box<dyn RangeBounds<usize>>,
 }
 
 impl<'f, 's> Span<'f, 's> {
