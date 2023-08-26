@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    25 Aug 2023, 22:45:26
+//    26 Aug 2023, 11:20:27
 //  Auto updated?
 //    Yes
 // 
@@ -96,7 +96,7 @@ mod nom_tests {
             // Compare them
             let mut builder = <Span as nom::ExtendInto>::new_builder(&span1);
             <Span as nom::ExtendInto>::extend_into(&span2, &mut builder);
-            assert_eq!(builder.text(), SpanRange::combined(span1.range, span2.range).slice(code));
+            assert_eq!(builder.text(), Span::combined(span1, span2).range.slice(code));
         }
     }
     #[test]
@@ -1612,7 +1612,7 @@ impl<'f, 's> nom::AsBytes for Span<'f, 's> {
 impl<'f, 's, S: AsRef<str>> nom::Compare<S> for Span<'f, 's> {
     #[inline]
     fn compare(&self, t: S) -> nom::CompareResult {
-        let s: &str = self.range.slice(self.source);
+        let s: &str = self.text();
         let t: &str = t.as_ref();
 
         // Compare string-wise
@@ -1626,7 +1626,7 @@ impl<'f, 's, S: AsRef<str>> nom::Compare<S> for Span<'f, 's> {
 
     #[inline]
     fn compare_no_case(&self, t: S) -> nom::CompareResult {
-        let s: &str = self.range.slice(self.source);
+        let s: &str = self.text();
         let t: &str = t.as_ref();
 
         // Compare string-wise
@@ -1736,42 +1736,44 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
     #[inline]
     #[track_caller]
     fn take(&self, count: usize) -> Self {
+        // Panic if out-of-range (required by the function itself)
         if count > self.range.len(self.source.len()) { panic!("Given count {} is out-of-range for Span of size {}", count, self.range.len(self.source.len())); }
-        if count > 0 {
-            Self {
-                file   : self.file,
-                source : self.source,
-                range  : match self.range {
-                    SpanRange::Range(SpanBound::Bounded(start), _) => SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(start + count - 1)),
-                    SpanRange::Range(SpanBound::Unbounded, _)      => SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(count - 1)),
-                    SpanRange::Empty(_)                            => { unreachable!(); },
-                },
-            }
-        } else {
-            Self {
-                file   : self.file,
-                source : self.source,
-                range  : SpanRange::Empty(match self.range { SpanRange::Range(SpanBound::Bounded(start), _) => Some(start), SpanRange::Range(SpanBound::Unbounded, _) => Some(0), SpanRange::Empty(start) => start }),
-            }
+
+        // Find a new range for the taken span, which is easy because we know that count <= end
+        let range: SpanRange = match self.range.start_bound() {
+            Bound::Included(start) => SpanRange::from(*start..count),
+            Bound::Unbounded       => SpanRange::from(0..count),
+
+            // Dunno what to do with these
+            Bound::Excluded(start) => { panic!("Rust does not appear to support ranges with exclusive starts at the time of writing"); },
+        };
+
+        // Return a new Span with that
+        Span {
+            file   : self.file,
+            source : self.source,
+            range,
         }
     }
 
     #[inline]
     #[track_caller]
     fn take_split(&self, count: usize) -> (Self, Self) {
+        // Panic if out-of-range (required by the function itself)
         if count > self.range.len(self.source.len()) { panic!("Given count {} is out-of-range for Span of size {}", count, self.range.len(self.source.len())); }
+        // The first span can be `self.take()`en
+        let first: Span = self.take(count);
+
+        // Compute the range of the second span
+        let range: SpanRange = SpanRange::from((Bound::Included(count), self.range.end_bound().cloned()));
+
+        // We can return both of them
         (
-            self.take(count),
-            Self {
+            first,
+            Span {
                 file   : self.file,
                 source : self.source,
-                range  : match self.range {
-                    SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => { let count: usize = start + count; if count <= end { SpanRange::Range(SpanBound::Bounded(count), SpanBound::Bounded(end)) } else { SpanRange::Empty(Some(count)) } },
-                    SpanRange::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => { let count: usize = start + count; SpanRange::Range(SpanBound::Bounded(count), SpanBound::Unbounded) },
-                    SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => if count <= end { SpanRange::Range(SpanBound::Bounded(count), SpanBound::Bounded(end)) } else { SpanRange::Empty(Some(count)) },
-                    SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => SpanRange::Range(SpanBound::Bounded(count), SpanBound::Unbounded),
-                    SpanRange::Empty(_)                                                  => { unreachable!(); },
-                },
+                range,
             }
         )
     }
