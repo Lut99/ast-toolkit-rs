@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:44
 //  Last edited:
-//    26 Aug 2023, 11:20:27
+//    26 Aug 2023, 18:06:17
 //  Auto updated?
 //    Yes
 // 
@@ -237,37 +237,6 @@ mod nom_tests {
         assert_eq!(span.split_at_position_complete(|c| c == 't'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=7), Span::from_range("<example>", "Example text!", 8..))));
         assert_eq!(span.split_at_position_complete(|c| c == '!'), Ok::<I, E>((Span::from_range("<example>", "Example text!", ..=11), Span::from_range("<example>", "Example text!", 12..))));
         assert_eq!(span.split_at_position_complete(|c| c == '_'), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
-    }
-}
-
-
-
-
-
-/***** HELPER FUNCTIONS *****/
-/// Resolves a [`SpanRange`] to a concrete set of indices.
-/// 
-/// # Arguments
-/// - `span`: The [`SpanRange`] to resolve.
-/// - `max_len`: The length of the thing is spans. This is needed to resolve unbounded.
-/// 
-/// # Returns
-/// A tuple with the start (inclusive), end (inclusive). May be out-of-range.
-fn resolve_span(span: impl Into<SpanRange>, max_len: impl AsPrimitive<usize>) -> (usize, usize) {
-    let span: SpanRange = span.into();
-    let max_len: usize = max_len.as_();
-
-    // Just match the possible bounds
-    match (span.start_bound(), span.end_bound()) {
-        (Bound::Excluded(start), Bound::Excluded(end)) => (if *start > 0 { *start - 1 } else { 0 }, if *end > 0 { *end - 1 } else { 0 }),
-        (Bound::Excluded(start), Bound::Included(end)) => (if *start > 0 { *start - 1 } else { 0 }, *end),
-        (Bound::Excluded(start), Bound::Unbounded)     => (if *start > 0 { *start - 1 } else { 0 }, if max_len > 0 { max_len - 1 } else { 0 }),
-        (Bound::Included(start), Bound::Excluded(end)) => (*start, if *end > 0 { *end - 1 } else { 0 }),
-        (Bound::Included(start), Bound::Included(end)) => (*start, *end),
-        (Bound::Included(start), Bound::Unbounded)     => (*start, if max_len > 0 { max_len - 1 } else { 0 }),
-        (Bound::Unbounded, Bound::Excluded(end))       => (0, if *end > 0 { *end - 1 } else { 0 }),
-        (Bound::Unbounded, Bound::Included(end))       => (0, *end),
-        (Bound::Unbounded, Bound::Unbounded)           => (0, if max_len > 0 { max_len - 1 } else { 0 }),
     }
 }
 
@@ -1553,6 +1522,22 @@ impl<'f, 's> Span<'f, 's> {
 
 
 
+    /// Returns if this Span would return a non-empty text.
+    /// 
+    /// # Returns
+    /// True if this Span spans nothing, or false otherwise.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// assert_eq!(Span::new("<example>", "Hello, world!").is_empty(), false);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 0, 4).is_empty(), false);
+    /// assert_eq!(Span::from_idx("<example>", "Hello, world!", 6, 5).is_empty(), true);
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.len() > 0 }
+
     /// Returns the number of logical units that this Span spans.
     /// 
     /// # Returns
@@ -1786,23 +1771,15 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     where
         P: Fn(Self::Item) -> bool,
     {
-        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
-                return Ok((
-                    // We create a new span if it's non-empty
-                    if i > 0 {
-                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
-                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
-                    } else {
-                        Span { file: self.file, source: self.source, range: SpanRange::Empty(match self.range { SpanRange::Range(SpanBound::Bounded(start), _) => Some(start), SpanRange::Range(SpanBound::Unbounded, _) => Some(0), SpanRange::Empty(start) => start }) }
-                    },
-                    // This one will never be empty because the c is part of the split
-                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
-                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
-                ));
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                return Ok(self.take_split(i));
             }
         }
         Err(nom::Err::Incomplete(nom::Needed::Unknown))
@@ -1811,24 +1788,16 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     where
         P: Fn(Self::Item) -> bool,
     {
-        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
-                return Ok((
-                    // We create a new span if it's non-empty
-                    if i > 0 {
-                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
-                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
-                    } else {
-                        // We don't want no empty slices! Instead, fail
-                        return Err(nom::Err::Failure(E::from_error_kind(*self, e)));
-                    },
-                    // This one will never be empty because the c is part of the split
-                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
-                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
-                ));
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                let (split, rem): (Span, Span) = self.take_split(i);
+                if rem.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
             }
         }
         Err(nom::Err::Incomplete(nom::Needed::Unknown))
@@ -1838,24 +1807,16 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     where
         P: Fn(Self::Item) -> bool,
     {
-        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
-                return Ok((
-                    // We create a new span if it's non-empty
-                    if i > 0 {
-                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
-                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
-                    } else {
-                        // We don't want no empty slices! Instead, fail
-                        return Err(nom::Err::Failure(E::from_error_kind(*self, e)));
-                    },
-                    // This one will never be empty because the c is part of the split
-                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
-                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
-                ));
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                let (split, rem): (Span, Span) = self.take_split(i);
+                if rem.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
             }
         }
 
@@ -1866,23 +1827,15 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     where
         P: Fn(Self::Item) -> bool,
     {
-        let mut chars = self.range.slice(self.source).char_indices().peekable();
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
-                return Ok((
-                    // We create a new span if it's non-empty
-                    if i > 0 {
-                        // NOTE: We can safely call `.start()` because this loop is only ever run if the range is non-empty.
-                        Span { file: self.file, source: self.source, range: SpanRange::Range(self.range.start(), SpanBound::Bounded(i - 1)) }
-                    } else {
-                        Span { file: self.file, source: self.source, range: SpanRange::Empty(match self.range { SpanRange::Range(SpanBound::Bounded(start), _) => Some(start), SpanRange::Range(SpanBound::Unbounded, _) => Some(0), SpanRange::Empty(start) => start }) }
-                    },
-                    // This one will never be empty because the c is part of the split
-                    // NOTE: We can safely call `.end()` because this loop is only ever run if the range is non-empty.
-                    Span { file: self.file, source: self.source, range: SpanRange::Range(SpanBound::Bounded(i), self.range.end()) },
-                ));
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                return Ok(self.take_split(i));
             }
         }
 
@@ -1895,56 +1848,55 @@ impl<'f, 's> nom::Offset for Span<'f, 's> {
     #[inline]
     #[track_caller]
     fn offset(&self, second: &Self) -> usize {
-        // Get some bound values
-        let start1: usize = match self.range {
-            SpanRange::Range(SpanBound::Bounded(start), _) => start,
-            SpanRange::Range(SpanBound::Unbounded, _)      => 0,
-            SpanRange::Empty(Some(start))                  => start,
-            SpanRange::Empty(None)                         => { panic!("Cannot get offset of empty Span"); },
-        };
-        let start2: usize = match second.range {
-            SpanRange::Range(SpanBound::Bounded(start), _) => start,
-            SpanRange::Range(SpanBound::Unbounded, _)      => 0,
-            SpanRange::Empty(Some(start))                  => start,
-            SpanRange::Empty(None)                         => { panic!("Cannot get offset of empty Span"); },
-        };
+        // Compare the starts
+        match (self.range.start_bound(), second.range.start_bound()) {
+            // Sometimes we can just compare apples with apples
+            (Bound::Excluded(start1), Bound::Excluded(start2)) |
+            (Bound::Included(start1), Bound::Included(start2)) => if *start2 >= *start1 { *start2 - *start1 } else { panic!("Cannot get offset of earlier Span"); },
 
-        // OK simply compare
-        if start1 <= start2 {
-            start2 - start1
-        } else {
-            panic!("Cannot find offset with earlier Span");
+            // There might be times when we need to compare apples and pears, so we need to paint the pears to look like apples
+            (Bound::Excluded(start1), Bound::Included(start2)) => if *start2 > *start1 { *start2 + 1 - *start1 } else { panic!("Cannot get offset of earlier Span"); },
+            (Bound::Included(start1), Bound::Excluded(start2)) => if *start1 < *start2 { *start2 - *start1 + 1 } else { panic!("Cannot get offset of earlier Span"); },
+
+            // And sometimes, we're comparing apples with cheese
+            (Bound::Excluded(start1), Bound::Unbounded) => { panic!("Cannot get offset of earlier Span"); },   // NOTE: You cannot express `0` in exclusive bounds (you'd have to index -1)
+            (Bound::Included(start1), Bound::Unbounded) => if *start1 == 0 { 0 } else { panic!("Cannot get offset of earlier Span"); },
+            (Bound::Unbounded, Bound::Excluded(start2)) => *start2 + 1,
+            (Bound::Unbounded, Bound::Included(start2)) => *start2,
+
+            // Also there's trivial cases
+            (Bound::Unbounded, Bound::Unbounded) => 0,
         }
     }
 }
-#[cfg(feature = "nom")]
-impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
-    #[inline]
-    #[track_caller]
-    fn slice(&self, range: R) -> Self {
-        // Obtain the range
-        let range: (usize, Option<usize>) = match (range.start_bound(), range.end_bound()) {
-            (Bound::Included(i1), Bound::Included(i2)) => (*i1, Some(*i2)),
-            (Bound::Included(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1, Some(*i2 - 1)) } else { (*i1, None) },
-            (Bound::Included(i1), Bound::Unbounded)    => (*i1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
-            (Bound::Excluded(i1), Bound::Included(i2)) => (*i1 + 1, Some(*i2)),
-            (Bound::Excluded(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1 + 1, Some(*i2 - 1)) } else { (*i1 + 1, None) },
-            (Bound::Excluded(i1), Bound::Unbounded)    => (*i1 + 1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
-            (Bound::Unbounded, Bound::Included(i2))    => (0, Some(*i2)),
-            (Bound::Unbounded, Bound::Excluded(i2))    => if *i2 > 0 { if !self.source.is_empty() { (0, Some(*i2 - 1)) } else { (0, None) } } else { (0, None) },
-            (Bound::Unbounded, Bound::Unbounded)       => (0, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
-        };
+// #[cfg(feature = "nom")]
+// impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
+//     #[inline]
+//     #[track_caller]
+//     fn slice(&self, range: R) -> Self {
+//         // Obtain the range
+//         let range: (usize, Option<usize>) = match (range.start_bound(), range.end_bound()) {
+//             (Bound::Included(i1), Bound::Included(i2)) => (*i1, Some(*i2)),
+//             (Bound::Included(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1, Some(*i2 - 1)) } else { (*i1, None) },
+//             (Bound::Included(i1), Bound::Unbounded)    => (*i1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+//             (Bound::Excluded(i1), Bound::Included(i2)) => (*i1 + 1, Some(*i2)),
+//             (Bound::Excluded(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1 + 1, Some(*i2 - 1)) } else { (*i1 + 1, None) },
+//             (Bound::Excluded(i1), Bound::Unbounded)    => (*i1 + 1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+//             (Bound::Unbounded, Bound::Included(i2))    => (0, Some(*i2)),
+//             (Bound::Unbounded, Bound::Excluded(i2))    => if *i2 > 0 { if !self.source.is_empty() { (0, Some(*i2 - 1)) } else { (0, None) } } else { (0, None) },
+//             (Bound::Unbounded, Bound::Unbounded)       => (0, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+//         };
 
-        // Now scale that down within context of our own range
-        let range: SpanRange = match (self.range, range) => {
-            (SpanRange::Range(SpanBound::Bounded(start1), SpanBound::Bounded(end1)), (start2, Some(end2))) => SpanRange::Range(SpanBound::Bounded(())),
-        },
+//         // Now scale that down within context of our own range
+//         let range: SpanRange = match (self.range, range) => {
+//             (SpanRange::Range(SpanBound::Bounded(start1), SpanBound::Bounded(end1)), (start2, Some(end2))) => SpanRange::Range(SpanBound::Bounded(())),
+//         },
 
-        // Create outselves with it
-        Self {
-            file   : self.file,
-            source : self.source,
-            range,
-        }
-    }
-}
+//         // Create outselves with it
+//         Self {
+//             file   : self.file,
+//             source : self.source,
+//             range,
+//         }
+//     }
+// }

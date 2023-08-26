@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    25 Aug 2023, 18:30:12
+//    26 Aug 2023, 18:15:33
 //  Auto updated?
 //    Yes
 // 
@@ -15,6 +15,7 @@
 
 use std::borrow::Cow;
 use std::io::Write;
+use std::ops::{Bound, RangeBounds as _};
 
 use console::{style, Style};
 use enum_debug::EnumDebug;
@@ -23,7 +24,7 @@ use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
-use crate::span::{Span, SpanBound, SpanRange};
+use crate::span::{Span, SpanRange};
 
 
 /***** HELPER MACROS *****/
@@ -96,12 +97,16 @@ fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, 
     let mut mark_buffer: String = String::new();
     for (i, c) in source.grapheme_indices(true) {
         // Decide whether to apply highlighting to this character
-        let highlight: bool = match accent {
-            SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(end)) => start <= i && i <= end,
-            SpanRange::Range(SpanBound::Bounded(start), SpanBound::Unbounded)    => start <= i,
-            SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(end))      => end <= i,
-            SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded)         => true,
-            SpanRange::Empty(_)                                                  => false,
+        let highlight: bool = match (accent.start_bound(), accent.end_bound()) {
+            (Bound::Excluded(start), Bound::Excluded(end)) => *start < i && i < *end,
+            (Bound::Excluded(start), Bound::Included(end)) => *start < i && i <= *end,
+            (Bound::Excluded(start), Bound::Unbounded)     => *start < i,
+            (Bound::Included(start), Bound::Excluded(end)) => *start <= i && i < *end,
+            (Bound::Included(start), Bound::Included(end)) => *start <= i && i <= *end,
+            (Bound::Included(start), Bound::Unbounded)     => *start <= i,
+            (Bound::Unbounded, Bound::Excluded(end))       => i < *end,
+            (Bound::Unbounded, Bound::Included(end))       => i <= *end,
+            (Bound::Unbounded, Bound::Unbounded)           => true,
         };
 
         // Write it either highlighted or not to the line buffer
@@ -416,7 +421,7 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
     fn from(value: Span<'f, 's>) -> Self {
         // Easy case: if we're empty, then nothing to consume
-        if value.range.is_empty() {
+        if value.is_empty() {
             return Self {
                 file    : value.file.into(),
                 source  : String::new(),
@@ -424,46 +429,61 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
                 skipped : 0,
             }
         }
+        let (start, end): (Bound<usize>, Bound<usize>) = (value.range.start_bound().cloned(), value.range.end_bound().cloned());
 
-        // Then, expand the range to contain the lines we need
-        let (start, end): (SpanBound, SpanBound) = value.range.range();
         // Find the first newline starting backwards from the start (and find how many lines we're skipping)
-        let (skipped, line_start): (usize, SpanBound) = match start {
-            SpanBound::Bounded(start) => 'res: {
+        let (skipped, line_start): (usize, Bound<usize>) = match start {
+            Bound::Excluded(start) => 'res: {
+                for (i, c) in value.source[..=start].grapheme_indices(true).rev() {
+                    if c == "\n" {
+                        break 'res (value.pos_of(i + 1).line, Bound::Included(i + 1));
+                    }
+                }
+                (0, Bound::Unbounded)
+            },
+            Bound::Included(start) => 'res: {
                 for (i, c) in value.source[..start].grapheme_indices(true).rev() {
                     if c == "\n" {
-                        break 'res (value.pos_of(i + 1).line, SpanBound::Bounded(i + 1));
+                        break 'res (value.pos_of(i + 1).line, Bound::Included(i + 1));
                     }
                 }
-                (0, SpanBound::Unbounded)
+                (0, Bound::Unbounded)
             },
-
-            SpanBound::Unbounded => (0, SpanBound::Unbounded),
+            Bound::Unbounded => (0, Bound::Unbounded),
         };
         // Next, first newline starting forwards from the endline
-        let line_end: SpanBound = match end {
-            SpanBound::Bounded(end) => 'res: {
-                for (i, c) in value.source[end..].grapheme_indices(true) {
-                    if c == "\n" {
-                        break 'res SpanBound::Bounded(end + i);
+        let line_end: Bound<usize> = match end {
+            Bound::Excluded(end) => 'res: {
+                if end > 0 {
+                    for (i, c) in value.source[end - 1..].grapheme_indices(true) {
+                        if c == "\n" {
+                            break 'res Bound::Included(end + i);
+                        }
                     }
                 }
-                SpanBound::Unbounded
+                Bound::Unbounded
             },
-
-            SpanBound::Unbounded => SpanBound::Unbounded,
+            Bound::Included(end) => 'res: {
+                for (i, c) in value.source[end..].grapheme_indices(true) {
+                    if c == "\n" {
+                        break 'res Bound::Included(end + i);
+                    }
+                }
+                Bound::Unbounded
+            },
+            Bound::Unbounded => Bound::Unbounded,
         };
 
         // Construct a range that is scaled to the only captured lines
-        let scaled_start: SpanBound = match (start, line_start) {
-            (SpanBound::Bounded(bound), SpanBound::Bounded(line_bound)) => SpanBound::Bounded(bound - line_bound),
-            (SpanBound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
-            (SpanBound::Unbounded, _)                                   => SpanBound::Unbounded,
+        let scaled_start: Bound<usize> = match (start, line_start) {
+            (Bound::Excluded(bound), Bound::Excluded(line_bound)) => Bound::Excluded(bound - line_bound),
+            (Bound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
+            (Bound::Unbounded, _)                                   => SpanBound::Unbounded,
         };
-        let scaled_end: SpanBound = match (end, line_start) {
-            (SpanBound::Bounded(bound), SpanBound::Bounded(line_bound)) => SpanBound::Bounded(bound - line_bound),
-            (SpanBound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
-            (SpanBound::Unbounded, _)                                   => SpanBound::Unbounded,
+        let scaled_end: Bound<usize> = match (end, line_start) {
+            (Bound::Bounded(bound), SpanBound::Bounded(line_bound)) => SpanBound::Bounded(bound - line_bound),
+            (Bound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
+            (Bound::Unbounded, _)                                   => SpanBound::Unbounded,
         };
 
         // Extract that piece of text and return ourselves
