@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    26 Aug 2023, 18:15:33
+//    27 Aug 2023, 12:17:29
 //  Auto updated?
 //    Yes
 // 
@@ -346,10 +346,10 @@ impl DiagnosticSpan {
     /// let span3: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 6, 10).into();
     /// let span4: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 10, 9).into();
     /// 
-    /// assert_eq!(span1.start(), Some(Position::new0(0, 0)));
-    /// assert_eq!(span2.start(), Some(Position::new0(0, 2)));
-    /// assert_eq!(span3.start(), Some(Position::new0(1, 0)));
-    /// assert_eq!(span4.start(), None);
+    /// assert_eq!(span1.start(), Position::new0(0, 0));
+    /// assert_eq!(span2.start(), Position::new0(0, 2));
+    /// assert_eq!(span3.start(), Position::new0(1, 0));
+    /// assert_eq!(span5.start(), Position::new0(1, 4));
     /// ```
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
@@ -358,10 +358,11 @@ impl DiagnosticSpan {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn start(&self) -> Option<Position> {
-        match self.range {
-            SpanRange::Range(start, _) => if let SpanBound::Bounded(start) = start { Some(self.pos_of(start)) } else if self.source.len() > 0 { Some(self.pos_of(0)) } else { None },
-            _ => None,
+    pub fn start(&self) -> Position {
+        match self.range.start_bound() {
+            Bound::Excluded(start) => self.pos_of(if *start < usize::MAX { *start + 1 } else { panic!("Cannot convert excluded start of `usize::MAX` to inclusive (would overflow)") }),
+            Bound::Included(start) => self.pos_of(*start),
+            Bound::Unbounded       => self.pos_of(0),
         }
     }
 
@@ -383,11 +384,11 @@ impl DiagnosticSpan {
     /// let span4: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 6, 10).into();
     /// let span5: DiagnosticSpan = Span::from_idx("<example>", "Hello\nworld!", 10, 9).into();
     /// 
-    /// assert_eq!(span1.end(), Some(Position::new0(0, 11)));
-    /// assert_eq!(span2.end(), Some(Position::new0(1, 5)));
-    /// assert_eq!(span3.end(), Some(Position::new0(0, 2)));
-    /// assert_eq!(span4.end(), Some(Position::new0(1, 4)));
-    /// assert_eq!(span5.start(), None);
+    /// assert_eq!(span1.end(), Position::new0(0, 11));
+    /// assert_eq!(span2.end(), Position::new0(1, 5));
+    /// assert_eq!(span3.end(), Position::new0(0, 2));
+    /// assert_eq!(span4.end(), Position::new0(1, 4));
+    /// assert_eq!(span5.end(), Position::new0(1, 3));
     /// ```
     /// ```should_panic
     /// # use ast_toolkit::{DiagnosticSpan, Span};
@@ -396,12 +397,49 @@ impl DiagnosticSpan {
     /// ```
     #[inline]
     #[track_caller]
-    pub fn end(&self) -> Option<Position> {
-        match self.range {
-            SpanRange::Range(_, end) => if let SpanBound::Bounded(end) = end { Some(self.pos_of(end)) } else if self.source.len() > 0 { Some(self.pos_of(self.source.len() - 1)) } else { None },
-            _ => None,
+    pub fn end(&self) -> Position {
+        match self.range.start_bound() {
+            Bound::Excluded(end) => self.pos_of(if *end > 0 { *end - 1 } else { panic!("Cannot convert excluded end of `0` to inclusive (would underflow)") }),
+            Bound::Included(end) => self.pos_of(*end),
+            Bound::Unbounded     => self.pos_of(if !self.source.is_empty() { self.source.len() - 1 } else { panic!("Cannot get position of unbounded end in empty source"); }),
         }
     }
+
+
+
+    /// Returns if this DiagnosticSpan would return a non-empty text.
+    /// 
+    /// # Returns
+    /// True if this DiagnosticSpan spans nothing, or false otherwise.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{DiagnosticSpan, Span};
+    /// 
+    /// assert_eq!(DiagnosticSpan::from(Span::new("<example>", "Hello, world!")).is_empty(), false);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 0, 4)).is_empty(), false);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 6, 5)).is_empty(), true);
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.len() > 0 }
+
+    /// Returns the number of logical units that this DiagnosticSpan spans.
+    /// 
+    /// # Returns
+    /// The number of characters.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{DiagnosticSpan, Span};
+    /// 
+    /// assert_eq!(DiagnosticSpan::from(Span::new("<example>", "Hello, world!")).len(), 13);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 0, 4)).len(), 5);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 7, 12)).len(), 6);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 5, 5)).len(), 1);
+    /// assert_eq!(DiagnosticSpan::from(Span::from_idx("<example>", "Hello, world!", 6, 5)).len(), 0);
+    /// ```
+    #[inline]
+    pub fn len(&self) -> usize { self.range.len(self.source.len()) }
 }
 
 impl<'f, 's> PartialEq<Span<'f, 's>> for DiagnosticSpan {
@@ -1038,7 +1076,7 @@ impl Diagnostic {
         emit_diagnostic_header(writer, &accent_colour, kind, self.code.as_ref().map(|c| c.as_str()), &self.message)?;
 
         // If there is a range to emit, then also emit source stuff
-        if !self.span.range.is_empty() {
+        if !self.span.is_empty() {
             // If it's a suggestion, then catch the source and range and make some tweaks
             let (source, accent_range): (Cow<str>, SpanRange) = match &self.kind {
                 DiagnosticSpecific::Suggestion { replace } => {
