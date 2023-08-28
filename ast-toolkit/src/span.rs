@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    27 Aug 2023, 23:32:19
+//    28 Aug 2023, 15:19:01
 //  Auto updated?
 //    Yes
 // 
@@ -16,6 +16,7 @@
 use std::ops::Bound;
 
 use num_traits::AsPrimitive;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
 
@@ -181,7 +182,26 @@ pub trait SpanningExt: Spanning {
     /// ```
     #[track_caller]
     fn pos_of(&self, idx: impl AsPrimitive<usize>) -> Position {
-        todo!();
+        let idx: usize = idx.as_();
+        let source: &str = self.source();
+
+        // Assert it is correctly sized
+        if idx >= source.len() { panic!("Given index '{}' is out-of-bounds for Span of length {}", idx, source.len()); }
+
+        // Iterate over the source to find the line & column
+        let (mut line, mut col): (usize, usize) = (0, 0);
+        for (i, c) in source.grapheme_indices(true) {
+            // If we reached it, we done
+            if i == idx { break; }
+            else if i > idx { panic!("Index {idx} does not point on the grapheme boundary"); }
+
+            // Otherwise, count
+            if c == "\n" { line += 1; col = 0; }
+            else { col += 1; }
+        }
+
+        // Done, return it as a position
+        Position::new0(line, col)
     }
 
     /// Returns the start position of this range in the source text.
@@ -271,8 +291,9 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..6).text(), "");
     /// ```
     fn text(&self) -> &str {
+        let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
-            (Some(start), Some(end)) => if start <= end { &self.source()[start..=end] } else { "" },
+            (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end { &source[start..=end] } else { "" },
             (None, _) | (_, None)    => "",
         }
     }
@@ -291,20 +312,37 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").text(), "Hello,\nworld!");
     /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").text(), "");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 0..5).text(), "Hello,\n");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 6..12).text(), "Hello,\nworld!");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).text(), "world!");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).text(), "world!");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..6).text(), "");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).text(), "");
     /// ```
     fn lines(&self) -> &str {
+        let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
             // If the ranges are defined, then limit by the fact the range has to logically contain elements
-            (Some(start), Some(end)) => if start <= end {
+            (Some(mut start), Some(mut end)) => if start < source.len() && end < source.len() && start <= end {
                 // Move the start backwards to find the nearest line
-                todo!();
+                let mut found: bool = false;
+                let mut prev: usize = start;
+                for (i, c) in self.source()[..start].grapheme_indices(true).rev() {
+                    // If we find a newline, then move start to include the previous character (which is the start of the newline)
+                    if c == "\n" { start = prev; found = true; break; }
+                    prev = i;
+                }
+                if !found { start = 0; }
 
                 // Move the end forwards to find the nearest line
+                let mut found: bool = false;
+                for (i, c) in self.source()[end..].grapheme_indices(true) {
+                    // If we find a newline, then accept the line with it
+                    if c == "\n" { end = i; found = true; break; }
+                }
+                if !found { end = source.len() - 1; }   // NOTE: This `end - 1` is OK because we already asserted end is less than source.len(), which can only be true if the source len() > 0.
 
-                // OK, done
+                // OK, slice the string like this
+                &source[start..=end]
             } else {
                 ""
             },
@@ -379,6 +417,24 @@ pub struct Span<'f, 's> {
     pub range  : (Option<Bound<usize>>, Option<Bound<usize>>),
 }
 
+impl<'f, 's> Span<'f, 's> {
+    /// Constructor for the Span that makes it span the entire given source text.
+    /// 
+    /// # Arguments
+    /// - `file`: The filename or other identifier that helps the user distinguish between source texts.
+    /// - `source`: The source text to span.
+    /// 
+    /// # Returns
+    /// A new instance of Self that covers the entire given `source`.
+    #[inline]
+    pub fn new(file: &'f str, source: &'s str) -> Self {
+        Self {
+            file,
+            source,
+            range : (Some(Bound::Unbounded), Some(Bound::Unbounded)),
+        }
+    }
+}
 impl<'f, 's> Spanning for Span<'f, 's> {
     #[inline]
     fn file(&self) -> &str { self.file }
