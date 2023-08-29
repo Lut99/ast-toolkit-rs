@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    28 Aug 2023, 15:19:01
+//    29 Aug 2023, 09:29:04
 //  Auto updated?
 //    Yes
 // 
@@ -13,7 +13,7 @@
 //!   track of a node's position in the source text.
 // 
 
-use std::ops::Bound;
+use std::ops::{Bound, RangeBounds};
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -432,6 +432,118 @@ impl<'f, 's> Span<'f, 's> {
             file,
             source,
             range : (Some(Bound::Unbounded), Some(Bound::Unbounded)),
+        }
+    }
+
+    /// Constructor for a Span that has a source text but spans an empty (and undefined) part of it.
+    /// 
+    /// # Arguments
+    /// - `file`: The filename or other identifier that helps the user distinguish between source texts.
+    /// - `source`: The source text to span.
+    /// 
+    /// # Returns
+    /// A new instance of Self that covers none of the given `source`.
+    #[inline]
+    pub fn empty(file: &'f str, source: &'s str) -> Self {
+        Self {
+            file,
+            source,
+            range : (None, None),
+        }
+    }
+
+    /// Constructor for a Span that spans a particular range of the given source text.
+    /// 
+    /// # Arguments
+    /// - `file`: The filename or other identifier that helps the user distinguish between source texts.
+    /// - `source`: The source text to span.
+    /// - `range`: Some [`RangeBounds`]-like range. If the start >= end in this range (or start > end if the end bound is inclusive too), then it's an empty range.
+    /// 
+    /// # Returns
+    /// A new instance of Self that covers the given `source` partially.
+    #[inline]
+    pub fn ranged(file: &'f str, source: &'s str, range: impl RangeBounds<usize>) -> Self {
+        Self {
+            file,
+            source,
+            range : (Some(range.start_bound().cloned()), Some(range.end_bound().cloned())),
+        }
+    }
+
+    /// Constructor for the Span that encapsulates both ranges of the given spans.
+    /// 
+    /// # Arguments
+    /// - `span1`: The first span to take into account.
+    /// - `span2`: The second span to take into account.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans both input spans and everything in between.
+    /// 
+    /// Note that, for lifetime purposes, the file and source text from the first span are referenced.
+    /// 
+    /// # Panics
+    /// This function panics if the given spans do not have the same `file` or `source`. Note that this goes by *pointer equality*.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::Span;
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let span1 = Span::ranged(file, text, 0..=4);
+    /// let span2 = Span::ranged(file, text, 7..=12);
+    /// 
+    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn combined<'f2, 's2>(span1: impl AsRef<Span<'f, 's>>, span2: impl AsRef<Span<'f2, 's2>>) -> Self {
+        let (span1, span2): (&Span, &Span) = (span1.as_ref(), span2.as_ref());
+
+        // Assert they talk about the same thing
+        if !std::ptr::eq(span1.file as *const str, span2.file as *const str) { panic!("Given spans do not have the same `file`"); }
+        if !std::ptr::eq(span1.source as *const str, span2.source as *const str) { panic!("Given spans do not have the same `source`"); }
+
+        // Combine the start into a new bound
+        let start: Option<Bound<usize>> = match span1.range {
+            (Some(Bound::Excluded(start1)), Some(Bound::Excluded(start2))) => Some(Bound::Excluded(std::cmp::min(start1, start2))),
+            // NOTE: This below works because we're changing the included start to an excluded start, e.g.,
+            //   `0, 1, [2, 3, ...]` to `0, (1, 2, 3, ...]`
+            // Thus, we have to -1. If the start is already at the 0, then we can instead safely assume it will be the smallest number out of the two.
+            (Some(Bound::Excluded(start1)), Some(Bound::Included(start2))) => Some(Bound::Excluded(if start2 > 0 { std::cmp::min(start1, start2 - 1) } else { start2 })),
+            (Some(Bound::Excluded(start1)), Some(Bound::Unbounded))        => Some(Bound::Unbounded),
+            (Some(Bound::Included(start1)), Some(Bound::Excluded(start2))) => Some(Bound::Excluded(if start1 > 0 { std::cmp::min(start1 - 1, start2) } else { start1 })),
+            (Some(Bound::Included(start1)), Some(Bound::Included(start2))) => Some(Bound::Included(std::cmp::min(start1, start2))),
+            (Some(Bound::Included(start1)), Some(Bound::Unbounded))        => Some(Bound::Unbounded),
+            (Some(Bound::Unbounded), Some(Bound::Excluded(start2)))        => Some(Bound::Unbounded),
+            (Some(Bound::Unbounded), Some(Bound::Included(start2)))        => Some(Bound::Unbounded),
+            (Some(Bound::Unbounded), Some(Bound::Unbounded))               => Some(Bound::Unbounded),
+
+            // Empty ones are slightly easier
+            (start1, None) => start1,
+            (None, start2) => start2,
+        };
+        // Combine the end into a new bound
+        let end: Bound<usize> = match (span1.range.end_bound(), span2.range.end_bound()) {
+            (Bound::Excluded(end1), Bound::Excluded(end2)) => Bound::Excluded(std::cmp::max(*end1, *end2)),
+            // NOTE: This below works because we're changing the included end to an excluded end, e.g.,
+            //   `[..., 4, 5], 6, 7` to `[..., 4, 5, 6), 7`
+            // Thus, we have to +1. If the start is already at the max (`usize::MAX`), then we can instead safely assume it will be the largest number out of the two.
+            (Bound::Excluded(end1), Bound::Included(end2)) => Bound::Excluded(if *end2 < usize::MAX { std::cmp::max(*end1, *end2 + 1) } else { *end2 }),
+            (Bound::Excluded(end1), Bound::Unbounded)      => Bound::Unbounded,
+            (Bound::Included(end1), Bound::Excluded(end2)) => Bound::Excluded(if *end1 < usize::MAX { std::cmp::max(*end1 + 1, *end2) } else { *end1 }),
+            (Bound::Included(end1), Bound::Included(end2)) => Bound::Included(std::cmp::max(*end1, *end2)),
+            (Bound::Included(end1), Bound::Unbounded)      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Excluded(end2))      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Included(end2))      => Bound::Unbounded,
+            (Bound::Unbounded, Bound::Unbounded)           => Bound::Unbounded,
+        };
+
+        // Construct a new self out of it
+        Self {
+            file   : span1.file,
+            source : span1.source,
+            range  : ((start, end)).into(),
         }
     }
 }
