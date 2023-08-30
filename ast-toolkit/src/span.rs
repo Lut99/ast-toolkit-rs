@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    30 Aug 2023, 14:27:55
+//    30 Aug 2023, 15:28:20
 //  Auto updated?
 //    Yes
 // 
@@ -236,6 +236,116 @@ mod nom_tests {
         assert_eq!(span.split_at_position_complete(|c| c == '!'), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
         assert_eq!(span.split_at_position_complete(|c| c == '_'), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
     }
+
+    #[test]
+    fn test_span_nom_offset() {
+        use std::panic::catch_unwind;
+        use nom::Offset as _;
+
+        // Prepare a few spans for comparisons
+        let file: &str = "<example>";
+        let source: &str = "Example text!";
+        let span1 = Span::new(file, source);
+        let span2 = Span::ranged(file, source, 0..7);
+        let span3 = Span::ranged(file, source, 8..12);
+        let span4 = Span::ranged(file, source, 8..8);
+        let span5 = Span::empty(file, source);
+
+        // Right-o, let's do the asserts
+        assert_eq!(span1.offset(&span1), 0);
+        assert_eq!(span1.offset(&span2), 0);
+        assert_eq!(span1.offset(&span3), 8);
+        assert!(catch_unwind(|| span3.offset(&span1)).is_err());
+        assert_eq!(span1.offset(&span4), 8);
+        assert_eq!(span3.offset(&span4), 0);
+        assert_eq!(span4.offset(&span3), 0);
+        assert!(catch_unwind(|| span1.offset(&span5)).is_err());
+        assert!(catch_unwind(|| span5.offset(&span1)).is_err());
+    }
+
+    #[test]
+    fn test_span_nom_slice() {
+        use nom::Slice as _;
+
+        // Prepare span(s)
+        let file: &str = "<example>";
+        let source: &str = "Example text!";
+        let span1 = Span::new(file, source);
+        let span2 = Span::ranged(file, source, 8..);
+
+        // Produce some slices on the whole span
+        assert_eq!(span1.slice(..), span1);
+        assert_eq!(span1.slice(0..13), span1);
+        assert_eq!(span1.slice(0..7), Span::ranged(file, source, 0..7));
+        assert_eq!(span1.slice(0..=6), Span::ranged(file, source, 0..7));
+        assert_eq!(span1.slice(1..=0), Span::empty(file, source));
+
+        // Now try for a span with offset
+        assert_eq!(span2.slice(..), span2);
+        assert_eq!(span2.slice(0..13), span2);
+        assert_eq!(span2.slice(0..4), Span::ranged(file, source, 8..12));
+        assert_eq!(span2.slice(0..7), span2);
+        assert_eq!(span2.slice(0..=6), span2);
+        assert_eq!(span2.slice(1..=0), Span::empty(file, source));
+    }
+}
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/// Extracts the "line wrapped source" of the given spanned area.
+/// 
+/// This is useful for diagnosting, where we return the spanned area + any line start and line end not captured.
+/// 
+/// # Arguments
+/// - `source`: The source to extract the spanned area from.
+/// - `start_idx`: The start index (inclusive) of the source area (or [`None`] if this doesn't make sense, e.g., it's empty).
+/// - `end_id`: The end index (inclusive) of the source area (or [`None`] if this doesn't make sense, e.g., it's empty).
+/// 
+/// # Returns
+/// A tuple of the start index of the new range (if any), the end index of the range (if any).
+pub(crate) fn find_lines_box(source: &str, start_idx: Option<usize>, end_idx: Option<usize>) -> (Option<usize>, Option<usize>) {
+    match (start_idx, end_idx) {
+        // If the ranges are defined, then limit by the fact the range has to logically contain elements
+        (Some(mut start), Some(mut end)) => if start <= end {
+            // Re-scale start and/or end if it makes sense
+            if !source.is_empty() && start >= source.len() && end < source.len() {
+                start = source.len() - 1;
+            } else if !source.is_empty() && start < source.len() && end >= source.len() {
+                end = source.len() - 1;
+            } else if start >= source.len() && end >= source.len() {
+                return (Some(start), Some(end));
+            }
+
+            // Move the start backwards to find the nearest line
+            let mut found: bool = false;
+            let mut prev: usize = start;
+            for (i, c) in source[..start].grapheme_indices(true).rev() {
+                // If we find a newline, then move start to include the previous character (which is the start of the newline)
+                if c == "\n" { start = prev; found = true; break; }
+                prev = i;
+            }
+            if !found { start = 0; }
+
+            // Move the end forwards to find the nearest line
+            let mut found: bool = false;
+            for (i, c) in source[end..].grapheme_indices(true) {
+                // If we find a newline, then accept the line with it
+                if c == "\n" { end += i; found = true; break; }
+            }
+            if !found { end = source.len() - 1; }   // NOTE: This `end - 1` is OK because we already asserted end is less than source.len(), which can only be true if the source len() > 0.
+
+            // OK, slice the string like this
+            (Some(start), Some(end))
+        } else {
+            (Some(start), Some(end))
+        },
+
+        // Catch explicit empties
+        (start, end) => (start, end),
+    }
 }
 
 
@@ -264,7 +374,7 @@ mod nom_tests {
 /// }
 /// 
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(12) }.file(), "<example>");
-/// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(4) }.source(), "Hello, world!");
+/// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(4) }.source(), "Hello,\nworld!");
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(1) }.start_idx(), Some(0));
 /// assert_eq!(HelloWorldSpan { start: Some(4), end: None }.end_idx(), None);
 /// // ...
@@ -312,11 +422,14 @@ pub trait Spanning {
     /// ```rust
     /// use ast_toolkit::{Span, Spanning as _};
     /// 
-    /// assert_eq!(Span::new("<example>", "").start_idx(), None);
+    /// assert_eq!(Span::new("<example>", "").start_idx(), Some(0));
     /// assert_eq!(Span::new("<example>", "Hello, world!").start_idx(), Some(0));
     /// assert_eq!(Span::empty("<example>", "Hello, world!").start_idx(), None);
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..5).start_idx(), Some(0));
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..=11).start_idx(), Some(7));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..=6).start_idx(), Some(7));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..=42).start_idx(), Some(0));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 42..).start_idx(), Some(42));
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 42..=42).start_idx(), Some(42));
     /// ```
     fn start_idx(&self) -> Option<usize>;
@@ -339,6 +452,9 @@ pub trait Spanning {
     /// assert_eq!(Span::empty("<example>", "Hello, world!").end_idx(), None);
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..5).end_idx(), Some(4));
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..=11).end_idx(), Some(11));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..=6).end_idx(), Some(6));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..=42).end_idx(), Some(42));
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 42..).end_idx(), Some(12));
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 42..=42).end_idx(), Some(42));
     /// ```
     fn end_idx(&self) -> Option<usize>;
@@ -352,7 +468,7 @@ pub trait Spanning {
 /// 
 /// # Example
 /// ```rust
-/// use ast_toolkit::{Spanning, SpanningExt as _};
+/// use ast_toolkit::{Position, Spanning, SpanningExt};
 /// 
 /// struct HelloWorldSpan {
 ///     start : Option<usize>,
@@ -365,6 +481,7 @@ pub trait Spanning {
 ///     fn start_idx(&self) -> Option<usize> { self.start }
 ///     fn end_idx(&self) -> Option<usize> { self.end }
 /// }
+/// impl SpanningExt for HelloWorldSpan {}
 /// 
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(12) }.pos_of(7), Position::new1(2, 1));
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(4) }.text(), "Hello");
@@ -386,16 +503,14 @@ pub trait SpanningExt: Spanning {
     /// # Example
     /// ```rust
     /// # use std::panic::catch_unwind;
-    /// use ast_toolkit::{Position, Span, Spanning as _};
+    /// use ast_toolkit::{Position, Span, SpanningExt as _};
     /// 
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").pos_of(0), Position::new1(1, 1));
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").pos_of(5), Position::new1(1, 6));
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").pos_of(6), Position::new1(1, 7));
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").pos_of(7), Position::new1(2, 1));
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").pos_of(12), Position::new1(2, 6));
-    /// ```
-    /// These will panic:
-    /// ```rust
+    /// 
     /// // Out-of-range
     /// assert!(catch_unwind(|| Span::new("<example>", "Hello,\nworld!").pos_of(42)).is_err());
     /// // Not on a grapheme boundary (i.e., byte-wise, 2 is in the middle of `ÿ`)
@@ -438,7 +553,7 @@ pub trait SpanningExt: Spanning {
     /// # Example
     /// ```rust
     /// # use std::panic::catch_unwind;
-    /// use ast_toolkit::{Position, Span, Spanning as _};
+    /// use ast_toolkit::{Position, Span, SpanningExt as _};
     /// 
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").start(), Some(Position::new1(1, 1)));
     /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").start(), None);
@@ -446,9 +561,7 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).start(), Some(Position::new1(2, 1)));
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 12..).start(), Some(Position::new1(2, 6)));
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).start(), None);
-    /// ```
-    /// These will panic:
-    /// ```rust
+    /// 
     /// // Not on a grapheme boundary (i.e., byte-wise, 2 is in the middle of `ÿ`)
     /// assert!(catch_unwind(|| Span::ranged("<example>", "Hÿllo,\nworld!", 2..=2).start()).is_err());
     /// ```
@@ -471,17 +584,15 @@ pub trait SpanningExt: Spanning {
     /// # Example
     /// ```rust
     /// # use std::panic::catch_unwind;
-    /// use ast_toolkit::{Position, Span, Spanning as _};
+    /// use ast_toolkit::{Position, Span, SpanningExt as _};
     /// 
     /// assert_eq!(Span::new("<example>", "Hello,\nworld!").end(), Some(Position::new1(2, 6)));
     /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").end(), None);
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 5..=5).end(), Some(Position::new1(1, 6)));
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).end(), Some(Position::new1(2, 6)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).end(), Some(Position::new1(2, 5)));
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 12..).end(), Some(Position::new1(2, 6)));
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).end(), None);
-    /// ```
-    /// These will panic:
-    /// ```rust
+    /// 
     /// // Not on a grapheme boundary (i.e., byte-wise, 2 is in the middle of `ÿ`)
     /// assert!(catch_unwind(|| Span::ranged("<example>", "Hÿllo,\nworld!", 2..=2).end()).is_err());
     /// ```
@@ -530,46 +641,33 @@ pub trait SpanningExt: Spanning {
     /// ```rust
     /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
-    /// assert_eq!(Span::new("<example>", "Hello,\nworld!").text(), "Hello,\nworld!");
-    /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").text(), "");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 0..5).text(), "Hello,\n");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 6..12).text(), "Hello,\nworld!");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).text(), "world!");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).text(), "world!");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..6).text(), "");
-    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).text(), "");
+    /// assert_eq!(Span::new("<example>", "Hello,\nworld!").lines(), "Hello,\nworld!");
+    /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").lines(), "");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 0..5).lines(), "Hello,\n");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 6..12).lines(), "Hello,\nworld!");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).lines(), "world!");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).lines(), "world!");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..=6).lines(), "");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..=42).lines(), "world!");
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).lines(), "");
     /// ```
+    #[inline]
     fn lines(&self) -> &str {
         let source: &str = self.source();
-        match (self.start_idx(), self.end_idx()) {
-            // If the ranges are defined, then limit by the fact the range has to logically contain elements
-            (Some(mut start), Some(mut end)) => if start < source.len() && end < source.len() && start <= end {
-                // Move the start backwards to find the nearest line
-                let mut found: bool = false;
-                let mut prev: usize = start;
-                for (i, c) in source[..start].grapheme_indices(true).rev() {
-                    // If we find a newline, then move start to include the previous character (which is the start of the newline)
-                    if c == "\n" { start = prev; found = true; break; }
-                    prev = i;
-                }
-                if !found { start = 0; }
-
-                // Move the end forwards to find the nearest line
-                let mut found: bool = false;
-                for (i, c) in source[end..].grapheme_indices(true) {
-                    // If we find a newline, then accept the line with it
-                    if c == "\n" { end = i; found = true; break; }
-                }
-                if !found { end = source.len() - 1; }   // NOTE: This `end - 1` is OK because we already asserted end is less than source.len(), which can only be true if the source len() > 0.
-
-                // OK, slice the string like this
+        match find_lines_box(source, self.start_idx(), self.end_idx()) {
+            (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end {
+                // Fully in bounds
                 &source[start..=end]
+            } else if start < source.len() && start <= end {
+                // Now we know the source is non-empty & start is within bounds; clip
+                &source[start..]
             } else {
+                // Evaluates to an empty slice
                 ""
             },
 
-            // Catch explicit empties
-            (None, _) | (_, None) => "",
+            // The rest is always empty
+            (_, _) => "",
         }
     }
 
@@ -582,7 +680,7 @@ pub trait SpanningExt: Spanning {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::{Span, Spanning as _};
+    /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
     /// assert_eq!(Span::new("<example>", "Hello, world!").is_empty(), false);
     /// assert_eq!(Span::empty("<example>", "Hello, world!").is_empty(), true);
@@ -601,7 +699,7 @@ pub trait SpanningExt: Spanning {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::{Span, Spanning as _};
+    /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
     /// assert_eq!(Span::new("<example>", "Hello, world!").len(), 13);
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..=4).len(), 5);
@@ -614,7 +712,7 @@ pub trait SpanningExt: Spanning {
     fn len(&self) -> usize {
         let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
-            (Some(start), Some(end)) => if start <= end && end < source.len() { 1 + end - start } else if start <= end && !source.is_empty() { source.len() - 1 } else { 0 },
+            (Some(start), Some(end)) => if start <= end && end < source.len() { 1 + end - start } else if start <= end { source.len() } else { 0 },
             (_, _)                   => 0,
         }
     }
@@ -628,7 +726,23 @@ pub trait SpanningExt: Spanning {
 /// 
 /// # Example
 /// ```rust
-/// todo!();
+/// use std::borrow::Cow;
+/// use std::path::PathBuf;
+/// use ast_toolkit::{Position, Span, Spanning as _, SpanningExt as _};
+/// 
+/// // Create some strings
+/// let file: String = PathBuf::from("/tmp/test").display().to_string();
+/// let bytes: Cow<str> = String::from_utf8_lossy(b"Hello, world!");
+/// 
+/// // Build spans over them!
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new(file.as_str(), "Hello, world!");
+/// let span3 = Span::new("<example>", bytes.as_ref());
+/// 
+/// // Use them!
+/// assert_eq!(span1.text(), "Hello, world!");
+/// assert_eq!(span2.file(), "/tmp/test");
+/// assert_eq!(span3.end(), Some(Position::new1(1, 13)));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash)]
 pub struct Span<'f, 's> {
@@ -674,7 +788,7 @@ impl<'f, 's> Span<'f, 's> {
     /// // Use them!
     /// assert_eq!(span1.text(), "Hello, world!");
     /// assert_eq!(span2.file(), "/tmp/test");
-    /// assert_eq!(span3.end(), Position::new1(1, 13));
+    /// assert_eq!(span3.end(), Some(Position::new1(1, 13)));
     /// ```
     #[inline]
     pub fn new(file: &'f str, source: &'s str) -> Self {
@@ -701,7 +815,7 @@ impl<'f, 's> Span<'f, 's> {
     /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
     /// let span1 = Span::empty("<example>", "Hello there!");
-    /// assert_eq!(span1.text() == "");
+    /// assert_eq!(span1.text(), "");
     /// ```
     #[inline]
     pub fn empty(file: &'f str, source: &'s str) -> Self {
@@ -757,7 +871,7 @@ impl<'f, 's> Span<'f, 's> {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::Span;
+    /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
     /// let file: &str = "<example>";
     /// let text: &str = "Hello, world!";
@@ -811,7 +925,7 @@ impl<'f, 's> Span<'f, 's> {
     /// 
     /// # Example
     /// ```rust
-    /// use ast_toolkit::Span;
+    /// use ast_toolkit::{Span, SpanningExt as _};
     /// 
     /// let file: &str = "<example>";
     /// let text: &str = "Hello, world!";
@@ -836,13 +950,9 @@ impl<'f, 's> Spanning for Span<'f, 's> {
     fn source(&self) -> &str { self.source }
 
     #[inline]
-    fn start_idx(&self) -> Option<usize> {
-        self.range.0.map(|start| if start < self.source.len() { Some(start) } else if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }).flatten()
-    }
+    fn start_idx(&self) -> Option<usize> { self.range.0 }
     #[inline]
-    fn end_idx(&self) -> Option<usize> {
-        self.range.1.map(|end| if end < self.source.len() { Some(end) } else if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }).flatten()
-    }
+    fn end_idx(&self) -> Option<usize> { self.range.1 }
 }
 impl<'f, 's> SpanningExt for Span<'f, 's> {}
 
@@ -1081,7 +1191,6 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
                 // It is; so perform the split at this location
                 // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
                 let (split, rem): (Span, Span) = self.take_split(i);
-                println!("{split:?}");
                 if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
                 return Ok((split, rem));
             }

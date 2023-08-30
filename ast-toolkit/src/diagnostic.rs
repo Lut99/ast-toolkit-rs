@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    30 Aug 2023, 14:04:05
+//    30 Aug 2023, 15:27:15
 //  Auto updated?
 //    Yes
 // 
@@ -265,13 +265,9 @@ impl Spanning for DiagnosticSpan {
     fn source(&self) -> &str { &self.source }
 
     #[inline]
-    fn start_idx(&self) -> Option<usize> {
-        self.range.0.map(|start| if start < self.source.len() { Some(start) } else if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }).flatten()
-    }
+    fn start_idx(&self) -> Option<usize> { self.range.0 }
     #[inline]
-    fn end_idx(&self) -> Option<usize> {
-        self.range.1.map(|end| if end < self.source.len() { Some(end) } else if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }).flatten()
-    }
+    fn end_idx(&self) -> Option<usize> { self.range.1 }
 }
 impl SpanningExt for DiagnosticSpan {
     #[track_caller]
@@ -309,49 +305,49 @@ impl<T: SpanningExt> PartialEq<T> for DiagnosticSpan {
 impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
     fn from(value: Span<'f, 's>) -> Self {
-        // First, find the lines - but this time while keeping track of the new positions
+        // Find, find the indices
         let source: &str = value.source();
-        let (skipped, start, end, lines_source): (usize, Option<usize>, Option<usize>, &str) = match (value.start_idx(), value.end_idx()) {
-            // If the ranges are defined, then limit by the fact the range has to logically contain elements
-            (Some(mut start), Some(mut end)) => if start < source.len() && end < source.len() && start <= end {
-                // Move the start backwards to find the nearest line
-                let mut found: bool = false;
-                let mut prev: usize = start;
-                for (i, c) in source[..start].grapheme_indices(true).rev() {
-                    // If we find a newline, then move start to include the previous character (which is the start of the newline)
-                    if c == "\n" { start = prev; found = true; break; }
-                    prev = i;
-                }
-                if !found { start = 0; }
+        let (start, end): (Option<usize>, Option<usize>) = (value.start_idx(), value.end_idx());
+        let (line_start, line_end): (Option<usize>, Option<usize>) = crate::span::find_lines_box(source, start, end);
 
-                // Move the end forwards to find the nearest line
-                let mut found: bool = false;
-                for (i, c) in source[end..].grapheme_indices(true) {
-                    // If we find a newline, then accept the line with it
-                    if c == "\n" { end = i; found = true; break; }
-                }
-                if !found { end = source.len() - 1; }   // NOTE: This `end - 1` is OK because we already asserted end is less than source.len(), which can only be true if the source len() > 0.
-
-                // OK, slice the string like this
-                (source[..start].chars().filter(|c| *c == '\n').count(), Some(start), Some(end), &source[start..=end])
+        // Extract the span
+        let line_source: &str = match (line_start, line_end) {
+            (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end {
+                // Fully in bounds
+                &source[start..=end]
+            } else if start < source.len() {
+                // Now we know the source is non-empty & start is within bounds; clip
+                &source[start..]
             } else {
-                (source[..start].chars().filter(|c| *c == '\n').count(), Some(start), None, "")
+                // Evaluates to an empty slice
+                ""
             },
 
-            // Catch explicit empties
-            (None, end)   => (0, None, end, ""),
-            (start, None) => (0, start, None, ""),
+            // The rest is always empty
+            (_, _) => "",
         };
 
-        // Construct a range that is scaled to the only captured lines
-        let relative_start: Option<usize> = start;
-        let relative_end: Option<usize> = end.map(|end| if let Some(start) = start { if start <= end { end - start } else { end } } else { end });
+        // Scale the span's ranges to the found ranges
+        let rel_start: Option<usize> = match (line_start, start) {
+            (Some(line_start), Some(start)) => Some(start - line_start),
+            (_, _)                          => None,
+        };
+        let rel_end: Option<usize> = match (line_start, end) {
+            (Some(line_start), Some(end)) => Some(end - line_start),
+            (_, _)                        => None,
+        };
+
+        // Compute the number of lines skipped
+        let skipped: usize = match line_start {
+            Some(start) => source[..start].chars().filter(|c| *c == '\n').count(),
+            None        => 0,
+        };
 
         // Extract that piece of text and return ourselves
         Self {
             file   : value.file.into(),
-            source : lines_source.into(),
-            range  : (relative_start, relative_end),
+            source : line_source.into(),
+            range  : (rel_start, rel_end),
             skipped,
         }
     }
@@ -390,8 +386,8 @@ impl From<&mut DiagnosticSpan> for DiagnosticSpan {
 /// ```rust
 /// use ast_toolkit::{Diagnostic, Span};
 /// 
-/// let err = Diagnostic::error("Invalid word 'Hlelo'", Span::from_idx("<example>", "Hlelo World!", 0, 4));
-/// let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::from_idx("<example>", "Hlelo World!", 6, 6));
+/// let err = Diagnostic::error("Invalid word 'Hlelo'", Span::ranged("<example>", "Hlelo World!", 0..=4));
+/// let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::ranged("<example>", "Hlelo World!", 6..=6));
 /// let note = Diagnostic::note("The most classical program in the world is given here", Span::new("<example>", "Hlelo World!"));
 /// let suggest = Diagnostic::suggestion("Consider writing it properly", Span::new("<example>", "Hlelo World!"), "Hello, world!");
 /// ```
@@ -399,8 +395,8 @@ impl From<&mut DiagnosticSpan> for DiagnosticSpan {
 /// ```rust
 /// # use ast_toolkit::{Diagnostic, Span};
 /// # 
-/// # let err = Diagnostic::error("Invalid word 'Hlelo'", Span::from_idx("<example>", "Hlelo World!", 0, 4));
-/// # let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::from_idx("<example>", "Hlelo World!", 6, 6));
+/// # let err = Diagnostic::error("Invalid word 'Hlelo'", Span::ranged("<example>", "Hlelo World!", 0..=4));
+/// # let warn = Diagnostic::warn("Second word shouldn't be capitalized", Span::ranged("<example>", "Hlelo World!", 6..=6));
 /// # let note = Diagnostic::note("The most classical program in the world is given here", Span::new("<example>", "Hlelo World!"));
 /// # let suggest = Diagnostic::suggestion("Consider writing it properly", Span::new("<example>", "Hlelo World!"), "Hello, world!");
 /// # 
@@ -608,7 +604,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// let span = Span::ranged("<example>", "pub sttaic TEST = 42;", 4..=9);
     /// Diagnostic::error("Unknown keyword 'sttaic'", span)
     ///     .add(Diagnostic::suggestion("Try 'static'", span, "static"))
     ///     .emit();
@@ -638,8 +634,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pbu static TEST = 42;";
-    /// let span1 = Span::from_idx("<example>", source, 0, 2);
-    /// let span2 = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::ranged("<example>", source, 0..=2);
+    /// let span2 = Span::ranged("<example>", source, 11..=14);
     /// Diagnostic::error("Unknown keyword 'pbu'", span1)
     ///     .add_error("'TEST' is therefore not publicly accessible", span2)
     ///     .emit();
@@ -669,8 +665,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pbu static TeST = 42;";
-    /// let span1 = Span::from_idx("<example>", source, 0, 2);
-    /// let span2 = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::ranged("<example>", source, 0..=2);
+    /// let span2 = Span::ranged("<example>", source, 11..=14);
     /// Diagnostic::error("Unknown keyword 'pbu'", span1)
     ///     .add_warn("Statics are conventionally spelled using full-caps", span2)
     ///     .emit();
@@ -700,8 +696,8 @@ impl Diagnostic {
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// let source: &str = "pub static TEST = 42; println!(\"{}\", TEST == true)";
-    /// let span1 = Span::from_idx("<example>", source, 37, 48);
-    /// let span2 = Span::from_idx("<example>", source, 11, 14);
+    /// let span1 = Span::ranged("<example>", source, 37..=48);
+    /// let span2 = Span::ranged("<example>", source, 11..=14);
     /// Diagnostic::error("Cannot compare integer with boolean", span1)
     ///     .add_note("TEST defined here", span2)
     ///     .emit();
@@ -731,7 +727,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "pub sttaic TEST = 42;", 4, 9);
+    /// let span = Span::ranged("<example>", "pub sttaic TEST = 42;", 4..=9);
     /// Diagnostic::error("Unknown keyword 'sttaic'", span)
     ///     .add_suggestion("Try 'static'", span, "static")
     ///     .emit();
@@ -753,7 +749,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
     /// assert_eq!(Diagnostic::error("An example error", span).message(), "An example error");
     /// ```
     #[inline]
@@ -768,7 +764,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
     /// let diag: Diagnostic = Diagnostic::error("An example error", span);
     /// assert_eq!(diag.code(), None);
     /// 
@@ -788,7 +784,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
     /// let diag: Diagnostic = Diagnostic::error("An example error", span);
     /// assert_eq!(diag.remark(), None);
     /// 
@@ -810,7 +806,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
     /// assert_eq!(Diagnostic::error("An example error", span).span(), &span);
     /// ```
     #[inline]
@@ -828,10 +824,8 @@ impl Diagnostic {
     /// let span = Span::new("<example>", "Hello, World!");
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello, World!");
     /// 
-    /// let span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
-    /// assert_eq!(Diagnostic::error("An example error", span).text(), "Hello");
-    /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
+    /// println!("{:?}", Diagnostic::error("An example error", span));
     /// assert_eq!(Diagnostic::error("An example error", span).text(), "World");
     /// ```
     #[inline]
@@ -870,7 +864,7 @@ impl Diagnostic {
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
     /// 
-    /// let span = Span::from_idx("<example>", "Hello, World!", 7, 11);
+    /// let span = Span::ranged("<example>", "Hello, World!", 7..=11);
     /// assert_eq!(Diagnostic::suggestion("Try writing 'World' lowercase", span, "world").replacement(), "world");
     /// ```
     #[inline]
