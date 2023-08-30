@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    30 Aug 2023, 14:04:10
+//    30 Aug 2023, 14:27:55
 //  Auto updated?
 //    Yes
 // 
@@ -19,6 +19,227 @@ use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
+
+
+/***** TESTS *****/
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn test_from_pos() {
+//         let span: Span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 1));
+//         assert_eq!(span.text(), "H");
+//         let span: Span = Span::from_pos("<example>", "Hello, World!", Position::new1(1, 1), Position::new1(1, 5));
+//         assert_eq!(span.text(), "Hello");
+
+//         let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 1));
+//         assert_eq!(span.text(), "H");
+//         let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(1, 5));
+//         assert_eq!(span.text(), "Hello");
+//         let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 1));
+//         assert_eq!(span.text(), "W");
+//         let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(2, 1), Position::new1(2, 5));
+//         assert_eq!(span.text(), "World");
+//         let span: Span = Span::from_pos("<example>", "Hello\nWorld!", Position::new1(1, 1), Position::new1(2, 6));
+//         assert_eq!(span.text(), "Hello\nWorld!");
+//     }
+// }
+
+#[cfg(feature = "nom")]
+#[cfg(test)]
+mod nom_tests {
+    use itertools::Itertools as _;
+    use super::*;
+
+    #[test]
+    fn test_span_nom_as_bytes() {
+        // Create a few spans and see if they byte version equates what we expect
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::new("<example>", "Example text")), b"Example text");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::ranged("<example>", "Example text", 0..=6)), b"Example");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::ranged("<example>", "Example text", 8..=11)), b"text");
+        assert_eq!(<Span as nom::AsBytes>::as_bytes(&Span::ranged("<example>", "Example text", 3..=9)), b"mple te");
+    }
+    #[test]
+    fn test_span_nom_compare() {
+        // Do some comparisons
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::ranged("<example>", "Example text", 0..=6), "Example"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::ranged("<example>", "Example text", 8..=11), "text"), nom::CompareResult::Ok);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example text 2"), nom::CompareResult::Incomplete);
+        assert_eq!(<Span as nom::Compare<&str>>::compare(&Span::new("<example>", "Example text"), "Example2 text"), nom::CompareResult::Error);
+    }
+    #[test]
+    fn test_span_nom_extend_into() {
+        let file: &str = "<test>";
+        let code: &str = "let test: &str = \"Hello, there!\"\nprintln!(\"{test}\");";
+
+        // Attempt to combine a few spans
+        let spans = vec![
+            Span::ranged(file, code, 0..=2),
+            Span::ranged(file, code, 4..=7),
+            Span::ranged(file, code, 11..=13),
+            Span::ranged(file, code, 18..=22),
+            Span::ranged(file, code, 25..=29),
+            Span::ranged(file, code, 32..=39),
+            Span::ranged(file, code, 44..=47),
+        ];
+
+        // Try various combinations
+        for spans in spans.iter().combinations(2) {
+            assert_eq!(spans.len(), 2);
+            let span1: &Span = spans[0];
+            let span2: &Span = spans[1];
+
+            // Compare them
+            let mut builder = <Span as nom::ExtendInto>::new_builder(&span1);
+            <Span as nom::ExtendInto>::extend_into(&span2, &mut builder);
+            assert_eq!(builder.text(), Span::combined(span1, span2).text());
+        }
+    }
+    #[test]
+    fn test_span_nom_find_substring() {
+        // Find substrings as indices in the source
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Hello"), Some(0));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "world"), Some(7));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "!"), Some(12));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Bananas"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::new("<example>", "Hello, world!"), "Helol"), None);
+
+        // Do the same but with limited source
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::ranged("<example>", "Hello, world!", 7..=12), "Hello"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::ranged("<example>", "Hello, world!", 7..=12), "world"), Some(0));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::ranged("<example>", "Hello, world!", 7..=12), "!"), Some(5));
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::ranged("<example>", "Hello, world!", 7..=12), "Bananas"), None);
+        assert_eq!(<Span as nom::FindSubstring<&str>>::find_substring(&Span::ranged("<example>", "Hello, world!", 7..=12), "Helol"), None);
+    }
+    #[test]
+    fn test_span_nom_find_token() {
+        let file: &str = "<test>";
+        let text: &str = "Hello there!ÿ";
+
+        // Find some bytes in full source...
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'H'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'o'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'!'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::new(file, text), b'q'), false);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::ranged(file, text, 6..=13), b'H'), false);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::ranged(file, text, 6..=13), b'o'), false);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::ranged(file, text, 6..=13), b'!'), true);
+        assert_eq!(<Span as nom::FindToken<u8>>::find_token(&Span::ranged(file, text, 6..=13), b'q'), false);
+
+        // Find some characters in full source...
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'H'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'o'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), '!'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'q'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::new(file, text), 'ÿ'), true);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::ranged(file, text, 6..=13), 'H'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::ranged(file, text, 6..=13), 'o'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::ranged(file, text, 6..=13), '!'), true);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::ranged(file, text, 6..=13), 'q'), false);
+        assert_eq!(<Span as nom::FindToken<char>>::find_token(&Span::ranged(file, text, 6..=13), 'ÿ'), true);
+
+        // Find some graphemes in full source...
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "H"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "o"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "!"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "q"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::new(file, text), "ÿ"), true);
+        // ...and ranges source
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::ranged(file, text, 6..=13), "H"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::ranged(file, text, 6..=13), "o"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::ranged(file, text, 6..=13), "!"), true);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::ranged(file, text, 6..=13), "q"), false);
+        assert_eq!(<Span as nom::FindToken<&str>>::find_token(&Span::ranged(file, text, 6..=13), "ÿ"), true);
+    }
+    #[test]
+    fn test_span_nom_input_iter() {
+        let target: &str = "Example text";
+        let span = Span::new("<example>", target);
+
+        // Try to iterate index/element-wise
+        for (i, b) in <Span as nom::InputIter>::iter_indices(&span) {
+            assert_eq!(b, target.as_bytes()[i]);
+        }
+
+        // Try to iterate element-wise
+        let mut chars = target.bytes();
+        for b in <Span as nom::InputIter>::iter_elements(&span) {
+            let c: u8 = if let Some(c) = chars.next() { c } else { panic!("Too many bytes in iter_elements()"); };
+            assert_eq!(b, c);
+        }
+
+        // Take the position
+        assert_eq!(<Span as nom::InputIter>::position(&span, |b: u8| b == b'l'), Some(5));
+        assert_eq!(<Span as nom::InputIter>::position(&span, |b: u8| b == b't'), Some(8));
+
+        // Take the slice
+        match <Span as nom::InputIter>::slice_index(&span, 5) {
+            Ok(idx)  => { assert_eq!(idx, 5); },
+            Err(err) => { panic!("Taking the slice index of Span failed: {err:?}"); },
+        }
+    }
+    #[test]
+    fn test_span_nom_input_length() {
+        // Create a few spans and see if their length matches with what we expect
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::new("<example>", "Example text")), 12);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::ranged("<example>", "Example text", 0..=6)), 7);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::ranged("<example>", "Example text", 8..=11)), 4);
+        assert_eq!(<Span as nom::InputLength>::input_len(&Span::ranged("<example>", "Example text", 3..=9)), 7);
+    }
+    #[test]
+    fn test_span_nom_input_take() {
+        // See if we can take and split how we expect
+        assert_eq!(<Span as nom::InputTake>::take(&Span::new("<example>", "Example text"), 7), Span::ranged("<example>", "Example text", 0..=6));
+        assert_eq!(<Span as nom::InputTake>::take(&Span::ranged("<example>", "Example text", 8..=11), 3), Span::ranged("<example>", "Example text", 8..=10));
+        assert_eq!(<Span as nom::InputTake>::take(&Span::ranged("<example>", "Example text", 8..=11), 0), Span::empty("<example>", "Example text"));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take(&Span::ranged("<example>", "Example text", 8..=11), 5)).is_err());
+
+        // Now compare the split
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::new("<example>", "Example text"), 7), (Span::ranged("<example>", "Example text", 0..=6), Span::ranged("<example>", "Example text", 7..=11)));
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::ranged("<example>", "Example text", 8..=11), 3), (Span::ranged("<example>", "Example text", 8..=10), Span::ranged("<example>", "Example text", 11..=11)));
+        assert_eq!(<Span as nom::InputTake>::take_split(&Span::ranged("<example>", "Example text", 8..=11), 0), (Span::empty("<example>", "Example text"), Span::ranged("<example>", "Example text", 8..=11)));
+        assert!(std::panic::catch_unwind(|| <Span as nom::InputTake>::take_split(&Span::ranged("<example>", "Example text", 8..=11), 5)).is_err());
+    }
+    #[test]
+    fn test_span_nom_input_take_at_position() {
+        use nom::InputTakeAtPosition as _;
+        use nom::error::{ErrorKind, ParseError as _, VerboseError};
+        type I<'f, 's> = (Span<'f, 's>, Span<'f, 's>);
+        type E<'f, 's> = nom::Err<VerboseError<Span<'f, 's>>>;
+
+        // Attempt to split at some points
+        let span = Span::new("<example>", "Example text!");
+        assert_eq!(span.split_at_position(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
+        assert_eq!(span.split_at_position(|c| c == 't'), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position(|c| c == '!'), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position(|c| c == '_'), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
+
+        // Do it again with a different function
+        assert_eq!(span.split_at_position1(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position1(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position1(|c| c == '_', ErrorKind::Many0), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
+
+        // And complete counterpart 1
+        assert_eq!(span.split_at_position1_complete(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1_complete(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position1_complete(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position1_complete(|c| c == '_', ErrorKind::Many0), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
+
+        // Finally, complete counterpart lenient.
+        assert_eq!(span.split_at_position_complete(|c| c == 'E'), Ok::<I, E>((Span::empty("<example>", "Example text!"), Span::new("<example>", "Example text!"))));
+        assert_eq!(span.split_at_position_complete(|c| c == 't'), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
+        assert_eq!(span.split_at_position_complete(|c| c == '!'), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
+        assert_eq!(span.split_at_position_complete(|c| c == '_'), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -369,9 +590,11 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 6..=5).is_empty(), true);
     /// ```
     #[inline]
-    fn is_empty(&self) -> bool { self.len() > 0 }
+    fn is_empty(&self) -> bool { self.len() == 0 }
 
     /// Returns the length of the spanned area.
+    /// 
+    /// Note that this length takes into account the length of the source text.
     /// 
     /// # Returns
     /// The number of characters (or other logical unit) spanned.
@@ -385,12 +608,14 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..=12).len(), 6);
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 5..=5).len(), 1);
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 6..=5).len(), 0);
+    /// assert_eq!(Span::ranged("<example>", "Hello, world!", 0..=42).len(), 13);
     /// ```
     #[inline]
     fn len(&self) -> usize {
+        let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
-            (Some(start), Some(end)) => if start <= end { 1 + end - start } else { 0 },
-            (None, _) | (_, None)    => 0,
+            (Some(start), Some(end)) => if start <= end && end < source.len() { 1 + end - start } else if start <= end && !source.is_empty() { source.len() - 1 } else { 0 },
+            (_, _)                   => 0,
         }
     }
 }
@@ -627,37 +852,6 @@ impl<'f, 's, T: SpanningExt> PartialEq<T> for Span<'f, 's> {
         self.file == other.file() && self.text() == self.text()
     }
 }
-// impl<'f, 's, S: RangeBounds<usize>> Index<S> for Span<'f, 's> {
-//     type Output = Self;
-
-//     fn index(&self, index: S) -> &Self::Output {
-//         // Compute the new start bound
-//         let start: Option<usize> = match (self.range.0, index.start_bound()) {
-//             // NOTE: The part below is allowed because, if the new bound would evaluate higher than usize::MAX, then, because start is inclusive, it will always be empty.
-//             (Some(base), Bound::Excluded(idx)) => if *idx < usize::MAX && base <= usize::MAX - (*idx + 1) { Some(base + *idx + 1) } else { None },
-//             (Some(base), Bound::Included(idx)) => if base <= usize::MAX - *idx { Some(base + *idx) } else { None },
-//             (Some(base), Bound::Unbounded)     => Some(base),
-//             // NOTE: We defined either side [`None`] as empty, so we never can index that no matter how hard we tried.
-//             (None, _)                          => None,
-//         };
-//         // Compute the new end bound
-//         let end: Option<usize> = match (self.range.1, index.end_bound()) {
-//             // NOTE: The part below is allowed because, if the new bound would evaluate higher than usize::MAX, then, because end is inclusive, it will always be empty.
-//             (Some(base), Bound::Excluded(idx)) => if *idx > 0 && base <= usize::MAX - (*idx - 1) { Some(base + (*idx - 1)) } else { None },
-//             (Some(base), Bound::Included(idx)) => if base <= usize::MAX - *idx { Some(base + *idx) } else { None }, 
-//             (Some(base), Bound::Unbounded)     => Some(base),
-//             // NOTE: We defined either side [`None`] as empty, so we never can index that no matter how hard we tried.
-//             (None, _)                          => None,
-//         };
-
-//         // Alright create the new span
-//         &Span {
-//             file   : self.file,
-//             source : self.source,
-//             range  : (start, end),
-//         }
-//     }
-// }
 
 impl<'f, 's> AsRef<str> for Span<'f, 's> {
     #[inline]
@@ -679,4 +873,305 @@ impl<'f, 's> From<&Span<'f, 's>> for Span<'f, 's> {
 impl<'f, 's> From<&mut Span<'f, 's>> for Span<'f, 's> {
     #[inline]
     fn from(value: &mut Span<'f, 's>) -> Self { value.clone() }
+}
+
+// [`nom`]-related stuff
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::AsBytes for Span<'f, 's> {
+    #[inline]
+    fn as_bytes(&self) -> &[u8] { self.text().as_bytes() }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, S: AsRef<str>> nom::Compare<S> for Span<'f, 's> {
+    #[inline]
+    fn compare(&self, t: S) -> nom::CompareResult {
+        let s: &str = self.text();
+        let t: &str = t.as_ref();
+
+        // Compare string-wise
+        let mut ss = s.graphemes(true);
+        for tc in t.graphemes(true) {
+            let sc: &str = if let Some(sc) = ss.next() { sc } else { return nom::CompareResult::Incomplete; };
+            if sc != tc { return nom::CompareResult::Error; }
+        }
+        nom::CompareResult::Ok
+    }
+
+    #[inline]
+    fn compare_no_case(&self, t: S) -> nom::CompareResult {
+        let s: &str = self.text();
+        let t: &str = t.as_ref();
+
+        // Compare string-wise
+        let mut ss = s.graphemes(true);
+        for tc in t.graphemes(true) {
+            let sc: &str = if let Some(sc) = ss.next() { sc } else { return nom::CompareResult::Incomplete; };
+
+            // Equalize the case
+            let sc: String = sc.to_lowercase();
+            let tc: String = tc.to_lowercase();
+
+            // Compare now
+            if sc != tc { return nom::CompareResult::Error; }
+        }
+        nom::CompareResult::Ok
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::ExtendInto for Span<'f, 's> {
+    type Item = Self;
+    type Extender = Self;
+
+    #[inline]
+    fn new_builder(&self) -> Self::Extender { *self }
+    #[inline]
+    fn extend_into(&self, acc: &mut Self::Extender) { acc.consume(self); }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::FindToken<u8> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: u8) -> bool {
+        for b in self.text().bytes() {
+            if b == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::FindToken<char> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: char) -> bool {
+        for c in self.text().chars() {
+            if c == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, 's2> nom::FindToken<&'s2 str> for Span<'f, 's> {
+    #[track_caller]
+    fn find_token(&self, token: &'s2 str) -> bool {
+        for c in self.text().graphemes(true) {
+            if c == token { return true; }
+        }
+        false
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, T: AsRef<str>> nom::FindSubstring<T> for Span<'f, 's> {
+    fn find_substring(&self, substr: T) -> Option<usize> {
+        let source: &str = self.text();
+        let substr: &str = substr.as_ref();
+        for (i, _) in source.grapheme_indices(true) {
+            if i + substr.len() <= source.len() && &source[i..i + substr.len()] == substr {
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputIter for Span<'f, 's> {
+    type Item = u8;
+    type Iter = std::iter::Enumerate<std::vec::IntoIter<u8>>;
+    type IterElem = std::vec::IntoIter<u8>;
+
+    #[inline]
+    fn iter_indices(&self) -> Self::Iter { self.text().as_bytes().to_vec().into_iter().enumerate() }
+    fn iter_elements(&self) -> Self::IterElem { self.text().as_bytes().to_vec().into_iter() }
+
+    #[inline]
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        <Span as nom::InputIter>::iter_indices(self).find_map(|(i, b)| if predicate(b) { Some(i) } else { None })
+    }
+    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+        use std::num::NonZeroUsize;
+
+        match <Span as nom::InputIter>::iter_indices(self).nth(count) {
+            Some((i, _)) => Ok(i),
+            None => Err(match NonZeroUsize::new(self.len() - 1 - count) {
+                Some(res) => nom::Needed::Size(res),
+                None => nom::Needed::Unknown,
+            }),
+        }
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputLength for Span<'f, 's> {
+    #[track_caller]
+    fn input_len(&self) -> usize { self.len() }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputTake for Span<'f, 's> {
+    #[inline]
+    #[track_caller]
+    fn take(&self, count: usize) -> Self {
+        // Panic if out-of-range (required by the function itself)
+        let self_len: usize = self.len();
+        if count > self_len { panic!("Given count {} is out-of-range for Span of size {}", count, self_len); }
+
+        // Find a new range for the taken span, which is easy because we know that count <= end
+        let range: (Option<usize>, Option<usize>) = if count > 0 { (self.range.0, Some(count - 1)) } else { (self.range.0, None) };
+
+        // Return a new Span with that
+        Span {
+            file   : self.file,
+            source : self.source,
+            range,
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        // Panic if out-of-range (required by the function itself)
+        let self_len: usize = self.len();
+        if count > self_len { panic!("Given count {} is out-of-range for Span of size {}", count, self_len); }
+        // The first span can be `self.take()`en
+        let first: Span = self.take(count);
+
+        // Compute the range of the second span
+        let range: (Option<usize>, Option<usize>) = (Some(count), self.range.1);
+
+        // We can return both of them
+        (
+            first,
+            Span {
+                file   : self.file,
+                source : self.source,
+                range,
+            }
+        )
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
+    type Item = char;
+
+    fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                return Ok(self.take_split(i));
+            }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
+    fn split_at_position1<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                let (split, rem): (Span, Span) = self.take_split(i);
+                println!("{split:?}");
+                if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
+                return Ok((split, rem));
+            }
+        }
+        Err(nom::Err::Incomplete(nom::Needed::Unknown))
+    }
+
+    fn split_at_position1_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                let (split, rem): (Span, Span) = self.take_split(i);
+                if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
+                return Ok((split, rem));
+            }
+        }
+
+        // Instead of crashing, return the full slice
+        Ok((*self, Span::empty(self.file, self.source)))
+    }
+    fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        use nom::InputTake as _;
+
+        let mut chars = self.text().char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            // Check if this is the character the user is looking for
+            if predicate(c) {
+                // It is; so perform the split at this location
+                // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
+                return Ok(self.take_split(i));
+            }
+        }
+
+        // Instead of crashing, return the full slice
+        Ok((*self, Span::empty(self.file, self.source)))
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's> nom::Offset for Span<'f, 's> {
+    #[inline]
+    #[track_caller]
+    fn offset(&self, second: &Self) -> usize {
+        // Compare the starts
+        match (self.range.0, second.range.0) {
+            (Some(start1), Some(start2)) => start2 - start1,
+            (_, _)                       => { panic!("Cannot get offset of Span that has [`None`] as start"); },
+        }
+    }
+}
+#[cfg(feature = "nom")]
+impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
+    #[inline]
+    #[track_caller]
+    fn slice(&self, range: R) -> Self {
+        // Obtain the range
+        let range: (usize, Option<usize>) = match (range.start_bound(), range.end_bound()) {
+            (Bound::Included(i1), Bound::Included(i2)) => (*i1, Some(*i2)),
+            (Bound::Included(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1, Some(*i2 - 1)) } else { (*i1, None) },
+            (Bound::Included(i1), Bound::Unbounded)    => (*i1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+            (Bound::Excluded(i1), Bound::Included(i2)) => (*i1 + 1, Some(*i2)),
+            (Bound::Excluded(i1), Bound::Excluded(i2)) => if *i2 > 0 { (*i1 + 1, Some(*i2 - 1)) } else { (*i1 + 1, None) },
+            (Bound::Excluded(i1), Bound::Unbounded)    => (*i1 + 1, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+            (Bound::Unbounded, Bound::Included(i2))    => (0, Some(*i2)),
+            (Bound::Unbounded, Bound::Excluded(i2))    => if *i2 > 0 { if !self.source.is_empty() { (0, Some(*i2 - 1)) } else { (0, None) } } else { (0, None) },
+            (Bound::Unbounded, Bound::Unbounded)       => (0, if !self.source.is_empty() { Some(self.source.len() - 1) } else { None }),
+        };
+
+        // Now scale that down within context of our own range
+        let range: (Option<usize>, Option<usize>) = match (self.range, range) {
+            ((Some(start1), Some(end1)), (start2, Some(end2))) => (Some(start1 + start2), Some(std::cmp::min(end1, start1 + end2))),
+            ((Some(start1), _), (start2, _))                   => (Some(start1 + start2), None),
+            ((None, _), (_, _))                                => (None, None),
+        };
+
+        // Create outselves with it
+        Self {
+            file   : self.file,
+            source : self.source,
+            range,
+        }
+    }
 }
