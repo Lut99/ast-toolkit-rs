@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    30 Aug 2023, 14:04:25
+//    30 Aug 2023, 15:40:50
 //  Auto updated?
 //    Yes
 // 
@@ -30,13 +30,12 @@
 #[cfg(not(feature = "nom"))]
 compile_error!("You must enable the `nom`-feature to compile the `nom.rs` example");
 
-use std::ops::Deref;
 use std::str::FromStr as _;
 
 use nom::IResult;
 use nom::{bytes::complete as bc, character::complete as cc, combinator as comb, multi, sequence as seq};
 
-use ast_toolkit::Span;
+use ast_toolkit::{Span, SpanningExt as _};
 
 
 /***** AST *****/
@@ -176,25 +175,25 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 
 // }
 
-// /// Parses an integer literal for our simple language
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
-//     comb::map(
-//         comb::recognize(seq::pair(
-//             comb::opt(bc::tag("-")),
-//             cc::digit0,
-//         )),
-//         |parsed: Span<'f, 's>| -> i64 { i64::from_str(parsed.text()).unwrap() }
-//     )(input)
-// }
+/// Parses an integer literal for our simple language
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
+    comb::map(
+        comb::recognize(seq::pair(
+            comb::opt(bc::tag("-")),
+            cc::digit1,
+        )),
+        |parsed: Span<'f, 's>| -> i64 { i64::from_str(parsed.text()).unwrap() }
+    )(input)
+}
 
 
 
@@ -206,7 +205,7 @@ fn main() {
     let source: &str = "hello_world();\nhello_x(\"world\");\nadd(42, 42);";
     let input: Span = Span::new(file, source);
 
-    // // Parse it
-    // let (rem, value) = parse_integer(Span::new("<test>", "42")).unwrap();
-    // println!("{value}");
+    // Parse it
+    let (rem, value) = parse_integer(Span::new("<test>", "42")).unwrap();
+    println!("{value}");
 }

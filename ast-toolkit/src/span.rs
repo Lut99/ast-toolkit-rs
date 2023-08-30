@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    30 Aug 2023, 15:28:20
+//    30 Aug 2023, 15:40:26
 //  Auto updated?
 //    Yes
 // 
@@ -1146,14 +1146,14 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
         // Compute the range of the second span
         let range: (Option<usize>, Option<usize>) = (Some(count), self.range.1);
 
-        // We can return both of them
+        // We can return both of them, but note the reverse order 'cuz nom!
         (
-            first,
             Span {
                 file   : self.file,
                 source : self.source,
                 range,
-            }
+            },
+            first,
         )
     }
 }
@@ -1190,9 +1190,9 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
             if predicate(c) {
                 // It is; so perform the split at this location
                 // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
-                let (split, rem): (Span, Span) = self.take_split(i);
+                let (rem, split): (Span, Span) = self.take_split(i);
                 if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
-                return Ok((split, rem));
+                return Ok((rem, split));
             }
         }
         Err(nom::Err::Incomplete(nom::Needed::Unknown))
@@ -1210,14 +1210,14 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
             if predicate(c) {
                 // It is; so perform the split at this location
                 // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
-                let (split, rem): (Span, Span) = self.take_split(i);
+                let (rem, split): (Span, Span) = self.take_split(i);
                 if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
-                return Ok((split, rem));
+                return Ok((rem, split));
             }
         }
 
         // Instead of crashing, return the full slice
-        Ok((*self, Span::empty(self.file, self.source)))
+        Ok((Span::ranged(self.file, self.source, self.source.len()..self.source.len()), *self))
     }
     fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
     where
@@ -1236,7 +1236,7 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
         }
 
         // Instead of crashing, return the full slice
-        Ok((*self, Span::empty(self.file, self.source)))
+        Ok((Span::ranged(self.file, self.source, self.source.len()..self.source.len()), *self))
     }
 }
 #[cfg(feature = "nom")]
@@ -1252,7 +1252,7 @@ impl<'f, 's> nom::Offset for Span<'f, 's> {
     }
 }
 #[cfg(feature = "nom")]
-impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
+impl<'f, 's, R: std::fmt::Debug + RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
     #[inline]
     #[track_caller]
     fn slice(&self, range: R) -> Self {
