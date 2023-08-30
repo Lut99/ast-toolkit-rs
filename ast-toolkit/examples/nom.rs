@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    30 Aug 2023, 15:40:50
+//    31 Aug 2023, 00:17:36
 //  Auto updated?
 //    Yes
 // 
@@ -21,7 +21,7 @@
 //!   ```
 //!   hello_world();
 //!   hello_x("world");
-//!   add(42, 42);
+//!   add(42,42);
 //!   ```
 //!   
 //!   Where we only define strings and constants as literals.
@@ -32,8 +32,9 @@ compile_error!("You must enable the `nom`-feature to compile the `nom.rs` exampl
 
 use std::str::FromStr as _;
 
-use nom::IResult;
-use nom::{bytes::complete as bc, character::complete as cc, combinator as comb, multi, sequence as seq};
+use nom::{IResult, Parser};
+use nom::{branch, bytes::complete as bc, character::complete as cc, combinator as comb, error, multi, sequence as seq};
+use unicode_segmentation::UnicodeSegmentation as _;
 
 use ast_toolkit::{Span, SpanningExt as _};
 
@@ -95,85 +96,142 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 
 
 
-// /// Parses the toplevel program for our simple language.
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed program and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_program<F: Clone + PartialEq, S: Clone + PartialEq>(input: Input<F, S>) -> Output<F, S, ast::Program<F, S>> {
-//     // Parse a list of calls and process that into a thing
-//     comb::map(
-//         multi::many0(parse_call),
-//         |calls: Vec<ast::FunctionCall<F, S>>| -> ast::Program<F, S> {
-//             // Deduce the over-arching span
-//             let span: Option<Span<F, S>> = match (calls.first(), calls.last()) {
-//                 (Some(c1), Some(c2)) => Some(Span::combined(&c1.span, &c2.span)),
-//                 _ => None,
-//             };
+/// Parses the toplevel program for our simple language.
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed program and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f, 's>> {
+    // Parse a list of calls and process that into a thing
+    comb::map(
+        // multi::separated_list0(cc::multispace0, parse_call),
+        multi::many0(whitespace(parse_call)),
+        |calls: Vec<ast::FunctionCall<'f, 's>>| -> ast::Program<'f, 's> {
+            // Deduce the over-arching span
+            let span: Option<Span<'f, 's>> = match (calls.first(), calls.last()) {
+                (Some(c1), Some(c2)) => Some(Span::combined(c1.span, c2.span)),
+                _ => None,
+            };
 
-//             // Done
-//             ast::Program {
-//                 calls,
-//                 span,
-//             }
-//         },
-//     )(input)
-// }
+            // Done
+            ast::Program {
+                calls,
+                span,
+            }
+        },
+    )(input)
+}
 
-// /// Parses a statement (i.e., function call) for our simple language.
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed function call and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_call<F, S>(input: Input<F, S>) -> Output<F, S, ast::FunctionCall<F, S>> {
-//     // Parse an identifier, a left brace, a comma-separated list of literals, a right brace and a semicolon
-//     comb::map(
-//         seq::tuple((
-            
-//         )),
-//         |(): ()| -> ast::FunctionCall<F, S> {
+/// Parses a statement (i.e., function call) for our simple language.
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed function call and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<'f, 's>> {
+    // Parse an identifier, a left brace, a comma-separated list of literals, a right brace and a semicolon
+    error::context("function call", comb::map(
+        seq::pair(
+            comb::recognize(seq::pair(branch::alt((cc::alpha1, bc::tag("_"))), multi::many0(branch::alt((cc::alphanumeric1, bc::tag("_")))))),
+            comb::cut(seq::pair(
+                seq::delimited(
+                    cc::char('('),
+                    multi::separated_list0(cc::char(','), parse_lit),
+                    cc::char(')'),
+                ),
+                bc::tag(";"),
+            )),
+        ),
+        |(id, (args, semicolon)): (Span<'f, 's>, (Vec<ast::Literal<'f, 's>>, Span<'f, 's>))| -> ast::FunctionCall<'f, 's> {
+            ast::FunctionCall {
+                name : id.text().into(),
+                args,
+                span : Span::combined(id, semicolon),
+            }
+        },
+    ))(input)
+}
 
-//         },
-//     )(input)
-// }
+/// Parses a call argument (i.e., a literal) for our simple language
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed literal and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
+    branch::alt((
+        parse_string,
+        parse_integer,
+    ))(input)
+}
 
-// /// Parses a call argument (i.e., a literal) for our simple language
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed function call and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_lit<F, S>(input: Input<F, S>) -> Output<F, S, ast::FunctionCall<F, S>> {
+/// Parses a string literal for our simple language
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The parsed string (as a literal) and any part of the `input` that wasn't parsed, as a tuple.
+/// 
+/// # Errors
+/// This function can error if we failed to parse any particular input text.
+fn parse_string<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
+    error::context("string literal",
+        comb::map(
+            comb::recognize(seq::pair(
+                cc::char('\"'),
+                comb::cut(seq::pair(
+                    // bc::escaped(bc::is_not("\"\\"), '\\', cc::one_of("\"ntr\\\'")),
+                    bc::is_not("\"\\"),
+                    cc::char('\"'),
+                )),
+            )),
+            |lit: Span<'f, 's>| -> ast::Literal<'f, 's> {
+                // Get the string without quotes
+                let text: &str = &lit.text()[1..lit.len() - 1];
 
-// }
+                // Tie the contents together
+                let mut value: String = String::new();
+                let mut escaped: bool = false;
+                for c in text.graphemes(true) {
+                    if !escaped && c == "\n" {
+                        escaped = true;
+                    } else if escaped {
+                        match c {
+                            "\"" => value.push('\"'),
+                            "n"  => value.push('\n'),
+                            "t"  => value.push('\t'),
+                            "r"  => value.push('\r'),
+                            "'"  => value.push('\''),
+                            _    => { unreachable!(); },
+                        }
+                    } else {
+                        value.push_str(c);
+                    }
+                }
 
-// /// Parses a call argument (i.e., a literal) for our simple language
-// /// 
-// /// # Arguments
-// /// - `input`: The input [`Span`] to parse.
-// /// 
-// /// # Returns
-// /// The parsed function call and any part of the `input` that wasn't parsed, as a tuple.
-// /// 
-// /// # Errors
-// /// This function can error if we failed to parse any particular input text.
-// fn parse_lit<F, S>(input: Input<F, S>) -> Output<F, S, ast::FunctionCall<F, S>> {
-
-// }
+                // Return the literal
+                ast::Literal {
+                    variant : ast::LiteralVariant::String(value),
+                    span    : lit,
+                }
+            }
+        )
+    )(input)
+}
 
 /// Parses an integer literal for our simple language
 /// 
@@ -181,18 +239,42 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 /// - `input`: The input [`Span`] to parse.
 /// 
 /// # Returns
-/// The parsed value and any part of the `input` that wasn't parsed, as a tuple.
+/// The parsed integer (as a literal) and any part of the `input` that wasn't parsed, as a tuple.
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
+fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
     comb::map(
         comb::recognize(seq::pair(
             comb::opt(bc::tag("-")),
             cc::digit1,
         )),
-        |parsed: Span<'f, 's>| -> i64 { i64::from_str(parsed.text()).unwrap() }
+        |parsed: Span<'f, 's>| -> ast::Literal<'f, 's> {
+            ast::Literal {
+                variant : ast::LiteralVariant::Integer(i64::from_str(parsed.text()).unwrap()),
+                span    : parsed,
+            }
+        }
     )(input)
+}
+
+/// Meta-parser that parses the given parser with optional surrounding whitespace.
+/// 
+/// # Arguments
+/// - `parser`: The parser to parse.
+/// 
+/// # Returns
+/// A new parser that parsers this parser with optional surrounding whitespace.
+fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, nom::error::Error<Span<'f, 's>>>) -> impl Parser<Input<'f, 's>, O, nom::error::Error<Span<'f, 's>>> {
+    move |input: Input<'f, 's>| -> Output<'f, 's, O> {
+        // Parse the whitespace first
+        let (rem, _) = cc::multispace0.parse(input)?;
+        // Parse the middle bit
+        let (rem, res) = parser.parse(rem)?;
+        // Parse the whitespace again
+        let (rem, _) = cc::multispace0.parse(rem)?;
+        Ok((rem, res))
+    }
 }
 
 
@@ -202,10 +284,19 @@ fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
 /***** ENTYRPOINT *****/
 fn main() {
     let file: &str = "<hardcoded>";
-    let source: &str = "hello_world();\nhello_x(\"world\");\nadd(42, 42);";
+    let source: &str = "hello_world();\nhello_x(\"world\");\nadd(42,42);";
     let input: Span = Span::new(file, source);
 
     // Parse it
-    let (rem, value) = parse_integer(Span::new("<test>", "42")).unwrap();
-    println!("{value}");
+    let (_, value) = parse_program(input).unwrap();
+
+    // We parsed it successfully! We can get what we like
+    println!();
+    for call in &value.calls {
+        println!("User used function '{}'!", call.name);
+        for (i, arg) in call.args.iter().enumerate() {
+            println!(" - Argument {}: {:?}", i + 1, arg.variant);
+        }
+        println!();
+    }
 }

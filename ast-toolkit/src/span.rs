@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    30 Aug 2023, 15:40:26
+//    30 Aug 2023, 23:58:16
 //  Auto updated?
 //    Yes
 // 
@@ -219,13 +219,13 @@ mod nom_tests {
         assert_eq!(span.split_at_position(|c| c == '_'), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
 
         // Do it again with a different function
-        assert_eq!(span.split_at_position1(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Error(VerboseError::from_error_kind(span, ErrorKind::Many0))));
         assert_eq!(span.split_at_position1(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
         assert_eq!(span.split_at_position1(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
         assert_eq!(span.split_at_position1(|c| c == '_', ErrorKind::Many0), Err(nom::Err::<VerboseError<Span>>::Incomplete(nom::Needed::Unknown)));
 
         // And complete counterpart 1
-        assert_eq!(span.split_at_position1_complete(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Failure(VerboseError::from_error_kind(span, ErrorKind::Many0))));
+        assert_eq!(span.split_at_position1_complete(|c| c == 'E', ErrorKind::Many0), Err(nom::Err::Error(VerboseError::from_error_kind(span, ErrorKind::Many0))));
         assert_eq!(span.split_at_position1_complete(|c| c == 't', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=7), Span::ranged("<example>", "Example text!", 8..))));
         assert_eq!(span.split_at_position1_complete(|c| c == '!', ErrorKind::Many0), Ok::<I, E>((Span::ranged("<example>", "Example text!", ..=11), Span::ranged("<example>", "Example text!", 12..))));
         assert_eq!(span.split_at_position1_complete(|c| c == '_', ErrorKind::Many0), Ok::<I, E>((span, Span::empty("<example>", "Example text!"))));
@@ -1124,7 +1124,10 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
         if count > self_len { panic!("Given count {} is out-of-range for Span of size {}", count, self_len); }
 
         // Find a new range for the taken span, which is easy because we know that count <= end
-        let range: (Option<usize>, Option<usize>) = if count > 0 { (self.range.0, Some(count - 1)) } else { (self.range.0, None) };
+        let range: (Option<usize>, Option<usize>) = match self.range.0 {
+            Some(start) => if count > 0 { (Some(start), Some(start + count - 1)) } else { (Some(start), None) },
+            None        => (None, None),
+        };
 
         // Return a new Span with that
         Span {
@@ -1140,11 +1143,12 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
         // Panic if out-of-range (required by the function itself)
         let self_len: usize = self.len();
         if count > self_len { panic!("Given count {} is out-of-range for Span of size {}", count, self_len); }
-        // The first span can be `self.take()`en
-        let first: Span = self.take(count);
 
         // Compute the range of the second span
-        let range: (Option<usize>, Option<usize>) = (Some(count), self.range.1);
+        let range: (Option<usize>, Option<usize>) = match self.range.0 {
+            Some(start) => (Some(start + count), self.range.1),
+            None        => (None, self.range.1),
+        };
 
         // We can return both of them, but note the reverse order 'cuz nom!
         (
@@ -1153,7 +1157,7 @@ impl<'f, 's> nom::InputTake for Span<'f, 's> {
                 source : self.source,
                 range,
             },
-            first,
+            self.take(count),
         )
     }
 }
@@ -1167,7 +1171,7 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     {
         use nom::InputTake as _;
 
-        let mut chars = self.text().char_indices().peekable();
+        let mut chars = self.text().char_indices();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
@@ -1184,14 +1188,14 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     {
         use nom::InputTake as _;
 
-        let mut chars = self.text().char_indices().peekable();
+        let mut chars = self.text().char_indices();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
                 // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
                 let (rem, split): (Span, Span) = self.take_split(i);
-                if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
+                if split.is_empty() { return Err(nom::Err::Error(E::from_error_kind(*self, e))); }
                 return Ok((rem, split));
             }
         }
@@ -1204,14 +1208,14 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     {
         use nom::InputTake as _;
 
-        let mut chars = self.text().char_indices().peekable();
+        let mut chars = self.text().char_indices();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
                 // It is; so perform the split at this location
                 // (note that we can pass i because the fact that `take_split()` takes a count, i.e., the index of the first element in the remainder of the split. And that's what we want here too!)
                 let (rem, split): (Span, Span) = self.take_split(i);
-                if split.is_empty() { return Err(nom::Err::Failure(E::from_error_kind(*self, e))); }
+                if split.is_empty() { return Err(nom::Err::Error(E::from_error_kind(*self, e))); }
                 return Ok((rem, split));
             }
         }
@@ -1225,7 +1229,7 @@ impl<'f, 's> nom::InputTakeAtPosition for Span<'f, 's> {
     {
         use nom::InputTake as _;
 
-        let mut chars = self.text().char_indices().peekable();
+        let mut chars = self.text().char_indices();
         while let Some((i, c)) = chars.next() {
             // Check if this is the character the user is looking for
             if predicate(c) {
