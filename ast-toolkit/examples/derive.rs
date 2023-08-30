@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    12 Aug 2023, 12:09:57
+//    30 Aug 2023, 14:05:50
 //  Auto updated?
 //    Yes
 // 
@@ -83,24 +83,24 @@ impl Error for TestError {}
 
 /***** ENTRYPOINT *****/
 fn main() {
-    Diagnostic::from(TestError::SingleLine{ span: Span::from_idx("<builtin>", "SOURCE TEXT SOURCE TEXT SOURCE TEXT", 0, 10).into() }).emit();
-    Diagnostic::from(TestError::SingleInMultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 22).into() }).emit();
-    Diagnostic::from(TestError::MultiLine { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 29).into() }).emit();
+    Diagnostic::from(TestError::SingleLine{ span: Span::ranged("<builtin>", "SOURCE TEXT SOURCE TEXT SOURCE TEXT", 0..=10).into() }).emit();
+    Diagnostic::from(TestError::SingleInMultiLine { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12..=22).into() }).emit();
+    Diagnostic::from(TestError::MultiLine { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12..=29).into() }).emit();
 
     // Codes, notes
-    Diagnostic::from(TestError::CommonError { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0).into() }).emit();
-    Diagnostic::from(TestError::CommonErrorRuntime { code: format!("E00{}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 0).into() }).emit();
-    Diagnostic::from(TestError::SpecificWarn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34).into() }).emit();
-    Diagnostic::from(TestError::SpecificWarnRuntime { remark: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34, 34).into() }).emit();
+    Diagnostic::from(TestError::CommonError { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0..=0).into() }).emit();
+    Diagnostic::from(TestError::CommonErrorRuntime { code: format!("E00{}", 2), span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0..=0).into() }).emit();
+    Diagnostic::from(TestError::SpecificWarn { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34..=34).into() }).emit();
+    Diagnostic::from(TestError::SpecificWarnRuntime { remark: format!("`#[warn({})]` is enabled by default", "runtime_error"), span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 34..=34).into() }).emit();
 
     // Warnings, notes
-    Diagnostic::from(TestError::Warn { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12, 17).into() }).emit();
-    Diagnostic::from(TestError::Note { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
+    Diagnostic::from(TestError::Warn { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 12..=17).into() }).emit();
+    Diagnostic::from(TestError::Note { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22).into() }).emit();
 
     // Some suggestion
-    Diagnostic::from(TestError::Suggestion { span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
-    Diagnostic::from(TestError::SuggestionRuntime { replace: format!("text {}", 2), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19, 22).into() }).emit();
+    Diagnostic::from(TestError::Suggestion { span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22).into() }).emit();
+    Diagnostic::from(TestError::SuggestionRuntime { replace: format!("text {}", 2), span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22).into() }).emit();
 
     // Chain a few
-    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), replace: "source".into(), span: Span::from_idx("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0, 5).into() }).emit();
+    Diagnostic::from(TestError::Chained { identifier: "SOURCE".into(), replace: "source".into(), span: Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0..=5).into() }).emit();
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    29 Aug 2023, 16:52:11
+//    30 Aug 2023, 14:04:05
 //  Auto updated?
 //    Yes
 // 
@@ -15,7 +15,6 @@
 
 use std::borrow::Cow;
 use std::io::Write;
-use std::ops::{Bound, RangeBounds as _};
 
 use console::{style, Style};
 use enum_debug::EnumDebug;
@@ -334,7 +333,7 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
                 if !found { end = source.len() - 1; }   // NOTE: This `end - 1` is OK because we already asserted end is less than source.len(), which can only be true if the source len() > 0.
 
                 // OK, slice the string like this
-                &source[start..=end]
+                (source[..start].chars().filter(|c| *c == '\n').count(), Some(start), Some(end), &source[start..=end])
             } else {
                 (source[..start].chars().filter(|c| *c == '\n').count(), Some(start), None, "")
             },
@@ -345,22 +344,14 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
         };
 
         // Construct a range that is scaled to the only captured lines
-        let scaled_start: Bound<usize> = match (start, line_start) {
-            (Bound::Excluded(bound), Bound::Excluded(line_bound)) => Bound::Excluded(bound - line_bound),
-            (Bound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
-            (Bound::Unbounded, _)                                   => SpanBound::Unbounded,
-        };
-        let scaled_end: Bound<usize> = match (end, line_start) {
-            (Bound::Bounded(bound), SpanBound::Bounded(line_bound)) => SpanBound::Bounded(bound - line_bound),
-            (Bound::Bounded(bound), SpanBound::Unbounded)           => SpanBound::Bounded(bound),
-            (Bound::Unbounded, _)                                   => SpanBound::Unbounded,
-        };
+        let relative_start: Option<usize> = start;
+        let relative_end: Option<usize> = end.map(|end| if let Some(start) = start { if start <= end { end - start } else { end } } else { end });
 
         // Extract that piece of text and return ourselves
         Self {
             file   : value.file.into(),
-            source : SpanRange::new(line_start, line_end).slice(value.source).into(),
-            range  : SpanRange::new(scaled_start, scaled_end),
+            source : lines_source.into(),
+            range  : (relative_start, relative_end),
             skipped,
         }
     }
@@ -910,26 +901,53 @@ impl Diagnostic {
         // If there is a range to emit, then also emit source stuff
         if !self.span.is_empty() {
             // If it's a suggestion, then catch the source and range and make some tweaks
-            let (source, accent_range): (Cow<str>, SpanRange) = match &self.kind {
+            let (source, accent_range): (Cow<str>, (Option<usize>, Option<usize>)) = match &self.kind {
                 DiagnosticSpecific::Suggestion { replace } => {
                     // First: construct a new source
-                    // NOTE: We can call start() because we ensure the span is never empty
                     let mut new_source: String = String::new();
-                    if let SpanBound::Bounded(bound) = self.span.range.start() {
-                        new_source.push_str(&self.span.source[..bound]);
-                    }
-                    new_source.push_str(replace);
-                    if let SpanBound::Bounded(bound) = self.span.range.end() {
-                        // Note we do the skip to exclude the bound position itself over a grapheme, which is inclusive
-                        new_source.push_str(&self.span.source[bound..].graphemes(true).skip(1).collect::<String>());
+                    match self.span.range {
+                        (Some(start), Some(end)) => {
+                            // First, add everything before the start (if it's within range, at least)
+                            if start < self.span.source.len() {
+                                new_source.push_str(&self.span.source[..start]);
+                            }
+
+                            // Add the replacement string
+                            new_source.push_str(replace);
+
+                            // Next, add everything after the end if it would make a non-empty span...
+                            if start <= end && end < self.span.source.len() {
+                                // Note we do the skip to exclude the bound position itself over a grapheme, which is inclusive
+                                new_source.push_str(&self.span.source[end..].graphemes(true).skip(1).collect::<String>());
+                            } else if start < self.span.source.len() {
+                                // ...or we consider start a length-zero span (which is why we include start here)
+                                new_source.push_str(&self.span.source[start..]);
+                            }
+                        },
+                        (Some(start), None) => {
+                            // First, add everything before the start (if it's within range, at least)
+                            if start < self.span.source.len() {
+                                new_source.push_str(&self.span.source[..start]);
+                            }
+
+                            // Add the replacement string
+                            new_source.push_str(replace);
+
+                            // ...and add everything after the start (if it's within range, at least)
+                            if start < self.span.source.len() {
+                                new_source.push_str(&self.span.source[start..]);
+                            }
+                        },
+                        (None, _) => {
+                            // We're shooting in the dark here, only add the replacement
+                            new_source.push_str(replace);
+                        }
                     }
 
                     // Then: compute the new range of the source
-                    let new_range: SpanRange = match self.span.range.range() {
-                        (SpanBound::Bounded(start), SpanBound::Bounded(_)) => SpanRange::Range(SpanBound::Bounded(start), SpanBound::Bounded(start + replace.len() - 1)),
-                        (SpanBound::Bounded(start), SpanBound::Unbounded)  => SpanRange::Range(SpanBound::Bounded(start), SpanBound::Unbounded),
-                        (SpanBound::Unbounded, SpanBound::Bounded(_))      => SpanRange::Range(SpanBound::Unbounded, SpanBound::Bounded(replace.len() - 1)),
-                        (SpanBound::Unbounded, SpanBound::Unbounded)       => SpanRange::Range(SpanBound::Unbounded, SpanBound::Unbounded),
+                    let new_range: (Option<usize>, Option<usize>) = match self.span.range {
+                        (Some(start), _) => (Some(start), Some(start + replace.len() - 1)),
+                        (None, _)        => (None, None),
                     };
 
                     // Alright, return the new things

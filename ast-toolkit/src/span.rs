@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    29 Aug 2023, 16:49:51
+//    30 Aug 2023, 14:04:10
 //  Auto updated?
 //    Yes
 // 
@@ -13,7 +13,7 @@
 //!   track of a node's position in the source text.
 // 
 
-use std::ops::{Bound, Index, RangeBounds};
+use std::ops::{Bound, RangeBounds};
 
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation as _;
