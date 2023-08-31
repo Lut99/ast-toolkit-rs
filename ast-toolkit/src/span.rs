@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    30 Aug 2023, 23:58:16
+//    31 Aug 2023, 23:23:07
 //  Auto updated?
 //    Yes
 // 
@@ -458,6 +458,29 @@ pub trait Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 42..=42).end_idx(), Some(42));
     /// ```
     fn end_idx(&self) -> Option<usize>;
+}
+
+impl<'a, T: Spanning> Spanning for &'a T {
+    #[inline]
+    fn file(&self) -> &str { T::file(self) }
+    #[inline]
+    fn source(&self) -> &str { T::source(self) }
+
+    #[inline]
+    fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
+    #[inline]
+    fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
+}
+impl<'a, T: Spanning> Spanning for &'a mut T {
+    #[inline]
+    fn file(&self) -> &str { T::file(self) }
+    #[inline]
+    fn source(&self) -> &str { T::source(self) }
+
+    #[inline]
+    fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
+    #[inline]
+    fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
 }
 
 
@@ -1256,7 +1279,7 @@ impl<'f, 's> nom::Offset for Span<'f, 's> {
     }
 }
 #[cfg(feature = "nom")]
-impl<'f, 's, R: std::fmt::Debug + RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
+impl<'f, 's, R: RangeBounds<usize>> nom::Slice<R> for Span<'f, 's> {
     #[inline]
     #[track_caller]
     fn slice(&self, range: R) -> Self {

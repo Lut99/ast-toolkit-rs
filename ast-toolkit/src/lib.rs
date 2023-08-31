@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    30 Aug 2023, 15:08:18
+//    31 Aug 2023, 22:55:27
 //  Auto updated?
 //    Yes
 // 
@@ -110,11 +110,18 @@ pub mod diagnostic;
 pub mod position;
 pub mod span;
 
+#[cfg(feature = "nom")]
+pub mod nom;
+
 
 // Pull the relevant stuff into the global namespace
 pub use diagnostic::{Diagnostic, DiagnosticKind, DiagnosticSpan};
 pub use position::Position;
 pub use span::{Span, Spanning, SpanningExt};
+
+#[cfg(feature = "nom")]
+pub use nom::NomError;
+
 
 // Pull any procedural macros into this namespace
 /// This module documents the use of the various procedural macros defined in the [`ast_toolkit_derive`]-crate.

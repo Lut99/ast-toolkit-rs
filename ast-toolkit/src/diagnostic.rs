@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    30 Aug 2023, 22:24:34
+//    31 Aug 2023, 23:27:15
 //  Auto updated?
 //    Yes
 // 
@@ -24,6 +24,22 @@ use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
 use crate::span::{Span, Spanning, SpanningExt};
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_span_from_self() {
+        let diag_span: DiagnosticSpan = Span::new("<example>", "Hello, world!").into_dspan();
+        assert_eq!(diag_span.into_dspan(), diag_span);
+    }
+}
+
+
+
 
 
 /***** HELPER MACROS *****/
@@ -302,12 +318,91 @@ impl<T: SpanningExt> PartialEq<T> for DiagnosticSpan {
     }
 }
 
-impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
+// impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
+//     #[inline]
+//     fn from(value: Span<'f, 's>) -> Self {
+//         // Find, find the indices
+//         let source: &str = value.source();
+//         let (start, end): (Option<usize>, Option<usize>) = (value.start_idx(), value.end_idx());
+//         let (line_start, line_end): (Option<usize>, Option<usize>) = crate::span::find_lines_box(source, start, end);
+
+//         // Extract the span
+//         let line_source: &str = match (line_start, line_end) {
+//             (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end {
+//                 // Fully in bounds
+//                 &source[start..=end]
+//             } else if start < source.len() {
+//                 // Now we know the source is non-empty & start is within bounds; clip
+//                 &source[start..]
+//             } else {
+//                 // Evaluates to an empty slice
+//                 ""
+//             },
+
+//             // The rest is always empty
+//             (_, _) => "",
+//         };
+
+//         // Scale the span's ranges to the found ranges
+//         let rel_start: Option<usize> = match (line_start, start) {
+//             (Some(line_start), Some(start)) => Some(start - line_start),
+//             (_, _)                          => None,
+//         };
+//         let rel_end: Option<usize> = match (line_start, end) {
+//             (Some(line_start), Some(end)) => Some(end - line_start),
+//             (_, _)                        => None,
+//         };
+
+//         // Compute the number of lines skipped
+//         let skipped: usize = match line_start {
+//             Some(start) => source[..start].chars().filter(|c| *c == '\n').count(),
+//             None        => 0,
+//         };
+
+//         // Extract that piece of text and return ourselves
+//         Self {
+//             file   : value.file.into(),
+//             source : line_source.into(),
+//             range  : (rel_start, rel_end),
+//             skipped,
+//         }
+//     }
+// }
+
+impl AsRef<DiagnosticSpan> for DiagnosticSpan {
     #[inline]
-    fn from(value: Span<'f, 's>) -> Self {
+    fn as_ref(&self) -> &DiagnosticSpan { self }
+}
+impl AsMut<DiagnosticSpan> for DiagnosticSpan {
+    #[inline]
+    fn as_mut(&mut self) -> &mut DiagnosticSpan { self }
+}
+impl From<&DiagnosticSpan> for DiagnosticSpan {
+    #[inline]
+    fn from(value: &DiagnosticSpan) -> Self { value.clone() }
+}
+impl From<&mut DiagnosticSpan> for DiagnosticSpan {
+    #[inline]
+    fn from(value: &mut DiagnosticSpan) -> Self { value.clone() }
+}
+
+
+
+/// A companion trait for the [`DiagnosticSpan`] that allows it to be created from any other [`Spanning`].
+/// 
+/// This trait exists to circumvent the fact that [`From<S>`], where `S: Spanning`, conflicts with the default implementation [`From<DiagnosticSpan>`].
+pub trait DiagnosticSpannable: Spanning {
+    /// Creates a [`DiagnosticSpan`] out of Self.
+    /// 
+    /// # Returns
+    /// A [`DiagnosticSpan`] suitable for use in [`Diagnostic`]s to carry around without lifetimes.
+    fn into_dspan(&self) -> DiagnosticSpan;
+}
+impl<T: Spanning> DiagnosticSpannable for T {
+    fn into_dspan(&self) -> DiagnosticSpan {
         // Find, find the indices
-        let source: &str = value.source();
-        let (start, end): (Option<usize>, Option<usize>) = (value.start_idx(), value.end_idx());
+        let source: &str = self.source();
+        let (start, end): (Option<usize>, Option<usize>) = (self.start_idx(), self.end_idx());
         let (line_start, line_end): (Option<usize>, Option<usize>) = crate::span::find_lines_box(source, start, end);
 
         // Extract the span
@@ -329,11 +424,11 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
 
         // Scale the span's ranges to the found ranges
         let rel_start: Option<usize> = match (line_start, start) {
-            (Some(line_start), Some(start)) => Some(start - line_start),
+            (Some(line_start), Some(start)) => if line_start <= start { Some(start - line_start) } else { None },
             (_, _)                          => None,
         };
         let rel_end: Option<usize> = match (line_start, end) {
-            (Some(line_start), Some(end)) => Some(end - line_start),
+            (Some(line_start), Some(end)) => if line_start <= end { Some(end - line_start) } else { None },
             (_, _)                        => None,
         };
 
@@ -344,30 +439,17 @@ impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
         };
 
         // Extract that piece of text and return ourselves
-        Self {
-            file   : value.file.into(),
+        DiagnosticSpan {
+            file   : self.file().into(),
             source : line_source.into(),
             range  : (rel_start, rel_end),
             skipped,
         }
     }
 }
-
-impl AsRef<DiagnosticSpan> for DiagnosticSpan {
+impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
-    fn as_ref(&self) -> &DiagnosticSpan { self }
-}
-impl AsMut<DiagnosticSpan> for DiagnosticSpan {
-    #[inline]
-    fn as_mut(&mut self) -> &mut DiagnosticSpan { self }
-}
-impl From<&DiagnosticSpan> for DiagnosticSpan {
-    #[inline]
-    fn from(value: &DiagnosticSpan) -> Self { value.clone() }
-}
-impl From<&mut DiagnosticSpan> for DiagnosticSpan {
-    #[inline]
-    fn from(value: &mut DiagnosticSpan) -> Self { value.clone() }
+    fn from(value: Span<'f, 's>) -> Self { value.into_dspan() }
 }
 
 
@@ -442,12 +524,12 @@ impl Diagnostic {
     /// let diag = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
-    pub fn error(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn error(message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         Self {
             message : message.into(),
             code    : None,
             remark  : None,
-            span    : span.into(),
+            span    : span.into_dspan(),
             kind    : DiagnosticSpecific::Error,
             sub     : vec![],
         }
@@ -471,12 +553,12 @@ impl Diagnostic {
     /// let diag: Diagnostic = Diagnostic::warn("An example warning.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
-    pub fn warn(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn warn(message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         Self {
             message : message.into(),
             code    : None,
             remark  : None,
-            span    : span.into(),
+            span    : span.into_dspan(),
             kind    : DiagnosticSpecific::Warning,
             sub     : vec![],
         }
@@ -500,12 +582,12 @@ impl Diagnostic {
     /// let diag: Diagnostic = Diagnostic::note("An example note.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
-    pub fn note(message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn note(message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         Self {
             message : message.into(),
             code    : None,
             remark  : None,
-            span    : span.into(),
+            span    : span.into_dspan(),
             kind    : DiagnosticSpecific::Note,
             sub     : vec![],
         }
@@ -530,12 +612,12 @@ impl Diagnostic {
     /// let diag: Diagnostic = Diagnostic::suggestion("An example suggestion.", Span::new("<example>", "Example"), "A better example.");
     /// ```
     #[inline]
-    pub fn suggestion(message: impl Into<String>, span: impl Into<DiagnosticSpan>, replacement: impl Into<String>) -> Self {
+    pub fn suggestion(message: impl Into<String>, span: impl DiagnosticSpannable, replacement: impl Into<String>) -> Self {
         Self {
             message : message.into(),
             code    : None,
             remark  : None,
-            span    : span.into(),
+            span    : span.into_dspan(),
             kind    : DiagnosticSpecific::Suggestion { replace: replacement.into() },
             sub     : vec![],
         }
@@ -641,7 +723,7 @@ impl Diagnostic {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_error(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn add_error(mut self, message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         self.sub.push(Self::error(message, span));
         self
     }
@@ -672,7 +754,7 @@ impl Diagnostic {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_warn(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn add_warn(mut self, message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         self.sub.push(Self::warn(message, span));
         self
     }
@@ -703,7 +785,7 @@ impl Diagnostic {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_note(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>) -> Self {
+    pub fn add_note(mut self, message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
         self.sub.push(Self::note(message, span));
         self
     }
@@ -733,7 +815,7 @@ impl Diagnostic {
     ///     .emit();
     /// ```
     #[inline]
-    pub fn add_suggestion(mut self, message: impl Into<String>, span: impl Into<DiagnosticSpan>, code: impl Into<String>) -> Self {
+    pub fn add_suggestion(mut self, message: impl Into<String>, span: impl DiagnosticSpannable, code: impl Into<String>) -> Self {
         self.sub.push(Self::suggestion(message, span, code));
         self
     }
@@ -871,6 +953,8 @@ impl Diagnostic {
     #[track_caller]
     pub fn replacement(&self) -> &str { if let DiagnosticSpecific::Suggestion { replace } = &self.kind { replace } else { panic!("Cannot return the code of a non-Suggestion Diagnostic (is {})", self.kind.variant()); } }
 
+
+
     /// Function that *actually* implements `emit_on`, but uses indirection to only print on toplevel diagnostic.
     /// 
     /// # Arguments
@@ -972,8 +1056,6 @@ impl Diagnostic {
         // And that's it!
         Ok(())
     }
-
-
 
     /// Emits the diagnostic (and all of its subsequent ones) on the given writer.
     /// 

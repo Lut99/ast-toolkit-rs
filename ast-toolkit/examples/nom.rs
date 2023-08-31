@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    31 Aug 2023, 00:17:36
+//    31 Aug 2023, 23:31:14
 //  Auto updated?
 //    Yes
 // 
@@ -33,10 +33,11 @@ compile_error!("You must enable the `nom`-feature to compile the `nom.rs` exampl
 use std::str::FromStr as _;
 
 use nom::{IResult, Parser};
+use nom::error::{ErrorKind, FromExternalError as _};
 use nom::{branch, bytes::complete as bc, character::complete as cc, combinator as comb, error, multi, sequence as seq};
 use unicode_segmentation::UnicodeSegmentation as _;
 
-use ast_toolkit::{Span, SpanningExt as _};
+use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
 
 
 /***** AST *****/
@@ -92,7 +93,7 @@ mod ast {
 type Input<'f, 's> = Span<'f, 's>;
 
 /// Defines the output of the parsing functions.
-type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>>>;
+type Output<'f, 's, T> = IResult<Span<'f, 's>, T, NomError<'f, Span<'f, 's>>>;
 
 
 
@@ -106,7 +107,7 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, nom::error::Error<Span<'f, 's>
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f, 's>> {
+fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f, 's>> where 's: 'f {
     // Parse a list of calls and process that into a thing
     comb::map(
         // multi::separated_list0(cc::multispace0, parse_call),
@@ -137,7 +138,7 @@ fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<'f, 's>> {
+fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<'f, 's>> where 's: 'f {
     // Parse an identifier, a left brace, a comma-separated list of literals, a right brace and a semicolon
     error::context("function call", comb::map(
         seq::pair(
@@ -171,7 +172,7 @@ fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
+fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> where 's: 'f {
     branch::alt((
         parse_string,
         parse_integer,
@@ -265,7 +266,7 @@ fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f
 /// 
 /// # Returns
 /// A new parser that parsers this parser with optional surrounding whitespace.
-fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, nom::error::Error<Span<'f, 's>>>) -> impl Parser<Input<'f, 's>, O, nom::error::Error<Span<'f, 's>>> {
+fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, NomError<'f, Span<'f, 's>>>) -> impl Parser<Input<'f, 's>, O, NomError<'f, Span<'f, 's>>> {
     move |input: Input<'f, 's>| -> Output<'f, 's, O> {
         // Parse the whitespace first
         let (rem, _) = cc::multispace0.parse(input)?;
@@ -274,6 +275,22 @@ fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, nom::error::E
         // Parse the whitespace again
         let (rem, _) = cc::multispace0.parse(rem)?;
         Ok((rem, res))
+    }
+}
+
+
+
+/// A parser for showing a specific error kind error.
+fn trigger_err_kind<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Vec<Span<'f, 's>>> {
+    multi::many1(comb::peek(bc::tag("Hello")))(input)
+}
+
+/// A parser for showing a custom error.
+fn trigger_custom_error<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
+    // Simply attempt to parse the input
+    match i64::from_str(input.text()) {
+        Ok(value) => Ok((Span::empty(input.file, input.source), value)),
+        Err(err)  => Err(nom::Err::Error(NomError::from_external_error(input, ErrorKind::Fail, err))),
     }
 }
 
@@ -299,4 +316,12 @@ fn main() {
         }
         println!();
     }
+
+    // Let us examine a few errors!
+    // A specific error kind (not very verbose, since nom does not give us a lot to work with...)
+    Diagnostic::from(trigger_err_kind(Span::new("<error>", "Hello, world!")).unwrap_err()).emit();
+    // Unexpected character
+    Diagnostic::from(parse_program(Span::new("<error>", "hello_world!();")).unwrap_err()).emit();
+    // External error
+    Diagnostic::from(trigger_custom_error(Span::new("<error>", "42#")).unwrap_err()).emit();
 }
