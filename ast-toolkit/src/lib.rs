@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    31 Aug 2023, 22:55:27
+//    02 Sep 2023, 11:48:44
 //  Auto updated?
 //    Yes
 // 
@@ -117,7 +117,7 @@ pub mod nom;
 // Pull the relevant stuff into the global namespace
 pub use diagnostic::{Diagnostic, DiagnosticKind, DiagnosticSpan};
 pub use position::Position;
-pub use span::{Span, Spanning, SpanningExt};
+pub use span::{Combining, Span, Spanning, SpanningExt};
 
 #[cfg(feature = "nom")]
 pub use nom::NomError;

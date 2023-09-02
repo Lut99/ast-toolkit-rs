@@ -4,7 +4,7 @@
 //  Created:
 //    22 Jul 2023, 12:35:42
 //  Last edited:
-//    31 Aug 2023, 23:31:14
+//    02 Sep 2023, 12:15:10
 //  Auto updated?
 //    Yes
 // 
@@ -30,6 +30,8 @@
 #[cfg(not(feature = "nom"))]
 compile_error!("You must enable the `nom`-feature to compile the `nom.rs` example");
 
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::str::FromStr as _;
 
 use nom::{IResult, Parser};
@@ -37,11 +39,12 @@ use nom::error::{ErrorKind, FromExternalError as _};
 use nom::{branch, bytes::complete as bc, character::complete as cc, combinator as comb, error, multi, sequence as seq};
 use unicode_segmentation::UnicodeSegmentation as _;
 
-use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
+use ast_toolkit::{Combining as _, Diagnostic, NomError, Span, SpanningExt as _};
 
 
 /***** AST *****/
 mod ast {
+    use std::fmt::{Display, Formatter, Result as FResult};
     use ast_toolkit::Span;
 
 
@@ -82,7 +85,49 @@ mod ast {
         /// Integral literals
         Integer(i64),
     }
+
+
+
+    /// Seperate "node" that defines the possible data types.
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub enum DataType {
+        /// It evaluates to a string of characters.
+        String,
+        /// It evaluates to a number.
+        Integer,
+    }
+    impl Display for DataType {
+        fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+            match self {
+                DataType::String  => write!(f, "string"),
+                DataType::Integer => write!(f, "integer"),
+            }
+        }
+    }
 }
+
+
+
+
+
+/***** ERRORS *****/
+/// Describes anything that goes wrong during type analysis.
+#[derive(Debug, Diagnostic)]
+enum TypeError<'f, 's> {
+    /// The given call arguments was incorrect for the given call
+    #[diag(error, span=arg_span)]
+    #[diag(note, message="Function '{func}' defined here", span=call_span)]
+    CallArgument { func: String, i: usize, got: ast::DataType, expected: ast::DataType, call_span: Span<'f, 's>, arg_span: Span<'f, 's> },
+}
+impl<'f, 's> Display for TypeError<'f, 's> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use TypeError::*;
+        match self {
+            CallArgument { func, i, got, expected, .. } => write!(f, "Argument {i} to function {func} has type {got} but needs to be type {expected}"),
+        }
+    }
+}
+impl<'f, 's> Error for TypeError<'f, 's> {}
 
 
 
@@ -93,7 +138,7 @@ mod ast {
 type Input<'f, 's> = Span<'f, 's>;
 
 /// Defines the output of the parsing functions.
-type Output<'f, 's, T> = IResult<Span<'f, 's>, T, NomError<'f, Span<'f, 's>>>;
+type Output<'f, 's, T> = IResult<Span<'f, 's>, T, NomError<Span<'f, 's>>>;
 
 
 
@@ -107,7 +152,7 @@ type Output<'f, 's, T> = IResult<Span<'f, 's>, T, NomError<'f, Span<'f, 's>>>;
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f, 's>> where 's: 'f {
+fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f, 's>> {
     // Parse a list of calls and process that into a thing
     comb::map(
         // multi::separated_list0(cc::multispace0, parse_call),
@@ -138,9 +183,9 @@ fn parse_program<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Program<'f
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<'f, 's>> where 's: 'f {
+fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<'f, 's>> {
     // Parse an identifier, a left brace, a comma-separated list of literals, a right brace and a semicolon
-    error::context("function call", comb::map(
+    error::context("a function call", comb::map(
         seq::pair(
             comb::recognize(seq::pair(branch::alt((cc::alpha1, bc::tag("_"))), multi::many0(branch::alt((cc::alphanumeric1, bc::tag("_")))))),
             comb::cut(seq::pair(
@@ -172,7 +217,7 @@ fn parse_call<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::FunctionCall<
 /// 
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
-fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> where 's: 'f {
+fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
     branch::alt((
         parse_string,
         parse_integer,
@@ -190,7 +235,7 @@ fn parse_lit<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's
 /// # Errors
 /// This function can error if we failed to parse any particular input text.
 fn parse_string<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f, 's>> {
-    error::context("string literal",
+    error::context("a string literal",
         comb::map(
             comb::recognize(seq::pair(
                 cc::char('\"'),
@@ -266,7 +311,7 @@ fn parse_integer<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, ast::Literal<'f
 /// 
 /// # Returns
 /// A new parser that parsers this parser with optional surrounding whitespace.
-fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, NomError<'f, Span<'f, 's>>>) -> impl Parser<Input<'f, 's>, O, NomError<'f, Span<'f, 's>>> {
+fn whitespace<'f, 's, O>(mut parser: impl Parser<Input<'f, 's>, O, NomError<Span<'f, 's>>>) -> impl Parser<Input<'f, 's>, O, NomError<Span<'f, 's>>> {
     move |input: Input<'f, 's>| -> Output<'f, 's, O> {
         // Parse the whitespace first
         let (rem, _) = cc::multispace0.parse(input)?;
@@ -294,6 +339,82 @@ fn trigger_custom_error<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
     }
 }
 
+/// A parser for showing a trace of multiple errors.
+fn trigger_stack_error<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Vec<i64>> {
+    // Simply attempt to parse the input, but in a multi::many kind of situation
+    multi::many1(trigger_custom_error)(input)
+}
+
+/// A parser for showing a branch of possible things tried.
+fn trigger_branch_error<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    // Simply attempt to parse the input, but in a multi::many kind of situation
+    branch::alt((comb::recognize(trigger_custom_error), bc::tag("test")))(input)
+}
+
+/// A parser for showing an end-of-file error (warning, really)
+fn trigger_eof_warn<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    nom::bytes::streaming::tag("test")(input)
+}
+
+
+
+
+/***** TRAVERSAL FUNCTIONS *****/
+/// Verifies if the types are correct on a program level.
+/// 
+/// # Arguments
+/// - `program`: The [`Program`](ast::Program) to analyse.
+/// 
+/// # Errors
+/// This function errors if there were inconsistencies in the typing.
+fn type_program<'f, 's>(program: &ast::Program<'f, 's>) -> Result<(), TypeError<'f, 's>> {
+    // Go through the calls and validate them
+    for call in &program.calls {
+        type_call(call)?;
+    }
+    Ok(())
+}
+
+/// Verifies if the types are correct on a call level.
+/// 
+/// For demonstration purposes, this simply compares hardcoded function call identifiers with expected types.
+/// 
+/// # Arguments
+/// - `call`: The [`FunctionCall`](ast::FunctionCall) to analyse.
+/// 
+/// # Errors
+/// This function errors if there were inconsistencies in the typing.
+fn type_call<'f, 's>(call: &ast::FunctionCall<'f, 's>) -> Result<(), TypeError<'f, 's>> {
+    // Check the name of the function
+    match call.name.as_str() {
+        "add" => {
+            // You can only add numbers
+            for (i, arg) in call.args.iter().enumerate() {
+                let arg_type: ast::DataType = get_lit_type(arg);
+                if arg_type != ast::DataType::Integer { return Err(TypeError::CallArgument { func: call.name.clone(), i, got: arg_type, expected: ast::DataType::Integer, call_span: call.span, arg_span: arg.span }); }
+            }
+            Ok(())
+        },
+
+        // The rest is up for grabs
+        _ => Ok(()),
+    }
+}
+
+/// Returns the type of the given literal.
+/// 
+/// # Arguments
+/// - `lit`: The [`Literal`](ast::Literal) to analyse.
+/// 
+/// # Returns
+/// The [`DataType`](ast::DataType) of the literal.
+fn get_lit_type(lit: &ast::Literal) -> ast::DataType {
+    match &lit.variant {
+        ast::LiteralVariant::String(_)  => ast::DataType::String,
+        ast::LiteralVariant::Integer(_) => ast::DataType::Integer,
+    }
+}
+
 
 
 
@@ -305,23 +426,51 @@ fn main() {
     let input: Span = Span::new(file, source);
 
     // Parse it
-    let (_, value) = parse_program(input).unwrap();
+    let (_, program) = parse_program(input).unwrap();
 
     // We parsed it successfully! We can get what we like
     println!();
-    for call in &value.calls {
+    for call in &program.calls {
         println!("User used function '{}'!", call.name);
         for (i, arg) in call.args.iter().enumerate() {
             println!(" - Argument {}: {:?}", i + 1, arg.variant);
         }
         println!();
     }
+    eprintln!();
+    eprintln!("{}", (0..80).map(|_| '-').collect::<String>());
+    eprintln!();
+    eprintln!();
 
-    // Let us examine a few errors!
+
+
+    /* SYNTAX ERRORS */
     // A specific error kind (not very verbose, since nom does not give us a lot to work with...)
     Diagnostic::from(trigger_err_kind(Span::new("<error>", "Hello, world!")).unwrap_err()).emit();
     // Unexpected character
     Diagnostic::from(parse_program(Span::new("<error>", "hello_world!();")).unwrap_err()).emit();
     // External error
     Diagnostic::from(trigger_custom_error(Span::new("<error>", "42#")).unwrap_err()).emit();
+
+    // A whole sequence of errors
+    Diagnostic::from(trigger_stack_error(Span::new("<error>", "42#")).unwrap_err()).emit();
+    // A branching error
+    Diagnostic::from(trigger_branch_error(Span::new("<error>", "42#")).unwrap_err()).emit();
+
+    // Finally, end-of-file.
+    Diagnostic::from(trigger_eof_warn(Span::new("<warn>", "tes")).unwrap_err()).emit();
+
+    eprintln!("{}", (0..80).map(|_| '-').collect::<String>());
+    eprintln!();
+    eprintln!();
+
+
+
+    /* COMPILE ERRORS */
+    // Let's say we attempt to verify the types of function calls
+    let wrong_source: &str = "add(\"Hello there!\");";
+    let (_, wrong_program) = parse_program(Span::new(file, wrong_source)).unwrap();
+    if let Err(err) = type_program(&wrong_program) {
+        Diagnostic::from(err).emit();
+    }
 }

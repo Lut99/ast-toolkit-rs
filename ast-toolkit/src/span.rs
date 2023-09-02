@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    31 Aug 2023, 23:23:07
+//    02 Sep 2023, 11:48:19
 //  Auto updated?
 //    Yes
 // 
@@ -485,6 +485,75 @@ impl<'a, T: Spanning> Spanning for &'a mut T {
 
 
 
+/// Abstracts over [`Spanning`]-capable types that may be joined together to form a new instance of `self`.
+/// 
+/// # Example
+/// ```rust
+/// 
+/// ```
+pub trait Combining<Other = Self>: Spanning where Self: Sized {
+    /// Constructor for Self that encapsulates `Self` and some other range.
+    /// 
+    /// # Arguments
+    /// - `left`: The first span to take into account, which is Self.
+    /// - `right`: The second span to take into account, which is some other range.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans both input ranges and everything in between.
+    /// 
+    /// # Panics
+    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let span1 = Span::ranged(file, text, 0..=4);
+    /// let span2 = Span::ranged(file, text, 7..=12);
+    /// 
+    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
+    /// ```
+    #[track_caller]
+    fn combined(span1: impl Into<Self>, span2: Other) -> Self;
+
+
+
+    /// Will expand the range in Self to include the given range.
+    /// 
+    /// # Arguments
+    /// - `other`: The other range to consume.
+    /// 
+    /// # Returns
+    /// A reference to self for chaining.
+    /// 
+    /// # Panics
+    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let mut span1 = Span::ranged(file, text, 0..=4);
+    /// let span2 = Span::ranged(file, text, 7..=12);
+    /// 
+    /// span1.consume(span2);
+    /// assert_eq!(span1.text(), "Hello, world!");
+    /// ```
+    #[inline]
+    #[track_caller]
+    fn consume(&mut self, other: Other) -> &mut Self where Self: Clone {
+        // Define in terms of combined
+        *self = Self::combined(self.clone(), other.into());
+        self
+    }
+}
+
+
+
 /// Abstracts over the specific implementation of a span. This allows us to have varying levels of references VS non-references while avoiding lifetime hell.
 /// 
 /// SpanningExt implements the typical usage functions of a spanning type, and is purely implemented by the internal functions provided by [`Spanning`].
@@ -877,94 +946,6 @@ impl<'f, 's> Span<'f, 's> {
             },
         }
     }
-
-    /// Constructor for the Span that encapsulates both ranges of the given spans.
-    /// 
-    /// # Arguments
-    /// - `span1`: The first span to take into account.
-    /// - `span2`: The second span to take into account.
-    /// 
-    /// # Returns
-    /// A new instance of Self that spans both input spans and everything in between.
-    /// 
-    /// Note that, for lifetime purposes, the file and source text from the first span are referenced.
-    /// 
-    /// # Panics
-    /// This function panics if the given spans do not have the same `file` or `source`. Note that this goes by *pointer equality*.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Span, SpanningExt as _};
-    /// 
-    /// let file: &str = "<example>";
-    /// let text: &str = "Hello, world!";
-    /// let span1 = Span::ranged(file, text, 0..=4);
-    /// let span2 = Span::ranged(file, text, 7..=12);
-    /// 
-    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn combined<'f2, 's2>(span1: impl AsRef<Span<'f, 's>>, span2: impl AsRef<Span<'f2, 's2>>) -> Self {
-        let (span1, span2): (&Span, &Span) = (span1.as_ref(), span2.as_ref());
-
-        // Assert they talk about the same thing
-        if !std::ptr::eq(span1.file as *const str, span2.file as *const str) { panic!("Given spans do not have the same `file`"); }
-        if !std::ptr::eq(span1.source as *const str, span2.source as *const str) { panic!("Given spans do not have the same `source`"); }
-
-        // Combine the start bounds into a new one
-        let start: Option<usize> = match (span1.range.0, span2.range.0) {
-            (Some(start1), Some(start2)) => Some(std::cmp::min(start1, start2)),
-            (start1, None)               => start1,
-            (None, start2)               => start2,
-        };
-        // Combine the end bounds into a new one
-        let end: Option<usize> = match (span1.range.1, span2.range.1) {
-            (Some(end1), Some(end2)) => Some(std::cmp::max(end1, end2)),
-            (end1, None)             => end1,
-            (None, end2)             => end2,
-        };
-
-        // Construct a new self out of it
-        Self {
-            file   : span1.file,
-            source : span1.source,
-            range  : ((start, end)),
-        }
-    }
-
-
-
-    /// Will expand the range in this Span to include the given Span.
-    /// 
-    /// # Arguments
-    /// - `other`: The other Span to consume.
-    /// 
-    /// # Returns
-    /// A reference to self for chaining.
-    /// 
-    /// # Panics
-    /// This function panics if the given spans do not have the same `file` or `source`. Note that this goes by *pointer equality*.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Span, SpanningExt as _};
-    /// 
-    /// let file: &str = "<example>";
-    /// let text: &str = "Hello, world!";
-    /// let mut span1 = Span::ranged(file, text, 0..=4);
-    /// let span2 = Span::ranged(file, text, 7..=12);
-    /// 
-    /// span1.consume(span2);
-    /// assert_eq!(span1.text(), "Hello, world!");
-    /// ```
-    #[inline]
-    #[track_caller]
-    pub fn consume(&mut self, other: impl AsRef<Span<'f, 's>>) -> &mut Self {
-        // Define in terms of combined
-        *self = Span::combined(*self, other);
-        self
-    }
 }
 impl<'f, 's> Spanning for Span<'f, 's> {
     #[inline]
@@ -976,6 +957,36 @@ impl<'f, 's> Spanning for Span<'f, 's> {
     fn start_idx(&self) -> Option<usize> { self.range.0 }
     #[inline]
     fn end_idx(&self) -> Option<usize> { self.range.1 }
+}
+impl<'f, 's, T: Spanning> Combining<T> for Span<'f, 's> {
+    #[track_caller]
+    fn combined(left: impl Into<Self>, right: T) -> Self {
+        let left: Span = left.into();
+
+        // Assert they talk about the same thing
+        if left.file != right.file() { panic!("Given spans do not have the same `file`"); }
+        if left.source != right.source() { panic!("Given spans do not have the same `source`"); }
+
+        // Combine the start bounds into a new one
+        let start: Option<usize> = match (left.range.0, right.start_idx()) {
+            (Some(start1), Some(start2)) => Some(std::cmp::min(start1, start2)),
+            (start1, None)               => start1,
+            (None, start2)               => start2,
+        };
+        // Combine the end bounds into a new one
+        let end: Option<usize> = match (left.range.1, right.end_idx()) {
+            (Some(end1), Some(end2)) => Some(std::cmp::max(end1, end2)),
+            (end1, None)             => end1,
+            (None, end2)             => end2,
+        };
+
+        // Construct a new self out of it
+        Self {
+            file   : left.file,
+            source : left.source,
+            range  : ((start, end)),
+        }
+    }
 }
 impl<'f, 's> SpanningExt for Span<'f, 's> {}
 
