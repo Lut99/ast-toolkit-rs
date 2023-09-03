@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    02 Sep 2023, 11:57:21
+//    03 Sep 2023, 16:35:29
 //  Auto updated?
 //    Yes
 // 
@@ -27,41 +27,39 @@ use crate::span::{Combining, Span, Spanning};
 
 
 /***** AUXILLARY *****/
-/// Formatter that writes a character quite readably to stdout.
+/// Specializes the [`NomError`] to a particular variant.
 /// 
 /// # Example
 /// ```rust
-/// use ast_toolkit::nom::CharFormatter;
+/// use nom::error::ErrorKind;
+/// use ast_toolkit::Span;
+/// use ast_toolkit::nom::{NomError, NomErrorKind};
 /// 
-/// assert_eq!(CharFormatter('A').to_string(), "A");
-/// assert_eq!(CharFormatter('d').to_string(), "d");
-/// assert_eq!(CharFormatter('/').to_string(), "/");
-/// assert_eq!(CharFormatter('ÿ').to_string(), "ÿ");
-/// assert_eq!(CharFormatter(' ').to_string(), " ");
-/// assert_eq!(CharFormatter('\n').to_string(), "\\n");
-/// assert_eq!(CharFormatter('\r').to_string(), "\\r");
-/// assert_eq!(CharFormatter('\t').to_string(), "\\t");
-/// assert_eq!(CharFormatter('\0').to_string(), "\\0");
+/// let input: Span = Span::new("<example>", "Hello, world!");
+/// 
+/// let err1 = NomError::error_kind(input, ErrorKind::Tag);
+/// assert_eq!(err1.kind, NomErrorKind::ErrorKind(input, ErrorKind::Tag));
+/// 
+/// let err2 = NomError::char(input, 'c');
+/// assert_eq!(err2.kind, NomErrorKind::Char(input, 'c'));
+/// 
+/// let err3 = NomError::external_error(input, ErrorKind::Many0, String::from_utf8(vec![ 0, 159 ]).unwrap_err());
+/// assert_eq!(err3.kind, NomErrorKind::ExternalError(input, ErrorKind::Many0, "".into()));
+/// 
+/// let err4 = NomError::stack(vec![ err1, err2, err3 ]);
+/// assert_eq!(err4.kind, NomErrorKind::Stack(vec![ err1, err2, err3 ]));
+/// 
+/// let err5 = NomError::branch(vec![ err1, err2, err3 ]);
+/// assert_eq!(err5.kind, NomErrorKind::Branch(vec![ err1, err2, err3 ]));
 /// ```
-#[derive(Debug)]
-pub struct CharFormatter(char);
-impl Display for CharFormatter {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "{:#?}", self.0)
-    }
-}
-
-
-
-/// Specializes the [`NomError`] to a particular variant.
-#[derive(Debug, EnumDebug)]
+#[derive(Debug, EnumDebug, Eq, PartialEq)]
 pub enum NomErrorKind<I> {
     /// It's a simple error from an unexpected [`char`].
     Char(I, char),
     /// It's a simple error from an [`ErrorKind`].
     ErrorKind(I, ErrorKind),
     /// It's an error with an external error attached to it.
-    FromExternalError(I, ErrorKind, String),
+    ExternalError(I, ErrorKind, String),
 
     /// It's an error that accumulates error contexts.
     Stack(Vec<NomError<I>>),
@@ -70,7 +68,25 @@ pub enum NomErrorKind<I> {
 }
 
 /// Defines what we need to know when the user [adds a context](nom::error::ContextError).
-#[derive(Clone, Debug)]
+/// 
+/// This struct is mostly for internal use in [`NomError`], but you can also use it yourself while at it.
+/// 
+/// # Example
+/// ```rust
+/// use ast_toolkit::nom::Context;
+/// 
+/// struct SomethingWithContext<I> {
+///     pub something : String,
+///     pub context   : Context<I>,
+/// }
+/// 
+/// let input: &str = "test";
+/// assert_eq!(SomethingWithContext {
+///     something : "Something!".into(),
+///     context   : Context::new(input, "A context"),
+/// }.context.context, "A context");
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Context<I> {
     /// The input span relating the context to some location
     pub input   : I,
@@ -107,9 +123,30 @@ impl<I> Context<I> {
 /// 
 /// # Example
 /// ```rust
-/// todo!();
+/// use nom::IResult;
+/// use nom::bytes::complete as bc;
+/// use ast_toolkit::{Diagnostic, NomError, Span};
+/// 
+/// type Input<'f, 's> = Span<'f, 's>;
+/// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+/// 
+/// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+///     bc::tag("Hello, world!")(input)
+/// }
+/// 
+/// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+/// Diagnostic::from(err).emit();
 /// ```
-#[derive(Debug)]
+/// which should show you something like:
+/// ```plain
+/// error: Tag
+///  --> <farewell>:1:1
+///   |
+/// 1 | Goodbye, world!
+///   | ^~~~~~~~~~~~~~~
+///   |
+/// ```
+#[derive(Debug, Eq, PartialEq)]
 pub struct NomError<I> {
     /// The specific variant of this error.
     pub kind    : NomErrorKind<I>,
@@ -126,8 +163,34 @@ impl<I> NomError<I> {
     /// 
     /// # Returns
     /// A new NomError based on the given `kind`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use nom::IResult;
+    /// use nom::bytes::complete as bc;
+    /// use ast_toolkit::{Diagnostic, NomError, Span};
+    /// 
+    /// type Input<'f, 's> = Span<'f, 's>;
+    /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+    /// 
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    ///     bc::tag("Hello, world!")(input)
+    /// }
+    /// 
+    /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// which should show you something like:
+    /// ```plain
+    /// error: Tag
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// ```
     #[inline]
-    fn error_kind(input: I, kind: ErrorKind) -> Self {
+    pub fn error_kind(input: I, kind: ErrorKind) -> Self {
         Self {
             kind : NomErrorKind::ErrorKind(input, kind),
             context : None,
@@ -142,10 +205,83 @@ impl<I> NomError<I> {
     /// 
     /// # Returns
     /// A new NomError based on the given `c`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use nom::IResult;
+    /// use nom::{character::complete as cc, combinator as comb};
+    /// use ast_toolkit::{Diagnostic, NomError, Span};
+    /// 
+    /// type Input<'f, 's> = Span<'f, 's>;
+    /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+    /// 
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    ///     comb::cut(cc::char('H'))(input)
+    /// }
+    /// 
+    /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// which should show you something like:
+    /// ```plain
+    /// error: Syntax error: Expected 'H', got 'G'
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^              
+    ///   |
+    /// ```
     #[inline]
-    fn char(input: I, c: char) -> Self {
+    pub fn char(input: I, c: char) -> Self {
         Self {
             kind : NomErrorKind::Char(input, c),
+            context : None,
+        }
+    }
+
+    /// Constructor for the NomError that initializes it from an external error.
+    /// 
+    /// # Arguments
+    /// - `input`: The input that relates this error to the source.
+    /// - `kind`: Some additional [`nom::error::ErrorKind`] to contextualize this error.
+    /// - `err`: The external [`Error`] to wrap..
+    /// 
+    /// # Returns
+    /// A new NomError based on the given error.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::str::FromStr as _;
+    /// use nom::IResult;
+    /// use nom::error::ErrorKind;
+    /// use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
+    /// 
+    /// type Input<'f, 's> = Span<'f, 's>;
+    /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+    /// 
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    ///     match i64::from_str(input.text()) {
+    ///        Ok(val)  => Ok((Span::empty(input.file, input.source), val)),
+    ///        Err(err) => Err(nom::Err::Error(NomError::external_error(input, ErrorKind::Fail, err))),
+    ///    }
+    /// }
+    /// 
+    /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// which should show you something like:
+    /// ```plain
+    /// error: In Fail: invalid digit found in string
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// ```
+    #[inline]
+    pub fn external_error(input: I, kind: ErrorKind, err: impl Error) -> Self {
+        Self {
+            kind : NomErrorKind::ExternalError(input, kind, err.to_string()),
             context : None,
         }
     }
@@ -158,7 +294,7 @@ impl<I> NomError<I> {
     /// # Returns
     /// A new NomError based on the given stack of `errs`.
     #[inline]
-    fn stack(errs: impl IntoIterator<Item = Self>) -> Self {
+    pub fn stack(errs: impl IntoIterator<Item = Self>) -> Self {
         Self {
             kind : NomErrorKind::Stack(errs.into_iter().collect()),
             context : None,
@@ -173,7 +309,7 @@ impl<I> NomError<I> {
     /// # Returns
     /// A new NomError based on the given list of `errs`.
     #[inline]
-    fn branch(errs: impl IntoIterator<Item = Self>) -> Self {
+    pub fn branch(errs: impl IntoIterator<Item = Self>) -> Self {
         Self {
             kind : NomErrorKind::Branch(errs.into_iter().collect()),
             context : None,
@@ -189,11 +325,11 @@ impl<I> NomError<I> {
     /// 
     /// # Panics
     /// This function may panic if we are a [`Stack`](NomErrorKind::Stack) but empty.
-    fn input(&self) -> I where I: Clone + Combining {
+    pub fn input(&self) -> I where I: Clone + Combining {
         match &self.kind {
-            NomErrorKind::ErrorKind(input, _)            |
-            NomErrorKind::Char(input, _)                 |
-            NomErrorKind::FromExternalError(input, _, _) => input.clone(),
+            NomErrorKind::ErrorKind(input, _)        |
+            NomErrorKind::Char(input, _)             |
+            NomErrorKind::ExternalError(input, _, _) => input.clone(),
 
             NomErrorKind::Stack(errs) | NomErrorKind::Branch(errs) => {
                 // Get the first two elements in self
@@ -223,9 +359,9 @@ impl<I> NomError<I> {
 impl<I> Display for NomError<I> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match &self.kind {
-            NomErrorKind::Char(_, c)                      => write!(f, "Syntax error: Expected {c:?}"),
-            NomErrorKind::ErrorKind(_, kind)              => write!(f, "An error of kind {kind:?} occurred"),
-            NomErrorKind::FromExternalError(_, kind, err) => write!(f, "In {kind:?}: {err}"),
+            NomErrorKind::Char(_, c)                  => write!(f, "Syntax error: Expected {c:?}"),
+            NomErrorKind::ErrorKind(_, kind)          => write!(f, "An error of kind {kind:?} occurred"),
+            NomErrorKind::ExternalError(_, kind, err) => write!(f, "In {kind:?}: {err}"),
 
             // These are implemented for direct usage but aren't used in Diagnostics.
             NomErrorKind::Stack(_)  => write!(f, "Multiple errors occurred"),
@@ -247,13 +383,13 @@ impl<I: Clone, E: Error> FromExternalError<I, E> for NomError<I> {
         // Compute the full stack of errors if `e` has a source
         if let Some(source) = e.source() {
             // Compute a full stack; put the main error in there first
-            let mut stack: Vec<NomError<I>> = vec![ Self { kind: NomErrorKind::FromExternalError(input.clone(), kind, e.to_string()), context: None } ];
+            let mut stack: Vec<NomError<I>> = vec![ Self { kind: NomErrorKind::ExternalError(input.clone(), kind, e.to_string()), context: None } ];
 
             // Add the sources while there are any
             let mut source: Option<&dyn Error> = Some(source);
             while let Some(err) = source {
                 source = err.source();
-                stack.push(Self { kind: NomErrorKind::FromExternalError(input.clone(), kind, e.to_string()), context: None })
+                stack.push(Self { kind: NomErrorKind::ExternalError(input.clone(), kind, e.to_string()), context: None })
             }
 
             // Alright cool, now return
@@ -264,7 +400,7 @@ impl<I: Clone, E: Error> FromExternalError<I, E> for NomError<I> {
         } else {
             // Return it as a simple error
             Self {
-                kind : NomErrorKind::FromExternalError(input, kind, e.to_string()),
+                kind : NomErrorKind::ExternalError(input, kind, e.to_string()),
                 context : None, // Some(Context::new(input, kind.description())),
             }
         }
@@ -351,7 +487,7 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
                 input,
             ),
 
-            NomErrorKind::FromExternalError(input, kind, err) => Diagnostic::error(
+            NomErrorKind::ExternalError(input, kind, err) => Diagnostic::error(
                 format!("In {kind:?}: {err}"),
                 input,
             ),
