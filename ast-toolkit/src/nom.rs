@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    03 Sep 2023, 16:35:29
+//    05 Sep 2023, 21:37:06
 //  Auto updated?
 //    Yes
 // 
@@ -293,6 +293,40 @@ impl<I> NomError<I> {
     /// 
     /// # Returns
     /// A new NomError based on the given stack of `errs`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::str::FromStr as _;
+    /// use nom::IResult;
+    /// use nom::error::ErrorKind;
+    /// use nom::{character::complete as cc, multi};
+    /// use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
+    /// 
+    /// type Input<'f, 's> = Span<'f, 's>;
+    /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+    /// 
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Vec<Span<'f, 's>>> {
+    ///     multi::many1(cc::digit1)(input)
+    /// }
+    /// 
+    /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// which should show you something like:
+    /// ```plain
+    /// error: Digit
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// error: Many1
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// ```
     #[inline]
     pub fn stack(errs: impl IntoIterator<Item = Self>) -> Self {
         Self {
@@ -308,6 +342,40 @@ impl<I> NomError<I> {
     /// 
     /// # Returns
     /// A new NomError based on the given list of `errs`.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use std::str::FromStr as _;
+    /// use nom::IResult;
+    /// use nom::error::ErrorKind;
+    /// use nom::{character::complete as cc, multi};
+    /// use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
+    /// 
+    /// type Input<'f, 's> = Span<'f, 's>;
+    /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
+    /// 
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Vec<Span<'f, 's>>> {
+    ///     multi::many1(cc::digit1)(input)
+    /// }
+    /// 
+    /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
+    /// Diagnostic::from(err).emit();
+    /// ```
+    /// which should show you something like:
+    /// ```plain
+    /// error: Digit
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// error: Many1
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   |
+    /// ```
     #[inline]
     pub fn branch(errs: impl IntoIterator<Item = Self>) -> Self {
         Self {
@@ -498,6 +566,11 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
                 // Loop over the errors to create the tree
                 let mut diag: Option<Diagnostic> = None;
                 for err in errs {
+                    // CATCH: If this is an Alt, and the next is a Branch, then discard the Alt
+                    if let NomErrorKind::ErrorKind(_, ErrorKind::Alt) = &err.kind {
+                        if 
+                    }
+
                     // Recursively create it
                     if let Some(d) = diag {
                         diag = Some(d.add(Self::from(err)));
