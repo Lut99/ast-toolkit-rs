@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    05 Sep 2023, 21:37:06
+//    06 Sep 2023, 16:44:36
 //  Auto updated?
 //    Yes
 // 
@@ -44,15 +44,15 @@ use crate::span::{Combining, Span, Spanning};
 /// assert_eq!(err2.kind, NomErrorKind::Char(input, 'c'));
 /// 
 /// let err3 = NomError::external_error(input, ErrorKind::Many0, String::from_utf8(vec![ 0, 159 ]).unwrap_err());
-/// assert_eq!(err3.kind, NomErrorKind::ExternalError(input, ErrorKind::Many0, "".into()));
+/// assert_eq!(err3.kind, NomErrorKind::ExternalError(input, ErrorKind::Many0, "invalid utf-8 sequence of 1 bytes from index 1".into()));
 /// 
-/// let err4 = NomError::stack(vec![ err1, err2, err3 ]);
-/// assert_eq!(err4.kind, NomErrorKind::Stack(vec![ err1, err2, err3 ]));
+/// let err4 = NomError::stack(vec![ err1.clone(), err2.clone(), err3.clone() ]);
+/// assert_eq!(err4.kind, NomErrorKind::Stack(vec![ err1.clone(), err2.clone(), err3.clone() ]));
 /// 
-/// let err5 = NomError::branch(vec![ err1, err2, err3 ]);
+/// let err5 = NomError::branch(vec![ err1.clone(), err2.clone(), err3.clone() ]);
 /// assert_eq!(err5.kind, NomErrorKind::Branch(vec![ err1, err2, err3 ]));
 /// ```
-#[derive(Debug, EnumDebug, Eq, PartialEq)]
+#[derive(Clone, Debug, EnumDebug, Eq, PartialEq)]
 pub enum NomErrorKind<I> {
     /// It's a simple error from an unexpected [`char`].
     Char(I, char),
@@ -146,7 +146,7 @@ impl<I> Context<I> {
 ///   | ^~~~~~~~~~~~~~~
 ///   |
 /// ```
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NomError<I> {
     /// The specific variant of this error.
     pub kind    : NomErrorKind<I>,
@@ -215,7 +215,7 @@ impl<I> NomError<I> {
     /// type Input<'f, 's> = Span<'f, 's>;
     /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
     /// 
-    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, char> {
     ///     comb::cut(cc::char('H'))(input)
     /// }
     /// 
@@ -259,7 +259,7 @@ impl<I> NomError<I> {
     /// type Input<'f, 's> = Span<'f, 's>;
     /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
     /// 
-    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, i64> {
     ///     match i64::from_str(input.text()) {
     ///        Ok(val)  => Ok((Span::empty(input.file, input.source), val)),
     ///        Err(err) => Err(nom::Err::Error(NomError::external_error(input, ErrorKind::Fail, err))),
@@ -348,14 +348,17 @@ impl<I> NomError<I> {
     /// use std::str::FromStr as _;
     /// use nom::IResult;
     /// use nom::error::ErrorKind;
-    /// use nom::{character::complete as cc, multi};
+    /// use nom::{branch, bytes::complete as bc, character::complete as cc};
     /// use ast_toolkit::{Diagnostic, NomError, Span, SpanningExt as _};
     /// 
     /// type Input<'f, 's> = Span<'f, 's>;
     /// type Output<'f, 's, O> = IResult<Input<'f, 's>, O, NomError<Input<'f, 's>>>;
     /// 
-    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Vec<Span<'f, 's>>> {
-    ///     multi::many1(cc::digit1)(input)
+    /// fn parser<'f, 's>(input: Input<'f, 's>) -> Output<'f, 's, Span<'f, 's>> {
+    ///     branch::alt((
+    ///         cc::digit1,
+    ///         bc::tag("Hello, world!"),
+    ///     ))(input)
     /// }
     /// 
     /// let err: nom::Err<NomError<Span>> = parser(Span::new("<farewell>", "Goodbye, world!")).unwrap_err();
@@ -363,13 +366,25 @@ impl<I> NomError<I> {
     /// ```
     /// which should show you something like:
     /// ```plain
-    /// error: Digit
+    /// error: Failed to parse as one of multiple possibilities
     ///  --> <farewell>:1:1
     ///   |
     /// 1 | Goodbye, world!
     ///   | ^~~~~~~~~~~~~~~
     ///   |
-    /// error: Many1
+    /// error: Digit
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   = note: This is possibility 1/2
+    /// error: Tag
+    ///  --> <farewell>:1:1
+    ///   |
+    /// 1 | Goodbye, world!
+    ///   | ^~~~~~~~~~~~~~~
+    ///   = note: This is possibility 2/2
+    /// error: Alt
     ///  --> <farewell>:1:1
     ///   |
     /// 1 | Goodbye, world!
@@ -393,6 +408,23 @@ impl<I> NomError<I> {
     /// 
     /// # Panics
     /// This function may panic if we are a [`Stack`](NomErrorKind::Stack) but empty.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use nom::error::ErrorKind;
+    /// use ast_toolkit::{Combining as _, NomError, Span};
+    /// 
+    /// let span1 = Span::ranged("<example>", "Hello, world!", 0..5);
+    /// let span2 = Span::ranged("<example>", "Hello, world!", 7..12);
+    /// 
+    /// let err1 = NomError::char(span1, 'h');
+    /// assert_eq!(err1.input(), span1);
+    /// let err2 = NomError::error_kind(span2, ErrorKind::Fail);
+    /// assert_eq!(err2.input(), span2);
+    /// 
+    /// assert_eq!(NomError::stack(vec![ err1.clone(), err2.clone() ]).input(), Span::combined(span1, span2));
+    /// assert_eq!(NomError::branch(vec![ err1, err2 ]).input(), Span::combined(span1, span2));
+    /// ```
     pub fn input(&self) -> I where I: Clone + Combining {
         match &self.kind {
             NomErrorKind::ErrorKind(input, _)        |
@@ -566,11 +598,6 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
                 // Loop over the errors to create the tree
                 let mut diag: Option<Diagnostic> = None;
                 for err in errs {
-                    // CATCH: If this is an Alt, and the next is a Branch, then discard the Alt
-                    if let NomErrorKind::ErrorKind(_, ErrorKind::Alt) = &err.kind {
-                        if 
-                    }
-
                     // Recursively create it
                     if let Some(d) = diag {
                         diag = Some(d.add(Self::from(err)));
