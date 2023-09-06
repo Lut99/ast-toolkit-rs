@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    06 Sep 2023, 16:44:36
+//    06 Sep 2023, 17:01:31
 //  Auto updated?
 //    Yes
 // 
@@ -24,6 +24,39 @@ use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 
 use crate::diagnostic::Diagnostic;
 use crate::span::{Combining, Span, Spanning};
+
+
+/***** HELPER MACROS *****/
+/// Returns either a character debug-style printed if given [`Some(...)`] or `end of input` if given [`None`].
+macro_rules! expected_char {
+    ($c:expr) => {
+        if let Some(c) = $c { format!("{c:?}") } else { "end of input".into() }
+    };
+}
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/// Extracts the starting character of the given input.
+/// 
+/// # Arguments
+/// - `input`: The [`Spanning`] object to try and get the character from.
+/// 
+/// # Returns
+/// The character at the start position, or [`None`] if the input is empty.
+#[inline]
+fn get_input_char(input: &impl Spanning) -> Option<char> {
+    if let Some(start) = input.start_idx() {
+        input.source().chars().nth(start)
+    } else {
+        None
+    }
+}
+
+
+
 
 
 /***** AUXILLARY *****/
@@ -582,10 +615,20 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
                 }
             },
 
-            NomErrorKind::ErrorKind(input, kind) => Diagnostic::error(
-                format!("{kind:?}"),
-                input,
-            ),
+            NomErrorKind::ErrorKind(input, kind) => {
+                // Resolve the error message first
+                let message: String = match kind {
+                    ErrorKind::Alpha        => format!("Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::AlphaNumeric => format!("Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::Alt          => todo!(),
+                };
+
+                // Return that as a Diagnostic
+                Diagnostic::error(
+                    message,
+                    input,
+                )
+            },
 
             NomErrorKind::ExternalError(input, kind, err) => Diagnostic::error(
                 format!("In {kind:?}: {err}"),
