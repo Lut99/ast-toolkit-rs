@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    12 Aug 2023, 12:05:17
+//    03 Sep 2023, 16:16:44
 //  Auto updated?
 //    Yes
 // 
@@ -110,11 +110,18 @@ pub mod diagnostic;
 pub mod position;
 pub mod span;
 
+#[cfg(feature = "nom")]
+pub mod nom;
+
 
 // Pull the relevant stuff into the global namespace
-pub use diagnostic::{Diagnostic, DiagnosticKind, DiagnosticSpan};
-pub use position::Position;
-pub use span::Span;
+pub use crate::diagnostic::{Diagnostic, DiagnosticKind, DiagnosticSpan};
+pub use crate::position::Position;
+pub use crate::span::{Combining, Span, Spanning, SpanningExt};
+
+#[cfg(feature = "nom")]
+pub use crate::nom::NomError;
+
 
 // Pull any procedural macros into this namespace
 /// This module documents the use of the various procedural macros defined in the [`ast_toolkit_derive`]-crate.
@@ -205,7 +212,7 @@ pub mod procedural {
     /// # }
     /// # impl std::error::Error for SourceError {}
     /// # 
-    /// let span = Span::from_idx("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40, 43);
+    /// let span = Span::ranged("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40..=43);
     /// let err = SourceError::InvalidType {
     ///     identifier: "test".into(),
     ///     got: DataType::String,
