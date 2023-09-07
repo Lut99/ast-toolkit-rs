@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    06 Sep 2023, 17:01:31
+//    07 Sep 2023, 22:28:53
 //  Auto updated?
 //    Yes
 // 
@@ -23,7 +23,7 @@ use enum_debug::EnumDebug;
 use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 
 use crate::diagnostic::Diagnostic;
-use crate::span::{Combining, Span, Spanning};
+use crate::span::{Combining, Span, Spanning, SpanningExt};
 
 
 /***** HELPER MACROS *****/
@@ -581,7 +581,7 @@ impl<I> ParseError<I> for NomError<I> {
     }
 }
 
-impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
+impl<I: Clone + Combining + Spanning + SpanningExt> From<NomError<I>> for Diagnostic {
     /// Builds a [`Diagnostic`] tree from the given [`NomError`].
     /// 
     /// # Arguments
@@ -618,9 +618,63 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
             NomErrorKind::ErrorKind(input, kind) => {
                 // Resolve the error message first
                 let message: String = match kind {
-                    ErrorKind::Alpha        => format!("Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::AlphaNumeric => format!("Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::Alt          => todo!(),
+                    ErrorKind::Alpha            => format!("Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::AlphaNumeric     => format!("Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::Complete         => format!("Incomplete input"),
+                    ErrorKind::Count            => format!("Expected more repetitions"),                                                                                // TODO: Can get more verbose if we read parser input
+                    ErrorKind::CrLf             => format!("Syntax error: Expected Windows-style line ending (CRLF), got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::Digit            => format!("Syntax error: Expected digit, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::Eof              => format!("Unexpected end of input"),                                                                                  // NOTE: Could get more verbose input but that's essentially which parser is being run
+                    ErrorKind::Escaped          |
+                    ErrorKind::EscapedTransform => format!("Syntax error: Incorrect escape sequence"),
+                    ErrorKind::Fail             => format!("Unexpected error occurred"),
+                    ErrorKind::Float            => format!("Syntax error: Incorrect floating-point number"),
+                    ErrorKind::HexDigit         => format!("Syntax error: Expected hexadecimal digit, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::IsA              => format!("Expected pattern"),                                                                                         // TODO: Can get more verbose if we read parser input
+                    ErrorKind::IsNot            => format!("Expected anything else than {}", expected_char!(get_input_char(&input))),                                   // TODO: Can get more verbose if we read parser input
+                    ErrorKind::Many0            |                                                                                                                       // NOTE: Don't need to catch like Many1 since it never propagates and can thus never be in a stack other than the end
+                    ErrorKind::Many0Count       => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (input.start(), input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
+                    ErrorKind::MapOpt           => format!("Failed to process parsed result"),
+                    ErrorKind::MultiSpace       => format!("Syntax error: Expected whitespace, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::NoneOf           => format!("Syntax error: Expected anything else than {}", expected_char!(get_input_char(&input))),                     // TODO: Can get more verbose if we read parser input
+                    ErrorKind::Not              => todo!(),
+                    ErrorKind::OctDigit         => format!("Syntax error: Expected octet digit, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::OneOf            => format!("Syntax error: Expected character, got {}", expected_char!(get_input_char(&input))),                         // TODO: Can get more verbose if we read parser input
+                    ErrorKind::Satisfy          => format!("Syntax error: Encountered unexpected character {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::SeparatedList    => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (input.start(), input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
+                    ErrorKind::Space            => format!("Syntax error: Expected non-newline whitespace, got {}", expected_char!(get_input_char(&input))),
+                    ErrorKind::Tag              => format!("Expected a sequence"),                                                                                      // TODO: Can get more verbose if we read parser input
+                    ErrorKind::TagBits          => format!("Expected a sequence of bits"),                                                                              // TODO: Can get more verbose if we read parser input
+                    ErrorKind::TakeTill1        => todo!(),
+                    ErrorKind::TakeUntil        => todo!(),
+                    ErrorKind::TakeWhile1       => todo!(),
+                    ErrorKind::TakeWhileMN      => todo!(),
+                    ErrorKind::TooLarge         => { panic!("Data size reported by function is too large"); },
+                    ErrorKind::Verify           => format!("Encountered illegal sequence"),
+
+                    // These treated elsewhere and get default messages
+                    ErrorKind::Alt         |
+                    ErrorKind::Char        |
+                    ErrorKind::Many1       |
+                    ErrorKind::Many1Count  |
+                    ErrorKind::ManyMN      |
+                    ErrorKind::ManyTill    |
+                    ErrorKind::MapRes      |
+                    ErrorKind::Permutation => format!("Syntax error: Unexpected character {}", expected_char!(get_input_char(&input))),
+
+                    // These should never occur
+                    ErrorKind::Fix                   => format!("Unused error encountered, Fix"),
+                    ErrorKind::LengthValue           => format!("Unused error encountered, LengthValue"),
+                    ErrorKind::LengthValueFn         => format!("Unused error encountered, LengthValueFn"),
+                    ErrorKind::NonEmpty              => format!("Unused error encountered, NonEmpty"),
+                    ErrorKind::RegexpCapture         => format!("Unused error encountered, RegexpCapture"),
+                    ErrorKind::RegexpCaptures        => format!("Unused error encountered, RegexpCaptures"),
+                    ErrorKind::RegexpFind            => format!("Unused error encountered, RegexpFind"),
+                    ErrorKind::RegexpMatch           => format!("Unused error encountered, RegexpMatch"),
+                    ErrorKind::RegexpMatches         => format!("Unused error encountered, RegexpMatches"),
+                    ErrorKind::SeparatedNonEmptyList => format!("Unused error encountered, SeparatedNonEmptyList"),
+                    ErrorKind::Switch                => format!("Unused error encountered, Switch"),
+                    ErrorKind::TagClosure            => format!("Unused error encountered, TagClosure"),
                 };
 
                 // Return that as a Diagnostic
@@ -682,7 +736,7 @@ impl<I: Clone + Combining + Spanning> From<NomError<I>> for Diagnostic {
         diag
     }
 }
-impl<I: Clone + Combining + Spanning> From<nom::Err<NomError<I>>> for Diagnostic {
+impl<I: Clone + Combining + Spanning + SpanningExt> From<nom::Err<NomError<I>>> for Diagnostic {
     /// Builds a [`Diagnostic`] tree from the given [`nom::Err<NomError>`].
     /// 
     /// # Arguments
