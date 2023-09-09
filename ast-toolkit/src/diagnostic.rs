@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    31 Aug 2023, 23:27:15
+//    09 Sep 2023, 13:55:40
 //  Auto updated?
 //    Yes
 // 
@@ -450,6 +450,22 @@ impl<T: Spanning> DiagnosticSpannable for T {
 impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
     #[inline]
     fn from(value: Span<'f, 's>) -> Self { value.into_dspan() }
+}
+
+/// A companion trait for the [`Diagnostic`] that allows one to use `X.into_diag()` instead of [`Diagnostic::from(X)`](From<Diagnostic>::from())).
+pub trait Diagnosticable: Into<Diagnostic> {
+    /// Shorthand for [`Diagnostic::from(self)`](From<Diagnostic>::from()).
+    /// 
+    /// Also equivalent to [`self.into()`](Into<Diagnostic>::into()) but then without type guessing.
+    /// 
+    /// # Returns
+    /// A [`Diagnostic`] created from self.
+    fn into_diag(self) -> Diagnostic;
+}
+impl<T: Into<Diagnostic>> Diagnosticable for T {
+    #[inline]
+    #[track_caller]
+    fn into_diag(self) -> Diagnostic { self.into() }
 }
 
 

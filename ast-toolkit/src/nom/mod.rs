@@ -1,10 +1,10 @@
-//  NOM.rs
+//  MOD.rs
 //    by Lut99
 // 
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    07 Sep 2023, 22:28:53
+//    09 Sep 2023, 13:24:16
 //  Auto updated?
 //    Yes
 // 
@@ -16,11 +16,15 @@
 //!     errors using [`Diagnostic`]s.
 // 
 
+pub mod multi;
+
+
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use enum_debug::EnumDebug;
-use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
+use nom::error::{ContextError, FromExternalError, ParseError};
+use num_traits::AsPrimitive;
 
 use crate::diagnostic::Diagnostic;
 use crate::span::{Combining, Span, Spanning, SpanningExt};
@@ -47,11 +51,73 @@ macro_rules! expected_char {
 /// # Returns
 /// The character at the start position, or [`None`] if the input is empty.
 #[inline]
-fn get_input_char(input: &impl Spanning) -> Option<char> {
+fn get_input_char<I: ?Sized + Spanning>(input: &I) -> Option<char> {
     if let Some(start) = input.start_idx() {
         input.source().chars().nth(start)
     } else {
         None
+    }
+}
+
+
+
+
+
+/***** FORMATTER *****/
+/// Implements [`Display`] for the [`ErrorKind`].
+#[derive(Debug)]
+pub struct ErrorKindFormatter<'e, 'i, I: ?Sized> {
+    err   : &'e ErrorKind,
+    input : &'i I,
+}
+impl<'e, 'i, I: ?Sized + Spanning + SpanningExt> Display for ErrorKindFormatter<'e, 'i, I> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use ErrorKind::*;
+        match self.err {
+            Alpha            => write!(f, "Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(self.input))),
+            AlphaNumeric     => write!(f, "Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(self.input))),
+            Complete         => write!(f, "Incomplete input"),
+            Count(_)         => write!(f, "Expected more repetitions"),
+            CrLf             => write!(f, "Syntax error: Expected Windows-style line ending (CRLF), got {}", expected_char!(get_input_char(self.input))),
+            Digit            => write!(f, "Syntax error: Expected digit, got {}", expected_char!(get_input_char(self.input))),
+            Eof              => write!(f, "Unexpected end of input"),                                                                                  // NOTE: Could get more verbose input but that's essentially which parser is being run
+            Escaped          |
+            EscapedTransform => write!(f, "Syntax error: Incorrect escape sequence"),
+            Fail             => write!(f, "Unexpected error occurred"),
+            Float            => write!(f, "Syntax error: Incorrect floating-point number"),
+            HexDigit         => write!(f, "Syntax error: Expected hexadecimal digit, got {}", expected_char!(get_input_char(self.input))),
+            IsA(_)           => write!(f, "Expected pattern"),                                                                                         // TODO: Can get more verbose if we read parser input
+            IsNot(_)         => write!(f, "Expected anything else than {}", expected_char!(get_input_char(self.input))),                                   // TODO: Can get more verbose if we read parser input
+            Many0            |                                                                                                                       // NOTE: Don't need to catch like Many1 since it never propagates and can thus never be in a stack other than the end
+            Many0Count       => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (self.input.start(), self.input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
+            MapOpt           => write!(f, "Failed to process parsed result"),
+            MultiSpace       => write!(f, "Syntax error: Expected whitespace, got {}", expected_char!(get_input_char(self.input))),
+            NoneOf(_)        => write!(f, "Syntax error: Expected anything else than {}", expected_char!(get_input_char(self.input))),                     // TODO: Can get more verbose if we read parser input
+            Not              => todo!(),
+            OctDigit         => write!(f, "Syntax error: Expected octet digit, got {}", expected_char!(get_input_char(self.input))),
+            OneOf(_)         => write!(f, "Syntax error: Expected character, got {}", expected_char!(get_input_char(self.input))),                         // TODO: Can get more verbose if we read parser input
+            Satisfy          => write!(f, "Syntax error: Encountered unexpected character {}", expected_char!(get_input_char(self.input))),
+            SeparatedList    => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (self.input.start(), self.input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
+            Space            => write!(f, "Syntax error: Expected non-newline whitespace, got {}", expected_char!(get_input_char(self.input))),
+            Tag(_)           => write!(f, "Expected a sequence"),                                                                                      // TODO: Can get more verbose if we read parser input
+            TagBits(_)       => write!(f, "Expected a sequence of bits"),                                                                              // TODO: Can get more verbose if we read parser input
+            TakeTill1        => todo!(),
+            TakeUntil        => todo!(),
+            TakeWhile1       => todo!(),
+            TakeWhileMN      => todo!(),
+            TooLarge         => { panic!("Data size reported by function is too large"); },
+            Verify           => write!(f, "Encountered illegal sequence"),
+
+            // These treated elsewhere and get default messages
+            Alt         |
+            Char        |
+            Many1       |
+            Many1Count  |
+            ManyMN      |
+            ManyTill    |
+            MapRes      |
+            Permutation => write!(f, "Syntax error: Unexpected character {}", expected_char!(get_input_char(self.input))),
+        }
     }
 }
 
@@ -149,6 +215,146 @@ impl<I> Context<I> {
 
 
 /***** LIBRARY *****/
+/// Shadows [`nom`]'s [`ErrorKind`](nom::error::ErrorKind) to add additional information for some kinds of errors.
+#[derive(Clone, Debug, EnumDebug, Eq, Hash, PartialEq)]
+pub enum ErrorKind {
+    Alpha,
+    AlphaNumeric,
+    Alt,
+    Char,
+    Complete,
+    Count(Option<(usize, usize)>),
+    CrLf,
+    Digit,
+    Eof,
+    Escaped,
+    EscapedTransform,
+    Fail,
+    Float,
+    HexDigit,
+    IsA(Option<()>),
+    IsNot(Option<()>),
+    Many0,
+    Many1,
+    Many0Count,
+    Many1Count,
+    ManyMN,
+    ManyTill,
+    MapOpt,
+    MapRes,
+    MultiSpace,
+    NoneOf(Option<()>),
+    Not,
+    OctDigit,
+    OneOf(Option<()>),
+    Permutation,
+    Satisfy,
+    SeparatedList,
+    Space,
+    Tag(Option<()>),
+    TagBits(Option<()>),
+    TakeTill1,
+    TakeUntil,
+    TakeWhile1,
+    TakeWhileMN,
+    TooLarge,
+    Verify,
+}
+impl ErrorKind {
+    /// Constructor for an [`ErrorKind::Count`] that initializes it with the additional context.
+    /// 
+    /// # Arguments
+    /// - `got`: The number of repetitions parsed.
+    /// - `expected`: The number of repetitions expected.
+    /// 
+    /// # Returns
+    /// A new instance of Self that represents a Count error.
+    #[inline]
+    pub fn count(got: impl AsPrimitive<usize>, expected: impl AsPrimitive<usize>) -> Self {
+        Self::Count(Some((got.as_(), expected.as_())))
+    }
+
+
+
+    /// Returns a formatter for the ErrorKind that implements [`Display`].
+    /// 
+    /// # Arguments
+    /// - `input`: A [`Spanning`]-type that can provide context about what failed to be parsed.
+    /// 
+    /// # Returns
+    /// A new [`ErrorKindFormatter`] that can be [`Display`]ed.
+    pub fn display<'s, 'i, I: ?Sized>(&'s self, input: &'i I) -> ErrorKindFormatter<'s, 'i, I> {
+        ErrorKindFormatter {
+            err : self,
+            input,
+        }
+    }
+}
+impl From<nom::error::ErrorKind> for ErrorKind {
+    fn from(value: nom::error::ErrorKind) -> Self {
+        use nom::error::ErrorKind::*;
+        match value {
+            Alpha            => Self::Alpha,
+            AlphaNumeric     => Self::AlphaNumeric,
+            Alt              => Self::Alt,
+            Char             => Self::Char,
+            Complete         => Self::Complete,
+            Count            => Self::Count(None),
+            CrLf             => Self::CrLf,
+            Digit            => Self::Digit,
+            Eof              => Self::Eof,
+            Escaped          => Self::Escaped,
+            EscapedTransform => Self::EscapedTransform,
+            Fail             => Self::Fail,
+            Float            => Self::Float,
+            HexDigit         => Self::HexDigit,
+            IsA              => Self::IsA(None),
+            IsNot            => Self::IsNot(None),
+            Many0            => Self::Many0,
+            Many1            => Self::Many1,
+            Many0Count       => Self::Many0Count,
+            Many1Count       => Self::Many1Count,
+            ManyMN           => Self::ManyMN,
+            ManyTill         => Self::ManyTill,
+            MapOpt           => Self::MapOpt,
+            MapRes           => Self::MapRes,
+            MultiSpace       => Self::MultiSpace,
+            NoneOf           => Self::NoneOf(None),
+            Not              => Self::Not,
+            OctDigit         => Self::OctDigit,
+            OneOf            => Self::OneOf(None),
+            Permutation      => Self::Permutation,
+            Satisfy          => Self::Satisfy,
+            SeparatedList    => Self::SeparatedList,
+            Space            => Self::Space,
+            Tag              => Self::Tag(None),
+            TagBits          => Self::TagBits(None),
+            TakeTill1        => Self::TakeTill1,
+            TakeUntil        => Self::TakeUntil,
+            TakeWhile1       => Self::TakeWhile1,
+            TakeWhileMN      => Self::TakeWhileMN,
+            TooLarge         => Self::TooLarge,
+            Verify           => Self::Verify,
+
+            // These never occur so we can assume we can ingore them
+            SeparatedNonEmptyList |
+            LengthValue           |
+            TagClosure            |
+            LengthValueFn         |
+            Switch                |
+            RegexpMatch           |
+            RegexpMatches         |
+            RegexpCapture         |
+            RegexpCaptures        |
+            RegexpFind            |
+            Fix                   |
+            NonEmpty              => { unreachable!(); }
+        }
+    }
+}
+
+
+
 /// Provides a drop-in error for use in [`nom`].
 /// 
 /// This error is meant to produce verbose, as-intuitive-as-possible errors using this crate's [`Diagnostic`]s.
@@ -223,9 +429,9 @@ impl<I> NomError<I> {
     ///   |
     /// ```
     #[inline]
-    pub fn error_kind(input: I, kind: ErrorKind) -> Self {
+    pub fn error_kind(input: I, kind: impl Into<ErrorKind>) -> Self {
         Self {
-            kind : NomErrorKind::ErrorKind(input, kind),
+            kind : NomErrorKind::ErrorKind(input, kind.into()),
             context : None,
         }
     }
@@ -312,9 +518,9 @@ impl<I> NomError<I> {
     ///   |
     /// ```
     #[inline]
-    pub fn external_error(input: I, kind: ErrorKind, err: impl Error) -> Self {
+    pub fn external_error(input: I, kind: impl Into<ErrorKind>, err: impl Error) -> Self {
         Self {
-            kind : NomErrorKind::ExternalError(input, kind, err.to_string()),
+            kind : NomErrorKind::ExternalError(input, kind.into(), err.to_string()),
             context : None,
         }
     }
@@ -434,6 +640,71 @@ impl<I> NomError<I> {
 
 
 
+    /// Equivalent to [`FromExternalError::from_external_error()`], except that it works with our more contextful [`ErrorKind`].
+    /// 
+    /// # Arguments
+    /// - `input`: The input that describes where in the source text the error occurs.
+    /// - `kind`: The [`ErrorKind`] describing (potentially more contextfully) what is wrong about the input.
+    /// - `e`: The external error that occurred.
+    /// 
+    /// # Returns
+    /// A new instance of Self that is based around the kind `kind` and `e`.
+    pub fn from_external_error_kind(input: I, kind: impl Into<ErrorKind>, e: impl Error) -> Self
+    where
+        I: Clone,
+    {
+        let kind: ErrorKind = kind.into();
+
+        // Compute the full stack of errors if `e` has a source
+        if let Some(source) = e.source() {
+            // Compute a full stack; put the main error in there first
+            let mut stack: Vec<NomError<I>> = vec![ Self { kind: NomErrorKind::ExternalError(input.clone(), kind.clone(), e.to_string()), context: None } ];
+
+            // Add the sources while there are any
+            let mut source: Option<&dyn Error> = Some(source);
+            while let Some(err) = source {
+                source = err.source();
+                stack.push(Self { kind: NomErrorKind::ExternalError(input.clone(), kind.clone(), e.to_string()), context: None })
+            }
+
+            // Alright cool, now return
+            Self {
+                kind : NomErrorKind::Stack(stack),
+                context : None, // Some(Context::new(input, kind.description())),
+            }
+        } else {
+            // Return it as a simple error
+            Self {
+                kind : NomErrorKind::ExternalError(input, kind.into(), e.to_string()),
+                context : None, // Some(Context::new(input, kind.description())),
+            }
+        }
+    }
+
+    /// Equivalent to [`ParseError::append()`], except that it works with our more contextful [`ErrorKind`].
+    /// 
+    /// # Arguments
+    /// - `input`: The input that describes where in the source text the error occurs.
+    /// - `kind`: The [`ErrorKind`] describing (potentially more contextfully) what is wrong about the input.
+    /// - `other`: The already existing instance of Self to append to.
+    /// 
+    /// # Returns
+    /// The given instance but either with the error appended if it was a [`NomErrorKind::Stack`], or else it but translated into a stack with this error.
+    pub fn append_kind(input: I, kind: impl Into<ErrorKind>, mut other: Self) -> Self {
+        match &mut other.kind {
+            // First, merge stacks
+            NomErrorKind::Stack(other_errs) => {
+                other_errs.push(Self::error_kind(input, kind));
+                other
+            },
+
+            // The rest we can just pass as-is
+            _ => Self::stack(vec![ other, Self::error_kind(input, kind) ]),
+        }
+    }
+
+
+
     /// Returns the input spanned by this error.
     /// 
     /// # Returns
@@ -512,51 +783,16 @@ impl<I> ContextError<I> for NomError<I> {
 }
 impl<I: Clone, E: Error> FromExternalError<I, E> for NomError<I> {
     #[inline]
-    fn from_external_error(input: I, kind: ErrorKind, e: E) -> Self {
-        // Compute the full stack of errors if `e` has a source
-        if let Some(source) = e.source() {
-            // Compute a full stack; put the main error in there first
-            let mut stack: Vec<NomError<I>> = vec![ Self { kind: NomErrorKind::ExternalError(input.clone(), kind, e.to_string()), context: None } ];
-
-            // Add the sources while there are any
-            let mut source: Option<&dyn Error> = Some(source);
-            while let Some(err) = source {
-                source = err.source();
-                stack.push(Self { kind: NomErrorKind::ExternalError(input.clone(), kind, e.to_string()), context: None })
-            }
-
-            // Alright cool, now return
-            Self {
-                kind : NomErrorKind::Stack(stack),
-                context : None, // Some(Context::new(input, kind.description())),
-            }
-        } else {
-            // Return it as a simple error
-            Self {
-                kind : NomErrorKind::ExternalError(input, kind, e.to_string()),
-                context : None, // Some(Context::new(input, kind.description())),
-            }
-        }
-    }
+    fn from_external_error(input: I, kind: nom::error::ErrorKind, e: E) -> Self { Self::from_external_error_kind(input, kind, e) }
 }
 impl<I> ParseError<I> for NomError<I> {
     #[inline]
-    fn from_error_kind(input: I, kind: ErrorKind) -> Self { Self::error_kind(input, kind) }
+    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self { Self::error_kind(input, kind) }
     #[inline]
     fn from_char(input: I, c: char) -> Self { Self::char(input, c) }
 
-    fn append(input: I, kind: ErrorKind, mut other: Self) -> Self {
-        match &mut other.kind {
-            // First, merge stacks
-            NomErrorKind::Stack(other_errs) => {
-                other_errs.push(Self::error_kind(input, kind));
-                other
-            },
-
-            // The rest we can just pass as-is
-            _ => Self::stack(vec![ other, Self::error_kind(input, kind) ]),
-        }
-    }
+    #[inline]
+    fn append(input: I, kind: nom::error::ErrorKind, other: Self) -> Self { Self::append_kind(input, kind, other) }
     fn or(mut self, mut other: Self) -> Self {
         match (&mut self.kind, &mut other.kind) {
             // First: let's merge branches
@@ -615,74 +851,10 @@ impl<I: Clone + Combining + Spanning + SpanningExt> From<NomError<I>> for Diagno
                 }
             },
 
-            NomErrorKind::ErrorKind(input, kind) => {
-                // Resolve the error message first
-                let message: String = match kind {
-                    ErrorKind::Alpha            => format!("Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::AlphaNumeric     => format!("Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::Complete         => format!("Incomplete input"),
-                    ErrorKind::Count            => format!("Expected more repetitions"),                                                                                // TODO: Can get more verbose if we read parser input
-                    ErrorKind::CrLf             => format!("Syntax error: Expected Windows-style line ending (CRLF), got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::Digit            => format!("Syntax error: Expected digit, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::Eof              => format!("Unexpected end of input"),                                                                                  // NOTE: Could get more verbose input but that's essentially which parser is being run
-                    ErrorKind::Escaped          |
-                    ErrorKind::EscapedTransform => format!("Syntax error: Incorrect escape sequence"),
-                    ErrorKind::Fail             => format!("Unexpected error occurred"),
-                    ErrorKind::Float            => format!("Syntax error: Incorrect floating-point number"),
-                    ErrorKind::HexDigit         => format!("Syntax error: Expected hexadecimal digit, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::IsA              => format!("Expected pattern"),                                                                                         // TODO: Can get more verbose if we read parser input
-                    ErrorKind::IsNot            => format!("Expected anything else than {}", expected_char!(get_input_char(&input))),                                   // TODO: Can get more verbose if we read parser input
-                    ErrorKind::Many0            |                                                                                                                       // NOTE: Don't need to catch like Many1 since it never propagates and can thus never be in a stack other than the end
-                    ErrorKind::Many0Count       => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (input.start(), input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
-                    ErrorKind::MapOpt           => format!("Failed to process parsed result"),
-                    ErrorKind::MultiSpace       => format!("Syntax error: Expected whitespace, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::NoneOf           => format!("Syntax error: Expected anything else than {}", expected_char!(get_input_char(&input))),                     // TODO: Can get more verbose if we read parser input
-                    ErrorKind::Not              => todo!(),
-                    ErrorKind::OctDigit         => format!("Syntax error: Expected octet digit, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::OneOf            => format!("Syntax error: Expected character, got {}", expected_char!(get_input_char(&input))),                         // TODO: Can get more verbose if we read parser input
-                    ErrorKind::Satisfy          => format!("Syntax error: Encountered unexpected character {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::SeparatedList    => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (input.start(), input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
-                    ErrorKind::Space            => format!("Syntax error: Expected non-newline whitespace, got {}", expected_char!(get_input_char(&input))),
-                    ErrorKind::Tag              => format!("Expected a sequence"),                                                                                      // TODO: Can get more verbose if we read parser input
-                    ErrorKind::TagBits          => format!("Expected a sequence of bits"),                                                                              // TODO: Can get more verbose if we read parser input
-                    ErrorKind::TakeTill1        => todo!(),
-                    ErrorKind::TakeUntil        => todo!(),
-                    ErrorKind::TakeWhile1       => todo!(),
-                    ErrorKind::TakeWhileMN      => todo!(),
-                    ErrorKind::TooLarge         => { panic!("Data size reported by function is too large"); },
-                    ErrorKind::Verify           => format!("Encountered illegal sequence"),
-
-                    // These treated elsewhere and get default messages
-                    ErrorKind::Alt         |
-                    ErrorKind::Char        |
-                    ErrorKind::Many1       |
-                    ErrorKind::Many1Count  |
-                    ErrorKind::ManyMN      |
-                    ErrorKind::ManyTill    |
-                    ErrorKind::MapRes      |
-                    ErrorKind::Permutation => format!("Syntax error: Unexpected character {}", expected_char!(get_input_char(&input))),
-
-                    // These should never occur
-                    ErrorKind::Fix                   => format!("Unused error encountered, Fix"),
-                    ErrorKind::LengthValue           => format!("Unused error encountered, LengthValue"),
-                    ErrorKind::LengthValueFn         => format!("Unused error encountered, LengthValueFn"),
-                    ErrorKind::NonEmpty              => format!("Unused error encountered, NonEmpty"),
-                    ErrorKind::RegexpCapture         => format!("Unused error encountered, RegexpCapture"),
-                    ErrorKind::RegexpCaptures        => format!("Unused error encountered, RegexpCaptures"),
-                    ErrorKind::RegexpFind            => format!("Unused error encountered, RegexpFind"),
-                    ErrorKind::RegexpMatch           => format!("Unused error encountered, RegexpMatch"),
-                    ErrorKind::RegexpMatches         => format!("Unused error encountered, RegexpMatches"),
-                    ErrorKind::SeparatedNonEmptyList => format!("Unused error encountered, SeparatedNonEmptyList"),
-                    ErrorKind::Switch                => format!("Unused error encountered, Switch"),
-                    ErrorKind::TagClosure            => format!("Unused error encountered, TagClosure"),
-                };
-
-                // Return that as a Diagnostic
-                Diagnostic::error(
-                    message,
-                    input,
-                )
-            },
+            NomErrorKind::ErrorKind(input, kind) => Diagnostic::error(
+                kind.display(&input).to_string(),
+                input,
+            ),
 
             NomErrorKind::ExternalError(input, kind, err) => Diagnostic::error(
                 format!("In {kind:?}: {err}"),
