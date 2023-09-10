@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    09 Sep 2023, 13:24:16
+//    10 Sep 2023, 11:30:22
 //  Auto updated?
 //    Yes
 // 
@@ -16,6 +16,7 @@
 //!     errors using [`Diagnostic`]s.
 // 
 
+#[cfg(feature = "nom-combinators")]
 pub mod multi;
 
 

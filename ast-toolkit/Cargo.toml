@@ -27,3 +27,4 @@ itertools = "0.11"
 default = [ "derive" ]
 derive = [ "dep:ast-toolkit-derive" ]
 nom = [ "dep:nom" ]
+nom-combinators = [ "nom" ]

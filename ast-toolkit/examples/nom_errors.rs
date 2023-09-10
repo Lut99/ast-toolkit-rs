@@ -4,13 +4,16 @@
 //  Created:
 //    09 Sep 2023, 13:33:26
 //  Last edited:
-//    09 Sep 2023, 13:41:36
+//    10 Sep 2023, 11:29:48
 //  Auto updated?
 //    Yes
 // 
 //  Description:
 //!   Shows how the more verbose [`NomError`] works.
 // 
+
+#[cfg(not(feature = "nom-combinators"))]
+compile_error!("You must enable the `nom-combinators`-feature to compile the `nom_errors.rs` example");
 
 use ast_toolkit::{Diagnosticable as _, Span};
 use ast_toolkit::nom::multi::count;
