@@ -4,13 +4,13 @@
 //  Created:
 //    09 Sep 2023, 12:58:13
 //  Last edited:
-//    09 Sep 2023, 13:32:10
+//    12 Sep 2023, 15:52:34
 //  Auto updated?
 //    Yes
 // 
 //  Description:
-//!   Implements shadows of [`nom`](::nom) combinators that can be used to
-//!   create more verbose errors.
+//!   Groups shadows of combinators that are shadowing combinators in
+//!   [`nom`](::nom)'s [`multi`](::nom::multi) module.
 // 
 
 use ::nom::{Err, IResult, Parser, ToUsize};
@@ -43,9 +43,9 @@ const MAX_INITIAL_CAPACITY_BYTES: usize = 65536;
 /// * `f` The parser to apply.
 /// * `count` How often to apply the parser.
 /// ```rust
-/// # use ::nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
-/// use ::nom::multi::count;
-/// use ::nom::bytes::complete::tag;
+/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// use nom::bytes::complete::tag;
+/// use ast_toolkit::nom::multi::count;
 ///
 /// fn parser(s: &str) -> IResult<&str, Vec<&str>> {
 ///   count(tag("abc"), 2)(s)
@@ -99,9 +99,9 @@ where
 /// * `f` The parser to apply.
 /// * `buf` The slice to fill
 /// ```rust
-/// # use ::nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
-/// use ::nom::multi::fill;
-/// use ::nom::bytes::complete::tag;
+/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// use nom::bytes::complete::tag;
+/// use ast_toolkit::nom::multi::count;
 ///
 /// fn parser(s: &str) -> IResult<&str, [&str; 2]> {
 ///   let mut buf = ["", ""];
@@ -156,11 +156,11 @@ where
 /// * `f` The parser to apply to obtain the count.
 /// * `g` The parser to apply repeatedly.
 /// ```rust
-/// # use ::nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
-/// use ::nom::number::complete::u8;
-/// use ::nom::multi::length_count;
-/// use ::nom::bytes::complete::tag;
-/// use ::nom::combinator::map;
+/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// use nom::number::complete::u8;
+/// use nom::bytes::complete::tag;
+/// use nom::combinator::map;
+/// use ast_toolkit::nom::multi::count;
 ///
 /// fn parser(s: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
 ///   length_count(map(u8, |i| {

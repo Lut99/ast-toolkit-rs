@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    10 Sep 2023, 11:30:22
+//    12 Sep 2023, 16:05:42
 //  Auto updated?
 //    Yes
 // 
@@ -16,6 +16,8 @@
 //!     errors using [`Diagnostic`]s.
 // 
 
+#[cfg(feature = "nom-combinators")]
+pub mod bytes;
 #[cfg(feature = "nom-combinators")]
 pub mod multi;
 
@@ -78,7 +80,7 @@ impl<'e, 'i, I: ?Sized + Spanning + SpanningExt> Display for ErrorKindFormatter<
             Alpha            => write!(f, "Syntax error: Expected alphabetic character, got {}", expected_char!(get_input_char(self.input))),
             AlphaNumeric     => write!(f, "Syntax error: Expected alphanumeric character, got {}", expected_char!(get_input_char(self.input))),
             Complete         => write!(f, "Incomplete input"),
-            Count(_)         => write!(f, "Expected more repetitions"),
+            Count(info)      => if let Some((got, exp)) = info { write!(f, "Expected {exp} repetitions, got {got}") } else { write!(f, "Expected more repetitions") },
             CrLf             => write!(f, "Syntax error: Expected Windows-style line ending (CRLF), got {}", expected_char!(get_input_char(self.input))),
             Digit            => write!(f, "Syntax error: Expected digit, got {}", expected_char!(get_input_char(self.input))),
             Eof              => write!(f, "Unexpected end of input"),                                                                                  // NOTE: Could get more verbose input but that's essentially which parser is being run
@@ -100,7 +102,7 @@ impl<'e, 'i, I: ?Sized + Spanning + SpanningExt> Display for ErrorKindFormatter<
             Satisfy          => write!(f, "Syntax error: Encountered unexpected character {}", expected_char!(get_input_char(self.input))),
             SeparatedList    => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (self.input.start(), self.input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
             Space            => write!(f, "Syntax error: Expected non-newline whitespace, got {}", expected_char!(get_input_char(self.input))),
-            Tag(_)           => write!(f, "Expected a sequence"),                                                                                      // TODO: Can get more verbose if we read parser input
+            Tag(info)        => if let Some((what, case)) = info { write!(f, "Expected '{what}'{}", if !case { " (case insensitive)" } else { "".into() }) } else { write!(f, "Expected a sequence") },                                                                                      // TODO: Can get more verbose if we read parser input
             TagBits(_)       => write!(f, "Expected a sequence of bits"),                                                                              // TODO: Can get more verbose if we read parser input
             TakeTill1        => todo!(),
             TakeUntil        => todo!(),
@@ -252,7 +254,7 @@ pub enum ErrorKind {
     Satisfy,
     SeparatedList,
     Space,
-    Tag(Option<()>),
+    Tag(Option<(String, bool)>),
     TagBits(Option<()>),
     TakeTill1,
     TakeUntil,
@@ -273,6 +275,19 @@ impl ErrorKind {
     #[inline]
     pub fn count(got: impl AsPrimitive<usize>, expected: impl AsPrimitive<usize>) -> Self {
         Self::Count(Some((got.as_(), expected.as_())))
+    }
+
+    /// Constructor for an [`ErrorKind::Tag`] that initializes it with the additional context.
+    /// 
+    /// # Arguments
+    /// - `what`: Some string describing what we are tagging on.
+    /// - `case_sensitive`: Whether or not the comparison was done case sensitively.
+    /// 
+    /// # Returns
+    /// A new instance of Self that represents a Count error.
+    #[inline]
+    pub fn tag(what: impl Into<String>, case_sensitive: bool) -> Self {
+        Self::Tag(Some((what.into(), case_sensitive)))
     }
 
 
