@@ -2,17 +2,16 @@
 //    by Lut99
 // 
 //  Created:
-//    12 Sep 2023, 15:47:31
+//    13 Sep 2023, 17:27:10
 //  Last edited:
-//    13 Sep 2023, 17:14:02
+//    13 Sep 2023, 17:27:40
 //  Auto updated?
 //    Yes
 // 
 //  Description:
 //!   Groups shadows of combinators that are shadowing combinators in
-//!   [`nom`](::nom)'s [`bytes`](::nom::bytes) module.
+//!   [`nom`](::nom)'s [`character`](::nom::character) module.
 // 
 
 // Declare nested things
 pub mod complete;
-pub mod streaming;
