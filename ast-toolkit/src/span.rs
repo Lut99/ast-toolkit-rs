@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    05 Sep 2023, 21:19:23
+//    16 Sep 2023, 17:49:42
 //  Auto updated?
 //    Yes
 // 
@@ -379,12 +379,12 @@ pub(crate) fn find_lines_box(source: &str, start_idx: Option<usize>, end_idx: Op
 /// assert_eq!(HelloWorldSpan { start: Some(4), end: None }.end_idx(), None);
 /// // ...
 /// ```
-pub trait Spanning {
+pub trait Spanning<'f, 's> {
     /// Returns the internal source description (e.g., filename or some other user-friendly description to disambiguate different source texts).
     /// 
     /// # Returns
     /// A reference to the filename, as a string.
-    fn file(&self) -> &str;
+    fn file<'a>(&'a self) -> &'f str where 'a: 'f + 's;
 
     /// Returns the entire source captured this Spanning object.
     /// 
@@ -404,7 +404,7 @@ pub trait Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..).source(), "Hello, world!");
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..6).source(), "Hello, world!");
     /// ```
-    fn source(&self) -> &str;
+    fn source<'a>(&'a self) -> &'s str where 'a: 'f + 's;
 
 
 
@@ -460,22 +460,22 @@ pub trait Spanning {
     fn end_idx(&self) -> Option<usize>;
 }
 
-impl<'a, T: Spanning> Spanning for &'a T {
+impl<'a, 'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'a T {
     #[inline]
-    fn file(&self) -> &str { T::file(self) }
+    fn file<'b>(&'b self) -> &'f str where 'b: 'f + 's { T::file(self) }
     #[inline]
-    fn source(&self) -> &str { T::source(self) }
+    fn source<'b>(&'b self) -> &'s str where 'b: 'f + 's { T::source(self) }
 
     #[inline]
     fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
     #[inline]
     fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
 }
-impl<'a, T: Spanning> Spanning for &'a mut T {
+impl<'a, 'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'a mut T {
     #[inline]
-    fn file(&self) -> &str { T::file(self) }
+    fn file<'b>(&'b self) -> &'f str where 'b: 'f + 's { T::file(self) }
     #[inline]
-    fn source(&self) -> &str { T::source(self) }
+    fn source<'b>(&'b self) -> &'s str where 'b: 'f + 's { T::source(self) }
 
     #[inline]
     fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
@@ -491,7 +491,7 @@ impl<'a, T: Spanning> Spanning for &'a mut T {
 /// ```rust
 /// 
 /// ```
-pub trait Combining<Other = Self>: Spanning where Self: Sized {
+pub trait Combining<'f, 's, Other = Self>: Spanning<'f, 's> where Self: Sized {
     /// Constructor for Self that encapsulates `Self` and some other range.
     /// 
     /// # Arguments
@@ -580,7 +580,7 @@ pub trait Combining<Other = Self>: Spanning where Self: Sized {
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(1) }.len(), 2);
 /// // ...
 /// ```
-pub trait SpanningExt: Spanning {
+pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
     /// Converts a source-relative index to a [`Position`].
     /// 
     /// # Arguments
@@ -714,7 +714,7 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).text(), "world!");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..6).text(), "");
     /// ```
-    fn text(&self) -> &str {
+    fn text(&'_ self) -> &'s str {
         let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
             (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end { &source[start..=end] } else { "" },
@@ -744,7 +744,7 @@ pub trait SpanningExt: Spanning {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).lines(), "");
     /// ```
     #[inline]
-    fn lines(&self) -> &str {
+    fn lines(&'_ self) -> &'s str {
         let source: &str = self.source();
         match find_lines_box(source, self.start_idx(), self.end_idx()) {
             (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end {
@@ -947,18 +947,18 @@ impl<'f, 's> Span<'f, 's> {
         }
     }
 }
-impl<'f, 's> Spanning for Span<'f, 's> {
+impl<'f, 's> Spanning<'f, 's> for Span<'f, 's> {
     #[inline]
-    fn file(&self) -> &str { self.file }
+    fn file<'a>(&'a self) -> &str where 'a: 'f + 's { self.file }
     #[inline]
-    fn source(&self) -> &str { self.source }
+    fn source<'a>(&'a self) -> &str where 'a: 'f + 's { self.source }
 
     #[inline]
     fn start_idx(&self) -> Option<usize> { self.range.0 }
     #[inline]
     fn end_idx(&self) -> Option<usize> { self.range.1 }
 }
-impl<'f, 's, T: Spanning> Combining<T> for Span<'f, 's> {
+impl<'f, 's, T: Spanning<'f, 's>> Combining<'f, 's, T> for Span<'f, 's> {
     #[track_caller]
     fn combined(left: impl Into<Self>, right: T) -> Self {
         let left: Span = left.into();
@@ -988,9 +988,9 @@ impl<'f, 's, T: Spanning> Combining<T> for Span<'f, 's> {
         }
     }
 }
-impl<'f, 's> SpanningExt for Span<'f, 's> {}
+impl<'f, 's> SpanningExt<'f, 's> for Span<'f, 's> {}
 
-impl<'f, 's, T: SpanningExt> PartialEq<T> for Span<'f, 's> {
+impl<'f, 's, T: SpanningExt<'f, 's>> PartialEq<T> for Span<'f, 's> {
     #[inline]
     fn eq(&self, other: &T) -> bool {
         self.file == other.file() && self.text() == self.text()

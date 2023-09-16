@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    09 Sep 2023, 13:55:40
+//    16 Sep 2023, 17:51:33
 //  Auto updated?
 //    Yes
 // 
@@ -274,7 +274,7 @@ pub struct DiagnosticSpan {
     pub skipped : usize,
 }
 
-impl Spanning for DiagnosticSpan {
+impl<'a> Spanning<'a, 'a> for DiagnosticSpan {
     #[inline]
     fn file(&self) -> &str { &self.file }
     #[inline]
@@ -285,7 +285,7 @@ impl Spanning for DiagnosticSpan {
     #[inline]
     fn end_idx(&self) -> Option<usize> { self.range.1 }
 }
-impl SpanningExt for DiagnosticSpan {
+impl<'a> SpanningExt<'a, 'a> for DiagnosticSpan {
     #[track_caller]
     fn pos_of(&self, idx: impl AsPrimitive<usize>) -> Position {
         let idx: usize = idx.as_();
@@ -311,7 +311,7 @@ impl SpanningExt for DiagnosticSpan {
     }
 }
 
-impl<T: SpanningExt> PartialEq<T> for DiagnosticSpan {
+impl<'a, T: SpanningExt<'a, 'a>> PartialEq<T> for DiagnosticSpan {
     #[inline]
     fn eq(&self, other: &T) -> bool {
         self.file == other.file() && self.text() == self.text()
@@ -391,14 +391,14 @@ impl From<&mut DiagnosticSpan> for DiagnosticSpan {
 /// A companion trait for the [`DiagnosticSpan`] that allows it to be created from any other [`Spanning`].
 /// 
 /// This trait exists to circumvent the fact that [`From<S>`], where `S: Spanning`, conflicts with the default implementation [`From<DiagnosticSpan>`].
-pub trait DiagnosticSpannable: Spanning {
+pub trait DiagnosticSpannable<'a>: Spanning<'a, 'a> {
     /// Creates a [`DiagnosticSpan`] out of Self.
     /// 
     /// # Returns
     /// A [`DiagnosticSpan`] suitable for use in [`Diagnostic`]s to carry around without lifetimes.
     fn into_dspan(&self) -> DiagnosticSpan;
 }
-impl<T: Spanning> DiagnosticSpannable for T {
+impl<'a, T: Spanning<'a, 'a>> DiagnosticSpannable<'a> for T {
     fn into_dspan(&self) -> DiagnosticSpan {
         // Find, find the indices
         let source: &str = self.source();
@@ -447,7 +447,7 @@ impl<T: Spanning> DiagnosticSpannable for T {
         }
     }
 }
-impl<'f, 's> From<Span<'f, 's>> for DiagnosticSpan {
+impl<'a> From<Span<'a, 'a>> for DiagnosticSpan {
     #[inline]
     fn from(value: Span<'f, 's>) -> Self { value.into_dspan() }
 }
@@ -540,7 +540,7 @@ impl Diagnostic {
     /// let diag = Diagnostic::error("An example error.", Span::new("<example>", "Example"));
     /// ```
     #[inline]
-    pub fn error(message: impl Into<String>, span: impl DiagnosticSpannable) -> Self {
+    pub fn error<'a>(message: impl Into<String>, span: impl DiagnosticSpannable<'a>) -> Self {
         Self {
             message : message.into(),
             code    : None,
