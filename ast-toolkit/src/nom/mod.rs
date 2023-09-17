@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    13 Sep 2023, 17:37:19
+//    17 Sep 2023, 12:18:43
 //  Auto updated?
 //    Yes
 // 
@@ -56,7 +56,7 @@ macro_rules! expected_char {
 /// # Returns
 /// The character at the start position, or [`None`] if the input is empty.
 #[inline]
-fn get_input_char<I: ?Sized + Spanning>(input: &I) -> Option<char> {
+fn get_input_char<'f, 's, I: ?Sized + Spanning<'f, 's>>(input: &I) -> Option<char> {
     if let Some(start) = input.start_idx() {
         input.source().chars().nth(start)
     } else {
@@ -75,7 +75,7 @@ pub struct ErrorKindFormatter<'e, 'i, I: ?Sized> {
     err   : &'e ErrorKind,
     input : &'i I,
 }
-impl<'e, 'i, I: ?Sized + Spanning + SpanningExt> Display for ErrorKindFormatter<'e, 'i, I> {
+impl<'e, 'i, 'f, 's, I: ?Sized + Spanning<'f, 's> + SpanningExt<'f, 's>> Display for ErrorKindFormatter<'e, 'i, I> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use ErrorKind::*;
         match self.err {
@@ -301,7 +301,7 @@ impl ErrorKind {
     /// 
     /// # Returns
     /// A new [`ErrorKindFormatter`] that can be [`Display`]ed.
-    pub fn display<'s, 'i, I: ?Sized>(&'s self, input: &'i I) -> ErrorKindFormatter<'s, 'i, I> {
+    pub fn display<'e, 'i, I>(&'e self, input: &'i I) -> ErrorKindFormatter<'e, 'i, I> {
         ErrorKindFormatter {
             err : self,
             input,
@@ -747,7 +747,7 @@ impl<I> NomError<I> {
     /// assert_eq!(NomError::stack(vec![ err1.clone(), err2.clone() ]).input(), Span::combined(span1, span2));
     /// assert_eq!(NomError::branch(vec![ err1, err2 ]).input(), Span::combined(span1, span2));
     /// ```
-    pub fn input(&self) -> I where I: Clone + Combining {
+    pub fn input<'f, 's>(&self) -> I where I: Clone + Combining<'f, 's> {
         match &self.kind {
             NomErrorKind::ErrorKind(input, _)        |
             NomErrorKind::Char(input, _)             |
@@ -835,7 +835,7 @@ impl<I> ParseError<I> for NomError<I> {
     }
 }
 
-impl<I: Clone + Combining + Spanning + SpanningExt> From<NomError<I>> for Diagnostic {
+impl<'f, 's, I: Clone + Combining<'f, 's> + Spanning<'f, 's> + SpanningExt<'f, 's>> From<NomError<I>> for Diagnostic<'f, 's> {
     /// Builds a [`Diagnostic`] tree from the given [`NomError`].
     /// 
     /// # Arguments
@@ -869,10 +869,12 @@ impl<I: Clone + Combining + Spanning + SpanningExt> From<NomError<I>> for Diagno
                 }
             },
 
-            NomErrorKind::ErrorKind(input, kind) => Diagnostic::error(
-                kind.display(&input).to_string(),
-                input,
-            ),
+            NomErrorKind::ErrorKind(input, kind) => {
+                Diagnostic::error(
+                    kind.display(&input).to_string(),
+                    input,
+                )
+            },
 
             NomErrorKind::ExternalError(input, kind, err) => Diagnostic::error(
                 format!("In {kind:?}: {err}"),
@@ -926,7 +928,7 @@ impl<I: Clone + Combining + Spanning + SpanningExt> From<NomError<I>> for Diagno
         diag
     }
 }
-impl<I: Clone + Combining + Spanning + SpanningExt> From<nom::Err<NomError<I>>> for Diagnostic {
+impl<'f, 's, I: Clone + Combining<'f, 's> + Spanning<'f, 's> + SpanningExt<'f, 's>> From<nom::Err<NomError<I>>> for Diagnostic<'f, 's> {
     /// Builds a [`Diagnostic`] tree from the given [`nom::Err<NomError>`].
     /// 
     /// # Arguments

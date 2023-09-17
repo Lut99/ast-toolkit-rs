@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    09 Sep 2023, 13:41:29
+//    17 Sep 2023, 12:13:00
 //  Auto updated?
 //    Yes
 // 
@@ -115,9 +115,9 @@ pub mod nom;
 
 
 // Pull the relevant stuff into the global namespace
-pub use crate::diagnostic::{Diagnostic, Diagnosticable, DiagnosticKind, DiagnosticSpan};
+pub use crate::diagnostic::{Diagnostic, Diagnosticable, DiagnosticKind};
 pub use crate::position::Position;
-pub use crate::span::{Combining, Span, Spanning, SpanningExt};
+pub use crate::span::{Combining, IntoSpan, Span, Spanning, SpanningExt};
 
 #[cfg(feature = "nom")]
 pub use crate::nom::NomError;

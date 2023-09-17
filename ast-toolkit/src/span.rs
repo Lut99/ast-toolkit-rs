@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    16 Sep 2023, 17:49:42
+//    17 Sep 2023, 12:11:56
 //  Auto updated?
 //    Yes
 // 
@@ -384,7 +384,7 @@ pub trait Spanning<'f, 's> {
     /// 
     /// # Returns
     /// A reference to the filename, as a string.
-    fn file<'a>(&'a self) -> &'f str where 'a: 'f + 's;
+    fn file(&self) -> &'f str;
 
     /// Returns the entire source captured this Spanning object.
     /// 
@@ -404,8 +404,7 @@ pub trait Spanning<'f, 's> {
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..).source(), "Hello, world!");
     /// assert_eq!(Span::ranged("<example>", "Hello, world!", 7..6).source(), "Hello, world!");
     /// ```
-    fn source<'a>(&'a self) -> &'s str where 'a: 'f + 's;
-
+    fn source(&self) -> &'s str;
 
 
     
@@ -459,100 +458,28 @@ pub trait Spanning<'f, 's> {
     /// ```
     fn end_idx(&self) -> Option<usize>;
 }
-
-impl<'a, 'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'a T {
+impl<'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'_ T {
     #[inline]
-    fn file<'b>(&'b self) -> &'f str where 'b: 'f + 's { T::file(self) }
+    fn file(&self) -> &'f str { T::file(self) }
     #[inline]
-    fn source<'b>(&'b self) -> &'s str where 'b: 'f + 's { T::source(self) }
-
-    #[inline]
-    fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
-    #[inline]
-    fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
-}
-impl<'a, 'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'a mut T {
-    #[inline]
-    fn file<'b>(&'b self) -> &'f str where 'b: 'f + 's { T::file(self) }
-    #[inline]
-    fn source<'b>(&'b self) -> &'s str where 'b: 'f + 's { T::source(self) }
+    fn source(&self) -> &'s str { T::source(self) }
 
     #[inline]
     fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
     #[inline]
     fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
 }
-
-
-
-/// Abstracts over [`Spanning`]-capable types that may be joined together to form a new instance of `self`.
-/// 
-/// # Example
-/// ```rust
-/// 
-/// ```
-pub trait Combining<'f, 's, Other = Self>: Spanning<'f, 's> where Self: Sized {
-    /// Constructor for Self that encapsulates `Self` and some other range.
-    /// 
-    /// # Arguments
-    /// - `left`: The first span to take into account, which is Self.
-    /// - `right`: The second span to take into account, which is some other range.
-    /// 
-    /// # Returns
-    /// A new instance of Self that spans both input ranges and everything in between.
-    /// 
-    /// # Panics
-    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
-    /// 
-    /// let file: &str = "<example>";
-    /// let text: &str = "Hello, world!";
-    /// let span1 = Span::ranged(file, text, 0..=4);
-    /// let span2 = Span::ranged(file, text, 7..=12);
-    /// 
-    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
-    /// ```
-    #[track_caller]
-    fn combined(span1: impl Into<Self>, span2: Other) -> Self;
-
-
-
-    /// Will expand the range in Self to include the given range.
-    /// 
-    /// # Arguments
-    /// - `other`: The other range to consume.
-    /// 
-    /// # Returns
-    /// A reference to self for chaining.
-    /// 
-    /// # Panics
-    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
-    /// 
-    /// # Example
-    /// ```rust
-    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
-    /// 
-    /// let file: &str = "<example>";
-    /// let text: &str = "Hello, world!";
-    /// let mut span1 = Span::ranged(file, text, 0..=4);
-    /// let span2 = Span::ranged(file, text, 7..=12);
-    /// 
-    /// span1.consume(span2);
-    /// assert_eq!(span1.text(), "Hello, world!");
-    /// ```
+impl<'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'_ mut T {
     #[inline]
-    #[track_caller]
-    fn consume(&mut self, other: Other) -> &mut Self where Self: Clone {
-        // Define in terms of combined
-        *self = Self::combined(self.clone(), other.into());
-        self
-    }
+    fn file(&self) -> &'f str { T::file(self) }
+    #[inline]
+    fn source(&self) -> &'s str { T::source(self) }
+
+    #[inline]
+    fn start_idx(&self) -> Option<usize> { T::start_idx(self) }
+    #[inline]
+    fn end_idx(&self) -> Option<usize> { T::end_idx(self) }
 }
-
-
 
 /// Abstracts over the specific implementation of a span. This allows us to have varying levels of references VS non-references while avoiding lifetime hell.
 /// 
@@ -810,6 +737,94 @@ pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
     }
 }
 
+/// Abstracts over [`Spanning`]-capable types that may be joined together to form a new instance of `self`.
+/// 
+/// # Example
+/// ```rust
+/// 
+/// ```
+pub trait Combining<'f, 's, Other = Self>: Spanning<'f, 's> where Self: Sized {
+    /// Constructor for Self that encapsulates `Self` and some other range.
+    /// 
+    /// # Arguments
+    /// - `left`: The first span to take into account, which is Self.
+    /// - `right`: The second span to take into account, which is some other range.
+    /// 
+    /// # Returns
+    /// A new instance of Self that spans both input ranges and everything in between.
+    /// 
+    /// # Panics
+    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let span1 = Span::ranged(file, text, 0..=4);
+    /// let span2 = Span::ranged(file, text, 7..=12);
+    /// 
+    /// assert_eq!(Span::combined(span1, span2).text(), "Hello, world!");
+    /// ```
+    #[track_caller]
+    fn combined(span1: impl Into<Self>, span2: Other) -> Self;
+
+
+
+    /// Will expand the range in Self to include the given range.
+    /// 
+    /// # Arguments
+    /// - `other`: The other range to consume.
+    /// 
+    /// # Returns
+    /// A reference to self for chaining.
+    /// 
+    /// # Panics
+    /// This function panics if the two given ranges are not suitable to join, e.g., they are from different source texts.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Combining as _, Span, SpanningExt as _};
+    /// 
+    /// let file: &str = "<example>";
+    /// let text: &str = "Hello, world!";
+    /// let mut span1 = Span::ranged(file, text, 0..=4);
+    /// let span2 = Span::ranged(file, text, 7..=12);
+    /// 
+    /// span1.consume(span2);
+    /// assert_eq!(span1.text(), "Hello, world!");
+    /// ```
+    #[inline]
+    #[track_caller]
+    fn consume(&mut self, other: Other) -> &mut Self where Self: Clone {
+        // Define in terms of combined
+        *self = Self::combined(self.clone(), other.into());
+        self
+    }
+}
+
+/// Auxillary trait allowing us to cast types to a [`Span`].
+/// 
+/// The kicker is that this is always implemented for all [`Spanning`] types.
+pub trait IntoSpan<'f, 's> {
+    /// Turns this type into a [`Span`].
+    /// 
+    /// # Returns
+    /// A new [`Span`] that can be interchangably used.
+    fn into_span(&self) -> Span<'f, 's>;
+}
+impl<'f, 's, T: Spanning<'f, 's>> IntoSpan<'f, 's> for T {
+    #[inline]
+    fn into_span(&self) -> Span<'f, 's> {
+        Span {
+            file   : self.file(),
+            source : self.source(),
+            range  : (self.start_idx(), self.end_idx()),
+        }
+    }
+}
+
 
 
 /// Allows one to span over a string reference.
@@ -949,9 +964,9 @@ impl<'f, 's> Span<'f, 's> {
 }
 impl<'f, 's> Spanning<'f, 's> for Span<'f, 's> {
     #[inline]
-    fn file<'a>(&'a self) -> &str where 'a: 'f + 's { self.file }
+    fn file(&self) -> &'f str { self.file }
     #[inline]
-    fn source<'a>(&'a self) -> &str where 'a: 'f + 's { self.source }
+    fn source(&self) -> &'s str { self.source }
 
     #[inline]
     fn start_idx(&self) -> Option<usize> { self.range.0 }
