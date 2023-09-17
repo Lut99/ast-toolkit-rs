@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2023, 12:58:13
 //  Last edited:
-//    12 Sep 2023, 15:52:34
+//    17 Sep 2023, 22:33:58
 //  Auto updated?
 //    Yes
 // 
@@ -99,20 +99,21 @@ where
 /// * `f` The parser to apply.
 /// * `buf` The slice to fill
 /// ```rust
-/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// # use nom::{Err, Needed, IResult};
 /// use nom::bytes::complete::tag;
-/// use ast_toolkit::nom::multi::count;
+/// use ast_toolkit::nom::{ErrorKind, NomError};
+/// use ast_toolkit::nom::multi::fill;
 ///
-/// fn parser(s: &str) -> IResult<&str, [&str; 2]> {
+/// fn parser(s: &str) -> IResult<&str, [&str; 2], NomError<&str>> {
 ///   let mut buf = ["", ""];
 ///   let (rest, ()) = fill(tag("abc"), &mut buf)(s)?;
 ///   Ok((rest, buf))
 /// }
 ///
 /// assert_eq!(parser("abcabc"), Ok(("", ["abc", "abc"])));
-/// assert_eq!(parser("abc123"), Err(Err::Error(Error::new("123", ErrorKind::Tag))));
-/// assert_eq!(parser("123123"), Err(Err::Error(Error::new("123123", ErrorKind::Tag))));
-/// assert_eq!(parser(""), Err(Err::Error(Error::new("", ErrorKind::Tag))));
+/// assert_eq!(parser("abc123"), Err(Err::Error(NomError::error_kind("123", ErrorKind::Tag(Some(("abc".into(), true)))))));
+/// assert_eq!(parser("123123"), Err(Err::Error(NomError::error_kind("123123", ErrorKind::Tag(Some(("abc".into(), true)))))));
+/// assert_eq!(parser(""), Err(Err::Error(NomError::error_kind("", ErrorKind::Tag(Some(("abc".into(), true)))))));
 /// assert_eq!(parser("abcabcabc"), Ok(("abc", ["abc", "abc"])));
 /// ```
 pub fn fill<'a, I, O, F>(f: F, buf: &'a mut [O]) -> impl FnMut(I) -> IResult<I, (), NomError<I>> + 'a

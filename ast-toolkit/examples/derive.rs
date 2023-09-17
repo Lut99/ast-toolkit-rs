@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:39:51
 //  Last edited:
-//    31 Aug 2023, 22:49:38
+//    17 Sep 2023, 22:20:24
 //  Auto updated?
 //    Yes
 // 
@@ -15,44 +15,45 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit::{Diagnostic, DiagnosticSpan, Span};
+use ast_toolkit::{Diagnostic, Span};
 
 
 /***** ERRORS *****/
 /// Defines an error... that is also a diagnostic!
 #[derive(Debug, Diagnostic)]
-pub enum TestError {
+#[diagnostic(f = "'a", s = "'b")]
+pub enum TestError<'a, 'b> {
     #[diag(error)]
-    SingleLine { span: DiagnosticSpan },
+    SingleLine { span: Span<'a, 'b> },
     #[diag(error)]
-    SingleInMultiLine { span: DiagnosticSpan },
+    SingleInMultiLine { span: Span<'a, 'b> },
     #[diag(error)]
-    MultiLine { span: DiagnosticSpan },
+    MultiLine { span: Span<'a, 'b> },
 
     #[diag(error, code = "E001")]
-    CommonError { span: DiagnosticSpan },
+    CommonError { span: Span<'a, 'b> },
     #[diag(error, code = code)]
-    CommonErrorRuntime { code: String, span: DiagnosticSpan },
+    CommonErrorRuntime { code: String, span: Span<'a, 'b> },
     #[diag(warn, remark = "`#[warn(last_char)]` is enabled by default")]
-    SpecificWarn { span: DiagnosticSpan },
+    SpecificWarn { span: Span<'a, 'b> },
     #[diag(warn, remark = remark)]
-    SpecificWarnRuntime { remark: String, span: DiagnosticSpan },
+    SpecificWarnRuntime { remark: String, span: Span<'a, 'b> },
 
     #[diag(warn)]
-    Warn { span: DiagnosticSpan },
+    Warn { span: Span<'a, 'b> },
     #[diag(note)]
-    Note { span: DiagnosticSpan },
+    Note { span: Span<'a, 'b> },
 
     #[diag(suggestion, replace = "text")]
-    Suggestion { span: DiagnosticSpan },
+    Suggestion { span: Span<'a, 'b> },
     #[diag(suggestion)]
-    SuggestionRuntime { replace: String, span: DiagnosticSpan },
+    SuggestionRuntime { replace: String, span: Span<'a, 'b> },
 
     #[diag(error)]
     #[diag(suggestion, message = "Replace with '{replace}'")]
-    Chained { identifier: String, replace: String, span: DiagnosticSpan },
+    Chained { identifier: String, replace: String, span: Span<'a, 'b> },
 }
-impl Display for TestError {
+impl<'a, 'b> Display for TestError<'a, 'b> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use TestError::*;
         match self {
@@ -75,7 +76,7 @@ impl Display for TestError {
         }
     }
 }
-impl Error for TestError {}
+impl<'a, 'b> Error for TestError<'a, 'b> {}
 
 
 

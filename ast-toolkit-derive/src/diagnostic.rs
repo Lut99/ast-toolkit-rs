@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    12 Aug 2023, 12:11:21
+//    17 Sep 2023, 22:21:19
 //  Auto updated?
 //    Yes
 // 
@@ -21,8 +21,9 @@ use proc_macro2::{TokenStream as TokenStream2, Span};
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
 use quote::quote;
-use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, Generics, Ident, Lit, Meta, Token, Visibility};
+use syn::{Attribute, Data, Expr, ExprLit, ExprPath, Fields, GenericParam, Generics, Ident, Lifetime, LifetimeParam, Lit, Meta, Token, Visibility};
 use syn::parse::ParseBuffer;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 
 
@@ -176,7 +177,7 @@ fn parse_toplevel_attrs(attrs: impl AsRef<[Attribute]>) -> Result<ToplevelAttrib
     let attrs: &[Attribute] = attrs.as_ref();
 
     // Parse the attributes
-    let toplevel: ToplevelAttributes = ToplevelAttributes::empty();
+    let mut toplevel: ToplevelAttributes = ToplevelAttributes::empty();
     for a in attrs {
         // Examine the meta found
         match &a.meta {
@@ -199,7 +200,49 @@ fn parse_toplevel_attrs(attrs: impl AsRef<[Attribute]>) -> Result<ToplevelAttrib
                 // Now iterate over them to collect the arguments
                 for a in args {
                     match a {
-                        Meta::NameValue(nv) => {
+                        Meta::NameValue(nv) => if nv.path.is_ident("f") {
+                            // Get the lifetime given
+                            let span: Span = nv.value.span();
+                            let mut lifetime_name: String = if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                s.value()
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "Expected string literal".into()).emit();
+                                continue;
+                            };
+
+                            // Optionally strip `'`
+                            if lifetime_name.is_empty() {
+                                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "No name given for lifetime parameter `'f`".into()).emit();
+                                continue;
+                            }
+                            if lifetime_name.chars().next().unwrap() == '\'' {
+                                lifetime_name = lifetime_name[1..].into();
+                            }
+
+                            // Set the name
+                            toplevel.f_name = lifetime_name;
+                        } else if nv.path.is_ident("s") {
+                            // Get the lifetime given
+                            let span: Span = nv.value.span();
+                            let mut lifetime_name: String = if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = nv.value {
+                                s.value()
+                            } else {
+                                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "Expected string literal".into()).emit();
+                                continue;
+                            };
+
+                            // Optionally strip `'`
+                            if lifetime_name.is_empty() {
+                                proc_macro_error::Diagnostic::spanned(span, proc_macro_error::Level::Error, "No name given for lifetime parameter `'s`".into()).emit();
+                                continue;
+                            }
+                            if lifetime_name.chars().next().unwrap() == '\'' {
+                                lifetime_name = lifetime_name[1..].into();
+                            }
+
+                            // Set the name
+                            toplevel.s_name = lifetime_name;
+                        } else {
                             proc_macro_error::Diagnostic::spanned(nv.path.span(), proc_macro_error::Level::Error, format!("Unknown attribute '{}' for '#[diagnostic(...)]'", nv.path.get_ident().map(|i| i.to_string()).unwrap_or("<unknown>".into()))).emit();
                         },
 
@@ -610,6 +653,68 @@ fn generate_constructor(fkind: FieldKind, value: &Ident, info: DiagnosticInfo) -
     })
 }
 
+/// Takes the generics given to the struct/enum, and adds `Clone` to any `F` or `S` generics.
+/// 
+/// # Arguments
+/// - `attrs`: Any toplevel attributes that influence this decision.
+/// - `generics`: The [`Generics`] given to the struct/enum.
+/// - `span`: The span of the struct/enums's identifier so that we can emit a bit more useful error messages.
+/// 
+/// # Returns
+/// The same generics but `F` and `S` have been added if they haven't, and independently marked as [`Clone`].
+fn add_lifetimes(attrs: &ToplevelAttributes, mut generics: Generics, span: Span) -> Generics {
+    /// A small helper for only this function that adds a new [`GenericParam::Lifetime`] to the given generics.
+    /// 
+    /// # Arguments
+    /// - `name`: The name of the new generic lifetime.
+    /// - `span`: The [`Span`] to assign to newly created structs.
+    /// - `generics`: The list of [`Generics`] to add it to.
+    fn add_lifetime(name: impl AsRef<str>, span: Span, generics: &mut Generics) {
+        // Build the lifetime parameter with it
+        let param: LifetimeParam = LifetimeParam {
+            attrs       : vec![],
+            lifetime    : Lifetime { apostrophe: span, ident: Ident::new(name.as_ref(), span) },
+            bounds      : Punctuated::default(),
+            colon_token : None,
+        };
+
+        // And add it to the generics
+        generics.params.push(GenericParam::Lifetime(param));
+    }
+
+
+    // Search for `'f` and `'s` to insert in the list of lifetimes
+    let mut has_f: bool = false;
+    let mut has_s: bool = false;
+    for g in &mut generics.params {
+        if has_f && has_s { break; }
+        match g {
+            // See if this is a lifetime with the expected identifier(s)
+            GenericParam::Lifetime(l) => {
+                if l.lifetime.ident == &attrs.f_name {
+                    has_f = true;
+                } else if l.lifetime.ident == &attrs.s_name {
+                    has_s = true;
+                }
+            },
+
+            // The rest is irrelevant
+            _ => { continue; },
+        }
+    }
+
+    // If not, insert the generics appropriately
+    if !has_f {
+        add_lifetime(&attrs.f_name, span, &mut generics);
+    }
+    if !has_s {
+        add_lifetime(&attrs.s_name, span, &mut generics);
+    }
+
+    // Done!
+    generics
+}
+
 
 
 
@@ -628,6 +733,10 @@ enum FieldKind {
 
 /// Defines the toplevel attributes we like to learn.
 struct ToplevelAttributes {
+    /// Defines the name of the `'f` lifetime
+    f_name : String,
+    /// Defines the name of the `'s` lifetime
+    s_name : String,
 }
 impl ToplevelAttributes {
     /// Creates an empty instance that can be populated as attributes pop up their heads.
@@ -637,6 +746,8 @@ impl ToplevelAttributes {
     #[inline]
     fn empty() -> Self {
         Self {
+            f_name : "f".into(),
+            s_name : "s".into(),
         }
     }
 }
@@ -772,7 +883,7 @@ enum DuoStrategy {
 pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, proc_macro_error::Diagnostic> {
     // Read the given struct and extract _everything_ we need
     let is_struct: bool = matches!(data, Data::Struct(_));
-    let (_top_attrs, mut diags): (ToplevelAttributes, Vec<(FieldKind, DiagnosticInfo)>) = match data {
+    let (top_attrs, mut diags): (ToplevelAttributes, Vec<(FieldKind, DiagnosticInfo)>) = match data {
         Data::Struct(s) => {
             // Assert the type of variant (struct, tuple or unit) is supported
             let fkind: FieldKind = match s.fields {
@@ -881,21 +992,29 @@ pub fn derive(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generic
         }
     };
 
+    // Add any missing lifetime parameters to the impl generics and split them for work
+    let (_, type_generics, where_clause) = generics.split_for_impl();
+    let generics = add_lifetimes(&top_attrs, generics.clone(), ident.span());
+    let (impl_generics, _, _) = generics.split_for_impl();
+
+    // Generate the lifetime identifiers
+    let f_lifetime: Lifetime = Lifetime { apostrophe: ident.span(), ident: Ident::new(&top_attrs.f_name, ident.span()) };
+    let s_lifetime: Lifetime = Lifetime { apostrophe: ident.span(), ident: Ident::new(&top_attrs.s_name, ident.span()) };
+
     // Finally, generate the implementation
-    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
     Ok(quote! {
         #[automatically_derived]
-        impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #where_clause {
+        impl #impl_generics From<#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<#f_lifetime, #s_lifetime> #where_clause {
             #[inline]
             fn from(value: #ident #type_generics) -> Self { Self::from(&value) }
         }
         #[automatically_derived]
         #[allow(non_snake_case)]
-        impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #where_clause {
+        impl #impl_generics From<&#ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<#f_lifetime, #s_lifetime> #where_clause {
             fn from(#value_ident: &#ident #type_generics) -> Self { #construct }
         }
         #[automatically_derived]
-        impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic #where_clause {
+        impl #impl_generics From<&mut #ident #type_generics> for ::ast_toolkit::diagnostic::Diagnostic<#f_lifetime, #s_lifetime> #where_clause {
             #[inline]
             fn from(value: &mut #ident #type_generics) -> Self { Self::from(&*value) }
         }

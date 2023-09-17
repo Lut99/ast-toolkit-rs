@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    17 Sep 2023, 12:18:43
+//    17 Sep 2023, 22:33:14
 //  Auto updated?
 //    Yes
 // 
@@ -135,9 +135,8 @@ impl<'e, 'i, 'f, 's, I: ?Sized + Spanning<'f, 's> + SpanningExt<'f, 's>> Display
 /// 
 /// # Example
 /// ```rust
-/// use nom::error::ErrorKind;
 /// use ast_toolkit::Span;
-/// use ast_toolkit::nom::{NomError, NomErrorKind};
+/// use ast_toolkit::nom::{ErrorKind, NomError, NomErrorKind};
 /// 
 /// let input: Span = Span::new("<example>", "Hello, world!");
 /// 

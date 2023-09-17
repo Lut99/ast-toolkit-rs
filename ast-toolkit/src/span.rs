@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    17 Sep 2023, 12:11:56
+//    17 Sep 2023, 22:30:02
 //  Auto updated?
 //    Yes
 // 
@@ -365,9 +365,9 @@ pub(crate) fn find_lines_box(source: &str, start_idx: Option<usize>, end_idx: Op
 ///     start : Option<usize>,
 ///     end   : Option<usize>,
 /// }
-/// impl Spanning for HelloWorldSpan {
-///     fn file(&self) -> &str { "<example>" }
-///     fn source(&self) -> &str { "Hello,\nworld!" }
+/// impl Spanning<'static, 'static> for HelloWorldSpan {
+///     fn file(&self) -> &'static str { "<example>" }
+///     fn source(&self) -> &'static str { "Hello,\nworld!" }
 /// 
 ///     fn start_idx(&self) -> Option<usize> { self.start }
 ///     fn end_idx(&self) -> Option<usize> { self.end }
@@ -493,14 +493,14 @@ impl<'f, 's, T: Spanning<'f, 's>> Spanning<'f, 's> for &'_ mut T {
 ///     start : Option<usize>,
 ///     end   : Option<usize>,
 /// }
-/// impl Spanning for HelloWorldSpan {
-///     fn file(&self) -> &str { "<example>" }
-///     fn source(&self) -> &str { "Hello,\nworld!" }
+/// impl Spanning<'static, 'static> for HelloWorldSpan {
+///     fn file(&self) -> &'static str { "<example>" }
+///     fn source(&self) -> &'static str { "Hello,\nworld!" }
 /// 
 ///     fn start_idx(&self) -> Option<usize> { self.start }
 ///     fn end_idx(&self) -> Option<usize> { self.end }
 /// }
-/// impl SpanningExt for HelloWorldSpan {}
+/// impl SpanningExt<'static, 'static> for HelloWorldSpan {}
 /// 
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(12) }.pos_of(7), Position::new1(2, 1));
 /// assert_eq!(HelloWorldSpan { start: Some(0), end: Some(4) }.text(), "Hello");

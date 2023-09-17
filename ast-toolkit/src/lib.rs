@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    17 Sep 2023, 12:13:00
+//    17 Sep 2023, 22:27:46
 //  Auto updated?
 //    Yes
 // 
@@ -228,7 +228,34 @@ pub mod procedural {
     /// 
     /// # Attributes
     /// ## Toplevel
-    /// There are no toplevel attributes for this macro.
+    /// - `#[diagnostic(f = "<LIFETIME>")]`: Specifies the name of the file-lifetime (default `'f`) defined for the [`Diagnostic`](crate::diagnostic::Diagnostic). This is useful if you do not name your error lifetimes `'f` and `'s`, respectively, or if you intend to use `'static`. Note that the preceding apostrophe (`'`) is optional.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use ast_toolkit::Diagnostic;
+    /// 
+    ///   #[derive(Diagnostic)]
+    ///   #[diagnostic(f = "'a")]
+    ///   enum Error<'a, 's> {
+    ///       /// Some error
+    ///       #[diag(error, message = "Oh no, something happened!")]
+    ///       Something { span: Span<'a, 'f> },
+    ///   }
+    ///   ```
+    /// - `#[diagnostic(s = "<LIFETIME>")]`: Specifies the name of the source-lifetime (default `'s`) defined for the [`Diagnostic`](crate::diagnostic::Diagnostic). This is useful if you do not name your error lifetimes `'f` and `'s`, respectively, or if you intend to use `'static`. Note that the preceding apostrophe (`'`) is optional.
+    ///   
+    ///   For example:
+    ///   ```rust
+    ///   use ast_toolkit::{Diagnostic, Span};
+    /// 
+    ///   #[derive(Diagnostic)]
+    ///   #[diagnostic(s = "'static")]
+    ///   enum Error<'f> {
+    ///       /// Some error
+    ///       #[diag(error, message = "Oh no, something happened!")]
+    ///       Something { span: Span<'f, 'static> },
+    ///   }
+    ///   ```
     /// 
     /// ## Variant-level
     /// For every variant (or the struct itself if you are deriving a struct), you can use `#[diag(...)]` to derive a new [`Diagnostic`](crate::diagnostic::Diagnostic) from that variant. Specifically:
@@ -242,23 +269,23 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
-    ///   use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Debug, Diagnostic)]
-    ///   enum Error {
+    ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a (potentially formatted) string as message:
     ///       #[diag(error, message = "Hello, {world}!")]
-    ///       HelloX { world: String, span: DiagnosticSpan },
+    ///       HelloX { world: String, span: Span<'f, 's> },
     ///   
     ///       /// Second case, where we directly use the value of a field:
     ///       #[diag(error, message = hello_world)]
-    ///       HelloWorld { hello_world: String, span: DiagnosticSpan },
+    ///       HelloWorld { hello_world: String, span: Span<'f, 's> },
     /// 
     ///       /// Third case, where we use the [`Display`]-implementation
     ///       #[diag(error)]
-    ///       HelloDisplay { span: DiagnosticSpan },
+    ///       HelloDisplay { span: Span<'f, 's> },
     ///   }
-    ///   impl Display for Error {
+    ///   impl<'f, 's> Display for Error<'f, 's> {
     ///       fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///           write!(f, "Hello, display!")
     ///       }
@@ -271,28 +298,28 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
-    ///   use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Debug, Diagnostic)]
-    ///   enum Error {
+    ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a string as code:
     ///       #[diag(error, code = "err1")]
-    ///       LiteralCode { span: DiagnosticSpan },
+    ///       LiteralCode { span: Span<'f, 's> },
     ///   
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(error, code = warn_code)]
-    ///       FieldCode { warn_code: String, span: DiagnosticSpan },
+    ///       FieldCode { warn_code: String, span: Span<'f, 's> },
     /// 
     ///       /// Third case, where we use the value of a the default `code`-field:
     ///       #[diag(error, code)]
-    ///       AutoCode { code: String, span: DiagnosticSpan },
+    ///       AutoCode { code: String, span: Span<'f, 's> },
     /// 
     ///       /// And, of course, the fourth case, which has no code:
     ///       #[diag(error)]
-    ///       NoCode { span: DiagnosticSpan },
+    ///       NoCode { span: Span<'f, 's> },
     ///   }
     ///   // ...
-    ///   # impl Display for Error {
+    ///   # impl<'f, 's> Display for Error<'f, 's> {
     ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///   #         write!(f, "Some message")
     ///   #     }
@@ -307,28 +334,28 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
-    ///   use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Debug, Diagnostic)]
-    ///   enum Error {
+    ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a string as remark:
     ///       #[diag(error, remark = "Additional information")]
-    ///       LiteralRemark { span: DiagnosticSpan },
+    ///       LiteralRemark { span: Span<'f, 's> },
     ///   
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(error, remark = note)]
-    ///       FieldRemark { note: String, span: DiagnosticSpan },
+    ///       FieldRemark { note: String, span: Span<'f, 's> },
     /// 
     ///       /// Third case, where we use the value of a the default `remark`-field:
     ///       #[diag(error, remark)]
-    ///       AutoRemark { remark: String, span: DiagnosticSpan },
+    ///       AutoRemark { remark: String, span: Span<'f, 's> },
     /// 
     ///       /// And, of course, the fourth case, which has no remark:
     ///       #[diag(error)]
-    ///       NoRemark { span: DiagnosticSpan },
+    ///       NoRemark { span: Span<'f, 's> },
     ///   }
     ///   // ...
-    ///   # impl Display for Error {
+    ///   # impl<'f, 's> Display for Error<'f, 's> {
     ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///   #         write!(f, "Some message")
     ///   #     }
@@ -343,27 +370,27 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
-    ///   use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Debug, Diagnostic)]
-    ///   enum Error {
+    ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a (potentially formatted) string as remark:
     ///       #[diag(suggestion, replace = "let {ident} = \"Hello, there!\"")]
-    ///       LiteralReplace { ident: String, span: DiagnosticSpan },
+    ///       LiteralReplace { ident: String, span: Span<'f, 's> },
     ///   
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(suggestion, replace = new_code)]
-    ///       FieldReplace { new_code: String, span: DiagnosticSpan },
+    ///       FieldReplace { new_code: String, span: Span<'f, 's> },
     /// 
     ///       /// Third case, where we use the value of a the default `remark`-field:
     ///       #[diag(suggestion, replace)]
-    ///       AutoReplace { replace: String, span: DiagnosticSpan },
+    ///       AutoReplace { replace: String, span: Span<'f, 's> },
     ///       /// This is equivalent to omitting it altogether for `#[diag(suggestion)]`-diagnostics:
     ///       #[diag(suggestion)]
-    ///       NoReplace { replace: String, span: DiagnosticSpan },
+    ///       NoReplace { replace: String, span: Span<'f, 's> },
     ///   }
     ///   // ...
-    ///   # impl Display for Error {
+    ///   # impl<'f, 's> Display for Error<'f, 's> {
     ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///   #         write!(f, "Some message")
     ///   #     }
@@ -375,23 +402,23 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
-    ///   use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Debug, Diagnostic)]
-    ///   enum Error {
+    ///   enum Error<'f, 's> {
     ///       /// First case, where we specify the field manually:
     ///       #[diag(error, span = main_span)]
-    ///       FieldSpan { main_span: DiagnosticSpan },
+    ///       FieldSpan { main_span: Span<'f, 's> },
     ///   
     ///       /// Second case, where we use the default fieldname:
     ///       #[diag(error, span)]
-    ///       AutoSpan { new_code: String, span: DiagnosticSpan },
+    ///       AutoSpan { new_code: String, span: Span<'f, 's> },
     ///       /// This is equivalent to omitting it altogether:
     ///       #[diag(error)]
-    ///       NoSpan { replace: String, span: DiagnosticSpan },
+    ///       NoSpan { replace: String, span: Span<'f, 's> },
     ///   }
     ///   // ...
-    ///   # impl Display for Error {
+    ///   # impl<'f, 's> Display for Error<'f, 's> {
     ///   #     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///   #         write!(f, "Some message")
     ///   #     }
@@ -402,21 +429,21 @@ pub mod procedural {
     /// A key feature of the API is that multiple [`Diagnostic`](crate::diagnostic::Diagnostic) can be derived per struct or variant:
     /// ```rust
     /// use std::fmt::{Display, Formatter, Result as FResult};
-    /// use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// #[derive(Debug, Diagnostic)]
     /// #[diag(error, code = "bad", span = main_span)]
     /// #[diag(note, message = "See here for more information", span = note_span)]
-    /// struct Error {
-    ///     main_span : DiagnosticSpan,
-    ///     note_span : DiagnosticSpan,
+    /// struct Error<'f, 's> {
+    ///     main_span : Span<'f, 's>,
+    ///     note_span : Span<'f, 's>,
     /// }
-    /// impl Display for Error {
+    /// impl<'f, 's> Display for Error<'f, 's> {
     ///     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
     ///         write!(f, "Oh no! A fatal error has occurred!")
     ///     }
     /// }
-    /// impl std::error::Error for Error {}
+    /// impl<'f, 's> std::error::Error for Error<'f, 's> {}
     /// ```
     #[allow(non_snake_case)]
     pub mod Diagnostic {}
