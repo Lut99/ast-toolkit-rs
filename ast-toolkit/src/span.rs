@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    18 Sep 2023, 16:48:28
+//    18 Sep 2023, 17:42:53
 //  Auto updated?
 //    Yes
 // 
@@ -664,7 +664,7 @@ pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).text(), "world!");
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..6).text(), "");
     /// ```
-    fn text(&'_ self) -> &'s str {
+    fn text(&self) -> &'s str {
         let source: &str = self.source();
         match (self.start_idx(), self.end_idx()) {
             (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end { &source[start..=end] } else { "" },
@@ -694,9 +694,9 @@ pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
     /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).lines(), "");
     /// ```
     #[inline]
-    fn lines(&'_ self) -> &'s str {
+    fn lines(&self) -> &'s str {
         let source: &str = self.source();
-        match find_lines_box(source, self.start_idx(), self.end_idx()) {
+        match self.lines_range() {
             (Some(start), Some(end)) => if start < source.len() && end < source.len() && start <= end {
                 // Fully in bounds
                 &source[start..=end]
@@ -711,6 +711,32 @@ pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
             // The rest is always empty
             (_, _) => "",
         }
+    }
+
+    /// Returns a range spanning the lines that contain the spanned text.
+    /// 
+    /// This is like calling [`SpanningExt::lines()`], but getting the range instead of the text.
+    /// 
+    /// # Returns
+    /// A tuple spanning the lines surrounding the spanned area.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Span, SpanningExt as _};
+    /// 
+    /// assert_eq!(Span::new("<example>", "Hello,\nworld!").lines_range(), (Some(0), Some(12)));
+    /// assert_eq!(Span::empty("<example>", "Hello,\nworld!").lines_range(), (None, None));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 0..5).lines_range(), (Some(0), Some(6)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 6..12).lines_range(), (Some(0), Some(12)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..12).lines_range(), (Some(7), Some(12)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..).lines_range(), (Some(7), Some(12)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..=6).lines_range(), (Some(7), Some(6)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 7..=42).lines_range(), (Some(7), Some(12)));
+    /// assert_eq!(Span::ranged("<example>", "Hello,\nworld!", 42..=42).lines_range(), (Some(42), Some(42)));
+    /// ```
+    #[inline]
+    fn lines_range(&self) -> (Option<usize>, Option<usize>) {
+        find_lines_box(self.source(), self.start_idx(), self.end_idx())
     }
 
  

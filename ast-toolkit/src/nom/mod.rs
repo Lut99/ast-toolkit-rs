@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    18 Sep 2023, 16:32:37
+//    18 Sep 2023, 16:53:55
 //  Auto updated?
 //    Yes
 // 
@@ -91,7 +91,7 @@ impl<'e, 'i, 'f, 's, I: ?Sized + Spanning<'f, 's> + SpanningExt<'f, 's>> Display
             Fail             => write!(f, "Unexpected error occurred"),
             Float            => write!(f, "Syntax error: Incorrect floating-point number"),
             HexDigit         => write!(f, "Syntax error: Expected hexadecimal digit, got {}", expected_char!(get_input_char(self.input))),
-            IsA(_)           => write!(f, "Expected pattern"),                                                                                         // TODO: Can get more verbose if we read parser input
+            IsA(info)        => if let Some(what) = info { write!(f, "Expected one of {what}") } else { write!(f, "Expected pattern") },                 // TODO: Can get more verbose if we read parser input
             IsNot(_)         => write!(f, "Expected anything else than {}", expected_char!(get_input_char(self.input))),                                   // TODO: Can get more verbose if we read parser input
             Many0            |                                                                                                                       // NOTE: Don't need to catch like Many1 since it never propagates and can thus never be in a stack other than the end
             Many0Count       => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (self.input.start(), self.input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
@@ -104,7 +104,7 @@ impl<'e, 'i, 'f, 's, I: ?Sized + Spanning<'f, 's> + SpanningExt<'f, 's>> Display
             Satisfy          => write!(f, "Syntax error: Encountered unexpected character {}", expected_char!(get_input_char(self.input))),
             SeparatedList    => { panic!("Parser got stuck in an infinite loop at {}", if let (Some(start), Some(end)) = (self.input.start(), self.input.end()) { format!("{start}-{end}") } else { "<unknown>".into() }); },
             Space            => write!(f, "Syntax error: Expected non-newline whitespace, got {}", expected_char!(get_input_char(self.input))),
-            Tag(info)        => if let Some((what, case)) = info { write!(f, "Expected {what}{}", if !case { " (case insensitive)" } else { "".into() }) } else { write!(f, "Expected a sequence") },                                                                                      // TODO: Can get more verbose if we read parser input
+            Tag(info)        => if let Some((what, case)) = info { write!(f, "Expected {what}{}", if !case { " (case insensitive)" } else { "".into() }) } else { write!(f, "Expected a sequence") },    // TODO: Can get more verbose if we read parser input
             TagBits(_)       => write!(f, "Expected a sequence of bits"),                                                                              // TODO: Can get more verbose if we read parser input
             TakeTill1        => todo!(),
             TakeUntil        => todo!(),
@@ -236,7 +236,7 @@ pub enum ErrorKind {
     Fail,
     Float,
     HexDigit,
-    IsA(Option<()>),
+    IsA(Option<String>),
     IsNot(Option<()>),
     Many0,
     Many1,
@@ -278,6 +278,18 @@ impl ErrorKind {
         Self::Count(Some((got.as_(), expected.as_())))
     }
 
+    /// Constructor for a [`ErrorKind::IsA`] that initializes it with the additional context.
+    /// 
+    /// # Arguments
+    /// - `what`: Some array describing what we are matching.
+    /// 
+    /// # Returns
+    /// A new instance of Self that represents an IsA error.
+    #[inline]
+    pub fn is_a(what: impl Into<String>) -> Self {
+        Self::IsA(Some(what.into()))
+    }
+
     /// Constructor for an [`ErrorKind::Tag`] that initializes it with the additional context.
     /// 
     /// # Arguments
@@ -285,7 +297,7 @@ impl ErrorKind {
     /// - `case_sensitive`: Whether or not the comparison was done case sensitively.
     /// 
     /// # Returns
-    /// A new instance of Self that represents a Count error.
+    /// A new instance of Self that represents a Tag error.
     #[inline]
     pub fn tag(what: impl Into<String>, case_sensitive: bool) -> Self {
         Self::Tag(Some((what.into(), case_sensitive)))

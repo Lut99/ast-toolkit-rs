@@ -4,7 +4,7 @@
 //  Created:
 //    04 Jul 2023, 19:17:50
 //  Last edited:
-//    17 Sep 2023, 12:12:34
+//    18 Sep 2023, 17:51:36
 //  Auto updated?
 //    Yes
 // 
@@ -22,7 +22,7 @@ use never_say_never::Never;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::position::Position;
-use crate::span::{IntoSpan, Span, SpanningExt};
+use crate::span::{IntoSpan, Span, Spanning as _, SpanningExt};
 
 
 /***** HELPER MACROS *****/
@@ -76,7 +76,6 @@ fn emit_diagnostic_source_pos(writer: &mut impl Write, max_line: usize, file: &s
 /// - `writer`: The [`Write`]r to write on.
 /// - `accent_colour`: The colour to write accents with.
 /// - `max_line`: The length of the maximum line number we will be displaying.
-/// - `line`: The line number of the first line to write (one-indexed).
 /// - `source`: The actual source to write.
 /// - `accent`: The total access range of this line, ignoring newlines for a sec.
 /// - `note`: Any note to write.
@@ -84,7 +83,32 @@ fn emit_diagnostic_source_pos(writer: &mut impl Write, max_line: usize, file: &s
 /// # Errors
 /// This function may error if we failed to write on the given writer.
 #[inline]
-fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, max_line: usize, line: usize, source: &str, accent: (Option<usize>, Option<usize>), note: Option<&str>) -> Result<(), std::io::Error> {
+fn emit_diagnostic_source_lines<'f, 's>(writer: &mut impl Write, accent_colour: &Style, source: Span<'f, 's>, note: Option<&str>) -> Result<(), std::io::Error> {
+    // Fetch the maximum line number
+    let max_line: usize = match source.end() {
+        Some(end) => end.line1(),
+        None      => 1 + source.source().chars().filter(|c| *c == '\n').count(),
+    };
+
+    // Next, we extract only the relevant lines from the source
+    let lines_range: (Option<usize>, Option<usize>) = source.lines_range();
+    let (lines, line, start): (&str, usize, usize) = match lines_range {
+        (Some(start), Some(end)) => if start < source.source.len() && end < source.source.len() && start <= end {
+            // Fully in bounds
+            (&source.source[start..=end], 1 + &source.source[..start].chars().filter(|c| *c == '\n').count(), start)
+        } else if start < source.source.len() && start <= end {
+            // Now we know the source is non-empty & start is within bounds; clip
+            (&source.source[start..], 1 + &source.source[..start].chars().filter(|c| *c == '\n').count(), start)
+        } else {
+            // Evaluates to an empty slice
+            ("", 0, start)
+        },
+
+        // The rest is always empty but might reveal any start info
+        (Some(start), _) => ("", 0, start),
+        (_, _)           => ("", 0, 0),
+    };
+
     // Write the empty line first
     writeln!(writer, "{} {}", (0..max_line).map(|_| ' ').collect::<String>(), style('|').bold().blue())?;
 
@@ -93,9 +117,12 @@ fn emit_diagnostic_source_lines(writer: &mut impl Write, accent_colour: &Style, 
     let mut first_accent: bool = true;
     let mut line_buffer: String = String::new();
     let mut mark_buffer: String = String::new();
-    for (i, c) in source.grapheme_indices(true) {
+    for (i, c) in lines.grapheme_indices(true) {
+        // Convert the index to one relative to the start of the source
+        let i: usize = start + i;
+
         // Decide whether to apply highlighting to this character
-        let highlight: bool = match (accent.0, accent.1) {
+        let highlight: bool = match (source.start_idx(), source.end_idx()) {
             (Some(start), Some(end)) => start <= i && i <= end,
             (None, _)                => false,
             (_, None)                => false,
@@ -985,7 +1012,7 @@ impl<'f, 's> Diagnostic<'f, 's> {
                     match self.span.range {
                         (Some(start), Some(end)) => {
                             // First, add everything before the start (if it's within range, at least)
-                            let source: &str = self.span.lines();
+                            let source: &str = self.span.source;
                             if start < source.len() {
                                 new_source.push_str(&source[..start]);
                             }
@@ -1004,7 +1031,7 @@ impl<'f, 's> Diagnostic<'f, 's> {
                         },
                         (Some(start), None) => {
                             // First, add everything before the start (if it's within range, at least)
-                            let source: &str = self.span.lines();
+                            let source: &str = self.span.source;
                             if start < source.len() {
                                 new_source.push_str(&source[..start]);
                             }
@@ -1033,17 +1060,14 @@ impl<'f, 's> Diagnostic<'f, 's> {
                     (Cow::Owned(new_source), new_range)
                 },
 
-                DiagnosticSpecific::Error | DiagnosticSpecific::Warning | DiagnosticSpecific::Note => (Cow::Borrowed(self.span.lines()), self.span.range),
+                DiagnosticSpecific::Error | DiagnosticSpecific::Warning | DiagnosticSpecific::Note => (Cow::Borrowed(self.span.source), self.span.range),
             };
 
-            // Compute how many lines we skipped
-            let skipped: usize = self.span.start().unwrap().line;
-
             // Write the source stuff
-            let max_line: usize = n_digits!(1 + skipped + source.chars().filter(|c| *c == '\n').count());
-            // NOTE: We can safely unwrap because we assert the range is not empty
-            emit_diagnostic_source_pos(writer, max_line, &self.span.file, self.span.start().unwrap())?;
-            emit_diagnostic_source_lines(writer, &accent_colour, max_line, skipped + 1, source.as_ref(), accent_range, self.remark.as_ref().map(|r| r.as_str()))?;
+            // NOTE: We can safely unwrap the positions because we assert the range is not empty
+            let max_line: usize = n_digits!(self.span.end().unwrap().line1());
+            emit_diagnostic_source_pos(writer, max_line, self.span.file, self.span.start().unwrap())?;
+            emit_diagnostic_source_lines(writer, &accent_colour, Span { file: self.span.file, source: source.as_ref(), range: accent_range }, self.remark.as_ref().map(|r| r.as_str()))?;
         }
 
         // Recursively write child diagnostics

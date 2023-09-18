@@ -4,7 +4,7 @@
 //  Created:
 //    12 Sep 2023, 15:49:44
 //  Last edited:
-//    18 Sep 2023, 16:41:29
+//    18 Sep 2023, 17:00:55
 //  Auto updated?
 //    Yes
 // 
@@ -15,9 +15,9 @@
 
 use std::fmt::Display;
 
-use nom::{Compare, CompareResult, Err, InputLength, InputTake, IResult};
+use nom::{Compare, CompareResult, Err, FindToken, InputLength, InputTake, InputTakeAtPosition, IResult};
 
-use crate::nom::{ErrorKind, NomError};
+use crate::nom::{ErrorKind, NomError, NomErrorKind};
 
 
 /***** LIBRARY *****/
@@ -113,5 +113,58 @@ where
             }
         };
         res
+    }
+}
+
+
+
+/// Returns the longest slice of the matches the pattern.
+///
+/// The parser will return the longest slice consisting of the characters in provided in the
+/// combinator's argument.
+///
+/// It will return a `Err(Err::Error((_, ErrorKind::IsA)))` if the pattern wasn't met.
+/// # Example
+/// ```rust
+/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// use nom::bytes::complete::is_a;
+///
+/// fn hex(s: &str) -> IResult<&str, &str> {
+///   is_a("1234567890ABCDEF")(s)
+/// }
+///
+/// assert_eq!(hex("123 and voila"), Ok((" and voila", "123")));
+/// assert_eq!(hex("DEADBEEF and others"), Ok((" and others", "DEADBEEF")));
+/// assert_eq!(hex("BADBABEsomething"), Ok(("something", "BADBABE")));
+/// assert_eq!(hex("D15EA5E"), Ok(("", "D15EA5E")));
+/// assert_eq!(hex(""), Err(Err::Error(Error::new("", ErrorKind::IsA))));
+/// ```
+pub fn is_a<T, Input>(arr: T) -> impl Fn(Input) -> IResult<Input, Input, NomError<Input>>
+where
+    Input: InputTakeAtPosition,
+    T: Display + FindToken<<Input as InputTakeAtPosition>::Item>,
+{
+    move |i: Input| {
+        i.split_at_position1_complete(|c| !arr.find_token(c), nom::error::ErrorKind::IsA)
+            // Inject the context into the error before returning it (if it errorred)
+            .map_err(|mut err: nom::Err<NomError<Input>>| {
+                // Unpack the error
+                match &mut err {
+                    Err::Error(err) | Err::Failure(err) => match &mut err.kind {
+                        NomErrorKind::ErrorKind(_, e) => match e {
+                            // Update the context
+                            ErrorKind::IsA(context) => { *context = Some(format!("'{arr}'")); },
+
+                            // Else, nothing to do
+                            _ => {},
+                        },
+                        _ => {},
+                    },
+                    _ => {},
+                };
+
+                // Done, propagate
+                err
+            })
     }
 }
