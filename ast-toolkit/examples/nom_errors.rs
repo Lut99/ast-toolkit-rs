@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2023, 13:33:26
 //  Last edited:
-//    18 Sep 2023, 16:31:40
+//    18 Sep 2023, 17:54:07
 //  Auto updated?
 //    Yes
 // 
@@ -107,6 +107,21 @@ fn parse_foo_5_times<'f, 's>(input: Span<'f, 's>) -> IResult<Span<'f, 's>, Vec<S
     multi::count(parse_tag_com, 5)(input)
 }
 
+/// Triggers a [`is_a()`](::nom::bytes::complete::is_a()) error, but more verbose.
+/// 
+/// # Arguments
+/// - `input`: The input [`Span`] to parse.
+/// 
+/// # Returns
+/// The remainder input span and the parsed repetitions.
+/// 
+/// # Errors
+/// This function may error if the given input was not what we expected.
+#[inline]
+fn parse_is_a<'f, 's>(input: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<'f, 's>> {
+    bc::is_a("abc")(input)
+}
+
 
 
 
@@ -143,6 +158,13 @@ fn main() {
     parse_foo_5_times(Span::new("<example>", "foofoo")).unwrap_err().into_diag().emit();
     parse_foo_5_times(Span::new("<example>", "foofoobar")).unwrap_err().into_diag().emit();
     parse_foo_5_times(Span::new("<example>", "foofoofoofoofob")).unwrap_err().into_diag().emit();
+    println!("{sep}");
+    println!();
+
+    // Show `is_a()` parsing
+    println!();
+    println!("{sep}");
+    parse_is_a(Span::new("<example>", "e")).unwrap_err().into_diag().emit();
     println!("{sep}");
     println!();
 }
