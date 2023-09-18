@@ -4,7 +4,7 @@
 //  Created:
 //    13 Sep 2023, 17:14:56
 //  Last edited:
-//    13 Sep 2023, 17:36:50
+//    18 Sep 2023, 16:43:30
 //  Auto updated?
 //    Yes
 // 
@@ -27,17 +27,25 @@ use crate::nom::{ErrorKind, NomError};
 /// the input that matches the argument.
 /// # Example
 /// ```rust
-/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// # use nom::{Err, Needed, IResult};
+/// # use ast_toolkit::diagnostic::Diagnosticable as _;
+/// # use ast_toolkit::span::Span;
+/// use ast_toolkit::nom::{ErrorKind, NomError};
 /// use ast_toolkit::nom::bytes::streaming::tag;
 ///
-/// fn parser(s: &str) -> IResult<&str, &str> {
+/// fn parser<'f, 's>(s: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<Span<'f, 's>>> {
 ///   tag("Hello")(s)
 /// }
-///
-/// assert_eq!(parser("Hello, World!"), Ok((", World!", "Hello")));
-/// assert_eq!(parser("Something"), Err(Err::Error(Error::new("Something", ErrorKind::Tag))));
-/// assert_eq!(parser("S"), Err(Err::Error(Error::new("S", ErrorKind::Tag))));
-/// assert_eq!(parser("H"), Err(Err::Incomplete(Needed::new(4))));
+/// 
+/// let input1 = Span::new("<example>", "Hello, world!");
+/// let input2 = Span::new("<example>", "Something");
+/// let input3 = Span::new("<example>", "S");
+/// let input4 = Span::new("<example>", "H");
+/// 
+/// assert_eq!(parser(input1), Ok((input1.range(5..), input1.range(..5))));
+/// assert_eq!(parser(input2).unwrap_err().into_diag().message(), "Expected 'Hello'");
+/// assert_eq!(parser(input3).unwrap_err().into_diag().message(), "Expected 'Hello'");
+/// assert_eq!(parser(input4).unwrap_err().into_diag().message(), "Given text parses OK but is incomplete");
 /// ```
 pub fn tag<T, Input>(tag: T) -> impl Fn(Input) -> IResult<Input, Input, NomError<Input>>
 where
@@ -66,18 +74,27 @@ where
 /// the input that matches the argument with no regard to case.
 /// # Example
 /// ```rust
-/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// # use nom::{Err, Needed, IResult};
+/// # use ast_toolkit::diagnostic::Diagnosticable as _;
+/// # use ast_toolkit::span::Span;
+/// use ast_toolkit::nom::{ErrorKind, NomError};
 /// use ast_toolkit::nom::bytes::streaming::tag_no_case;
 ///
-/// fn parser(s: &str) -> IResult<&str, &str> {
+/// fn parser<'f, 's>(s: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<Span<'f, 's>>> {
 ///   tag_no_case("hello")(s)
 /// }
-///
-/// assert_eq!(parser("Hello, World!"), Ok((", World!", "Hello")));
-/// assert_eq!(parser("hello, World!"), Ok((", World!", "hello")));
-/// assert_eq!(parser("HeLlO, World!"), Ok((", World!", "HeLlO")));
-/// assert_eq!(parser("Something"), Err(Err::Error(Error::new("Something", ErrorKind::Tag))));
-/// assert_eq!(parser(""), Err(Err::Incomplete(Needed::new(5))));
+/// 
+/// let input1 = Span::new("<example>", "Hello, world!");
+/// let input2 = Span::new("<example>", "hello, world!");
+/// let input3 = Span::new("<example>", "HeLlO, world!");
+/// let input4 = Span::new("<example>", "Something");
+/// let input5 = Span::new("<example>", "");
+/// 
+/// assert_eq!(parser(input1), Ok((input1.range(5..), input1.range(..5))));
+/// assert_eq!(parser(input2), Ok((input2.range(5..), input2.range(..5))));
+/// assert_eq!(parser(input3), Ok((input3.range(5..), input3.range(..5))));
+/// assert_eq!(parser(input4).unwrap_err().into_diag().message(), "Expected 'hello' (case insensitive)");
+/// assert_eq!(parser(input5).unwrap_err().into_diag().message(), "Given text parses OK but is incomplete");
 /// ```
 pub fn tag_no_case<T, Input>(tag: T) -> impl Fn(Input) -> IResult<Input, Input, NomError<Input>>
 where

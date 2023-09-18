@@ -4,7 +4,7 @@
 //  Created:
 //    31 Aug 2023, 21:17:55
 //  Last edited:
-//    17 Sep 2023, 22:33:14
+//    18 Sep 2023, 16:32:37
 //  Auto updated?
 //    Yes
 // 
@@ -140,8 +140,8 @@ impl<'e, 'i, 'f, 's, I: ?Sized + Spanning<'f, 's> + SpanningExt<'f, 's>> Display
 /// 
 /// let input: Span = Span::new("<example>", "Hello, world!");
 /// 
-/// let err1 = NomError::error_kind(input, ErrorKind::Tag);
-/// assert_eq!(err1.kind, NomErrorKind::ErrorKind(input, ErrorKind::Tag));
+/// let err1 = NomError::error_kind(input, ErrorKind::Tag(None));
+/// assert_eq!(err1.kind, NomErrorKind::ErrorKind(input, ErrorKind::Tag(None)));
 /// 
 /// let err2 = NomError::char(input, 'c');
 /// assert_eq!(err2.kind, NomErrorKind::Char(input, 'c'));

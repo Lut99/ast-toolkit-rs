@@ -4,7 +4,7 @@
 //  Created:
 //    13 Sep 2023, 17:27:53
 //  Last edited:
-//    13 Sep 2023, 17:35:44
+//    18 Sep 2023, 16:37:02
 //  Auto updated?
 //    Yes
 // 
@@ -27,18 +27,28 @@ use crate::nom::{ErrorKind, NomError};
 /// # Example
 ///
 /// ```
-/// # use nom::{Err, error::{Error, ErrorKind}, IResult, Needed};
+/// # use nom::{Err, IResult, Needed};
+/// # use ast_toolkit::diagnostic::Diagnosticable as _;
+/// # use ast_toolkit::nom::{ErrorKind, NomError};
 /// # use ast_toolkit::nom::character::complete::not_line_ending;
-/// fn parser(input: &str) -> IResult<&str, &str> {
+/// # use ast_toolkit::span::Span;
+/// fn parser<'f, 's>(input: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<Span<'f, 's>>> {
 ///     not_line_ending(input)
 /// }
 ///
-/// assert_eq!(parser("ab\r\nc"), Ok(("\r\nc", "ab")));
-/// assert_eq!(parser("ab\nc"), Ok(("\nc", "ab")));
-/// assert_eq!(parser("abc"), Ok(("", "abc")));
-/// assert_eq!(parser(""), Ok(("", "")));
-/// assert_eq!(parser("a\rb\nc"), Err(Err::Error(Error { input: "a\rb\nc", code: ErrorKind::Tag })));
-/// assert_eq!(parser("a\rbc"), Err(Err::Error(Error { input: "a\rbc", code: ErrorKind::Tag })));
+/// let input1 = Span::new("<example>", "ab\r\nc");
+/// let input2 = Span::new("<example>", "ab\nc");
+/// let input3 = Span::new("<example>", "abc");
+/// let input4 = Span::new("<example>", "");
+/// let input5 = Span::new("<example>", "a\rb\nc");
+/// let input6 = Span::new("<example>", "a\rbc");
+/// 
+/// assert_eq!(parser(input1), Ok((input1.range(2..), input1.range(..2))));
+/// assert_eq!(parser(input2), Ok((input2.range(2..), input1.range(..2))));
+/// assert_eq!(parser(input3), Ok((input3.emptied(), input3)));
+/// assert_eq!(parser(input4), Ok((input4.emptied(), input4.emptied())));
+/// assert_eq!(parser(input5).unwrap_err().into_diag().message(), "Expected '\\n' in CRLF-style line ending");
+/// assert_eq!(parser(input6).unwrap_err().into_diag().message(), "Expected '\\n' in CRLF-style line ending");
 /// ```
 pub fn not_line_ending<T>(input: T) -> IResult<T, T, NomError<T>>
 where

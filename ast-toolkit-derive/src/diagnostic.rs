@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 18:16:24
 //  Last edited:
-//    17 Sep 2023, 22:21:19
+//    18 Sep 2023, 16:45:18
 //  Auto updated?
 //    Yes
 // 
@@ -683,9 +683,9 @@ fn add_lifetimes(attrs: &ToplevelAttributes, mut generics: Generics, span: Span)
     }
 
 
-    // Search for `'f` and `'s` to insert in the list of lifetimes
-    let mut has_f: bool = false;
-    let mut has_s: bool = false;
+    // Search for `'f` and `'s` to insert in the list of lifetimes (unless they are 'static)
+    let mut has_f: bool = attrs.f_name == "static";
+    let mut has_s: bool = attrs.s_name == "static";
     for g in &mut generics.params {
         if has_f && has_s { break; }
         match g {

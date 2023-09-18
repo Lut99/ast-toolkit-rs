@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    17 Sep 2023, 22:27:46
+//    18 Sep 2023, 16:47:19
 //  Auto updated?
 //    Yes
 // 
@@ -156,21 +156,21 @@ pub mod procedural {
     /// ```
     /// By adding spans and minimal annotations, we can turn this error into a real source-referring error:
     /// ```rust
-    /// use ast_toolkit::{Diagnostic, DiagnosticSpan};
+    /// use ast_toolkit::{Diagnostic, Span};
     /// 
     /// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
     /// #[derive(Debug, Diagnostic)]
-    /// enum SourceError {
+    /// enum SourceError<'f, 's> {
     ///     #[diag(error)]
-    ///     InvalidType { identifier: String, got: DataType, expected: DataType, span: DiagnosticSpan },
+    ///     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<'f, 's> },
     ///     #[diag(error, message = "Unidentified variable '{identifier}'")]
     ///     #[diag(suggestion, message = "Did you mean '{suggestion}'?", replace = suggestion)]
-    ///     UndefinedSymbol { identifier: String, suggestion: String, span: DiagnosticSpan },
+    ///     UndefinedSymbol { identifier: String, suggestion: String, span: Span<'f, 's> },
     ///     #[diag(error)]
     ///     #[diag(note, message = "Previous declaration here", span = prev)]
-    ///     DuplicateSymbol { identifier: String, span: DiagnosticSpan, prev: DiagnosticSpan },
+    ///     DuplicateSymbol { identifier: String, span: Span<'f, 's>, prev: Span<'f, 's> },
     /// }
-    /// impl std::fmt::Display for SourceError {
+    /// impl<'f, 's> std::fmt::Display for SourceError<'f, 's> {
     ///     #[inline]
     ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     ///         use SourceError::*;
@@ -181,25 +181,25 @@ pub mod procedural {
     ///         }
     ///     }
     /// }
-    /// impl std::error::Error for SourceError {}
+    /// impl<'f, 's> std::error::Error for SourceError<'f, 's> {}
     /// ```
     /// To use:
     /// ```rust
-    /// # use ast_toolkit::{Diagnostic, DiagnosticSpan, Span};
+    /// # use ast_toolkit::{Diagnostic, Span};
     /// # 
     /// # #[derive(Debug)] enum DataType { String, UnsignedInt8 } impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { match self { Self::String => write!(f, "string"), Self::UnsignedInt8 => write!(f, "uint8"), } } }
     /// # #[derive(Debug, Diagnostic)]
-    /// # enum SourceError{
+    /// # enum SourceError<'f, 's>{
     /// #     #[diag(error)]
-    /// #     InvalidType { identifier: String, got: DataType, expected: DataType, span: DiagnosticSpan },
+    /// #     InvalidType { identifier: String, got: DataType, expected: DataType, span: Span<'f, 's> },
     /// #     #[diag(error, message = "Unidentified variable '{identifier}'")]
     /// #     #[diag(suggestion, message = "Did you mean '{suggestion}'?", replace = suggestion)]
-    /// #     UndefinedSymbol { identifier: String, suggestion: String, span: DiagnosticSpan },
+    /// #     UndefinedSymbol { identifier: String, suggestion: String, span: Span<'f, 's> },
     /// #     #[diag(error)]
     /// #     #[diag(note, message = "Previous declaration here", span = prev)]
-    /// #     DuplicateSymbol { identifier: String, span: DiagnosticSpan, prev: DiagnosticSpan },
+    /// #     DuplicateSymbol { identifier: String, span: Span<'f, 's>, prev: Span<'f, 's> },
     /// # }
-    /// # impl std::fmt::Display for SourceError {
+    /// # impl<'f, 's> std::fmt::Display for SourceError<'f, 's> {
     /// #     #[inline]
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     /// #         use SourceError::*;
@@ -210,7 +210,7 @@ pub mod procedural {
     /// #         }
     /// #     }
     /// # }
-    /// # impl std::error::Error for SourceError {}
+    /// # impl<'f, 's> std::error::Error for SourceError<'f, 's> {}
     /// # 
     /// let span = Span::ranged("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40..=43);
     /// let err = SourceError::InvalidType {
@@ -232,14 +232,14 @@ pub mod procedural {
     ///   
     ///   For example:
     ///   ```rust
-    ///   use ast_toolkit::Diagnostic;
+    ///   use ast_toolkit::{Diagnostic, Span};
     /// 
     ///   #[derive(Diagnostic)]
     ///   #[diagnostic(f = "'a")]
     ///   enum Error<'a, 's> {
     ///       /// Some error
     ///       #[diag(error, message = "Oh no, something happened!")]
-    ///       Something { span: Span<'a, 'f> },
+    ///       Something { span: Span<'a, 's> },
     ///   }
     ///   ```
     /// - `#[diagnostic(s = "<LIFETIME>")]`: Specifies the name of the source-lifetime (default `'s`) defined for the [`Diagnostic`](crate::diagnostic::Diagnostic). This is useful if you do not name your error lifetimes `'f` and `'s`, respectively, or if you intend to use `'static`. Note that the preceding apostrophe (`'`) is optional.

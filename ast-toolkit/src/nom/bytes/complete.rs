@@ -4,7 +4,7 @@
 //  Created:
 //    12 Sep 2023, 15:49:44
 //  Last edited:
-//    13 Sep 2023, 17:36:38
+//    18 Sep 2023, 16:41:29
 //  Auto updated?
 //    Yes
 // 
@@ -29,16 +29,23 @@ use crate::nom::{ErrorKind, NomError};
 /// It will return `Err(Err::Error((_, ErrorKind::Tag)))` if the input doesn't match the pattern
 /// # Example
 /// ```rust
-/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// # use nom::{Err, Needed, IResult};
+/// # use ast_toolkit::diagnostic::Diagnosticable as _;
+/// # use ast_toolkit::span::Span;
+/// use ast_toolkit::nom::{ErrorKind, NomError};
 /// use ast_toolkit::nom::bytes::complete::tag;
 ///
-/// fn parser(s: &str) -> IResult<&str, &str> {
+/// fn parser<'f, 's>(s: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<Span<'f, 's>>> {
 ///   tag("Hello")(s)
 /// }
-///
-/// assert_eq!(parser("Hello, World!"), Ok((", World!", "Hello")));
-/// assert_eq!(parser("Something"), Err(Err::Error(Error::new("Something", ErrorKind::Tag))));
-/// assert_eq!(parser(""), Err(Err::Error(Error::new("", ErrorKind::Tag))));
+/// 
+/// let input1 = Span::new("<example>", "Hello, world!");
+/// let input2 = Span::new("<example>", "Something");
+/// let input3 = Span::new("<example>", "");
+/// 
+/// assert_eq!(parser(input1), Ok((input1.range(5..), input1.range(..5))));
+/// assert_eq!(parser(input2).unwrap_err().into_diag().message(), "Expected 'Hello'");
+/// assert_eq!(parser(input3).unwrap_err().into_diag().message(), "Expected 'Hello'");
 /// ```
 pub fn tag<T, Input>(tag: T) -> impl Fn(Input) -> IResult<Input, Input, NomError<Input>>
 where
@@ -67,18 +74,27 @@ where
 /// It will return `Err(Err::Error((_, ErrorKind::Tag)))` if the input doesn't match the pattern.
 /// # Example
 /// ```rust
-/// # use nom::{Err, error::{Error, ErrorKind}, Needed, IResult};
+/// # use nom::{Err, Needed, IResult};
+/// # use ast_toolkit::diagnostic::Diagnosticable as _;
+/// # use ast_toolkit::span::Span;
+/// use ast_toolkit::nom::{ErrorKind, NomError};
 /// use ast_toolkit::nom::bytes::complete::tag_no_case;
 ///
-/// fn parser(s: &str) -> IResult<&str, &str> {
+/// fn parser<'f, 's>(s: Span<'f, 's>) -> IResult<Span<'f, 's>, Span<'f, 's>, NomError<Span<'f, 's>>> {
 ///   tag_no_case("hello")(s)
 /// }
-///
-/// assert_eq!(parser("Hello, World!"), Ok((", World!", "Hello")));
-/// assert_eq!(parser("hello, World!"), Ok((", World!", "hello")));
-/// assert_eq!(parser("HeLlO, World!"), Ok((", World!", "HeLlO")));
-/// assert_eq!(parser("Something"), Err(Err::Error(Error::new("Something", ErrorKind::Tag))));
-/// assert_eq!(parser(""), Err(Err::Error(Error::new("", ErrorKind::Tag))));
+/// 
+/// let input1 = Span::new("<example>", "Hello, world!");
+/// let input2 = Span::new("<example>", "hello, world!");
+/// let input3 = Span::new("<example>", "HeLlO, world!");
+/// let input4 = Span::new("<example>", "Something");
+/// let input5 = Span::new("<example>", "");
+/// 
+/// assert_eq!(parser(input1), Ok((input1.range(5..), input1.range(..5))));
+/// assert_eq!(parser(input2), Ok((input2.range(5..), input2.range(..5))));
+/// assert_eq!(parser(input3), Ok((input3.range(5..), input3.range(..5))));
+/// assert_eq!(parser(input4).unwrap_err().into_diag().message(), "Expected 'hello' (case insensitive)");
+/// assert_eq!(parser(input5).unwrap_err().into_diag().message(), "Expected 'hello' (case insensitive)");
 /// ```
 pub fn tag_no_case<T, Input>(tag: T) -> impl Fn(Input) -> IResult<Input, Input, NomError<Input>>
 where

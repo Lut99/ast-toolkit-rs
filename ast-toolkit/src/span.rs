@@ -4,7 +4,7 @@
 //  Created:
 //    27 Aug 2023, 12:36:52
 //  Last edited:
-//    17 Sep 2023, 22:30:02
+//    18 Sep 2023, 16:48:28
 //  Auto updated?
 //    Yes
 // 
@@ -345,6 +345,29 @@ pub(crate) fn find_lines_box(source: &str, start_idx: Option<usize>, end_idx: Op
 
         // Catch explicit empties
         (start, end) => (start, end),
+    }
+}
+
+/// Converts a given [`RangeBounds]-implementing type to a Span tuple of range.
+/// 
+/// # Arguments
+/// - `range`: The [`RangeBounds] to convert.
+/// - `max_len`: The maximum source length that this range can be.
+/// 
+/// # Returns
+/// A new tuple with a start- and end bound, respectively (inclusive, may be None if empty etc).
+#[inline]
+fn range_bound_to_range(range: impl RangeBounds<usize>, max_len: usize) -> (Option<usize>, Option<usize>) {
+    match (range.start_bound(), range.end_bound()) {
+        (Bound::Excluded(start), Bound::Excluded(end)) => (if *start < usize::MAX { Some(*start + 1) } else { None }, if *end > 0 { Some(*end - 1) } else { None }),
+        (Bound::Excluded(start), Bound::Included(end)) => (if *start < usize::MAX { Some(*start + 1) } else { None }, Some(*end)),
+        (Bound::Excluded(start), Bound::Unbounded)     => (if *start < usize::MAX { Some(*start + 1) } else { None }, if max_len >0 { Some(max_len - 1) } else { None }),
+        (Bound::Included(start), Bound::Excluded(end)) => (Some(*start), if *end > 0 { Some(*end - 1) } else { None }),
+        (Bound::Included(start), Bound::Included(end)) => (Some(*start), Some(*end)),
+        (Bound::Included(start), Bound::Unbounded)     => (Some(*start), if max_len >0 { Some(max_len - 1) } else { None }),
+        (Bound::Unbounded, Bound::Excluded(end))       => (Some(0), if *end > 0 { Some(*end - 1) } else { None }),
+        (Bound::Unbounded, Bound::Included(end))       => (Some(0), Some(*end)),
+        (Bound::Unbounded, Bound::Unbounded)           => (Some(0), if max_len >0 { Some(max_len - 1) } else { None }),
     }
 }
 
@@ -736,6 +759,8 @@ pub trait SpanningExt<'f, 's>: Spanning<'f, 's> {
         }
     }
 }
+impl<'f, 's, T: SpanningExt<'f, 's>> SpanningExt<'f, 's> for &'_ T {}
+impl<'f, 's, T: SpanningExt<'f, 's>> SpanningExt<'f, 's> for &'_ mut T {}
 
 /// Abstracts over [`Spanning`]-capable types that may be joined together to form a new instance of `self`.
 /// 
@@ -948,17 +973,57 @@ impl<'f, 's> Span<'f, 's> {
         Self {
             file,
             source,
-            range : match (range.start_bound(), range.end_bound()) {
-                (Bound::Excluded(start), Bound::Excluded(end)) => (if *start < usize::MAX { Some(*start + 1) } else { None }, if *end > 0 { Some(*end - 1) } else { None }),
-                (Bound::Excluded(start), Bound::Included(end)) => (if *start < usize::MAX { Some(*start + 1) } else { None }, Some(*end)),
-                (Bound::Excluded(start), Bound::Unbounded)     => (if *start < usize::MAX { Some(*start + 1) } else { None }, if source_len >0 { Some(source_len - 1) } else { None }),
-                (Bound::Included(start), Bound::Excluded(end)) => (Some(*start), if *end > 0 { Some(*end - 1) } else { None }),
-                (Bound::Included(start), Bound::Included(end)) => (Some(*start), Some(*end)),
-                (Bound::Included(start), Bound::Unbounded)     => (Some(*start), if source_len >0 { Some(source_len - 1) } else { None }),
-                (Bound::Unbounded, Bound::Excluded(end))       => (Some(0), if *end > 0 { Some(*end - 1) } else { None }),
-                (Bound::Unbounded, Bound::Included(end))       => (Some(0), Some(*end)),
-                (Bound::Unbounded, Bound::Unbounded)           => (Some(0), if source_len >0 { Some(source_len - 1) } else { None }),
-            },
+            range : range_bound_to_range(range, source_len),
+        }
+    }
+
+
+
+    /// Convenience function that returns a new Span out of this one that has no range.
+    /// 
+    /// # Returns
+    /// A new instance of Self based on the same file and source, but with an empty range.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Span, SpanningExt as _};
+    /// 
+    /// let input: Span = Span::new("<example>", "Hello, world!");
+    /// assert_eq!(input.text(), "Hello, world!");
+    /// 
+    /// let empty: Span = input.emptied();
+    /// assert_eq!(empty.text(), "");
+    /// ```
+    #[inline]
+    pub fn emptied(&self) -> Span<'f, 's> {
+        Span {
+            file   : self.file,
+            source : self.source,
+            range  : (None, None),
+        }
+    }
+
+    /// Convenience function that returns a new Span out of this one with the given range.
+    /// 
+    /// # Returns
+    /// A new instance of Self based on the same file and source, but with a different range.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use ast_toolkit::{Span, SpanningExt as _};
+    /// 
+    /// let input: Span = Span::new("<example>", "Hello, world!");
+    /// assert_eq!(input.text(), "Hello, world!");
+    /// 
+    /// let range: Span = input.range(0..5);
+    /// assert_eq!(range.text(), "Hello");
+    /// ```
+    #[inline]
+    pub fn range(&self, range: impl RangeBounds<usize>) -> Span<'f, 's> {
+        Span {
+            file   : self.file,
+            source : self.source,
+            range  : range_bound_to_range(range, self.source.len()),
         }
     }
 }
