@@ -1,23 +1,23 @@
 //  LIB.rs
 //    by Lut99
-// 
+//
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    18 Sep 2023, 16:47:19
+//    15 Dec 2023, 19:15:26
 //  Auto updated?
 //    Yes
-// 
+//
 //  Description:
 //!   A collection of structs and interfaces extremely useful when working
 //!   with compilers that parse text into ASTs.
-//! 
+//!
 //!   # Diagnostics
 //!   One of the main features this crate contributes is the addition of
 //!   [`struct@Diagnostic`]s, which, much like the one in Rust's own proc_macro
 //!   ecosystem, allows for the formatting of source-related errors, warnings,
 //!   notes and suggestions. For example:
-//! 
+//!
 //!   ```plain
 //!   error: Invalid word 'Hlelo'
 //!     --> <example>:1:1
@@ -59,7 +59,7 @@
 //!   implementing [`Error`](std::error::Error) such that it is compatible with
 //!   the more typical paradigm of defining error enums. You can refer to the
 //!   [derive-macro](derive@Diagnostic)-macro itself for more information.
-//! 
+//!
 //!   Like its Rust-counterpart, the [`struct@Diagnostic`] also supports
 //!   adding error- or warning codes, notes, or even full extra diagnostics in
 //!   a chain. For example:
@@ -85,9 +85,9 @@
 //!     |      ^^      
 //!     |
 //!   ```
-//! 
+//!
 //!   You can refer to the [`examples`](../examples)-folder for a few practical examples.
-//! 
+//!
 //!   # Spans
 //!   This crate contributes [`Span`]s for mapping AST nodes/tokens to source
 //!   text. It is very comparable to [`LocatedSpan`](https://docs.rs/nom_locate/latest/nom_locate/struct.LocatedSpan.html)
@@ -95,32 +95,31 @@
 //!   Similarly, when enabling the `nom`-feature (see [below](#features)), it
 //!   also implements the required traits to be used in `nom`-functions in a
 //!   similar fashion.
-//! 
+//!
 //!   The biggest contribution is that this [`Span`] also carries filename
 //!   information.
-//! 
+//!
 //!   # Features
 //!   The following features can be enabled in this crate:
 //!   - `derive`: Auto-imports the [`ast-toolkit-derive`](ast_toolkit_derive) crate. [enabled by default]
 //!   - `nom`: Adds [nom](https://docs.rs/nom/latest/nom/)-compatability for [`Span`] and exposes a re-export of it.
-// 
+//
 
 // Define the submodules
-pub mod diagnostic;
-pub mod position;
-pub mod span;
+pub mod display_source;
+// pub mod position;
+// pub mod span;
 
-#[cfg(feature = "nom")]
-pub mod nom;
+// #[cfg(feature = "nom")]
+// pub mod nom;
 
 
 // Pull the relevant stuff into the global namespace
-pub use crate::diagnostic::{Diagnostic, Diagnosticable, DiagnosticKind};
-pub use crate::position::Position;
-pub use crate::span::{Combining, IntoSpan, Span, Spanning, SpanningExt};
-
-#[cfg(feature = "nom")]
-pub use crate::nom::NomError;
+// pub use crate::display_source::{Diagnostic, DiagnosticKind, Diagnosticable};
+// pub use crate::position::Position;
+// pub use crate::span::{Combining, IntoSpan, Span, Spanning, SpanningExt};
+// #[cfg(feature = "nom")]
+// pub use crate::nom::NomError;
 
 
 // Pull any procedural macros into this namespace
@@ -128,9 +127,9 @@ pub use crate::nom::NomError;
 #[cfg(feature = "derive")]
 pub mod procedural {
     /// The [`Diagnostic`](ast_toolkit_derive::Diagnostic) derive-macro automatically derives [`From<Diagnostic>`] on the annotated struct or enum.
-    /// 
+    ///
     /// You can create diagnostics for the struct or every enum variant by annotating them with `#[diag(...)]`. Toplevel attributes can be set on the struct or enum itself using `#[diagnostic(...)]`.
-    /// 
+    ///
     /// # Goal
     /// The main use-case of this macro is to provide easy-to-use interoparability with standard Rust enum errors. For example, consider the following error:
     /// ```rust
@@ -157,7 +156,7 @@ pub mod procedural {
     /// By adding spans and minimal annotations, we can turn this error into a real source-referring error:
     /// ```rust
     /// use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     /// # #[derive(Debug)] enum DataType {} impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { Ok(()) } }
     /// #[derive(Debug, Diagnostic)]
     /// enum SourceError<'f, 's> {
@@ -186,7 +185,7 @@ pub mod procedural {
     /// To use:
     /// ```rust
     /// # use ast_toolkit::{Diagnostic, Span};
-    /// # 
+    /// #
     /// # #[derive(Debug)] enum DataType { String, UnsignedInt8 } impl std::fmt::Display for DataType { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { match self { Self::String => write!(f, "string"), Self::UnsignedInt8 => write!(f, "uint8"), } } }
     /// # #[derive(Debug, Diagnostic)]
     /// # enum SourceError<'f, 's>{
@@ -211,7 +210,7 @@ pub mod procedural {
     /// #     }
     /// # }
     /// # impl<'f, 's> std::error::Error for SourceError<'f, 's> {}
-    /// # 
+    /// #
     /// let span = Span::ranged("<example>", "let test: &str = \"test\"; let test: u8 = test;", 40..=43);
     /// let err = SourceError::InvalidType {
     ///     identifier: "test".into(),
@@ -221,11 +220,11 @@ pub mod procedural {
     /// };
     /// Diagnostic::from(err).emit();
     /// ```
-    /// 
+    ///
     /// # [`Span`](crate::span::Span)s VS [`DiagnosticSpan`](crate::diagnostic::DiagnosticSpan)s
     /// The macro makes use of [`DiagnosticSpan`](crate::diagnostic::DiagnosticSpan)s instead of [`Span`](crate::span::Span)s because they do not implement references. Instead, they copy
     /// part of the source text which makes the errors much more portable. You can easily convert from the latter to the first using `DiagnosticSpan::from()` or `Span::into()`.
-    /// 
+    ///
     /// # Attributes
     /// ## Toplevel
     /// - `#[diagnostic(f = "<LIFETIME>")]`: Specifies the name of the file-lifetime (default `'f`) defined for the [`Diagnostic`](crate::diagnostic::Diagnostic). This is useful if you do not name your error lifetimes `'f` and `'s`, respectively, or if you intend to use `'static`. Note that the preceding apostrophe (`'`) is optional.
@@ -233,7 +232,7 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Diagnostic)]
     ///   #[diagnostic(f = "'a")]
     ///   enum Error<'a, 's> {
@@ -247,7 +246,7 @@ pub mod procedural {
     ///   For example:
     ///   ```rust
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Diagnostic)]
     ///   #[diagnostic(s = "'static")]
     ///   enum Error<'f> {
@@ -256,7 +255,7 @@ pub mod procedural {
     ///       Something { span: Span<'f, 'static> },
     ///   }
     ///   ```
-    /// 
+    ///
     /// ## Variant-level
     /// For every variant (or the struct itself if you are deriving a struct), you can use `#[diag(...)]` to derive a new [`Diagnostic`](crate::diagnostic::Diagnostic) from that variant. Specifically:
     /// - `#[diag(error)]`, `#[diag(warn)]`, `#[diag(note)]`, `#[diag(suggestion)]`: Derive a new error-, warning-, note- or suggestion-diagnostic from this variant.
@@ -270,7 +269,7 @@ pub mod procedural {
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Debug, Diagnostic)]
     ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a (potentially formatted) string as message:
@@ -280,7 +279,7 @@ pub mod procedural {
     ///       /// Second case, where we directly use the value of a field:
     ///       #[diag(error, message = hello_world)]
     ///       HelloWorld { hello_world: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// Third case, where we use the [`Display`]-implementation
     ///       #[diag(error)]
     ///       HelloDisplay { span: Span<'f, 's> },
@@ -299,7 +298,7 @@ pub mod procedural {
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Debug, Diagnostic)]
     ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a string as code:
@@ -309,11 +308,11 @@ pub mod procedural {
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(error, code = warn_code)]
     ///       FieldCode { warn_code: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// Third case, where we use the value of a the default `code`-field:
     ///       #[diag(error, code)]
     ///       AutoCode { code: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// And, of course, the fourth case, which has no code:
     ///       #[diag(error)]
     ///       NoCode { span: Span<'f, 's> },
@@ -335,7 +334,7 @@ pub mod procedural {
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Debug, Diagnostic)]
     ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a string as remark:
@@ -345,11 +344,11 @@ pub mod procedural {
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(error, remark = note)]
     ///       FieldRemark { note: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// Third case, where we use the value of a the default `remark`-field:
     ///       #[diag(error, remark)]
     ///       AutoRemark { remark: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// And, of course, the fourth case, which has no remark:
     ///       #[diag(error)]
     ///       NoRemark { span: Span<'f, 's> },
@@ -371,7 +370,7 @@ pub mod procedural {
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Debug, Diagnostic)]
     ///   enum Error<'f, 's> {
     ///       /// First case, where we specify a (potentially formatted) string as remark:
@@ -381,7 +380,7 @@ pub mod procedural {
     ///       /// Second case, where we use the value of a field:
     ///       #[diag(suggestion, replace = new_code)]
     ///       FieldReplace { new_code: String, span: Span<'f, 's> },
-    /// 
+    ///
     ///       /// Third case, where we use the value of a the default `remark`-field:
     ///       #[diag(suggestion, replace)]
     ///       AutoReplace { replace: String, span: Span<'f, 's> },
@@ -403,7 +402,7 @@ pub mod procedural {
     ///   ```rust
     ///   use std::fmt::{Display, Formatter, Result as FResult};
     ///   use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     ///   #[derive(Debug, Diagnostic)]
     ///   enum Error<'f, 's> {
     ///       /// First case, where we specify the field manually:
@@ -424,19 +423,20 @@ pub mod procedural {
     ///   #     }
     ///   # }
     ///   ```
-    /// 
+    ///
     /// # Chaining
     /// A key feature of the API is that multiple [`Diagnostic`](crate::diagnostic::Diagnostic) can be derived per struct or variant:
     /// ```rust
     /// use std::fmt::{Display, Formatter, Result as FResult};
+    ///
     /// use ast_toolkit::{Diagnostic, Span};
-    /// 
+    ///
     /// #[derive(Debug, Diagnostic)]
     /// #[diag(error, code = "bad", span = main_span)]
     /// #[diag(note, message = "See here for more information", span = note_span)]
     /// struct Error<'f, 's> {
-    ///     main_span : Span<'f, 's>,
-    ///     note_span : Span<'f, 's>,
+    ///     main_span: Span<'f, 's>,
+    ///     note_span: Span<'f, 's>,
     /// }
     /// impl<'f, 's> Display for Error<'f, 's> {
     ///     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {

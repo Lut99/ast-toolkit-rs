@@ -1,19 +1,19 @@
 //  DIAGNOSTIC.rs
 //    by Lut99
-// 
+//
 //  Created:
 //    05 Jul 2023, 11:20:29
 //  Last edited:
-//    30 Aug 2023, 14:05:10
+//    15 Dec 2023, 19:17:40
 //  Auto updated?
 //    Yes
-// 
+//
 //  Description:
 //!   Shows a few examples of a diagnostic.
-// 
+//
 
-use ast_toolkit::span::Span;
 use ast_toolkit::diagnostic::Diagnostic;
+use ast_toolkit::span::Span;
 
 
 /***** ENTRYPOINT *****/
@@ -42,8 +42,18 @@ fn main() {
     Diagnostic::note("A note", Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22)).emit();
 
     // Some suggestion
-    Diagnostic::suggestion("A suggestion to replace 'TEXT' with 'text'", Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22), "text").emit();
-    Diagnostic::suggestion("A suggestion to replace 'TEXT' with a runtime-dependent value", Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22), format!("text {}", 2)).emit();
+    Diagnostic::suggestion(
+        "A suggestion to replace 'TEXT' with 'text'",
+        Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22),
+        "text",
+    )
+    .emit();
+    Diagnostic::suggestion(
+        "A suggestion to replace 'TEXT' with a runtime-dependent value",
+        Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 19..=22),
+        format!("text {}", 2),
+    )
+    .emit();
 
     // Chain a few
     Diagnostic::error("Invalid identifier 'SOURCE'", Span::ranged("<builtin>", "SOURCE TEXT\nSOURCE TEXT\nSOURCE TEXT", 0..=5))
