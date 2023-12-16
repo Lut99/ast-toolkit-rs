@@ -1,10 +1,10 @@
-//  DISPLAY SOURCE.rs
+//  SPAN.rs
 //    by Lut99
 //
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    16 Dec 2023, 12:00:12
+//    16 Dec 2023, 12:40:45
 //  Auto updated?
 //    Yes
 //
@@ -13,9 +13,10 @@
 //!   [`Diagnostic`]s that implement it to show advanced source texts.
 //
 
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use console::Style;
+use super::style::DiagnosticStyle;
 
 
 /***** HELPER MACROS *****/
@@ -38,9 +39,9 @@ pub struct DisplaySpanFormatter<'s, S: ?Sized, T> {
     /// The style to display it in.
     style: T,
 }
-impl<'s, S: DisplaySpanImpl, T: DisplaySpanStyle> Display for DisplaySpanFormatter<'s, S, T> {
+impl<'s, S: Span, T: DiagnosticStyle> Display for DisplaySpanFormatter<'s, S, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let source: &str = self.span.source();
+        let source: &[u8] = self.span.source();
         let (start, end): ((u64, u64), (u64, u64)) = match (self.span.start(), self.span.end()) {
             (Some(start), Some(end)) => (start, end),
             _ => {
@@ -48,12 +49,16 @@ impl<'s, S: DisplaySpanImpl, T: DisplaySpanStyle> Display for DisplaySpanFormatt
                 return Ok(());
             },
         };
+        println!("source : {source:?}");
+        println!("start  : {start:?}");
+        println!("end    : {end:?}");
 
         // Fetch the maximum line number
         // Note: `end()` returns zero-indexed numbers, but we show one-indexed numbers, so convert to get the actual maximum we show
         let max_line: u64 = 1 + end.0;
 
         // Next, go through the source lines to write them
+        let source: Cow<str> = String::from_utf8_lossy(source);
         for (l, line) in source.lines().enumerate() {
             // Do nothing if the line is not within range
             if ((l as u64) < start.0) || ((l as u64) > end.0) {
@@ -61,7 +66,14 @@ impl<'s, S: DisplaySpanImpl, T: DisplaySpanStyle> Display for DisplaySpanFormatt
             }
 
             // Write the line, prefixed with the line number
-            writeln!(f, "{:>width$} {} {}", l, '|', line, width = n_digits!(max_line) - n_digits!(l))?;
+            writeln!(
+                f,
+                "{:>width$} {} {}",
+                self.style.line_number().apply_to(l + 1),
+                self.style.scaffolding().apply_to('|'),
+                self.style.source_unaccented().apply_to(line),
+                width = n_digits!(max_line) - n_digits!(l)
+            )?;
         }
 
         Ok(())
@@ -162,13 +174,8 @@ impl<'s, S: DisplaySpanImpl, T: DisplaySpanStyle> Display for DisplaySpanFormatt
 
 
 /***** LIBRARY *****/
-/// Defines how to colour the formatting of a [`DisplaySpan`].
-pub trait DisplaySpanStyle {}
-
-
-
 /// Allows something that spans source text to be (prettily!) displayed.
-pub trait DisplaySpan: DisplaySpanImpl {
+pub trait DisplaySpan: Span {
     /// Returns a formatter that will show the source text highlighted by this span.
     ///
     /// # Arguments
@@ -179,15 +186,21 @@ pub trait DisplaySpan: DisplaySpanImpl {
     #[inline]
     fn display_span<'s, T>(&'s self, style: T) -> DisplaySpanFormatter<'s, Self, T> { DisplaySpanFormatter { span: self, style } }
 }
-impl<T: DisplaySpanImpl> DisplaySpan for T {}
+impl<T: Span> DisplaySpan for T {}
 
 /// The half of the trait that is "private", and contains the child-specific implementation functions.
-pub trait DisplaySpanImpl {
+pub trait Span {
+    /// Returns the name of the source file where we span.
+    ///
+    /// # Returns
+    /// A [`&str`] that encodes the name of whatever source the text has.
+    fn filename(&self) -> &[u8];
     /// Returns the part of the source text that is spanned by this span.
     ///
     /// # Returns
     /// A [`&str`] that encodes the spanned source text.
-    fn source(&self) -> &str;
+    fn source(&self) -> &[u8];
+
     /// Returns the text position of the first character spanned by this span.
     ///
     /// # Returns

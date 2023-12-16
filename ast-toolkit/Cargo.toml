@@ -9,23 +9,15 @@ repository = "https://github.com/Lut99/ast-toolkit-rs"
 
 
 [dependencies]
-console = "0.15"
-enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
-never-say-never = "6.6.666"
+console = { version = "0.15", optional = true }
 nom = { version = "7.1", optional = true }
-nom_locate = "4.2"
-num-traits = "0.2"
+nom_locate = { version = "4.2", optional = true }
 unicode-segmentation = "1.10"
 
 ast-toolkit-derive = { path = "../ast-toolkit-derive", optional = true }
 
 
-[dev-dependencies]
-itertools = "0.11"
-
-
 [features]
-default = [ "derive" ]
-derive = [ "dep:ast-toolkit-derive" ]
-nom = [ "dep:nom" ]
-nom-combinators = [ "nom" ]
+default = []
+diagnostic = [ "dep:console" ]
+diagnostic-located-span = [ "diagnostic", "dep:nom", "dep:nom_locate" ]

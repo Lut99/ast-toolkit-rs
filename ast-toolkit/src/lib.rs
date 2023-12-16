@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    15 Dec 2023, 19:15:26
+//    16 Dec 2023, 12:06:52
 //  Auto updated?
 //    Yes
 //
@@ -106,7 +106,8 @@
 //
 
 // Define the submodules
-pub mod display_source;
+#[cfg(feature = "diagnostic")]
+pub mod diagnostic;
 // pub mod position;
 // pub mod span;
 
