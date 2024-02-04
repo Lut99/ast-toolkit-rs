@@ -4,7 +4,7 @@
 //  Created:
 //    16 Dec 2023, 12:01:01
 //  Last edited:
-//    16 Dec 2023, 12:43:55
+//    04 Feb 2024, 13:56:55
 //  Auto updated?
 //    Yes
 //
@@ -14,8 +14,7 @@
 //
 
 // Declare modules
-#[cfg(feature = "diagnostic-located-span")]
-pub mod located_span;
+mod diagnostic;
 mod span;
 mod style;
 

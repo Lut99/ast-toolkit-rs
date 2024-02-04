@@ -4,20 +4,19 @@ version = "0.1.0"
 edition = { workspace = true }
 authors = { workspace = true }
 description = "A collection of structs and interfaces extremely useful when working with compilers that parse text into ASTs."
-
 repository = "https://github.com/Lut99/ast-toolkit-rs"
 
 
 [dependencies]
 console = { version = "0.15", optional = true }
 nom = { version = "7.1", optional = true }
-nom_locate = { version = "4.2", optional = true }
-unicode-segmentation = "1.10"
+num-traits = { version = "0.2", optional = true }
+unicode-segmentation = { version = "1.10", optional = true }
 
 ast-toolkit-derive = { path = "../ast-toolkit-derive", optional = true }
 
 
 [features]
 default = []
-diagnostic = [ "dep:console" ]
-diagnostic-located-span = [ "diagnostic", "dep:nom", "dep:nom_locate" ]
+diagnostic = [ "dep:console", "dep:num-traits", "dep:unicode-segmentation" ]
+nom = [ "dep:nom" ]

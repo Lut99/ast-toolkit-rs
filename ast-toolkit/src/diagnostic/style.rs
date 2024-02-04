@@ -4,7 +4,7 @@
 //  Created:
 //    16 Dec 2023, 12:39:19
 //  Last edited:
-//    16 Dec 2023, 12:40:42
+//    04 Feb 2024, 15:28:16
 //  Auto updated?
 //    Yes
 //
@@ -37,8 +37,7 @@ pub trait DiagnosticStyle {
 }
 
 /// Defines a default style that does not style.
-pub struct PlainStyle;
-impl DiagnosticStyle for PlainStyle {
+impl DiagnosticStyle for () {
     #[inline]
     fn line_number(&self) -> Style { Style::new() }
 
