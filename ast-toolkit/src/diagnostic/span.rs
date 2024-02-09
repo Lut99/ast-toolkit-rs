@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    04 Feb 2024, 15:35:24
+//    09 Feb 2024, 18:19:38
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,6 @@
 
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use console::Style;
 use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -46,11 +45,9 @@ macro_rules! n_digits {
 #[derive(Debug)]
 pub struct TextSnippetFormatter<'s, F, I, D> {
     /// The span to format
-    span:   &'s Span<F, I>,
-    /// The colour to use for highlithing.
-    accent: Style,
+    span:  &'s Span<F, I>,
     /// The style to use for colouring the input.
-    style:  D,
+    style: D,
 }
 impl<'s, F, I, D> Display for TextSnippetFormatter<'s, F, I, D>
 where
@@ -98,18 +95,23 @@ where
         // Ok(())
 
         /// Writes a line to the given formatter.
-        fn write_line(
+        fn write_line<C: TextChar>(
             f: &mut Formatter<'_>,
-            input: &impl Spannable,
+            line: &mut usize,
+            line_buf: &mut Vec<C>,
+            i: usize,
             start: usize,
             end: usize,
-            accent: &Style,
             style: &impl DiagnosticStyle,
         ) -> FResult {
-            // See if we need to write this line at all
-            let start_i: usize = i - line_buf.len();
+            // NOTE: We'll do this here to get one-indexed for free
+            *line += 1;
+
+            // See if we need to write this line at all (either if the range is empty and we're in the start line, or we're in the range)
+            let line_buf_len: usize = line_buf.len();
+            let start_i: usize = i - line_buf_len;
             // NOTE: `end` is exclusive, we treat `i` as inclusive (to match on the newline only)
-            if !(start_i < end && start <= i) {
+            if !((start == end && start >= start_i && start <= i) || (start_i < end && start <= i)) {
                 return Ok(());
             }
 
@@ -117,33 +119,53 @@ where
             write!(
                 f,
                 "{:>width$} {} ",
-                style.line_number().apply_to(line),
+                style.line_number().apply_to(*line),
                 style.scaffolding().apply_to('|'),
-                width = MAX_LINE_DIGITS - n_digits!(line)
+                width = 1 + MAX_LINE_DIGITS - n_digits!(*line)
             )?;
 
             // Write the line one-by-one and highlight where necessary
-            let col: usize = 0;
-            for c in line_buf.drain(..) {
+            for (col, c) in line_buf.drain(..).enumerate() {
                 // Check if we're in range for highlighting
                 let x: usize = start_i + col;
                 if x >= start && x < end {
                     // Write the character with highlighting
-                    write!(f, "{}", accent.apply_to(c))?;
+                    write!(f, "{}", style.source_accented().apply_to(c.display()))?;
                 } else {
                     // Write without highlighting
-                    write!(f, "{}", style.source_unaccented().apply_to(c))?;
+                    write!(f, "{}", style.source_unaccented().apply_to(c.display()))?;
                 }
             }
 
             // Write end-of-line
-            writeln!(f)
+            writeln!(f)?;
+
+
+
+            // Next, write the accent highlight line, but only if we're accenting something
+            if start_i < end && start <= i {
+                write!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
+                for col in 0..line_buf_len {
+                    // Check if we're in range for highlighting
+                    let x: usize = start_i + col;
+                    if x >= start && x < end {
+                        // Write the character with highlighting
+                        write!(f, "{}", style.source_marker().apply_to('^'))?;
+                    } else {
+                        // Write without highlighting
+                        write!(f, " ")?;
+                    }
+                }
+                writeln!(f)?;
+            }
+
+            // Done!
+            Ok(())
         }
 
 
         // Define some shorthands
         let Span { from: _, ref input, start, end } = *self.span;
-        let accent: &Style = &self.accent;
         let style: &D = &self.style;
 
         // Search the input until we find that which we need
@@ -151,15 +173,22 @@ where
         let mut line_buf: Vec<I::Char> = Vec::new();
         for (i, c) in input.chars().enumerate() {
             if c.is_newline() {
-                // NOTE: We'll do this here to get one-indexed for free
-                line += 1;
-
                 // Write the line
-                write_line(f)?;
+                write_line(f, &mut line, &mut line_buf, i, start, end, style)?;
             } else {
                 // Else, keep collecting lines
                 line_buf.push(c);
             }
+        }
+
+        // Write the remainder
+        if !line_buf.is_empty() {
+            write_line(f, &mut line, &mut line_buf, input.len(), start, end, style)?;
+        }
+
+        // If we wrote accentless, write a newline for prettyness
+        if start == end {
+            writeln!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
         }
 
         // Done
@@ -193,6 +222,16 @@ pub trait Spannable {
 }
 
 // Default impls for [`Spannable`]
+impl<'b, const LEN: usize> Spannable for &'b [u8; LEN] {
+    type Char = u8;
+    type Iter = std::iter::Map<std::slice::Iter<'b, u8>, fn(&u8) -> u8>;
+
+    #[inline]
+    fn chars(&self) -> Self::Iter { <&[u8; LEN]>::into_iter(self).map(|b| *b) }
+
+    #[inline]
+    fn len(&self) -> usize { LEN }
+}
 impl<'b> Spannable for &'b [u8] {
     type Char = u8;
     type Iter = std::iter::Map<std::slice::Iter<'b, u8>, fn(&u8) -> u8>;
@@ -217,17 +256,37 @@ impl<'s> Spannable for &'s str {
 
 
 /// Helper trait that abstracts over [`char`]s or graphemes.
-pub trait TextChar: Display {
+pub trait TextChar {
+    /// A formatter for this character.
+    type Formatter: Display;
+
     /// Returns if this TextChar is a newline.
     fn is_newline(&self) -> bool;
+    /// Returns a formatter that writes this TextChar.
+    fn display(&self) -> Self::Formatter;
 }
 
 // Default impls for [`TextChar`]
+impl TextChar for u8 {
+    type Formatter = char;
+
+    fn is_newline(&self) -> bool { *self == b'\n' }
+
+    fn display(&self) -> Self::Formatter { char::from(*self) }
+}
 impl TextChar for char {
+    type Formatter = Self;
+
     fn is_newline(&self) -> bool { *self == '\n' }
+
+    fn display(&self) -> Self::Formatter { *self }
 }
 impl<'s> TextChar for &'s str {
+    type Formatter = Self;
+
     fn is_newline(&self) -> bool { *self == "\n" }
+
+    fn display(&self) -> Self::Formatter { *self }
 }
 
 
@@ -427,14 +486,13 @@ impl<F, I> Span<F, I> {
     /// todo!()
     /// ``
     #[inline]
-    pub fn text_snippet(&self) -> TextSnippetFormatter<F, I, ()> { TextSnippetFormatter { span: self, accent: Style::new(), style: () } }
+    pub fn text_snippet(&self) -> TextSnippetFormatter<F, I, ()> { TextSnippetFormatter { span: self, style: () } }
 
     /// Formats this `Span` to the given formatter as a snippet of UTF-8 input, using ANSI-colours.
     ///
     /// See [`Span::text_snippet()`] to disable styling.
     ///
     /// # Arguments
-    /// - `accent`: The [`Style`] to write accents with. Usually, this matches the error level (e.g., red for error).
     /// - `style`: A [`DiagnosticStyle`] to use for colouring.
     ///
     /// # Returns
@@ -445,7 +503,5 @@ impl<F, I> Span<F, I> {
     /// todo!()
     /// ``
     #[inline]
-    pub fn text_snippet_styled<D>(&self, accent: Style, style: D) -> TextSnippetFormatter<F, I, D> {
-        TextSnippetFormatter { span: self, accent, style }
-    }
+    pub fn text_snippet_styled<D>(&self, style: D) -> TextSnippetFormatter<F, I, D> { TextSnippetFormatter { span: self, style } }
 }
