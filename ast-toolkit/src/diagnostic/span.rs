@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    09 Feb 2024, 18:19:38
+//    10 Feb 2024, 11:05:38
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements a [`Span`], which abstracts over some input to track a particular location in it.
 //
 
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FResult};
 
 use num_traits::AsPrimitive;
@@ -42,19 +43,16 @@ macro_rules! n_digits {
 
 /***** FORMATTERS *****/
 /// Defines a formatter that [`Display`]s the given [`Span`] as a snippet of source text.
-#[derive(Debug)]
-pub struct TextSnippetFormatter<'s, F, I, D> {
+pub struct TextSnippetFormatter<'s, F, I> {
     /// The span to format
     span:  &'s Span<F, I>,
     /// The style to use for colouring the input.
-    style: D,
+    style: Box<dyn DiagnosticStyle>,
 }
-impl<'s, F, I, D> Display for TextSnippetFormatter<'s, F, I, D>
+impl<'s, F, I> Display for TextSnippetFormatter<'s, F, I>
 where
     F: Display,
     I: Spannable,
-    I::Char: TextChar,
-    D: DiagnosticStyle,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         // let source: &I = self.span.input_ref();
@@ -94,102 +92,102 @@ where
 
         // Ok(())
 
-        /// Writes a line to the given formatter.
-        fn write_line<C: TextChar>(
-            f: &mut Formatter<'_>,
-            line: &mut usize,
-            line_buf: &mut Vec<C>,
-            i: usize,
-            start: usize,
-            end: usize,
-            style: &impl DiagnosticStyle,
-        ) -> FResult {
-            // NOTE: We'll do this here to get one-indexed for free
-            *line += 1;
+        // /// Writes a line to the given formatter.
+        // fn write_line(
+        //     f: &mut Formatter<'_>,
+        //     line: &mut usize,
+        //     line_buf: &mut Vec<C>,
+        //     i: usize,
+        //     start: usize,
+        //     end: usize,
+        //     style: &impl DiagnosticStyle,
+        // ) -> FResult {
+        //     // NOTE: We'll do this here to get one-indexed for free
+        //     *line += 1;
 
-            // See if we need to write this line at all (either if the range is empty and we're in the start line, or we're in the range)
-            let line_buf_len: usize = line_buf.len();
-            let start_i: usize = i - line_buf_len;
-            // NOTE: `end` is exclusive, we treat `i` as inclusive (to match on the newline only)
-            if !((start == end && start >= start_i && start <= i) || (start_i < end && start <= i)) {
-                return Ok(());
-            }
+        //     // See if we need to write this line at all (either if the range is empty and we're in the start line, or we're in the range)
+        //     let line_buf_len: usize = line_buf.len();
+        //     let start_i: usize = i - line_buf_len;
+        //     // NOTE: `end` is exclusive, we treat `i` as inclusive (to match on the newline only)
+        //     if !((start == end && start >= start_i && start <= i) || (start_i < end && start <= i)) {
+        //         return Ok(());
+        //     }
 
-            // Write the prefix to the line
-            write!(
-                f,
-                "{:>width$} {} ",
-                style.line_number().apply_to(*line),
-                style.scaffolding().apply_to('|'),
-                width = 1 + MAX_LINE_DIGITS - n_digits!(*line)
-            )?;
+        //     // Write the prefix to the line
+        //     write!(
+        //         f,
+        //         "{:>width$} {} ",
+        //         style.line_number().apply_to(*line),
+        //         style.scaffolding().apply_to('|'),
+        //         width = 1 + MAX_LINE_DIGITS - n_digits!(*line)
+        //     )?;
 
-            // Write the line one-by-one and highlight where necessary
-            for (col, c) in line_buf.drain(..).enumerate() {
-                // Check if we're in range for highlighting
-                let x: usize = start_i + col;
-                if x >= start && x < end {
-                    // Write the character with highlighting
-                    write!(f, "{}", style.source_accented().apply_to(c.display()))?;
-                } else {
-                    // Write without highlighting
-                    write!(f, "{}", style.source_unaccented().apply_to(c.display()))?;
-                }
-            }
+        //     // Write the line one-by-one and highlight where necessary
+        //     for (col, c) in line_buf.drain(..).enumerate() {
+        //         // Check if we're in range for highlighting
+        //         let x: usize = start_i + col;
+        //         if x >= start && x < end {
+        //             // Write the character with highlighting
+        //             write!(f, "{}", style.source_accented().apply_to(c.display()))?;
+        //         } else {
+        //             // Write without highlighting
+        //             write!(f, "{}", style.source_unaccented().apply_to(c.display()))?;
+        //         }
+        //     }
 
-            // Write end-of-line
-            writeln!(f)?;
-
-
-
-            // Next, write the accent highlight line, but only if we're accenting something
-            if start_i < end && start <= i {
-                write!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
-                for col in 0..line_buf_len {
-                    // Check if we're in range for highlighting
-                    let x: usize = start_i + col;
-                    if x >= start && x < end {
-                        // Write the character with highlighting
-                        write!(f, "{}", style.source_marker().apply_to('^'))?;
-                    } else {
-                        // Write without highlighting
-                        write!(f, " ")?;
-                    }
-                }
-                writeln!(f)?;
-            }
-
-            // Done!
-            Ok(())
-        }
+        //     // Write end-of-line
+        //     writeln!(f)?;
 
 
-        // Define some shorthands
-        let Span { from: _, ref input, start, end } = *self.span;
-        let style: &D = &self.style;
 
-        // Search the input until we find that which we need
-        let mut line: usize = 0;
-        let mut line_buf: Vec<I::Char> = Vec::new();
-        for (i, c) in input.chars().enumerate() {
-            if c.is_newline() {
-                // Write the line
-                write_line(f, &mut line, &mut line_buf, i, start, end, style)?;
-            } else {
-                // Else, keep collecting lines
-                line_buf.push(c);
-            }
-        }
+        //     // Next, write the accent highlight line, but only if we're accenting something
+        //     if start_i < end && start <= i {
+        //         write!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
+        //         for col in 0..line_buf_len {
+        //             // Check if we're in range for highlighting
+        //             let x: usize = start_i + col;
+        //             if x >= start && x < end {
+        //                 // Write the character with highlighting
+        //                 write!(f, "{}", style.source_marker().apply_to('^'))?;
+        //             } else {
+        //                 // Write without highlighting
+        //                 write!(f, " ")?;
+        //             }
+        //         }
+        //         writeln!(f)?;
+        //     }
 
-        // Write the remainder
-        if !line_buf.is_empty() {
-            write_line(f, &mut line, &mut line_buf, input.len(), start, end, style)?;
-        }
+        //     // Done!
+        //     Ok(())
+        // }
 
-        // If we wrote accentless, write a newline for prettyness
-        if start == end {
-            writeln!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
-        }
+
+        // // Define some shorthands
+        // let Span { from: _, ref input, start, end } = *self.span;
+        // let style: &D = &self.style;
+
+        // // Search the input until we find that which we need
+        // let mut line: usize = 0;
+        // let mut line_buf: Vec<I::Char> = Vec::new();
+        // for (i, c) in input.chars().enumerate() {
+        //     if c.is_newline() {
+        //         // Write the line
+        //         write_line(f, &mut line, &mut line_buf, i, start, end, style)?;
+        //     } else {
+        //         // Else, keep collecting lines
+        //         line_buf.push(c);
+        //     }
+        // }
+
+        // // Write the remainder
+        // if !line_buf.is_empty() {
+        //     write_line(f, &mut line, &mut line_buf, input.len(), start, end, style)?;
+        // }
+
+        // // If we wrote accentless, write a newline for prettyness
+        // if start == end {
+        //     writeln!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
+        // }
 
         // Done
         Ok(())
@@ -203,17 +201,6 @@ where
 /***** AUXILLARY *****/
 /// A helper trait for the [`Span`] that can be implemented for anything used as input.
 pub trait Spannable {
-    /// The type of the "characters" in this `Spannable` (e.g., `u8` for a slice of bytes).
-    type Char;
-    /// The type of the iterator that is produced by [`Spannable::chars()`].
-    type Iter: Iterator<Item = Self::Char>;
-
-    /// Returns an iterator over the internal "characters".
-    ///
-    /// # Returns
-    /// An iterator of type `Self::Iter` that is used to access the characters in-order.
-    fn chars(&self) -> Self::Iter;
-
     /// Returns the number of spannable things (character, bytes, tokens) in this list.
     ///
     /// # Returns
@@ -221,72 +208,102 @@ pub trait Spannable {
     fn len(&self) -> usize;
 }
 
-// Default impls for [`Spannable`]
+// Default binary impls for [`Spannable`]
 impl<'b, const LEN: usize> Spannable for &'b [u8; LEN] {
-    type Char = u8;
-    type Iter = std::iter::Map<std::slice::Iter<'b, u8>, fn(&u8) -> u8>;
-
-    #[inline]
-    fn chars(&self) -> Self::Iter { <&[u8; LEN]>::into_iter(self).map(|b| *b) }
-
     #[inline]
     fn len(&self) -> usize { LEN }
 }
 impl<'b> Spannable for &'b [u8] {
-    type Char = u8;
-    type Iter = std::iter::Map<std::slice::Iter<'b, u8>, fn(&u8) -> u8>;
-
-    #[inline]
-    fn chars(&self) -> Self::Iter { <[u8]>::iter(self).map(|b| *b) }
-
     #[inline]
     fn len(&self) -> usize { <[u8]>::len(self) }
 }
-impl<'s> Spannable for &'s str {
-    type Char = &'s str;
-    type Iter = unicode_segmentation::Graphemes<'s>;
-
+impl Spannable for Vec<u8> {
     #[inline]
-    fn chars(&self) -> Self::Iter { <str as UnicodeSegmentation>::graphemes(self, true) }
+    fn len(&self) -> usize { <Vec<u8>>::len(self) }
+}
 
+// Default string impls for [`Spannable`]
+impl<'s> Spannable for &'s str {
     #[inline]
     fn len(&self) -> usize { self.chars().count() }
 }
-
-
-
-/// Helper trait that abstracts over [`char`]s or graphemes.
-pub trait TextChar {
-    /// A formatter for this character.
-    type Formatter: Display;
-
-    /// Returns if this TextChar is a newline.
-    fn is_newline(&self) -> bool;
-    /// Returns a formatter that writes this TextChar.
-    fn display(&self) -> Self::Formatter;
+impl Spannable for String {
+    #[inline]
+    fn len(&self) -> usize { self.graphemes(true).count() }
 }
 
-// Default impls for [`TextChar`]
-impl TextChar for u8 {
-    type Formatter = char;
 
-    fn is_newline(&self) -> bool { *self == b'\n' }
 
-    fn display(&self) -> Self::Formatter { char::from(*self) }
+/// A helper trait for a [`Spannable`] that allows it to be serialized as a binary snippet.
+pub trait BinarySpannable: Spannable {
+    /// Returns a binary representation of the whole object.
+    ///
+    /// Implementations can choose between owned or borrowed through the appropricate [`Cow`]-variant.
+    ///
+    /// # Returns
+    /// A [`Cow`] that contains the binary reference.
+    fn as_bytes(&self) -> Cow<[u8]>;
 }
-impl TextChar for char {
-    type Formatter = Self;
 
-    fn is_newline(&self) -> bool { *self == '\n' }
-
-    fn display(&self) -> Self::Formatter { *self }
+// Default binary impls for [`BinarySpannable`]
+impl<'b, const LEN: usize> BinarySpannable for &'b [u8; LEN] {
+    #[inline]
+    fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_slice()) }
 }
-impl<'s> TextChar for &'s str {
-    type Formatter = Self;
+impl<'b> BinarySpannable for &'b [u8] {
+    #[inline]
+    fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self) }
+}
+impl BinarySpannable for Vec<u8> {
+    #[inline]
+    fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_slice()) }
+}
 
-    fn is_newline(&self) -> bool { *self == "\n" }
+// Default string impls for [`BinarySpannable`]
+impl<'s> BinarySpannable for &'s str {
+    #[inline]
+    fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(<str>::as_bytes(self)) }
+}
+impl BinarySpannable for String {
+    #[inline]
+    fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_bytes()) }
+}
 
-    fn display(&self) -> Self::Formatter { *self }
+
+
+/// A helper trait for a [`Spannable`] that allows it to be serialized as a UTF-8 snippet.
+pub trait TextSpannable: Spannable {
+    /// Returns a text representation of the whole object.
+    ///
+    /// Implementations can choose between owned or borrowed through the appropricate [`Cow`]-variant.
+    ///
+    /// # Returns
+    /// A [`Cow`] that contains the binary reference.
+    fn as_str(&self) -> Cow<str>;
+}
+
+// Default binary impls for [`TextSpannable`].
+impl<'b, const LEN: usize> TextSpannable for &'b [u8; LEN] {
+    #[inline]
+    fn as_str(&self) -> Cow<str> { String::from_utf8_lossy(self.as_slice()) }
+}
+impl<'b> TextSpannable for &'b [u8] {
+    #[inline]
+    fn as_str(&self) -> Cow<str> { String::from_utf8_lossy(self) }
+}
+impl TextSpannable for Vec<u8> {
+    #[inline]
+    fn as_str(&self) -> Cow<str> { String::from_utf8_lossy(self.as_slice()) }
+}
+
+// Default string impls for [`TextSpannable`].
+impl<'s> TextSpannable for &'s str {
+    #[inline]
+    fn as_str(&self) -> Cow<str> { Cow::Borrowed(self) }
+}
+impl TextSpannable for String {
+    #[inline]
+    fn as_str(&self) -> Cow<str> { Cow::Borrowed(<String>::as_str(self)) }
 }
 
 
@@ -486,22 +503,5 @@ impl<F, I> Span<F, I> {
     /// todo!()
     /// ``
     #[inline]
-    pub fn text_snippet(&self) -> TextSnippetFormatter<F, I, ()> { TextSnippetFormatter { span: self, style: () } }
-
-    /// Formats this `Span` to the given formatter as a snippet of UTF-8 input, using ANSI-colours.
-    ///
-    /// See [`Span::text_snippet()`] to disable styling.
-    ///
-    /// # Arguments
-    /// - `style`: A [`DiagnosticStyle`] to use for colouring.
-    ///
-    /// # Returns
-    /// A [`SnippetFormatter`] that formats this snippet to a formatter with the given style.
-    ///
-    /// # Example
-    /// ```rust
-    /// todo!()
-    /// ``
-    #[inline]
-    pub fn text_snippet_styled<D>(&self, style: D) -> TextSnippetFormatter<F, I, D> { TextSnippetFormatter { span: self, style } }
+    pub fn text_snippet(&self) -> TextSnippetFormatter<F, I> { TextSnippetFormatter { span: self, style: Box::new(()) } }
 }
