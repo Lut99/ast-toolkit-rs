@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    10 Feb 2024, 11:05:38
+//    11 Feb 2024, 23:15:02
 //  Auto updated?
 //    Yes
 //
@@ -46,13 +46,46 @@ macro_rules! n_digits {
 pub struct TextSnippetFormatter<'s, F, I> {
     /// The span to format
     span:  &'s Span<F, I>,
+    /// An _additional_ range (as `[inclusive, exclusive)`) that determines the range to show.
+    ///
+    /// If omitted, defaults to the lines containing the `span`.
+    range: Option<(usize, usize)>,
     /// The style to use for colouring the input.
     style: Box<dyn DiagnosticStyle>,
+}
+impl<'s, F, I> TextSnippetFormatter<'s, F, I> {
+    /// Factory method that changes which part of the text is shown by the formatter.
+    ///
+    /// This is not the highlighted text (that is the span), but instead the text that is shown at all.
+    ///
+    /// Defaults to the lines containing the given span.
+    ///
+    /// # Arguments
+    /// - `range`: A range of text (as `[inclusive, exclusive)`) that represents the shown area of the input span's text.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    pub fn shown_range(mut self, range: (usize, usize)) -> Self {
+        self.range = Some(range);
+        self
+    }
+
+    /// Factory method that changes the style used by the formatter.
+    ///
+    /// # Arguments
+    /// - `style`: A [`DiagnosticStyle`] that is used to find styling for snippets.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    pub fn style(mut self, style: impl 'static + DiagnosticStyle) -> Self {
+        self.style = Box::new(style);
+        self
+    }
 }
 impl<'s, F, I> Display for TextSnippetFormatter<'s, F, I>
 where
     F: Display,
-    I: Spannable,
+    I: TextSpannable,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         // let source: &I = self.span.input_ref();
@@ -91,6 +124,35 @@ where
         // }
 
         // Ok(())
+
+        /// Translates an index to a line/column pair for the given input.
+        ///
+        /// # Arguments
+        /// - `input`: The [`str`]ing to resolve the line number in.
+        /// - `pos`: The one-dimensional position to translate.
+        ///
+        /// # Returns
+        /// A two-dimensional counterpart to the `pos`, which is a tuple of **one-indexed** line- and column-numbers, respectively.
+        ///
+        /// # Panics
+        /// This function may panic if `pos` is out-of-range for this snippet.
+        #[track_caller]
+        fn index_to_pos(input: &str, mut pos: usize) -> (usize, usize) {
+            // Loop to find
+            for (l, line) in input.lines().enumerate() {
+                for (c, _) in line.grapheme_indices(true) {
+                    // Check if we found the location indexed by `pos`
+                    if pos == 0 {
+                        return (l + 1, c + 1);
+                    }
+
+                    // Else, decrement pos to keep searching
+                    pos -= 1;
+                }
+            }
+            // It was out-of-range
+            panic!("Given index '{pos}' is out-of-range for text snippet of {} graphemes", input.graphemes(true).count());
+        }
 
         // /// Writes a line to the given formatter.
         // fn write_line(
@@ -162,32 +224,78 @@ where
         // }
 
 
-        // // Define some shorthands
-        // let Span { from: _, ref input, start, end } = *self.span;
-        // let style: &D = &self.style;
+        // Define some shorthands
+        let Span { from, input, start, end } = self.span;
+        let input: Cow<str> = input.as_str();
+        let range: Option<(usize, usize)> = self.range;
+        let style: &dyn DiagnosticStyle = &*self.style;
 
-        // // Search the input until we find that which we need
-        // let mut line: usize = 0;
-        // let mut line_buf: Vec<I::Char> = Vec::new();
-        // for (i, c) in input.chars().enumerate() {
-        //     if c.is_newline() {
-        //         // Write the line
-        //         write_line(f, &mut line, &mut line_buf, i, start, end, style)?;
-        //     } else {
-        //         // Else, keep collecting lines
-        //         line_buf.push(c);
-        //     }
-        // }
+        // Resolve all ranges from grapheme indices to byte indices, for efficient slicing
+        let (mut highlighted, mut shown): ((Option<usize>, Option<usize>), (Option<usize>, Option<usize>)) = ((None, None), (None, None));
+        for (g, (i, _)) in input.grapheme_indices(true).enumerate() {
+            if g == *start {
+                highlighted.0 = Some(i);
+            }
+            if g == *end {
+                highlighted.1 = Some(i);
+            }
+            if let Some((start, end)) = range {
+                if g == start {
+                    shown.0 = Some(i);
+                }
+                if g == end {
+                    shown.1 = Some(i);
+                }
+            }
+        }
+        let highlighted: (usize, usize) = if let (Some(start), Some(end)) = highlighted {
+            (start, end)
+        } else {
+            panic!("Span range [{},{}) is out-of-range for input of {} graphemes", start, end, input.graphemes(true).count())
+        };
+        let shown: Option<(usize, usize)> = if range.is_some() {
+            if let (Some(start), Some(end)) = shown {
+                Some((start, end))
+            } else {
+                panic!("Shown range [{},{}) is out-of-range for input of {} graphemes", range.0, range.1, input.graphemes(true).count())
+            }
+        } else {
+            None
+        };
 
-        // // Write the remainder
-        // if !line_buf.is_empty() {
-        //     write_line(f, &mut line, &mut line_buf, input.len(), start, end, style)?;
-        // }
+        // Next, resolve the range if it's [`None`]
+        let shown: (usize, usize) = if let Some(shown) = shown {
+            shown
+        } else {
+            // Assume the span, then find the first newline characters on either side
+            // NOTE: Returns `[inclusive, exclusive)`, excluding the left newline but including the right
+            (input[..*start].rfind('\n').map(|p| p + 1).unwrap_or(0), input[*end..].find('\n').map(|p| p + 1).unwrap_or(input.len()))
+        };
 
-        // // If we wrote accentless, write a newline for prettyness
-        // if start == end {
-        //     writeln!(f, "{:>width$} {} ", "", style.scaffolding().apply_to('|'), width = MAX_LINE_DIGITS)?;
-        // }
+        // Write the initial from header
+        let (line, col): (usize, usize) = index_to_pos(input.as_ref(), *start);
+        writeln!(
+            f,
+            "{:>width$} {} {}{}{}{}{}",
+            "",
+            style.scaffolding().apply_to("-->"),
+            style.location_from().apply_to(from),
+            style.location_colon().apply_to(':'),
+            style.location_line().apply_to(line),
+            style.location_colon().apply_to(':'),
+            style.location_col().apply_to(col),
+            width = MAX_LINE_DIGITS - 1,
+        )?;
+
+        // Find the range to show
+        let shown: &str = &input[shown.0..shown.1];
+        // Split that into pre, highlighted, and post
+        let (pre, mid, post): (&str, &str, &str) = (&shown[..highlighted.0], &shown[highlighted.0..highlighted.1], &shown[highlighted.1..]);
+
+        // Write all lines of the first one
+        for (l, line) in pre.lines() {
+            writeln!(f, "{:>} {line}");
+        }
 
         // Done
         Ok(())
