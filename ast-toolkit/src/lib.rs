@@ -4,7 +4,7 @@
 //  Created:
 //    02 Jul 2023, 16:40:06
 //  Last edited:
-//    16 Dec 2023, 12:06:52
+//    22 Feb 2024, 12:01:36
 //  Auto updated?
 //    Yes
 //
@@ -110,6 +110,8 @@
 pub mod diagnostic;
 // pub mod position;
 // pub mod span;
+#[cfg(feature = "railroad")]
+pub mod railroad;
 
 // #[cfg(feature = "nom")]
 // pub mod nom;

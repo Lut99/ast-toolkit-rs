@@ -8,15 +8,23 @@ repository = "https://github.com/Lut99/ast-toolkit-rs"
 
 
 [dependencies]
+# diagnostic
 console = { version = "0.15", optional = true }
 nom = { version = "7.1", optional = true }
 num-traits = { version = "0.2", optional = true }
 unicode-segmentation = { version = "1.10", optional = true }
 
+# railroad
+railroad = { version = "0.2", optional = true }
+
+# derive
 ast-toolkit-derive = { path = "../ast-toolkit-derive", optional = true }
 
 
 [features]
 default = []
+derive = [ "dep:ast-toolkit-derive" ]
+
 diagnostic = [ "dep:console", "dep:num-traits", "dep:unicode-segmentation" ]
+railroad = [ "dep:railroad", "ast-toolkit-derive/railroad" ]
 nom = [ "dep:nom" ]
