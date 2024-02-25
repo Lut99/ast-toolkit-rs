@@ -1,0 +1,20 @@
+[package]
+name = "ast-toolkit-railroad"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides traits for recursively generating [railroad](https://crates.io/crates/railroad/0.2.0) diagrams. Comes with a derive macro for convenience."
+
+
+[dependencies]
+parking_lot = { version = "0.12", optional = true }
+railroad = "0.2"
+
+ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive", optional = true }
+
+
+[features]
+default = []
+derive = [ "dep:ast-toolkit-railroad-derive" ]
+parking_lot = [ "dep:parking_lot" ]

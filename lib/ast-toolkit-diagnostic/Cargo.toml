@@ -1,0 +1,18 @@
+[package]
+name = "ast-toolkit-diagnostic"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides an error-like type called a `Diagnostic` that is used to build informative error messages for compiler users."
+
+
+[dependencies]
+ast-toolkit-span = { path = "../ast-toolkit-span" }
+
+# ast-toolkit-diagnostic-derive = { path = "../../derive/ast-toolkit-diagnostic-derive", optional = true }
+
+
+[features]
+default = []
+# derive = [ "dep:ast-toolkit-diagnostic-derive" ]
