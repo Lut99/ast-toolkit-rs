@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    25 Feb 2024, 15:23:14
+//    26 Feb 2024, 13:14:31
 //  Auto updated?
 //    Yes
 //
@@ -158,6 +158,16 @@ macro_rules! rr_comment {
 
 
 /***** HELPERS *****/
+/// Represents the types of toplevel nodes.
+enum NodeKind {
+    /// It's a typical, derived node.
+    Derived,
+    /// It's a direct terminal.
+    Terminal(LitStr),
+    /// It's a direct terminal but phrased as a regex.
+    Regex(LitStr),
+}
+
 /// Represents an identifier of either [`Ident`]s or [`LitInt`]s.
 #[derive(Clone, PartialEq)]
 enum FieldIdent {
@@ -178,7 +188,7 @@ impl Parse for FieldIdent {
 }
 
 /// Represents the three traits we know.
-enum NodeKind {
+enum FieldKind {
     /// It's a typical node.
     Node,
     /// It's a nonterm.
@@ -188,6 +198,145 @@ enum NodeKind {
 }
 
 
+/// Represents things we parse from the toplevel for `ToNode`-macros.
+struct ToplevelToNodeAttributes {
+    /// The specialized kind of node.
+    kind: NodeKind,
+}
+impl ToplevelToNodeAttributes {
+    /// Parses this ToplevelNodeAttributes from the given [`Attribute`]s.
+    ///
+    /// # Arguments
+    /// - `what`: The type of the node for which we're parsing.
+    /// - `attrs`: The [`Attribute`] to parse.
+    ///
+    /// # Returns
+    /// A new ToplevelNodeAttributes.
+    ///
+    /// # Errors
+    /// This function may error if the given `attrs` were not understood.
+    fn parse(what: &'static str, attrs: &[Attribute]) -> Result<Self, Diagnostic> {
+        // Set out to collect what we want
+        let mut kind: NodeKind = NodeKind::Derived;
+        for attr in attrs {
+            // Match on the meta to find `#[railroad(...)]`
+            match &attr.meta {
+                Meta::List(l) => {
+                    if l.path.is_ident("railroad") {
+                        // Attempt to parse its arguments as a comma-separated list of more metas
+                        let args: Vec<Meta> = match l.parse_args_with(|buffer: &ParseBuffer| {
+                            // Repeatedly parsed metas separated by commands
+                            let mut metas: Vec<Meta> = vec![buffer.parse()?];
+                            while !buffer.is_empty() {
+                                // Parse a comma then a meta
+                                buffer.parse::<Comma>()?;
+                                metas.push(buffer.parse()?);
+                            }
+                            Ok(metas)
+                        }) {
+                            Ok(args) => args,
+                            Err(err) => {
+                                return Err(proc_macro_error::Diagnostic::spanned(
+                                    l.tokens.span(),
+                                    proc_macro_error::Level::Error,
+                                    "Failed to parse struct/enum arguments".into(),
+                                )
+                                .span_error(err.span(), err.to_string()));
+                            },
+                        };
+
+                        // Search to match
+                        for meta in args {
+                            match meta {
+                                Meta::NameValue(nv) => {
+                                    if nv.path.is_ident("term") || nv.path.is_ident("terminal") || nv.path.is_ident("token") {
+                                        // Parse the value as a string literal
+                                        let value: LitStr = if let Expr::Lit(ExprLit { attrs: _, lit: Lit::Str(value) }) = nv.value {
+                                            value
+                                        } else {
+                                            return Err(Diagnostic::spanned(
+                                                nv.value.span(),
+                                                Level::Error,
+                                                format!(
+                                                    "Expected string literal as value for `{}`",
+                                                    if nv.path.is_ident("term") {
+                                                        "term"
+                                                    } else if nv.path.is_ident("terminal") {
+                                                        "terminal"
+                                                    } else {
+                                                        "token"
+                                                    },
+                                                ),
+                                            ));
+                                        };
+
+                                        // Store it
+                                        kind = NodeKind::Terminal(value);
+                                    } else if nv.path.is_ident("regex") {
+                                        // Parse the value as a string literal
+                                        let value: LitStr = if let Expr::Lit(ExprLit { attrs: _, lit: Lit::Str(value) }) = nv.value {
+                                            value
+                                        } else {
+                                            return Err(Diagnostic::spanned(
+                                                nv.value.span(),
+                                                Level::Error,
+                                                "Expected string literal as value for `regex`".into(),
+                                            ));
+                                        };
+
+                                        // Store it
+                                        kind = NodeKind::Regex(value);
+                                    } else {
+                                        return Err(Diagnostic::spanned(
+                                            nv.path.span(),
+                                            Level::Error,
+                                            format!(
+                                                "Unknown {}-attribute '{}' in '#[railroad(...)]'",
+                                                what,
+                                                nv.path.span().source_text().unwrap_or_else(String::new)
+                                            ),
+                                        ));
+                                    }
+                                },
+
+                                Meta::Path(p) => {
+                                    return Err(Diagnostic::spanned(
+                                        p.span(),
+                                        Level::Error,
+                                        format!(
+                                            "Unknown {}-attribute '{}' in '#[railroad(...)]'",
+                                            what,
+                                            p.span().source_text().unwrap_or_else(String::new)
+                                        ),
+                                    ));
+                                },
+                                Meta::List(l) => {
+                                    return Err(Diagnostic::spanned(
+                                        l.path.span(),
+                                        Level::Error,
+                                        format!(
+                                            "Unknown {}-attribute '{}' in '#[railroad(...)]'",
+                                            what,
+                                            l.path.span().source_text().unwrap_or_else(String::new)
+                                        ),
+                                    ));
+                                },
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                },
+
+                Meta::Path(_) => continue,
+                Meta::NameValue(_) => continue,
+            }
+        }
+
+        // Build ourselves
+        Ok(Self { kind })
+    }
+}
 
 /// Represents things we parse the from the toplevel for the `ToDelimNode`-macro.
 struct ToplevelDelimAttributes {
@@ -337,7 +486,7 @@ impl ToplevelDelimAttributes {
 /// Represents things we parse from field attributes.
 struct FieldAttributes {
     /// The type of implementation (either normal, nonterm or delimited).
-    kind:     NodeKind,
+    kind:     FieldKind,
     /// A comment, if any.
     comment:  Option<LitStr>,
     /// Whether to enclose the field in optional path.
@@ -357,7 +506,7 @@ impl FieldAttributes {
     /// This function may error if the given `attrs` were not understood.
     fn parse(what: &'static str, attrs: &[Attribute]) -> Result<Self, Diagnostic> {
         // Set out to collect what we want
-        let mut kind: NodeKind = NodeKind::Node;
+        let mut kind: FieldKind = FieldKind::Node;
         let mut comment: Option<LitStr> = None;
         let mut optional: bool = false;
         for attr in attrs {
@@ -392,9 +541,9 @@ impl FieldAttributes {
                             match meta {
                                 Meta::Path(p) => {
                                     if p.is_ident("node") {
-                                        kind = NodeKind::Node;
+                                        kind = FieldKind::Node;
                                     } else if p.is_ident("nonterm") {
-                                        kind = NodeKind::NonTerm;
+                                        kind = FieldKind::NonTerm;
                                     } else if p.is_ident("optional") {
                                         optional = true;
                                     } else {
@@ -434,7 +583,7 @@ impl FieldAttributes {
                                         };
 
                                         // Store them
-                                        kind = NodeKind::Delim(fields);
+                                        kind = FieldKind::Delim(fields);
                                     } else {
                                         return Err(Diagnostic::spanned(
                                             l.path.span(),
@@ -538,7 +687,7 @@ pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> R
                     .unwrap_or_else(|| FieldIdent::Index(LitInt::new(&i.to_string(), Span::call_site())));
                 let ty: &Type = &f.ty;
                 match attrs.kind {
-                    NodeKind::Node | NodeKind::NonTerm => {
+                    FieldKind::Node | FieldKind::NonTerm => {
                         // The base thing
                         let mut base: TokenStream2 =
                             quote! { { let b: #std_box<dyn #rr_node> = #std_box::new(<#ty as #ast_to_node>::railroad()); b }, };
@@ -569,7 +718,7 @@ pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> R
                         // Add it
                         parts.push((ident, base));
                     },
-                    NodeKind::Delim(fields) => {
+                    FieldKind::Delim(fields) => {
                         // The base things
                         let mut open: TokenStream2 =
                             quote! { { let b: #std_box<dyn #rr_node> = #std_box::new(<#ty as #ast_to_delim_node>::railroad_open()); b }, };
@@ -704,30 +853,66 @@ pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> R
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_node(ident: Ident, data: Data, _attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
+pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
     // Serialize the chosen paths
-    let ast_to_node = ast_to_node!();
+    let (std_box, std_vec, ast_to_node, rr_sequence, rr_terminal, rr_comment, rr_node) =
+        (std_box!(), std_vec!(), ast_to_node!(), rr_sequence!(), rr_terminal!(), rr_comment!(), rr_node!());
 
     // Parse the toplevel attributes
-    // TODO
+    let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNode", &attrs)?;
 
-    // Generate the type & expression for the impl
-    let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNode", &ident, &data)?;
-
-
-    // Use those to build the full impl
+    // Match on what to do
     let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
-    Ok(quote! {
-        impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
-            type Node = #node_ty;
+    match toplevel.kind {
+        NodeKind::Derived => {
+            // Generate the type & expression for the impl
+            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNode", &ident, &data)?;
 
-            #[inline]
-            fn railroad() -> Self::Node {
-                #node_expr
+            // Use those to build the full impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #node_ty;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #node_expr
+                    }
+                }
             }
-        }
+            .into())
+        },
+
+        NodeKind::Terminal(term) => {
+            // Simply generate a straightforward impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_terminal;
+
+                    #[inline]
+                    fn railroad() -> Self::Node { #rr_terminal::new(#term.into()) }
+                }
+            }
+            .into())
+        },
+
+        NodeKind::Regex(term) => {
+            // Simply generate a straightforward impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_sequence<#std_box<dyn #rr_node>>;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_sequence::new(#std_vec::from([
+                            { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
+                            { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
+                        ]))
+                    }
+                }
+            }
+            .into())
+        },
     }
-    .into())
 }
 
 

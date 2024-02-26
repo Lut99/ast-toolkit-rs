@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 14:26:07
 //  Last edited:
-//    25 Feb 2024, 15:23:40
+//    26 Feb 2024, 13:10:43
 //  Auto updated?
 //    Yes
 //
@@ -127,50 +127,28 @@ struct ExprBinOp<O: ToNode> {
 }
 
 /// Represents a `+`.
+#[derive(ToNode)]
+#[railroad(token = "+")]
 struct Plus;
-impl ToNode for Plus {
-    type Node = rr::Terminal;
-
-    #[inline]
-    fn railroad() -> Self::Node { rr::Terminal::new("+".into()) }
-}
 /// Represents a `-`.
+#[derive(ToNode)]
+#[railroad(token = "-")]
 struct Minus;
-impl ToNode for Minus {
-    type Node = rr::Terminal;
-
-    #[inline]
-    fn railroad() -> Self::Node { rr::Terminal::new("-".into()) }
-}
 /// Represents a `*`.
+#[derive(ToNode)]
+#[railroad(token = "*")]
 struct Star;
-impl ToNode for Star {
-    type Node = rr::Terminal;
-
-    #[inline]
-    fn railroad() -> Self::Node { rr::Terminal::new("*".into()) }
-}
 /// Represents a `/`.
+#[derive(ToNode)]
+#[railroad(token = "/")]
 struct Slash;
-impl ToNode for Slash {
-    type Node = rr::Terminal;
-
-    #[inline]
-    fn railroad() -> Self::Node { rr::Terminal::new("/".into()) }
-}
 
 
 
 /// Represents a literal number.
+#[derive(ToNode)]
+#[railroad(regex = "^[0-9]+$")]
 struct Lit(i64);
-impl ToNode for Lit {
-    type Node = rr::Sequence<Box<dyn rr::Node>>;
-
-    #[inline]
-    fn railroad() -> Self::Node {
-        rr::Sequence::new(vec![Box::new(rr::Comment::new("regex".into())), Box::new(rr::Terminal::new("^[0-9]+$".into()))])
-    }
-}
 
 
 
