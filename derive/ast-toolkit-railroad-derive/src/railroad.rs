@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    26 Feb 2024, 13:53:25
+//    26 Feb 2024, 13:55:38
 //  Auto updated?
 //    Yes
 //
@@ -1092,10 +1092,10 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
                 }
 
                 impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
-                    type Node = #rr_sequence<#std_box<dyn #rr_node>>;
+                    type NodeNonTerm = #rr_sequence<#std_box<dyn #rr_node>>;
 
                     #[inline]
-                    fn railroad() -> Self::Node {
+                    fn railroad_nonterm() -> Self::NodeNonTerm {
                         #rr_sequence::new(#std_vec::from([
                             { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
                             { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
@@ -1138,10 +1138,10 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
                 }
 
                 impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
-                    type Node = #rr_choice<#std_box<dyn #rr_node>>;
+                    type NodeNonTerm = #rr_choice<#std_box<dyn #rr_node>>;
 
                     #[inline]
-                    fn railroad() -> Self::Node {
+                    fn railroad_nonterm() -> Self::NodeNonTerm {
                         #rr_choice::new(#std_vec::from([
                             #(#parts)*
                         ]))
