@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    26 Feb 2024, 16:22:36
+//    26 Feb 2024, 17:10:40
 //  Auto updated?
 //    Yes
 //
@@ -118,17 +118,39 @@ macro_rules! propagate_impl {
 /// ```
 #[macro_export]
 macro_rules! diagram {
-    ($($nodes:ty),+ $(,)?) => {
-        ::ast_toolkit_railroad::railroad::Diagram::new(::ast_toolkit_railroad::railroad::VerticalGrid::new(::std::vec![
-            $(
-                ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Sequence::<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>>::new(::std::vec! [
-                    ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Comment::new(::std::stringify!($nodes).into())),
-                    ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Start),
-                    ::std::boxed::Box::new(<$nodes as ::ast_toolkit_railroad::ToNonTerm>::railroad_nonterm()),
-                    ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::End),
-                ]))
-            ),+
-        ]))
+    ($($nodes:ty $(as $names:literal)?),+ $(,)?) => {
+        {
+            let mut items: ::std::vec::Vec<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>> = ::std::vec::Vec::new();
+            ::ast_toolkit_railroad::_diagram!(items, $($nodes $(as $names)?),+);
+            ::ast_toolkit_railroad::railroad::Diagram::new(::ast_toolkit_railroad::railroad::VerticalGrid::new(items))
+        }
+    };
+}
+/// Does recursive list unfolding for [`diagram!()`].
+///
+/// Not meant to be used directly.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _diagram {
+    ($list:ident, $node:ty as $name:literal) => {
+        $list.push(::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Sequence::<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>>::new(::std::vec! [
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Comment::new($name.into())),
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Start),
+            ::std::boxed::Box::new(<$node as ::ast_toolkit_railroad::ToNonTerm>::railroad_nonterm()),
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::End),
+        ])))
+    };
+    ($list:ident, $node:ty) => {
+        $list.push(::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Sequence::<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>>::new(::std::vec! [
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Comment::new(::std::stringify!($node).into())),
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Start),
+            ::std::boxed::Box::new(<$node as ::ast_toolkit_railroad::ToNonTerm>::railroad_nonterm()),
+            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::End),
+        ])))
+    };
+    ($list:ident, $node:ty $(as $name:literal)?, $($nodes:ty $(as $names:literal)?),+) => {
+        ::ast_toolkit_railroad::_diagram!($list, $node $(as $name)?);
+        ::ast_toolkit_railroad::_diagram!($list, $($nodes $(as $names)?),+);
     };
 }
 
@@ -166,9 +188,9 @@ macro_rules! diagram {
 /// ```
 #[macro_export]
 macro_rules! diagram_svg {
-    ($($nodes:ty),+ $(,)?) => {
+    ($($nodes:tt)+) => {
         {
-            let mut diag = ::ast_toolkit_railroad::diagram!($($nodes),+);
+            let mut diag = ::ast_toolkit_railroad::diagram!($($nodes)+);
             diag.add_element(::ast_toolkit_railroad::railroad::svg::Element::new("style").set("type", "text/css").text(::ast_toolkit_railroad::railroad::DEFAULT_CSS));
             diag
         }
@@ -210,9 +232,9 @@ macro_rules! diagram_svg {
 /// ```
 #[macro_export]
 macro_rules! diagram_svg_file {
-    ($path:expr, $($nodes:ty),+ $(,)?) => {
+    ($path:expr, $($nodes:tt)+) => {
         {
-            let diag = ::ast_toolkit_railroad::diagram_svg!($($nodes),+);
+            let diag = ::ast_toolkit_railroad::diagram_svg!($($nodes)+);
             ::std::fs::write($path, diag.to_string())
         }
     };
