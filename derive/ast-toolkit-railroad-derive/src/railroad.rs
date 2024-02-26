@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    26 Feb 2024, 13:44:09
+//    26 Feb 2024, 13:53:25
 //  Auto updated?
 //    Yes
 //
@@ -1009,39 +1009,148 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_non_term(ident: Ident, data: Data, _attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
+pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
     // Serialize the chosen paths
-    let (ast_to_node, ast_to_non_termm, rr_non_terminal) = (ast_to_node!(), ast_to_non_term!(), rr_non_terminal!());
+    let (std_box, std_vec, ast_to_node, ast_to_non_termm, rr_choice, rr_sequence, rr_terminal, rr_non_terminal, rr_comment, rr_node) = (
+        std_box!(),
+        std_vec!(),
+        ast_to_node!(),
+        ast_to_non_term!(),
+        rr_choice!(),
+        rr_sequence!(),
+        rr_terminal!(),
+        rr_non_terminal!(),
+        rr_comment!(),
+        rr_node!(),
+    );
 
     // Parse the toplevel attributes
-    // TODO
+    let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNonTerm", &attrs)?;
 
-    // Generate the type & expression for the impl
-    let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNonTerm", &ident, &data)?;
-
-    // Use those to build the full impls
     let name: String = ident.to_string();
     let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
-    Ok(quote! {
-        impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
-            type Node = #rr_non_terminal;
+    match toplevel.kind {
+        NodeKind::Derived => {
+            // Generate the type & expression for the impl
+            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNonTerm", &ident, &data)?;
 
-            #[inline]
-            fn railroad() -> Self::Node {
-                #rr_non_terminal::new(#name.into())
+            // Use those to build the full impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_non_terminal;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_non_terminal::new(#name.into())
+                    }
+                }
+
+                impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
+                    type NodeNonTerm = #node_ty;
+
+                    #[inline]
+                    fn railroad_nonterm() -> Self::NodeNonTerm {
+                        #node_expr
+                    }
+                }
             }
-        }
+            .into())
+        },
 
-        impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
-            type NodeNonTerm = #node_ty;
+        NodeKind::Terminal(NodeTermKind::Value(term)) => {
+            // Simply generate a straightforward impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_non_terminal;
 
-            #[inline]
-            fn railroad_nonterm() -> Self::NodeNonTerm {
-                #node_expr
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_non_terminal::new(#name.into())
+                    }
+                }
+
+                impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
+                    type NodeNonTerm = #rr_terminal;
+
+                    #[inline]
+                    fn railroad_nonterm() -> Self::NodeNonTerm { #rr_terminal::new(#term.into()) }
+                }
             }
-        }
+            .into())
+        },
+
+        NodeKind::Terminal(NodeTermKind::Regex(term)) => {
+            // Simply generate a straightforward impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_non_terminal;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_non_terminal::new(#name.into())
+                    }
+                }
+
+                impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
+                    type Node = #rr_sequence<#std_box<dyn #rr_node>>;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_sequence::new(#std_vec::from([
+                            { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
+                            { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
+                        ]))
+                    }
+                }
+            }
+            .into())
+        },
+
+        NodeKind::OneOf(terms) => {
+            // Builds the terms
+            let mut parts: Vec<TokenStream2> = Vec::with_capacity(terms.len());
+            for term in terms {
+                match term {
+                    NodeTermKind::Value(term) => {
+                        parts.push(quote! { { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b }, })
+                    },
+                    NodeTermKind::Regex(term) => parts.push(quote! {
+                        {
+                            let b: #std_box<dyn #rr_node> = #std_box::new(#rr_sequence::new(#std_vec::from([
+                                { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
+                                { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
+                            ])));
+                            b
+                        },
+                    }),
+                }
+            }
+
+            // Generate the impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_non_terminal;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_non_terminal::new(#name.into())
+                    }
+                }
+
+                impl #impl_gen #ast_to_non_termm for #ident #ty_gen #where_gen {
+                    type Node = #rr_choice<#std_box<dyn #rr_node>>;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_choice::new(#std_vec::from([
+                            #(#parts)*
+                        ]))
+                    }
+                }
+            }
+            .into())
+        },
     }
-    .into())
 }
 
 
