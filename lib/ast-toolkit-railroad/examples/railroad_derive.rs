@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 14:26:07
 //  Last edited:
-//    26 Feb 2024, 13:44:32
+//    26 Feb 2024, 13:56:28
 //  Auto updated?
 //    Yes
 //
@@ -156,7 +156,7 @@ enum Lit {
 #[railroad(regex = "^[0-9]+$")]
 struct LitInt(i64);
 /// Represents a boolean number.
-#[derive(ToNode)]
+#[derive(ToNonTerm)]
 #[railroad(one_of("true", regex "^false$"))]
 struct LitBool(bool);
 
@@ -167,6 +167,6 @@ struct LitBool(bool);
 /***** ENTRYPOINT *****/
 fn main() {
     // Build a diagram out of it!
-    let diagram: Diagram<_> = diagram_svg!(Program, Expr);
+    let diagram: Diagram<_> = diagram_svg!(Program, Expr, LitBool);
     println!("{diagram}");
 }
