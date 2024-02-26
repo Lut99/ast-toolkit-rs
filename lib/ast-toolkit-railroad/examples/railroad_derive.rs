@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 14:26:07
 //  Last edited:
-//    26 Feb 2024, 13:10:43
+//    26 Feb 2024, 13:25:18
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@
 #[cfg(not(feature = "derive"))]
 compile_error!("Please enable the 'derive' feature when running the 'railroad_derive' example.");
 
-use ast_toolkit_railroad::{diagram, railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit_railroad::{diagram_svg, railroad as rr, ToDelimNode, ToNode, ToNonTerm};
 use rr::Diagram;
 
 
@@ -157,7 +157,6 @@ struct Lit(i64);
 /***** ENTRYPOINT *****/
 fn main() {
     // Build a diagram out of it!
-    let mut diagram: Diagram<_> = diagram!(Program, Expr);
-    diagram.add_element(rr::svg::Element::new("style").set("type", "text/css").text(rr::DEFAULT_CSS));
+    let diagram: Diagram<_> = diagram_svg!(Program, Expr);
     println!("{diagram}");
 }

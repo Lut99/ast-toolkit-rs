@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    25 Feb 2024, 15:06:17
+//    26 Feb 2024, 13:26:41
 //  Auto updated?
 //    Yes
 //
@@ -84,10 +84,38 @@ macro_rules! propagate_impl {
 /***** LIBRARY MACROS *****/
 /// Generates the implementation to create a diagram out of the given nodes.
 ///
-/// Node that the nodes must implement [`NonTerm`].
+/// Note that the nodes must implement [`NonTerm`] instead of just [`ToNode`].
+///
+/// Also note that this version returns a plain diagram that must be serialized further. See [`diagram_svg!`] or [`diagram_file!`] for more convenient methods.
 ///
 /// # Arguments
 /// A comma-separated list of types referring to the types to generates the toplevel of the diagram.
+///
+/// # Returns
+/// A [`Diagram`](railroad::Diagram) that encodes the given nodes. You still have to make a graphic out of it yourself.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_railroad::{diagram, railroad as rr, ToNode, ToNonTerm};
+///
+/// struct Example;
+/// impl ToNode for Example {
+///     type Node = rr::NonTerminal;
+///
+///     fn railroad() -> Self::Node { rr::NonTerminal::new("Example".into()) }
+/// }
+/// impl ToNonTerm for Example {
+///     type NodeNonTerm = rr::Terminal;
+///
+///     fn railroad_nonterm() -> Self::NodeNonTerm { rr::Terminal::new("example".into()) }
+/// }
+///
+/// // Generate a diagram
+/// let mut diag: rr::Diagram<_> = diagram!(Example);
+/// // Add an SVG serialization and write the HTML to stdout
+/// diag.add_element(rr::svg::Element::new("style").set("type", "text/css").text(rr::DEFAULT_CSS));
+/// println!("{diag}");
+/// ```
 #[macro_export]
 macro_rules! diagram {
     ($($nodes:ty),+ $(,)?) => {
@@ -101,6 +129,92 @@ macro_rules! diagram {
                 ]))
             ),+
         ]))
+    };
+}
+
+/// Generates the implementation to create a diagram out of the given nodes.
+///
+/// Note that the nodes must implement [`NonTerm`] instead of just [`ToNode`].
+///
+/// This version returns a diagram that already has an SVG serialization attached to it. See [`diagram!`] for a more flexible implementation, or [`diagram_file!`] for a more convenient method.
+///
+/// # Arguments
+/// A comma-separated list of types referring to the types to generates the toplevel of the diagram.
+///
+/// # Returns
+/// A [`Diagram`](railroad::Diagram) that encodes the given nodes, with SVG already attached
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_railroad::{diagram_svg, railroad as rr, ToNode, ToNonTerm};
+///
+/// struct Example;
+/// impl ToNode for Example {
+///     type Node = rr::NonTerminal;
+///
+///     fn railroad() -> Self::Node { rr::NonTerminal::new("Example".into()) }
+/// }
+/// impl ToNonTerm for Example {
+///     type NodeNonTerm = rr::Terminal;
+///
+///     fn railroad_nonterm() -> Self::NodeNonTerm { rr::Terminal::new("example".into()) }
+/// }
+///
+/// // Generate a diagram and write it as HTML to stdout
+/// let diag: rr::Diagram<_> = diagram_svg!(Example);
+/// println!("{diag}");
+/// ```
+#[macro_export]
+macro_rules! diagram_svg {
+    ($($nodes:ty),+ $(,)?) => {
+        {
+            let mut diag = ::ast_toolkit_railroad::diagram!($($nodes),+);
+            diag.add_element(::ast_toolkit_railroad::railroad::svg::Element::new("style").set("type", "text/css").text(::ast_toolkit_railroad::railroad::DEFAULT_CSS));
+            diag
+        }
+    };
+}
+
+/// Generates the implementation to create a diagram out of the given nodes, then writes it to the given path as an SVG.
+///
+/// Note that the nodes must implement [`NonTerm`] instead of just [`ToNode`].
+///
+/// This version writes the diagram immediately. See [`diagram!`] or [`diagram_svg!`] for more flexible methods.
+///
+/// # Arguments
+/// A path, a comma, and then a comma-separated list of types referring to the types to generates the toplevel of the diagram.
+///
+/// # Returns
+/// A [`Result<(), std::io::Error>`](std::io::Error) that encodes the success state of writing to the file.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_railroad::{diagram_svg_file, railroad as rr, ToNode, ToNonTerm};
+///
+/// struct Example;
+/// impl ToNode for Example {
+///     type Node = rr::NonTerminal;
+///
+///     fn railroad() -> Self::Node { rr::NonTerminal::new("Example".into()) }
+/// }
+/// impl ToNonTerm for Example {
+///     type NodeNonTerm = rr::Terminal;
+///
+///     fn railroad_nonterm() -> Self::NodeNonTerm { rr::Terminal::new("example".into()) }
+/// }
+///
+/// // Generate a diagram and write it as HTML to stdout
+/// if let Err(err) = diagram_svg_file!(std::env::temp_dir().join("test.svg"), Example) {
+///     eprintln!("ERROR: {err}");
+/// }
+/// ```
+#[macro_export]
+macro_rules! diagram_svg_file {
+    ($path:expr, $($nodes:ty),+ $(,)?) => {
+        {
+            let diag = ::ast_toolkit_railroad::diagram_svg!($($nodes),+);
+            ::std::fs::write($path, diag.to_string())
+        }
     };
 }
 
