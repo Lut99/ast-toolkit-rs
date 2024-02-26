@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:17:34
 //  Last edited:
-//    25 Feb 2024, 11:18:14
+//    26 Feb 2024, 16:25:36
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,10 @@
 
 // Use some deps
 #[cfg(feature = "diagnostic")]
-pub use ast_toolkit_diagnostic;
+pub use ast_toolkit_diagnostic as diagnostic;
+#[cfg(any(feature = "punctuated-normal", feature = "punctuated-tailing"))]
+pub use ast_toolkit_punctuated as punctuated;
 #[cfg(feature = "railroad")]
-pub use ast_toolkit_railroad;
+pub use ast_toolkit_railroad as railroad;
 #[cfg(feature = "span")]
-pub use ast_toolkit_span;
+pub use ast_toolkit_span as span;
