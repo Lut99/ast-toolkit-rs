@@ -16,6 +16,7 @@ ast-toolkit-span = { path = "./lib/ast-toolkit-span", optional = true }
 
 [features]
 default = []
+derive = [ "ast-toolkit-railroad/derive" ]
 diagnostic = [ "dep:ast-toolkit-diagnostic" ]
 punctuated = [ "punctuated-normal" ]
 punctuated-normal = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal" ]
