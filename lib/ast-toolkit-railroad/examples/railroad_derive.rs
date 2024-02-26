@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 14:26:07
 //  Last edited:
-//    26 Feb 2024, 13:25:18
+//    26 Feb 2024, 13:44:32
 //  Auto updated?
 //    Yes
 //
@@ -145,10 +145,20 @@ struct Slash;
 
 
 
+/// Represents a literal.
+#[derive(ToNode)]
+enum Lit {
+    Int(LitInt),
+    Bool(LitBool),
+}
 /// Represents a literal number.
 #[derive(ToNode)]
 #[railroad(regex = "^[0-9]+$")]
-struct Lit(i64);
+struct LitInt(i64);
+/// Represents a boolean number.
+#[derive(ToNode)]
+#[railroad(one_of("true", regex "^false$"))]
+struct LitBool(bool);
 
 
 

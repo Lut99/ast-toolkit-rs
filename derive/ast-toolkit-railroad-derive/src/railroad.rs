@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    26 Feb 2024, 13:14:31
+//    26 Feb 2024, 13:44:09
 //  Auto updated?
 //    Yes
 //
@@ -158,14 +158,31 @@ macro_rules! rr_comment {
 
 
 /***** HELPERS *****/
+/// The different kinds of node terminals.
+enum NodeTermKind {
+    /// It's a direct value.
+    Value(LitStr),
+    /// It's a direct terminal but phrased as a regex.
+    Regex(LitStr),
+}
+impl Parse for NodeTermKind {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Parse regex or not
+        let regex: Option<Ident> = input.parse::<Ident>().ok().filter(|i| i == "regex");
+        // Parse the string
+        let value: LitStr = input.parse()?;
+        // OK
+        if regex.is_some() { Ok(Self::Regex(value)) } else { Ok(Self::Value(value)) }
+    }
+}
 /// Represents the types of toplevel nodes.
 enum NodeKind {
     /// It's a typical, derived node.
     Derived,
     /// It's a direct terminal.
-    Terminal(LitStr),
-    /// It's a direct terminal but phrased as a regex.
-    Regex(LitStr),
+    Terminal(NodeTermKind),
+    /// It's one of a set of terminals.
+    OneOf(Vec<NodeTermKind>),
 }
 
 /// Represents an identifier of either [`Ident`]s or [`LitInt`]s.
@@ -271,7 +288,7 @@ impl ToplevelToNodeAttributes {
                                         };
 
                                         // Store it
-                                        kind = NodeKind::Terminal(value);
+                                        kind = NodeKind::Terminal(NodeTermKind::Value(value));
                                     } else if nv.path.is_ident("regex") {
                                         // Parse the value as a string literal
                                         let value: LitStr = if let Expr::Lit(ExprLit { attrs: _, lit: Lit::Str(value) }) = nv.value {
@@ -285,7 +302,7 @@ impl ToplevelToNodeAttributes {
                                         };
 
                                         // Store it
-                                        kind = NodeKind::Regex(value);
+                                        kind = NodeKind::Terminal(NodeTermKind::Regex(value));
                                     } else {
                                         return Err(Diagnostic::spanned(
                                             nv.path.span(),
@@ -299,6 +316,45 @@ impl ToplevelToNodeAttributes {
                                     }
                                 },
 
+                                Meta::List(l) => {
+                                    if l.path.is_ident("one-of") || l.path.is_ident("one_of") {
+                                        // Parse as a list of string literals
+                                        let args: Vec<NodeTermKind> = match l.parse_args_with(|buffer: &ParseBuffer| {
+                                            // Repeatedly parsed metas separated by commands
+                                            let mut kinds: Vec<NodeTermKind> = vec![buffer.parse()?];
+                                            while !buffer.is_empty() {
+                                                // Parse a comma then a meta
+                                                buffer.parse::<Comma>()?;
+                                                kinds.push(buffer.parse()?);
+                                            }
+                                            Ok(kinds)
+                                        }) {
+                                            Ok(args) => args,
+                                            Err(err) => {
+                                                return Err(proc_macro_error::Diagnostic::spanned(
+                                                    l.tokens.span(),
+                                                    proc_macro_error::Level::Error,
+                                                    "Failed to parse '#[railroad(one_of(...))]' arguments".into(),
+                                                )
+                                                .span_error(err.span(), err.to_string()));
+                                            },
+                                        };
+
+                                        // Store 'em
+                                        kind = NodeKind::OneOf(args);
+                                    } else {
+                                        return Err(Diagnostic::spanned(
+                                            l.path.span(),
+                                            Level::Error,
+                                            format!(
+                                                "Unknown {}-attribute '{}' in '#[railroad(...)]'",
+                                                what,
+                                                l.path.span().source_text().unwrap_or_else(String::new)
+                                            ),
+                                        ));
+                                    }
+                                },
+
                                 Meta::Path(p) => {
                                     return Err(Diagnostic::spanned(
                                         p.span(),
@@ -307,17 +363,6 @@ impl ToplevelToNodeAttributes {
                                             "Unknown {}-attribute '{}' in '#[railroad(...)]'",
                                             what,
                                             p.span().source_text().unwrap_or_else(String::new)
-                                        ),
-                                    ));
-                                },
-                                Meta::List(l) => {
-                                    return Err(Diagnostic::spanned(
-                                        l.path.span(),
-                                        Level::Error,
-                                        format!(
-                                            "Unknown {}-attribute '{}' in '#[railroad(...)]'",
-                                            what,
-                                            l.path.span().source_text().unwrap_or_else(String::new)
                                         ),
                                     ));
                                 },
@@ -855,8 +900,8 @@ pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> R
 /// This function may error if any of the attributes were ill-formed.
 pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
     // Serialize the chosen paths
-    let (std_box, std_vec, ast_to_node, rr_sequence, rr_terminal, rr_comment, rr_node) =
-        (std_box!(), std_vec!(), ast_to_node!(), rr_sequence!(), rr_terminal!(), rr_comment!(), rr_node!());
+    let (std_box, std_vec, ast_to_node, rr_choice, rr_sequence, rr_terminal, rr_comment, rr_node) =
+        (std_box!(), std_vec!(), ast_to_node!(), rr_choice!(), rr_sequence!(), rr_terminal!(), rr_comment!(), rr_node!());
 
     // Parse the toplevel attributes
     let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNode", &attrs)?;
@@ -882,7 +927,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
             .into())
         },
 
-        NodeKind::Terminal(term) => {
+        NodeKind::Terminal(NodeTermKind::Value(term)) => {
             // Simply generate a straightforward impl
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
@@ -895,7 +940,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
             .into())
         },
 
-        NodeKind::Regex(term) => {
+        NodeKind::Terminal(NodeTermKind::Regex(term)) => {
             // Simply generate a straightforward impl
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
@@ -906,6 +951,42 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
                         #rr_sequence::new(#std_vec::from([
                             { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
                             { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
+                        ]))
+                    }
+                }
+            }
+            .into())
+        },
+
+        NodeKind::OneOf(terms) => {
+            // Builds the terms
+            let mut parts: Vec<TokenStream2> = Vec::with_capacity(terms.len());
+            for term in terms {
+                match term {
+                    NodeTermKind::Value(term) => {
+                        parts.push(quote! { { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b }, })
+                    },
+                    NodeTermKind::Regex(term) => parts.push(quote! {
+                        {
+                            let b: #std_box<dyn #rr_node> = #std_box::new(#rr_sequence::new(#std_vec::from([
+                                { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_comment::new("regex".into())); b },
+                                { let b: #std_box<dyn #rr_node> = #std_box::new(#rr_terminal::new(#term.into())); b },
+                            ])));
+                            b
+                        },
+                    }),
+                }
+            }
+
+            // Generate the impl
+            Ok(quote! {
+                impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
+                    type Node = #rr_choice<#std_box<dyn #rr_node>>;
+
+                    #[inline]
+                    fn railroad() -> Self::Node {
+                        #rr_choice::new(#std_vec::from([
+                            #(#parts)*
                         ]))
                     }
                 }
