@@ -11,6 +11,7 @@ description = "Provides traits for recursively generating [railroad](https://cra
 parking_lot = { version = "0.12", optional = true }
 railroad = "0.2"
 
+ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", optional = true }
 ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive", optional = true }
 
 
@@ -18,3 +19,4 @@ ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive
 default = []
 derive = [ "dep:ast-toolkit-railroad-derive" ]
 parking_lot = [ "dep:parking_lot" ]
+punctuated = [ "dep:ast-toolkit-punctuated" ]

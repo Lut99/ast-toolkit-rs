@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    26 Feb 2024, 13:26:41
+//    26 Feb 2024, 15:57:24
 //  Auto updated?
 //    Yes
 //
@@ -373,4 +373,17 @@ impl<T: ToNonTerm> ToNonTerm for HashSet<T> {
 
     #[inline]
     fn railroad_nonterm() -> Self::NodeNonTerm { railroad::Repeat::new(T::railroad_nonterm(), railroad::Empty) }
+}
+// Propagation for the Punctuated set
+impl<V: ToNode, P: ToNode> ToNode for ast_toolkit_punctuated::Punctuated<V, P> {
+    type Node = railroad::Repeat<V::Node, P::Node>;
+
+    #[inline]
+    fn railroad() -> Self::Node { railroad::Repeat::new(V::railroad(), P::railroad()) }
+}
+impl<V: ToNonTerm, P: ToNode> ToNonTerm for ast_toolkit_punctuated::Punctuated<V, P> {
+    type NodeNonTerm = railroad::Repeat<V::NodeNonTerm, P::Node>;
+
+    #[inline]
+    fn railroad_nonterm() -> Self::NodeNonTerm { railroad::Repeat::new(V::railroad_nonterm(), P::railroad()) }
 }

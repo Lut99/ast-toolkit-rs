@@ -9,6 +9,7 @@ description = "Provides various tools that are useful when working with ASTs as 
 
 [dependencies]
 ast-toolkit-diagnostic = { path = "./lib/ast-toolkit-diagnostic", optional = true }
+ast-toolkit-punctuated = { path = "./lib/ast-toolkit-punctuated", optional = true }
 ast-toolkit-railroad = { path = "./lib/ast-toolkit-railroad", optional = true }
 ast-toolkit-span = { path = "./lib/ast-toolkit-span", optional = true }
 
@@ -16,6 +17,7 @@ ast-toolkit-span = { path = "./lib/ast-toolkit-span", optional = true }
 [features]
 default = []
 diagnostic = [ "dep:ast-toolkit-diagnostic" ]
+punctuated = [ "dep:ast-toolkit-punctuated", "ast-toolkit-railroad/punctuated" ]
 railroad = [ "dep:ast-toolkit-railroad" ]
 span = [ "dep:ast-toolkit-span" ]
 
@@ -25,6 +27,7 @@ resolver = "2"
 members = [
     # Components
     "lib/ast-toolkit-diagnostic",
+    "lib/ast-toolkit-punctuated",
     "lib/ast-toolkit-railroad",
     "lib/ast-toolkit-span",
 

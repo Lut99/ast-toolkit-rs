@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:33:52
 //  Last edited:
-//    25 Feb 2024, 12:33:57
+//    26 Feb 2024, 14:17:51
 //  Auto updated?
 //    Yes
 //
@@ -14,4 +14,6 @@
 
 
 /***** ENTRYPOINT *****/
-fn main() {}
+fn main() {
+    print!("{:#?}", Vec::<&str>::new());
+}

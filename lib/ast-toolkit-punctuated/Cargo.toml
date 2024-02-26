@@ -1,0 +1,16 @@
+[package]
+name = "ast-toolkit-punctuated"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Implements a wrapper around a [`Vec`] that allows it to be convenient for modelling punctuated lists in ASTs (e.g., comma-separated list)."
+
+
+[dependencies]
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
+
+
+[features]
+default = [ "normal" ]
+normal = []
