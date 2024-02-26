@@ -19,4 +19,5 @@ ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive
 default = []
 derive = [ "dep:ast-toolkit-railroad-derive" ]
 parking_lot = [ "dep:parking_lot" ]
-punctuated = [ "dep:ast-toolkit-punctuated" ]
+punctuated-normal = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/normal" ]
+punctuated-trailing = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/trailing" ]

@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    26 Feb 2024, 15:57:24
+//    26 Feb 2024, 16:22:36
 //  Auto updated?
 //    Yes
 //
@@ -374,16 +374,40 @@ impl<T: ToNonTerm> ToNonTerm for HashSet<T> {
     #[inline]
     fn railroad_nonterm() -> Self::NodeNonTerm { railroad::Repeat::new(T::railroad_nonterm(), railroad::Empty) }
 }
+
 // Propagation for the Punctuated set
+#[cfg(feature = "punctuated-normal")]
 impl<V: ToNode, P: ToNode> ToNode for ast_toolkit_punctuated::Punctuated<V, P> {
     type Node = railroad::Repeat<V::Node, P::Node>;
 
     #[inline]
     fn railroad() -> Self::Node { railroad::Repeat::new(V::railroad(), P::railroad()) }
 }
+#[cfg(feature = "punctuated-normal")]
 impl<V: ToNonTerm, P: ToNode> ToNonTerm for ast_toolkit_punctuated::Punctuated<V, P> {
     type NodeNonTerm = railroad::Repeat<V::NodeNonTerm, P::Node>;
 
     #[inline]
     fn railroad_nonterm() -> Self::NodeNonTerm { railroad::Repeat::new(V::railroad_nonterm(), P::railroad()) }
+}
+#[cfg(feature = "punctuated-trailing")]
+impl<V: ToNode, P: ToNode> ToNode for ast_toolkit_punctuated::PunctuatedTrailing<V, P> {
+    type Node = railroad::Sequence<Box<dyn railroad::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        railroad::Sequence::new(vec![Box::new(railroad::Repeat::new(V::railroad(), P::railroad())), Box::new(railroad::Optional::new(P::railroad()))])
+    }
+}
+#[cfg(feature = "punctuated-trailing")]
+impl<V: ToNonTerm, P: ToNode> ToNonTerm for ast_toolkit_punctuated::PunctuatedTrailing<V, P> {
+    type NodeNonTerm = railroad::Sequence<Box<dyn railroad::Node>>;
+
+    #[inline]
+    fn railroad_nonterm() -> Self::NodeNonTerm {
+        railroad::Sequence::new(vec![
+            Box::new(railroad::Repeat::new(V::railroad_nonterm(), P::railroad())),
+            Box::new(railroad::Optional::new(P::railroad())),
+        ])
+    }
 }

@@ -17,7 +17,9 @@ ast-toolkit-span = { path = "./lib/ast-toolkit-span", optional = true }
 [features]
 default = []
 diagnostic = [ "dep:ast-toolkit-diagnostic" ]
-punctuated = [ "dep:ast-toolkit-punctuated", "ast-toolkit-railroad/punctuated" ]
+punctuated = [ "punctuated-normal" ]
+punctuated-normal = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal" ]
+punctuated-trailing = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing" ]
 railroad = [ "dep:ast-toolkit-railroad" ]
 span = [ "dep:ast-toolkit-span" ]
 

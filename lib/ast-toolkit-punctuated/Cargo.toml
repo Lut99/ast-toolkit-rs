@@ -8,9 +8,10 @@ description = "Implements a wrapper around a [`Vec`] that allows it to be conven
 
 
 [dependencies]
-enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"], optional = true }
 
 
 [features]
 default = [ "normal" ]
-normal = []
+normal = [ "dep:enum-debug" ]
+trailing = []
