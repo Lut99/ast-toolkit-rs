@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    27 Feb 2024, 18:26:53
+//    28 Feb 2024, 15:51:15
 //  Auto updated?
 //    Yes
 //
@@ -13,146 +13,134 @@
 //
 
 use std::borrow::Cow;
-use std::ops::{Bound, Range, RangeBounds};
+use std::ops::{Add, AddAssign, Bound, Deref, Range, RangeBounds, Sub, SubAssign};
 
-use num_traits::AsPrimitive;
 use unicode_segmentation::UnicodeSegmentation;
 
 
 /***** AUXILLARY *****/
-/// A helper trait for the [`Span`] that can be implemented for anything used as input.
-pub trait Spannable {
-    /// Returns the number of spannable things (character, bytes, tokens) in this list.
+/// Newtype wrapper that differentiates raw indices (e.g., byte indices) from [logic indices](LogicUsize) (e.g., grapheme indices).
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RawUsize(usize);
+impl RawUsize {
+    /// Constructor for zero.
     ///
     /// # Returns
-    /// A [`usize`] with the total number of things.
-    fn len(&self) -> usize;
+    /// A new RawUsize that encodes `0`.
+    #[inline]
+    pub const fn zero() -> Self { Self(0) }
+}
+impl Add<Self> for RawUsize {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output { Self(self.0 + rhs.0) }
+}
+impl AddAssign<Self> for RawUsize {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) { self.0 += rhs.0 }
+}
+impl Sub<Self> for RawUsize {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output { Self(self.0 - rhs.0) }
+}
+impl SubAssign<Self> for RawUsize {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) { self.0 -= rhs.0 }
+}
+impl Deref for RawUsize {
+    type Target = usize;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl From<usize> for RawUsize {
+    #[inline]
+    fn from(value: usize) -> Self { Self(value) }
+}
+
+/// Newtype wrapper that differentiates [raw indices](RawUsize) (e.g., byte indices) from logic indices (e.g., grapheme indices).
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct LogicUsize(usize);
+impl LogicUsize {
+    /// Constructor for zero.
+    ///
+    /// # Returns
+    /// A new RawUsize that encodes `0`.
+    #[inline]
+    pub const fn zero() -> Self { Self(0) }
+}
+impl Add<Self> for LogicUsize {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output { Self(self.0 + rhs.0) }
+}
+impl AddAssign<Self> for LogicUsize {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) { self.0 += rhs.0 }
+}
+impl Sub<Self> for LogicUsize {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output { Self(self.0 - rhs.0) }
+}
+impl SubAssign<Self> for LogicUsize {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) { self.0 -= rhs.0 }
+}
+impl Deref for LogicUsize {
+    type Target = usize;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl From<usize> for LogicUsize {
+    #[inline]
+    fn from(value: usize) -> Self { Self(value) }
+}
+
+
+
+/// A helper trait for the [`Span`] that can be implemented for anything used as input.
+pub trait Spannable {
+    /// Returns the number of currently spanned "raw" items (e.g., bytes).
+    ///
+    /// # Returns
+    /// A [`RawUsize`] with the total number of bytes or other elementary items as is stored on-disk.
+    fn spanned_len(&self) -> RawUsize;
 }
 
 // Default binary impls for [`Spannable`]
 impl<'b> Spannable for &'b [u8] {
     #[inline]
-    fn len(&self) -> usize { <[u8]>::len(self) }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl<'b> Spannable for Cow<'b, [u8]> {
     #[inline]
-    fn len(&self) -> usize { <[u8]>::len(self) }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl Spannable for Vec<u8> {
     #[inline]
-    fn len(&self) -> usize { <Vec<u8>>::len(self) }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 
 // Default string impls for [`Spannable`]
 impl<'s> Spannable for &'s str {
     #[inline]
-    fn len(&self) -> usize { self.graphemes(true).count() }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl<'s> Spannable for Cow<'s, str> {
     #[inline]
-    fn len(&self) -> usize { self.graphemes(true).count() }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl Spannable for String {
     #[inline]
-    fn len(&self) -> usize { self.graphemes(true).count() }
+    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
-
-
-
-/// Defines an extension to [`Spannable`] that communicates it spans something fundamentally binary.
-pub trait BytesSpannable: Spannable {
-    /// Returns the given "logical index" (e.g., graphemes) as an index over bytes.
-    ///
-    /// # Arguments
-    /// - `index`: The "logical index" (e.g., grapheme index) to translate.
-    ///
-    /// # Returns
-    /// A [`usize`] encoding the byte-index.
-    fn to_byte_index(&self, index: usize) -> usize;
-}
-
-// Default binary impls for [`Spannable`]
-impl<'b> BytesSpannable for &'b [u8] {
-    #[inline]
-    fn to_byte_index(&self, index: usize) -> usize { index }
-}
-impl<'b> BytesSpannable for Cow<'b, [u8]> {
-    #[inline]
-    fn to_byte_index(&self, index: usize) -> usize { index }
-}
-impl BytesSpannable for Vec<u8> {
-    #[inline]
-    fn to_byte_index(&self, index: usize) -> usize { index }
-}
-
-// Default string impls for [`Spannable`]
-impl<'s> BytesSpannable for &'s str {
-    #[inline]
-    #[track_caller]
-    fn to_byte_index(&self, index: usize) -> usize {
-        self.grapheme_indices(true)
-            .nth(index)
-            .unwrap_or_else(|| panic!("Grapheme index {} is out-of-bounds for string of {} graphemes", index, self.graphemes(true).count()))
-            .0
-    }
-}
-impl<'s> BytesSpannable for Cow<'s, str> {
-    #[inline]
-    #[track_caller]
-    fn to_byte_index(&self, index: usize) -> usize {
-        self.grapheme_indices(true)
-            .nth(index)
-            .unwrap_or_else(|| panic!("Grapheme index {} is out-of-bounds for string of {} graphemes", index, self.graphemes(true).count()))
-            .0
-    }
-}
-impl BytesSpannable for String {
-    #[inline]
-    #[track_caller]
-    fn to_byte_index(&self, index: usize) -> usize {
-        self.grapheme_indices(true)
-            .nth(index)
-            .unwrap_or_else(|| panic!("Grapheme index {} is out-of-bounds for string of {} graphemes", index, self.graphemes(true).count()))
-            .0
-    }
-}
-
-
-
-// /// A helper trait for a [`Spannable`] that allows it to be serialized as a binary snippet.
-// pub trait BinarySpannable: Spannable {
-//     /// Returns a binary representation of the whole object.
-//     ///
-//     /// Implementations can choose between owned or borrowed through the appropricate [`Cow`]-variant.
-//     ///
-//     /// # Returns
-//     /// A [`Cow`] that contains the binary reference.
-//     fn as_bytes(&self) -> Cow<[u8]>;
-// }
-
-// // Default binary impls for [`BinarySpannable`]
-// impl<'b, const LEN: usize> BinarySpannable for &'b [u8; LEN] {
-//     #[inline]
-//     fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_slice()) }
-// }
-// impl<'b> BinarySpannable for &'b [u8] {
-//     #[inline]
-//     fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self) }
-// }
-// impl BinarySpannable for Vec<u8> {
-//     #[inline]
-//     fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_slice()) }
-// }
-
-// // Default string impls for [`BinarySpannable`]
-// impl<'s> BinarySpannable for &'s str {
-//     #[inline]
-//     fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(<str>::as_bytes(self)) }
-// }
-// impl BinarySpannable for String {
-//     #[inline]
-//     fn as_bytes(&self) -> Cow<[u8]> { Cow::Borrowed(self.as_bytes()) }
-// }
 
 
 
@@ -173,10 +161,10 @@ pub struct Span<F, S> {
     from:   F,
     /// An input of \*something\* spannable.
     source: S,
-    /// A start position in this input. Inclusive.
-    start:  usize,
-    /// An end position in this input. Exclusive.
-    end:    usize,
+    /// A start position in this input as it is on the disk (e.g., bytes). Inclusive.
+    start:  RawUsize,
+    /// An end position in this input as it is on the disk (e.g., bytes). Exclusive.
+    end:    RawUsize,
 }
 impl<F, S> Span<F, S> {
     /// Constructor for the `Span` that initializes it from a source text, but spanning nothing.
@@ -188,7 +176,7 @@ impl<F, S> Span<F, S> {
     /// # Returns
     /// A new `Span` that spans none of the given `source`.
     #[inline]
-    pub fn empty(from: F, source: S) -> Self { Self { from, source, start: 0, end: 0 } }
+    pub fn empty(from: F, source: S) -> Self { Self { from, source, start: RawUsize::zero(), end: RawUsize::zero() } }
 }
 impl<F, S: Spannable> Span<F, S> {
     /// Constructor for the `Span` that initializes it to Span the entire given range.
@@ -200,8 +188,8 @@ impl<F, S: Spannable> Span<F, S> {
     /// A new `Span` that spans the entire given `source`.
     #[inline]
     pub fn new(from: F, source: S) -> Self {
-        let len: usize = source.len();
-        Self { from, source, start: 0, end: len }
+        let len: RawUsize = source.spanned_len();
+        Self { from, source, start: RawUsize::zero(), end: len }
     }
 
     /// Provides access to the internal `from`-string.
@@ -231,7 +219,7 @@ impl<F, S: Spannable> Span<F, S> {
     /// - be smaller-or-equal-to `Span::end()`; and
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
-    pub fn start(&self) -> usize { self.start }
+    pub fn start(&self) -> RawUsize { self.start }
 
     /// Allows mutation of the `start`-position in this `Span`.
     ///
@@ -244,16 +232,16 @@ impl<F, S: Spannable> Span<F, S> {
     /// # Panics
     /// This function panics if the given value does not meet any of the assertions.
     #[track_caller]
-    pub fn set_start(&mut self, start: impl AsPrimitive<usize>) {
-        let start: usize = start.as_();
+    pub fn set_start(&mut self, start: impl Into<RawUsize>) {
+        let start: RawUsize = start.into();
 
         // Assert things
         if start < self.end {
-            panic!("Given start position {} is smaller than internal end position {}", start, self.end);
+            panic!("Given start position {:?} is smaller than internal end position {:?}", start, self.end);
         }
-        let input_len: usize = self.source.len();
+        let input_len: RawUsize = self.source.spanned_len();
         if start >= input_len {
-            panic!("Given start position {} is larger-than-or-equal-to internal source length {}", start, input_len);
+            panic!("Given start position {:?} is larger-than-or-equal-to internal source length {:?}", start, input_len);
         }
 
         // Checks out, store
@@ -268,7 +256,7 @@ impl<F, S: Spannable> Span<F, S> {
     ///
     /// Use `Span::set_start()` if you're not sure your value matches the above and would like to have checks.
     #[inline]
-    pub unsafe fn set_start_unchecked(&mut self, start: impl AsPrimitive<usize>) { self.start = start.as_(); }
+    pub unsafe fn set_start_unchecked(&mut self, start: impl Into<RawUsize>) { self.start = start.into(); }
 
     /// Returns the end position of the `Span` compared to the start of the full source.
     ///
@@ -279,7 +267,7 @@ impl<F, S: Spannable> Span<F, S> {
     /// - be larger-or-equal-to `Span::start()`; and
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
-    pub fn end(&self) -> usize { self.end }
+    pub fn end(&self) -> RawUsize { self.end }
 
     /// Allows mutation of the `end`-position in this `Span`.
     ///
@@ -292,16 +280,16 @@ impl<F, S: Spannable> Span<F, S> {
     /// # Panics
     /// This function panics if the given value does not meet any of the assertions.
     #[track_caller]
-    pub fn set_end(&mut self, end: impl AsPrimitive<usize>) {
-        let end: usize = end.as_();
+    pub fn set_end(&mut self, end: impl Into<RawUsize>) {
+        let end: RawUsize = end.into();
 
         // Assert things
         if end > self.start {
-            panic!("Given end position {} is smaller than internal start position {}", end, self.start);
+            panic!("Given end position {:?} is smaller than internal start position {:?}", end, self.start);
         }
-        let input_len: usize = self.source.len();
-        if end > input_len || (input_len > 0 && end == input_len) {
-            panic!("Given end position {} is larger-than-or-equal-to internal input length {}", end, input_len);
+        let input_len: RawUsize = self.source.spanned_len();
+        if end > input_len || (input_len > RawUsize::zero() && end == input_len) {
+            panic!("Given end position {:?} is larger-than-or-equal-to internal input length {:?}", end, input_len);
         }
 
         // Checks out, store
@@ -316,7 +304,7 @@ impl<F, S: Spannable> Span<F, S> {
     ///
     /// Use `Span::set_end()` if you're not sure your value matches the above and would like to have checks.
     #[inline]
-    pub unsafe fn set_end_unchecked(&mut self, end: impl AsPrimitive<usize>) { self.end = end.as_(); }
+    pub unsafe fn set_end_unchecked(&mut self, end: impl Into<RawUsize>) { self.end = end.into(); }
 
     /// Returns the start & end position of the `Span` relative to the start of the internal source as a range of values.
     ///
@@ -327,7 +315,7 @@ impl<F, S: Spannable> Span<F, S> {
     /// - start is smaller-or-equal-to end; and
     /// - both are never larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
-    pub fn range(&self) -> Range<usize> { self.start..self.end }
+    pub fn range(&self) -> Range<RawUsize> { self.start..self.end }
 
     /// Allows mutation of both the `start`- and `end`-position in this `Span`.
     ///
@@ -340,27 +328,28 @@ impl<F, S: Spannable> Span<F, S> {
     /// # Panics
     /// This function panics if the given value does not meet any of the assertions.
     #[track_caller]
-    pub fn set_range(&mut self, range: impl RangeBounds<usize>) {
-        let start: usize = match range.start_bound() {
-            Bound::Excluded(b) => *b - 1,
+    pub fn set_range(&mut self, range: impl RangeBounds<RawUsize>) {
+        let start: RawUsize = match range.start_bound() {
+            Bound::Excluded(b) => *b - RawUsize::from(1),
             Bound::Included(b) => *b,
-            Bound::Unbounded => 0,
+            Bound::Unbounded => RawUsize::zero(),
         };
-        let end: usize = match range.start_bound() {
+        let end: RawUsize = match range.end_bound() {
             Bound::Excluded(b) => *b,
-            Bound::Included(b) => *b + 1,
-            Bound::Unbounded => 0,
+            Bound::Included(b) => *b + RawUsize::from(1),
+            Bound::Unbounded => self.source.spanned_len(),
         };
 
         // Assert things
         if start > end {
-            panic!("Given start position {} is larger than given end position {}", start, end);
+            panic!("Given start position {:?} is larger than given end position {:?}", start, end);
         }
-        let input_len: usize = self.source.len();
+        let input_len: RawUsize = self.source.spanned_len();
         if start >= input_len {
-            panic!("Given start position {} is larger-than-or-equal-to internal input length {}", start, input_len);
-        } else if end > input_len || (input_len > 0 && end == input_len) {
-            panic!("Given end position {} is larger-than-or-equal-to internal input length {}", end, input_len);
+            panic!("Given start position {:?} is larger-than-or-equal-to internal input length {:?}", start, input_len);
+        }
+        if end > input_len || (input_len > RawUsize::zero() && end == input_len) {
+            panic!("Given end position {:?} is larger-than-or-equal-to internal input length {:?}", end, input_len);
         }
 
         // Checks out, store
@@ -376,16 +365,16 @@ impl<F, S: Spannable> Span<F, S> {
     ///
     /// Use `Span::set_range()` if you're not sure your value matches the above and would like to have checks.
     #[inline]
-    pub unsafe fn set_range_unchecked(&mut self, range: impl RangeBounds<usize>) {
+    pub unsafe fn set_range_unchecked(&mut self, range: impl RangeBounds<RawUsize>) {
         self.start = match range.start_bound() {
-            Bound::Excluded(b) => *b - 1,
+            Bound::Excluded(b) => *b - RawUsize::from(1),
             Bound::Included(b) => *b,
-            Bound::Unbounded => 0,
+            Bound::Unbounded => RawUsize::zero(),
         };
-        self.end = match range.start_bound() {
+        self.end = match range.end_bound() {
             Bound::Excluded(b) => *b,
-            Bound::Included(b) => *b + 1,
-            Bound::Unbounded => 0,
+            Bound::Included(b) => *b + RawUsize::from(1),
+            Bound::Unbounded => self.source.spanned_len(),
         };
     }
 }
@@ -426,13 +415,9 @@ impl<F, S> Span<F, S> {
 }
 
 #[cfg(feature = "nom")]
-impl<'s, F, S: nom::AsBytes + BytesSpannable> nom::AsBytes for Span<F, S> {
+impl<'s, F, S: nom::AsBytes> nom::AsBytes for Span<F, S> {
     #[inline]
-    fn as_bytes(&self) -> &[u8] {
-        // Get it as binary
-        let bself: &[u8] = <Self as nom::AsBytes>::as_bytes(self);
-        let (start, end): (usize, usize) = ();
-    }
+    fn as_bytes(&self) -> &[u8] { &self.source.as_bytes()[*self.start..*self.end] }
 }
 #[cfg(feature = "nom")]
 impl<F, S: nom::AsChar> nom::AsChar for Span<F, S> {
