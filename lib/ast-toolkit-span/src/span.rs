@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    28 Feb 2024, 15:51:15
+//    29 Feb 2024, 14:48:56
 //  Auto updated?
 //    Yes
 //
@@ -107,39 +107,149 @@ impl From<usize> for LogicUsize {
 
 /// A helper trait for the [`Span`] that can be implemented for anything used as input.
 pub trait Spannable {
+    /// Maps a given raw index to a logic index.
+    ///
+    /// # Arguments
+    /// - `raw`: The [`RawUsize`] to map.
+    ///
+    /// # Returns
+    /// An equivalent [`LogicUsize`].
+    ///
+    /// # Panics
+    /// This function should panic if `raw` is not on a logic boundary, or is out-of-range.
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize;
+    /// Maps a given logic index to a raw index.
+    ///
+    /// # Arguments
+    /// - `logic`: The [`LogicUsize`] to map.
+    ///
+    /// # Returns
+    /// An equivalent [`RawUsize`].
+    ///
+    /// # Panics
+    /// This function should panic if `logic` is out-of-range.
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize;
+
     /// Returns the number of currently spanned "raw" items (e.g., bytes).
     ///
     /// # Returns
     /// A [`RawUsize`] with the total number of bytes or other elementary items as is stored on-disk.
-    fn spanned_len(&self) -> RawUsize;
+    fn raw_len(&self) -> RawUsize;
 }
 
 // Default binary impls for [`Spannable`]
 impl<'b> Spannable for &'b [u8] {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Maps 1-to-1
+        LogicUsize(raw.0)
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Maps 1-to-1
+        RawUsize(logic.0)
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl<'b> Spannable for Cow<'b, [u8]> {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Map 1-to-1
+        LogicUsize(raw.0)
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Maps 1-to-1
+        RawUsize(logic.0)
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl Spannable for Vec<u8> {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Map 1-to-1
+        LogicUsize(raw.0)
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Maps 1-to-1
+        RawUsize(logic.0)
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 
 // Default string impls for [`Spannable`]
 impl<'s> Spannable for &'s str {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Search graphemes to find it
+        LogicUsize(
+            self.grapheme_indices(true)
+                .enumerate()
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
+                .unwrap_or_else(|| panic!("Given raw index {raw:?} is either out-of-bounds or not at a grapheme boundary")),
+        )
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Search graphemes to find it
+        RawUsize(self.grapheme_indices(true).nth(*logic).map(|(i, _)| i).unwrap_or_else(|| panic!("Given logical index {logic:?} is out-of-bounds")))
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl<'s> Spannable for Cow<'s, str> {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Search graphemes to find it
+        LogicUsize(
+            self.grapheme_indices(true)
+                .enumerate()
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
+                .unwrap_or_else(|| panic!("Given raw index {raw:?} is either out-of-bounds or not at a grapheme boundary")),
+        )
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Search graphemes to find it
+        RawUsize(self.grapheme_indices(true).nth(*logic).map(|(i, _)| i).unwrap_or_else(|| panic!("Given logical index {logic:?} is out-of-bounds")))
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 impl Spannable for String {
     #[inline]
-    fn spanned_len(&self) -> RawUsize { RawUsize(self.len()) }
+    fn raw_to_logic(&self, raw: RawUsize) -> LogicUsize {
+        // Search graphemes to find it
+        LogicUsize(
+            self.grapheme_indices(true)
+                .enumerate()
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
+                .unwrap_or_else(|| panic!("Given raw index {raw:?} is either out-of-bounds or not at a grapheme boundary")),
+        )
+    }
+
+    #[inline]
+    fn logic_to_raw(&self, logic: LogicUsize) -> RawUsize {
+        // Search graphemes to find it
+        RawUsize(self.grapheme_indices(true).nth(*logic).map(|(i, _)| i).unwrap_or_else(|| panic!("Given logical index {logic:?} is out-of-bounds")))
+    }
+
+    #[inline]
+    fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
 }
 
 
@@ -177,20 +287,6 @@ impl<F, S> Span<F, S> {
     /// A new `Span` that spans none of the given `source`.
     #[inline]
     pub fn empty(from: F, source: S) -> Self { Self { from, source, start: RawUsize::zero(), end: RawUsize::zero() } }
-}
-impl<F, S: Spannable> Span<F, S> {
-    /// Constructor for the `Span` that initializes it to Span the entire given range.
-    ///
-    /// # Arguments
-    /// - `source`: The input source (text) to wrap.
-    ///
-    /// # Returns
-    /// A new `Span` that spans the entire given `source`.
-    #[inline]
-    pub fn new(from: F, source: S) -> Self {
-        let len: RawUsize = source.spanned_len();
-        Self { from, source, start: RawUsize::zero(), end: len }
-    }
 
     /// Provides access to the internal `from`-string.
     ///
@@ -212,123 +308,169 @@ impl<F, S: Spannable> Span<F, S> {
 
     /// Returns the start position of the `Span` compared to the start of the full source.
     ///
+    /// For strings, this would be the byte index. See [`start()`] to get the logical index of start (e.g., grapheme index for strings).
+    ///
     /// # Returns
-    /// A [`usize`] containing the start position (inclusive) of the source text.
+    /// A raw [`usize`] containing the start position (inclusive) of the source text.
     ///
     /// This size is guaranteed to:
-    /// - be smaller-or-equal-to `Span::end()`; and
+    /// - point to a logic boundary (e.g., grapheme indices for strings);
+    /// - be smaller-or-equal-to `Span::raw_end()`; and
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
-    pub fn start(&self) -> RawUsize { self.start }
-
-    /// Allows mutation of the `start`-position in this `Span`.
-    ///
-    /// Some checks are performed before the value is assigned. These checks are:
-    /// - assert that the given value is not larger than `Span::end()`;  and
-    /// - assert that the given value is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
-    ///
-    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_start_unchecked()`.
-    ///
-    /// # Panics
-    /// This function panics if the given value does not meet any of the assertions.
-    #[track_caller]
-    pub fn set_start(&mut self, start: impl Into<RawUsize>) {
-        let start: RawUsize = start.into();
-
-        // Assert things
-        if start < self.end {
-            panic!("Given start position {:?} is smaller than internal end position {:?}", start, self.end);
-        }
-        let input_len: RawUsize = self.source.spanned_len();
-        if start >= input_len {
-            panic!("Given start position {:?} is larger-than-or-equal-to internal source length {:?}", start, input_len);
-        }
-
-        // Checks out, store
-        self.start = start;
-    }
-
-    /// Allows mutation of the `start`-position in this `Span`, without having performed checks.
-    ///
-    /// Ensure that your given `start`-value:
-    /// - is not larger than `Span::end()`;  and
-    /// - is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
-    ///
-    /// Use `Span::set_start()` if you're not sure your value matches the above and would like to have checks.
-    #[inline]
-    pub unsafe fn set_start_unchecked(&mut self, start: impl Into<RawUsize>) { self.start = start.into(); }
+    pub fn raw_start(&self) -> RawUsize { self.start }
 
     /// Returns the end position of the `Span` compared to the start of the full source.
+    ///
+    /// For strings, this would be the byte index. See [`end()`] to get the logical index of end (e.g., grapheme index for strings).
     ///
     /// # Returns
     /// A [`usize`] containing the end position (exclusive) of the source text.
     ///
     /// This size is guaranteed to:
-    /// - be larger-or-equal-to `Span::start()`; and
+    /// - point to a logic boundary (e.g., grapheme indices for strings);
+    /// - be larger-or-equal-to `Span::raw_start()`; and
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
-    pub fn end(&self) -> RawUsize { self.end }
+    pub fn raw_end(&self) -> RawUsize { self.end }
 
-    /// Allows mutation of the `end`-position in this `Span`.
+    /// Allows mutation of the `start`-position in this `Span`, without having performed checks.
     ///
-    /// Some checks are performed before the value is assigned. These checks are:
-    /// - assert that the given value is not smaller than `Span::start()`;  and
-    /// - assert that the given value is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
+    /// For strings, this would be the byte index.
     ///
-    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_end_unchecked()`.
+    /// Ensure that your given `start`-value:
+    /// - your index points to a logic boundary (e.g., grapheme boundary for strings);
+    /// - is not larger than `Span::raw_end()`; and
+    /// - is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
     ///
-    /// # Panics
-    /// This function panics if the given value does not meet any of the assertions.
-    #[track_caller]
-    pub fn set_end(&mut self, end: impl Into<RawUsize>) {
-        let end: RawUsize = end.into();
-
-        // Assert things
-        if end > self.start {
-            panic!("Given end position {:?} is smaller than internal start position {:?}", end, self.start);
-        }
-        let input_len: RawUsize = self.source.spanned_len();
-        if end > input_len || (input_len > RawUsize::zero() && end == input_len) {
-            panic!("Given end position {:?} is larger-than-or-equal-to internal input length {:?}", end, input_len);
-        }
-
-        // Checks out, store
-        self.end = end;
-    }
+    /// Use `Span::set_raw_start()` if you're not sure your value matches the above and would like to have checks.
+    ///
+    /// # Arguments
+    /// - `start`: The index to which to set the internal start-pointer.
+    #[inline]
+    pub unsafe fn set_raw_start_unchecked(&mut self, start: impl Into<RawUsize>) { self.start = start.into(); }
 
     /// Allows mutation of the `end`-position in this `Span`, without having performed checks.
     ///
+    /// For strings, this would be the byte index.
+    ///
     /// Ensure that your given `end`-value:
-    /// - is not smaller than `Span::start()`;  and
+    /// - your index points to a logic boundary (e.g., grapheme boundary for strings);
+    /// - is not smaller than `Span::raw_start()`; and
     /// - is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
     ///
-    /// Use `Span::set_end()` if you're not sure your value matches the above and would like to have checks.
+    /// Use `Span::set_raw_end()` if you're not sure your value matches the above and would like to have checks.
+    ///
+    /// # Arguments
+    /// - `end`: The index to which to set the internal end-pointer.
     #[inline]
-    pub unsafe fn set_end_unchecked(&mut self, end: impl Into<RawUsize>) { self.end = end.into(); }
-
-    /// Returns the start & end position of the `Span` relative to the start of the internal source as a range of values.
+    pub unsafe fn set_raw_end_unchecked(&mut self, end: impl Into<RawUsize>) { self.end = end.into(); }
+}
+impl<F, S: Spannable> Span<F, S> {
+    /// Constructor for the `Span` that initializes it to Span the entire given range.
+    ///
+    /// # Arguments
+    /// - `source`: The input source (text) to wrap.
     ///
     /// # Returns
-    /// A [`Range<usize>`] containing the start- (inclusive) and end position (exclusive) of the source text.
-    ///
-    /// It is guaranteed that:
-    /// - start is smaller-or-equal-to end; and
-    /// - both are never larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
+    /// A new `Span` that spans the entire given `source`.
     #[inline]
-    pub fn range(&self) -> Range<RawUsize> { self.start..self.end }
+    pub fn new(from: F, source: S) -> Self {
+        let len: RawUsize = source.raw_len();
+        Self { from, source, start: RawUsize::zero(), end: len }
+    }
+
+    /// Returns the start position of the `Span` compared to the start of the full source.
+    ///
+    /// For strings, this would be the grapheme index. See [`raw_start()`] to get the raw index of start (e.g., byte index for strings).
+    ///
+    /// # Returns
+    /// A logical [`usize`] containing the start position (inclusive) of the source text.
+    ///
+    /// This value is guaranteed to:
+    /// - be smaller-or-equal-to `Span::end()`; and
+    /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
+    #[inline]
+    pub fn start(&self) -> LogicUsize { self.source.raw_to_logic(self.start) }
+
+    /// Returns the end position of the `Span` compared to the start of the full source.
+    ///
+    /// For strings, this would be the grapheme index. See [`raw_end()`] to get the raw index of end (e.g., byte index for strings).
+    ///
+    /// # Returns
+    /// A logical [`usize`] containing the end position (exclusive) of the source text.
+    ///
+    /// This value is guaranteed to:
+    /// - be larger-or-equal-to `Span::start()`; and
+    /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
+    #[inline]
+    pub fn end(&self) -> LogicUsize { self.source.raw_to_logic(self.end) }
+
+    /// Allows mutation of the `start`-position in this `Span`.
+    ///
+    /// For strings, this would be the byte index. See [`set_start()`] to set the logical index of start (e.g., grapheme index for strings).
+    ///
+    /// Some checks are performed before the value is assigned. These checks are:
+    /// - asserting the given index falls on a grapheme boundary;
+    /// - asserting that the given value is not larger than `Span::raw_end()`;  and
+    /// - asserting that the given value is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
+    ///
+    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_raw_start_unchecked()`.
+    ///
+    /// # Arguments
+    /// - `start`: The index to which to set the internal start-pointer.
+    ///
+    /// # Panics
+    /// This function panics if the given value does not meet any of the assertions.
+    #[inline]
+    #[track_caller]
+    pub fn set_raw_start(&mut self, start: impl Into<RawUsize>) {
+        // Model as a range update with own end
+        self.set_raw_range(start.into()..self.end)
+    }
+
+    /// Allows mutation of the `end`-position in this `Span`.
+    ///
+    /// For strings, this would be the byte index. See [`set_start()`] to set the logical index of start (e.g., grapheme index for strings).
+    ///
+    /// Some checks are performed before the value is assigned. These checks are:
+    /// - asserting the given index falls on a grapheme boundary;
+    /// - asserting that the given value is not smaller than `Span::raw_start()`; and
+    /// - asserting that the given value is not larger-or-equal-to the length of the input _unless_ the length is 0 (this this must be 0).
+    ///
+    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_raw_end_unchecked()`.
+    ///
+    /// # Arguments
+    /// - `end`: The index to which to set the internal end-pointer.
+    ///
+    /// # Panics
+    /// This function panics if the given value does not meet any of the assertions.
+    #[inline]
+    #[track_caller]
+    pub fn set_raw_end(&mut self, end: impl Into<RawUsize>) {
+        // Model as a range update with own start
+        self.set_raw_range(self.start..end.into())
+    }
 
     /// Allows mutation of both the `start`- and `end`-position in this `Span`.
     ///
-    /// Some checks are performed before the value is assigned. These checks are:
-    /// - assert that the given start value is not larger than the given end value; and
-    /// - assert that the given start & end values are not larger-or-equal-to the length of the input _unless_ the length is 0 (these then must be 0).
+    /// For strings, this would be the byte index. See [`set_range()`] to set the logical indices of start and end (e.g., grapheme index for strings).
     ///
-    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_range_unchecked()`.
+    /// Some checks are performed before the value is assigned. These checks are:
+    /// - asserting the given indices falls on a grapheme boundary;
+    /// - asserting that the given start is not smaller than the given end; and
+    /// - asserting that the given values are not larger-or-equal-to the length of the input _unless_ the length is 0 (then they must be 0).
+    ///
+    /// If you are sure your value passes these checks, you can use the unsafe `Span::set_raw_end_unchecked()`.
+    ///
+    /// # Arguments
+    /// - `range`: The range of start and ends to set.
     ///
     /// # Panics
     /// This function panics if the given value does not meet any of the assertions.
     #[track_caller]
-    pub fn set_range(&mut self, range: impl RangeBounds<RawUsize>) {
+    pub fn set_raw_range(&mut self, range: impl RangeBounds<RawUsize>) {
+        // Get the bounds
         let start: RawUsize = match range.start_bound() {
             Bound::Excluded(b) => *b - RawUsize::from(1),
             Bound::Included(b) => *b,
@@ -337,14 +479,14 @@ impl<F, S: Spannable> Span<F, S> {
         let end: RawUsize = match range.end_bound() {
             Bound::Excluded(b) => *b,
             Bound::Included(b) => *b + RawUsize::from(1),
-            Bound::Unbounded => self.source.spanned_len(),
+            Bound::Unbounded => self.source.raw_len(),
         };
 
         // Assert things
         if start > end {
             panic!("Given start position {:?} is larger than given end position {:?}", start, end);
         }
-        let input_len: RawUsize = self.source.spanned_len();
+        let input_len: RawUsize = self.source.raw_len();
         if start >= input_len {
             panic!("Given start position {:?} is larger-than-or-equal-to internal input length {:?}", start, input_len);
         }
@@ -357,25 +499,70 @@ impl<F, S: Spannable> Span<F, S> {
         self.end = end;
     }
 
-    /// Allows mutation of both the `start`- and `end`-position simultaneously in this `Span`, without having performed checks.
+    /// Mutates the start position of the `Span` compared to the start of the full source.
     ///
-    /// Ensure that you:
-    /// - assert that the given start value is not larger than the given end value; and
-    /// - assert that the given start & end values are not larger-or-equal-to the length of the input _unless_ the length is 0 (these then must be 0).
+    /// For strings, this would be the grapheme index. See [`set_raw_start()`] to get the raw index of start (e.g., byte index for strings).
     ///
-    /// Use `Span::set_range()` if you're not sure your value matches the above and would like to have checks.
+    /// The input value must:
+    /// - be smaller-or-equal-to `Span::end()`; and
+    /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
+    ///
+    /// # Arguments
+    /// - `start`: A logical [`usize`] defining the start position (inclusive) of the source text.
+    ///
+    /// # Panics
+    /// This function may panic if the given index does not meet any of the above assertions.
     #[inline]
-    pub unsafe fn set_range_unchecked(&mut self, range: impl RangeBounds<RawUsize>) {
-        self.start = match range.start_bound() {
-            Bound::Excluded(b) => *b - RawUsize::from(1),
-            Bound::Included(b) => *b,
+    #[track_caller]
+    pub fn set_start(&mut self, start: impl Into<LogicUsize>) { self.set_range(start.into()..self.source.raw_to_logic(self.end)) }
+
+    /// Mutates the end position of the `Span` compared to the start of the full source.
+    ///
+    /// For strings, this would be the grapheme index. See [`set_raw_start()`] to get the raw index of end (e.g., byte index for strings).
+    ///
+    /// The input value must:
+    /// - be larger-or-equal-to `Span::start()`; and
+    /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
+    ///
+    /// # Arguments
+    /// - `end`: A logical [`usize`] defining the end position (exclusive) of the source text.
+    ///
+    /// # Panics
+    /// This function may panic if the given index does not meet any of the above assertions.
+    #[inline]
+    #[track_caller]
+    pub fn set_end(&mut self, end: impl Into<LogicUsize>) { self.set_range(self.source.raw_to_logic(self.start)..end.into()) }
+
+    /// Mutates the start- and end position of the `Span` compared to the start of the full source at the same time.
+    ///
+    /// For strings, this would be the grapheme index. See [`set_raw_start()`] to get the raw index of end (e.g., byte index for strings).
+    ///
+    /// It must be true that:
+    /// - the given start is larger than the given end; and
+    /// - both are never larger-or-equal-to the length of the input _unless_ the length is 0 (then they are 0).
+    ///
+    /// # Arguments
+    /// - `range`: A logical [`RangeBounds<LogicUsize>`] defining the start- (inclusive) and end positions (exclusive) in the source text.
+    ///
+    /// # Panics
+    /// This function may panic if any of the given indices does not meet any of the above assertions.
+    #[inline]
+    #[track_caller]
+    pub fn set_range(&mut self, range: impl RangeBounds<LogicUsize>) {
+        // Get the bounds
+        let start: RawUsize = match range.start_bound() {
+            Bound::Excluded(b) => self.source.logic_to_raw(*b - LogicUsize::from(1)),
+            Bound::Included(b) => self.source.logic_to_raw(*b),
             Bound::Unbounded => RawUsize::zero(),
         };
-        self.end = match range.end_bound() {
-            Bound::Excluded(b) => *b,
-            Bound::Included(b) => *b + RawUsize::from(1),
-            Bound::Unbounded => self.source.spanned_len(),
+        let end: RawUsize = match range.end_bound() {
+            Bound::Excluded(b) => self.source.logic_to_raw(*b),
+            Bound::Included(b) => self.source.logic_to_raw(*b + LogicUsize::from(1)),
+            Bound::Unbounded => self.source.raw_len(),
         };
+
+        // Run as raw set
+        self.set_raw_range(start..end)
     }
 }
 impl<F: Copy, S> Span<F, S> {
