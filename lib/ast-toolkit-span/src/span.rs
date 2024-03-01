@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    29 Feb 2024, 17:20:39
+//    01 Mar 2024, 15:56:10
 //  Auto updated?
 //    Yes
 //
@@ -13,9 +13,47 @@
 //
 
 use std::borrow::Cow;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FResult};
+use std::num::NonZeroUsize;
 use std::ops::{Add, AddAssign, Bound, Deref, Range, RangeBounds, Sub, SubAssign};
+use std::str::FromStr;
 
 use unicode_segmentation::UnicodeSegmentation;
+
+
+/***** ERRORS *****/
+/// Defines a wrapper around some user-defined [`Error`] to also emit a "cannot convert to UTF-8" error.
+#[derive(Debug)]
+pub enum FromBytesError<E> {
+    /// Could not convert the bytes to UTF-8.
+    Utf8 { err: std::str::Utf8Error },
+    /// Could not parse otherwise.
+    Parse { err: E },
+}
+impl<E: Display> Display for FromBytesError<E> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use FromBytesError::*;
+        match self {
+            Utf8 { .. } => write!(f, "Bytes not valid UTF-8"),
+            Parse { err } => err.fmt(f),
+        }
+    }
+}
+impl<E: Error> Error for FromBytesError<E> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        use FromBytesError::*;
+        match self {
+            Utf8 { err } => Some(err),
+            Parse { err } => err.source(),
+        }
+    }
+}
+
+
+
 
 
 /***** AUXILLARY *****/
@@ -111,6 +149,17 @@ pub trait Spannable {
     where
         Self: 's;
 
+    /// Asserts this [`Spannable`] refers to the same one as some other [`Spannable`].
+    ///
+    /// Used to see if comparing two Spans makes sense or not.
+    ///
+    /// # Arguments
+    /// - `other`: Some other `Self` that we want to compare.
+    ///
+    /// # Returns
+    /// True if this is conceptually the same source, or false otherwise.
+    fn is_same(&self, other: &Self) -> bool;
+
     /// Slices this Spannable by raw index.
     ///
     /// # Arguments
@@ -129,7 +178,7 @@ pub trait Spannable {
     /// - `raw`: The [`RawUsize`] to map.
     ///
     /// # Returns
-    /// An equivalent [`LogicUsize`], or [`None`] if it was out-of-range.
+    /// An equivalent [`LogicUsize`] if the value was in range, or [`None`] if it wasn't.
     ///
     /// # Panics
     /// This function should panic if `raw` is not on a logic boundary.
@@ -140,8 +189,8 @@ pub trait Spannable {
     /// - `logic`: The [`LogicUsize`] to map.
     ///
     /// # Returns
-    /// An equivalent [`RawUsize`], or [`None`] if it was out-of-range.
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize>;
+    /// An equivalent [`RawUsize`] if the value was in range. Else, an [`Option<RawUsize>`] is returned, indicating how many more bytes are necessary to bring the logic index within range (or [`None`] if this is unknowable, e.g., for graphemes due to each element being different sizes).
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>>;
 
     /// Returns the number of currently spanned "raw" items (e.g., bytes).
     ///
@@ -155,6 +204,9 @@ impl<'b> Spannable for &'b [u8] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
+
+    #[inline]
     fn slice<'s>(&'s self, range: Range<RawUsize>) -> Self::Slice<'s> { &self[range.start.0..range.end.0] }
 
     #[inline]
@@ -164,9 +216,9 @@ impl<'b> Spannable for &'b [u8] {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Maps 1-to-1 if within range
-        if logic.0 < self.len() { Some(RawUsize(logic.0)) } else { None }
+        if logic.0 < self.len() { Ok(RawUsize(logic.0)) } else { Err(Some(RawUsize(1 + self.len() - logic.0))) }
     }
 
     #[inline]
@@ -174,6 +226,9 @@ impl<'b> Spannable for &'b [u8] {
 }
 impl<'b> Spannable for Cow<'b, [u8]> {
     type Slice<'s> = Cow<'s, [u8]> where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     fn slice<'s>(&'s self, range: Range<RawUsize>) -> Self::Slice<'s> { Cow::Borrowed(&self[range.start.0..range.end.0]) }
@@ -185,9 +240,9 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Maps 1-to-1 if within range
-        if logic.0 < self.len() { Some(RawUsize(logic.0)) } else { None }
+        if logic.0 < self.len() { Ok(RawUsize(logic.0)) } else { Err(Some(RawUsize(1 + self.len() - logic.0))) }
     }
 
     #[inline]
@@ -195,6 +250,9 @@ impl<'b> Spannable for Cow<'b, [u8]> {
 }
 impl Spannable for Vec<u8> {
     type Slice<'s> = Vec<u8> where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     fn slice<'s>(&'s self, range: Range<RawUsize>) -> Self::Slice<'s> { self[range.start.0..range.end.0].to_vec() }
@@ -206,9 +264,9 @@ impl Spannable for Vec<u8> {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Maps 1-to-1 if within range
-        if logic.0 < self.len() { Some(RawUsize(logic.0)) } else { None }
+        if logic.0 < self.len() { Ok(RawUsize(logic.0)) } else { Err(Some(RawUsize(1 + self.len() - logic.0))) }
     }
 
     #[inline]
@@ -218,6 +276,9 @@ impl Spannable for Vec<u8> {
 // Default string impls for [`Spannable`]
 impl<'s> Spannable for &'s str {
     type Slice<'s2> = &'s2 str where Self: 's2;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     fn slice<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Slice<'s2> { &self[range.start.0..range.end.0] }
@@ -236,9 +297,9 @@ impl<'s> Spannable for &'s str {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Search graphemes to find it
-        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None })
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
     }
 
     #[inline]
@@ -246,6 +307,9 @@ impl<'s> Spannable for &'s str {
 }
 impl<'s> Spannable for Cow<'s, str> {
     type Slice<'s2> = Cow<'s2, str> where Self: 's2;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     fn slice<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Slice<'s2> { Cow::Borrowed(&self[range.start.0..range.end.0]) }
@@ -264,9 +328,9 @@ impl<'s> Spannable for Cow<'s, str> {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Search graphemes to find it
-        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None })
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
     }
 
     #[inline]
@@ -274,6 +338,9 @@ impl<'s> Spannable for Cow<'s, str> {
 }
 impl Spannable for String {
     type Slice<'s2> = String where Self: 's2;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     fn slice<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Slice<'s2> { self[range.start.0..range.end.0].to_string() }
@@ -292,13 +359,106 @@ impl Spannable for String {
     }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Option<RawUsize> {
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Search graphemes to find it
-        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None })
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
     }
 
     #[inline]
     fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
+}
+
+
+
+/// An abstraction over a [`Spannable`] that marks that it can be parsed as a string.
+pub trait ParsableSpannable<R>: Spannable {
+    /// The error returned when parsing fails.
+    type Error: Error;
+
+    /// Attempts to parse this Spannable as an `R`.
+    ///
+    /// # Returns
+    /// A parsed object of type `R`.
+    ///
+    /// # Errors
+    /// This function errors if it failed to run the parse function.
+    fn parse(&self) -> Result<R, Self::Error>;
+}
+
+// Default binary impls for [`ParsableSpannable`]
+impl<'b, R> ParsableSpannable<R> for &'b [u8]
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = FromBytesError<R::Err>;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> {
+        // Assert the bytes are UTF-8
+        let text: &str = std::str::from_utf8(self).map_err(|err| FromBytesError::<R::Err>::Utf8 { err })?;
+        R::from_str(text).map_err(|err| FromBytesError::Parse { err })
+    }
+}
+impl<'b, R> ParsableSpannable<R> for Cow<'b, [u8]>
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = FromBytesError<R::Err>;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> {
+        // Assert the bytes are UTF-8
+        let text: &str = std::str::from_utf8(self).map_err(|err| FromBytesError::<R::Err>::Utf8 { err })?;
+        R::from_str(text).map_err(|err| FromBytesError::Parse { err })
+    }
+}
+impl<R> ParsableSpannable<R> for Vec<u8>
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = FromBytesError<R::Err>;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> {
+        // Assert the bytes are UTF-8
+        let text: &str = std::str::from_utf8(self).map_err(|err| FromBytesError::<R::Err>::Utf8 { err })?;
+        R::from_str(text).map_err(|err| FromBytesError::Parse { err })
+    }
+}
+
+// Default string impls for [`ParsableSpannable`]
+impl<'s, R> ParsableSpannable<R> for &'s str
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = R::Err;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> { R::from_str(self) }
+}
+impl<'s, R> ParsableSpannable<R> for Cow<'s, str>
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = R::Err;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> { R::from_str(self) }
+}
+impl<R> ParsableSpannable<R> for String
+where
+    R: FromStr,
+    R::Err: Error,
+{
+    type Error = R::Err;
+
+    #[inline]
+    fn parse(&self) -> Result<R, Self::Error> { R::from_str(self) }
 }
 
 
@@ -551,8 +711,6 @@ impl<F, S: Spannable> Span<F, S> {
 
     /// Provides access to the internal `source`-string, but only the spanned area.
     ///
-    /// If `S` implements [`Copy`], you might prefer [`Span::spanned()`] instead to avoid the lifetime to `self`.
-    ///
     /// # Returns
     /// A reference to the internal `source`-string.
     #[inline]
@@ -742,15 +900,15 @@ impl<F, S: Spannable> Span<F, S> {
         // Get the bounds
         let start: RawUsize = match range.start_bound() {
             Bound::Excluded(b) => {
-                self.source.logic_to_raw(*b - LogicUsize::from(1)).unwrap_or_else(|| panic!("Given index is out-of-range for span"))
+                self.source.logic_to_raw(*b - LogicUsize::from(1)).unwrap_or_else(|_| panic!("Given index is out-of-range for span"))
             },
-            Bound::Included(b) => self.source.logic_to_raw(*b).unwrap_or_else(|| panic!("Given index is out-of-range for span")),
+            Bound::Included(b) => self.source.logic_to_raw(*b).unwrap_or_else(|_| panic!("Given index is out-of-range for span")),
             Bound::Unbounded => RawUsize::zero(),
         };
         let end: RawUsize = match range.end_bound() {
-            Bound::Excluded(b) => self.source.logic_to_raw(*b).unwrap_or_else(|| panic!("Given index is out-of-range for span")),
+            Bound::Excluded(b) => self.source.logic_to_raw(*b).unwrap_or_else(|_| panic!("Given index is out-of-range for span")),
             Bound::Included(b) => {
-                self.source.logic_to_raw(*b + LogicUsize::from(1)).unwrap_or_else(|| panic!("Given index is out-of-range for span"))
+                self.source.logic_to_raw(*b + LogicUsize::from(1)).unwrap_or_else(|_| panic!("Given index is out-of-range for span"))
             },
             Bound::Unbounded => self.source.raw_len(),
         };
@@ -800,37 +958,18 @@ impl<F, S: nom::AsBytes> nom::AsBytes for Span<F, S> {
     #[inline]
     fn as_bytes(&self) -> &[u8] { &self.source.as_bytes()[*self.start..*self.end] }
 }
-// #[cfg(feature = "nom")]
-// impl<T: ?Sized, F, S: AsRef<T>> AsRef<T> for Span<F, S> {
-//     #[inline]
-//     fn as_ref(&self) -> &T { self.source.as_ref() }
-// }
 #[cfg(feature = "nom")]
 impl<F, S1, S2> nom::Compare<S2> for Span<F, S1>
 where
     S1: Spannable,
-    S2: Spannable + Into<Span<F, S2>>,
-    for<'s1, 's2> S1::Slice<'s1>: nom::Compare<S2::Slice<'s2>>,
+    for<'s> S1::Slice<'s>: nom::Compare<S2>,
 {
     #[inline]
-    fn compare(&self, t: S2) -> nom::CompareResult {
-        let t: Span<F, S2> = t.into();
-        self.spanned().compare(t.spanned())
-    }
+    fn compare(&self, t: S2) -> nom::CompareResult { self.spanned().compare(t) }
 
     #[inline]
-    fn compare_no_case(&self, t: S2) -> nom::CompareResult {
-        let t: Span<F, S2> = t.into();
-        self.spanned().compare(t.spanned())
-    }
+    fn compare_no_case(&self, t: S2) -> nom::CompareResult { self.spanned().compare_no_case(t) }
 }
-// #[cfg(feature = "nom")]
-// impl<F, S> Deref for Span<F, S> {
-//     type Target = S;
-
-//     #[inline]
-//     fn deref(&self) -> &Self::Target { &self.source }
-// }
 #[cfg(feature = "nom")]
 impl<F, S, E, I> nom::ExtendInto for Span<F, S>
 where
@@ -892,70 +1031,198 @@ where
 
     #[inline]
     fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-        self.spanned().logic_to_raw(LogicUsize(count)).map(|i| *i).ok_or(nom::Needed::Unknown)
+        self.spanned()
+            .logic_to_raw(LogicUsize(count))
+            .map(|i| *i)
+            .map_err(|needed| if let Some(count) = needed { nom::Needed::Size(NonZeroUsize::new(count.0).unwrap()) } else { nom::Needed::Unknown })
     }
 }
 #[cfg(feature = "nom")]
-impl<F, S> nom::InputLength for Span<F, S>
-where
-    S: Spannable,
-    for<'s> S::Slice<'s>: Spannable,
-{
+impl<F, S> nom::InputLength for Span<F, S> {
     #[inline]
-    fn input_len(&self) -> usize { self.spanned().raw_len().0 }
+    fn input_len(&self) -> usize { self.end.0 - self.start.0 }
 }
 #[cfg(feature = "nom")]
-impl<F, S> nom::InputTake for Span<F, S> {
-    fn take(&self, count: usize) -> Self { todo!() }
+impl<F, S> nom::InputTake for Span<F, S>
+where
+    F: Clone,
+    S: Clone,
+{
+    fn take(&self, count: usize) -> Self {
+        // Assert count is within range
+        let count: RawUsize = count.into();
+        if self.start + count >= self.end {
+            panic!("Given count of {:?} is out-of-range for Span of {:?} bytes", count, self.end - self.start);
+        }
 
-    fn take_split(&self, count: usize) -> (Self, Self) { todo!() }
+        // Return the spanned area
+        Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.start + count }
+    }
+
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        // Get the first split
+        let first: Self = self.take(count);
+
+        // Return it + the second split
+        (first, Self { from: self.from.clone(), source: self.source.clone(), start: self.start + RawUsize(count), end: self.end })
+    }
 }
 #[cfg(feature = "nom")]
-impl<F, S> nom::InputTakeAtPosition for Span<F, S> {
-    type Item = ();
+impl<F, S, I> nom::InputTakeAtPosition for Span<F, S>
+where
+    F: Clone,
+    for<'s> S: 's + Clone + SpannableLogicIter<Item<'s> = I>,
+{
+    type Item = I;
 
     fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
     where
         P: Fn(Self::Item) -> bool,
     {
-        todo!()
+        // Find the index using the `SpannableLogicIter`-implementation.
+        let split: RawUsize =
+            match self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, c)| if predicate(c) { Some(i) } else { None }) {
+                Some(split) => split,
+                None => return Err(nom::Err::Incomplete(nom::Needed::Unknown)),
+            };
+
+        // Split ourselves according to this
+        Ok((
+            // Remainder (i.e., second half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start + split, end: self.end },
+            // Parsed (i.e., first half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.start + split },
+        ))
     }
 
     fn split_at_position1<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
     where
         P: Fn(Self::Item) -> bool,
     {
-        todo!()
+        // Find the index using the `SpannableLogicIter`-implementation.
+        let split: RawUsize =
+            match self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, c)| if predicate(c) { Some(i) } else { None }) {
+                // Change compared to `split_at_position`: no first one allowed!
+                Some(RawUsize(0)) => return Err(nom::Err::Error(E::from_error_kind(self.clone(), e))),
+                Some(split) => split,
+                None => return Err(nom::Err::Incomplete(nom::Needed::Unknown)),
+            };
+
+        // Split ourselves according to this
+        Ok((
+            // Remainder (i.e., second half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start + split, end: self.end },
+            // Parsed (i.e., first half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.start + split },
+        ))
     }
 
     fn split_at_position1_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P, e: nom::error::ErrorKind) -> nom::IResult<Self, Self, E>
     where
         P: Fn(Self::Item) -> bool,
     {
-        todo!()
+        // Find the index using the `SpannableLogicIter`-implementation.
+        let split: RawUsize =
+            match self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, c)| if predicate(c) { Some(i) } else { None }) {
+                // Change compared to `split_at_position_complete()`: no first one allowed!
+                Some(RawUsize(0)) => return Err(nom::Err::Error(E::from_error_kind(self.clone(), e))),
+                Some(split) => split,
+                // If not found, we do not split at all
+                None => {
+                    return Ok((
+                        // Remainder (i.e., nothing)
+                        Self { from: self.from.clone(), source: self.source.clone(), start: RawUsize::zero(), end: RawUsize::zero() },
+                        // Parsed (i.e., everything)
+                        Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.end },
+                    ));
+                },
+            };
+
+        // Split ourselves according to this
+        Ok((
+            // Remainder (i.e., second half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start + split, end: self.end },
+            // Parsed (i.e., first half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.start + split },
+        ))
     }
 
     fn split_at_position_complete<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
     where
         P: Fn(Self::Item) -> bool,
     {
-        todo!()
+        // Find the index using the `SpannableLogicIter`-implementation.
+        let split: RawUsize =
+            match self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, c)| if predicate(c) { Some(i) } else { None }) {
+                Some(split) => split,
+                // If not found, we do not split at all
+                None => {
+                    return Ok((
+                        // Remainder (i.e., nothing)
+                        Self { from: self.from.clone(), source: self.source.clone(), start: RawUsize::zero(), end: RawUsize::zero() },
+                        // Parsed (i.e., everything)
+                        Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.end },
+                    ));
+                },
+            };
+
+        // Split ourselves according to this
+        Ok((
+            // Remainder (i.e., second half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start + split, end: self.end },
+            // Parsed (i.e., first half)
+            Self { from: self.from.clone(), source: self.source.clone(), start: self.start, end: self.start + split },
+        ))
     }
 }
 #[cfg(feature = "nom")]
-impl<F, S> nom::Offset for Span<F, S> {
+impl<F, S: Spannable + nom::Offset> nom::Offset for Span<F, S> {
     #[inline]
-    fn offset(&self, second: &Self) -> usize { todo!() }
+    fn offset(&self, second: &Self) -> usize {
+        // Assert they have the same source
+        if !self.source.is_same(&second.source) {
+            panic!("No point in computing offset of Spans with different sources");
+        }
+
+        // Then compute the offset
+        self.source.offset(&second.source)
+    }
 }
 #[cfg(feature = "nom")]
-impl<F, S, R> nom::ParseTo<R> for Span<F, S> {
+impl<F, S, R> nom::ParseTo<R> for Span<F, S>
+where
+    S: Spannable,
+    for<'s> S::Slice<'s>: ParsableSpannable<R>,
+{
     #[inline]
-    fn parse_to(&self) -> Option<R> { todo!() }
+    fn parse_to(&self) -> Option<R> { self.spanned().parse().ok() }
 }
 #[cfg(feature = "nom")]
-impl<F, S, R> nom::Slice<R> for Span<F, S> {
+impl<F, S, R> nom::Slice<R> for Span<F, S>
+where
+    for<'s> S: 's + Spannable<Slice<'s> = Self>,
+    R: RangeBounds<usize>,
+{
     #[inline]
-    fn slice(&self, range: R) -> Self { todo!() }
+    fn slice(&self, range: R) -> Self {
+        // Translate the range
+        let span: Self = self.spanned();
+        let start: RawUsize = match range.start_bound() {
+            Bound::Excluded(b) => span.source.logic_to_raw(LogicUsize(*b - 1)).unwrap_or_else(|_| panic!("Given index is out-of-range for span")),
+            Bound::Included(b) => span.source.logic_to_raw(LogicUsize(*b)).unwrap_or_else(|_| panic!("Given index is out-of-range for span")),
+            Bound::Unbounded => RawUsize::zero(),
+        };
+        let end: RawUsize = match range.end_bound() {
+            Bound::Excluded(b) => span.source.logic_to_raw(LogicUsize(*b)).unwrap_or_else(|_| panic!("Given index is out-of-range for span")),
+            Bound::Included(b) => {
+                span.source.logic_to_raw(LogicUsize::from(*b + 1)).unwrap_or_else(|_| panic!("Given index is out-of-range for span"))
+            },
+            Bound::Unbounded => span.source.raw_len(),
+        };
+
+        // Run
+        span.source.slice(start..end)
+    }
 }
 #[cfg(feature = "nom")]
 impl<F, S: nom::AsChar> nom::AsChar for Span<F, S> {

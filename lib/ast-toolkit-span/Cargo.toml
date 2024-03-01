@@ -13,6 +13,10 @@ nom = { version = "7.1", optional = true }
 unicode-segmentation = "1.11"
 
 
+[dev-dependencies]
+function_name = "0.3"
+
+
 [features]
 default = []
 nom = [ "dep:nom" ]

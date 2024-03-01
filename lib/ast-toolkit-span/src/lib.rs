@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    27 Feb 2024, 16:32:09
+//    01 Mar 2024, 15:57:03
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,8 @@
 // mod formatter;
 // mod formatting;
 mod span;
+#[cfg(test)]
+mod tests;
 // mod style;
 
 // Flatten them all in this namespace
