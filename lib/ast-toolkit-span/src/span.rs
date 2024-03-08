@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    01 Mar 2024, 15:56:10
+//    08 Mar 2024, 16:25:22
 //  Auto updated?
 //    Yes
 //
@@ -371,6 +371,7 @@ impl Spannable for String {
 
 
 /// An abstraction over a [`Spannable`] that marks that it can be parsed as a string.
+#[cfg(feature = "nom")]
 pub trait ParsableSpannable<R>: Spannable {
     /// The error returned when parsing fails.
     type Error: Error;
@@ -386,6 +387,7 @@ pub trait ParsableSpannable<R>: Spannable {
 }
 
 // Default binary impls for [`ParsableSpannable`]
+#[cfg(feature = "nom")]
 impl<'b, R> ParsableSpannable<R> for &'b [u8]
 where
     R: FromStr,
@@ -400,6 +402,7 @@ where
         R::from_str(text).map_err(|err| FromBytesError::Parse { err })
     }
 }
+#[cfg(feature = "nom")]
 impl<'b, R> ParsableSpannable<R> for Cow<'b, [u8]>
 where
     R: FromStr,
@@ -414,6 +417,7 @@ where
         R::from_str(text).map_err(|err| FromBytesError::Parse { err })
     }
 }
+#[cfg(feature = "nom")]
 impl<R> ParsableSpannable<R> for Vec<u8>
 where
     R: FromStr,
@@ -430,6 +434,7 @@ where
 }
 
 // Default string impls for [`ParsableSpannable`]
+#[cfg(feature = "nom")]
 impl<'s, R> ParsableSpannable<R> for &'s str
 where
     R: FromStr,
@@ -440,6 +445,7 @@ where
     #[inline]
     fn parse(&self) -> Result<R, Self::Error> { R::from_str(self) }
 }
+#[cfg(feature = "nom")]
 impl<'s, R> ParsableSpannable<R> for Cow<'s, str>
 where
     R: FromStr,
@@ -450,6 +456,7 @@ where
     #[inline]
     fn parse(&self) -> Result<R, Self::Error> { R::from_str(self) }
 }
+#[cfg(feature = "nom")]
 impl<R> ParsableSpannable<R> for String
 where
     R: FromStr,
@@ -500,6 +507,7 @@ pub trait SpannableLogicIter: Spannable {
 }
 
 // Default binary impls for [`SpannableLogicIter`]
+#[cfg(feature = "nom")]
 impl<'b> SpannableLogicIter for &'b [u8] {
     type Item<'i> = u8 where Self: 'i;
     type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
@@ -513,6 +521,7 @@ impl<'b> SpannableLogicIter for &'b [u8] {
         self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
     }
 }
+#[cfg(feature = "nom")]
 impl<'b> SpannableLogicIter for Cow<'b, [u8]> {
     type Item<'i> = u8 where Self: 'i;
     type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
@@ -526,6 +535,7 @@ impl<'b> SpannableLogicIter for Cow<'b, [u8]> {
         self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
     }
 }
+#[cfg(feature = "nom")]
 impl SpannableLogicIter for Vec<u8> {
     type Item<'i> = u8 where Self: 'i;
     type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
@@ -541,6 +551,7 @@ impl SpannableLogicIter for Vec<u8> {
 }
 
 // Default string impls for [`SpannableLogicIter`]
+#[cfg(feature = "nom")]
 impl<'s> SpannableLogicIter for &'s str {
     type Item<'i> = &'i str where Self: 'i;
     type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
@@ -554,6 +565,7 @@ impl<'s> SpannableLogicIter for &'s str {
         self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
     }
 }
+#[cfg(feature = "nom")]
 impl<'s> SpannableLogicIter for Cow<'s, str> {
     type Item<'i> = &'i str where Self: 'i;
     type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
@@ -567,6 +579,7 @@ impl<'s> SpannableLogicIter for Cow<'s, str> {
         self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
     }
 }
+#[cfg(feature = "nom")]
 impl<'s> SpannableLogicIter for String {
     type Item<'i> = &'i str where Self: 'i;
     type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
