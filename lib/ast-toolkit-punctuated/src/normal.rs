@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    26 Feb 2024, 16:17:33
+//    13 Mar 2024, 11:02:24
 //  Auto updated?
 //    Yes
 //
@@ -111,7 +111,7 @@ impl<V, P> Iterator for IntoIter<V, P> {
 /***** LIBRARY *****/
 /// Defines a wrapper around a [`Vec`] that makes it punctuated.
 ///
-/// This version represents mandatory punctuation in-between elements, and optional trailing at the end.
+/// This version represents mandatory punctuation in-between elements and no trailing at the end.
 ///
 /// See the list of features to find other versions.
 ///
@@ -365,6 +365,18 @@ impl<V, P> Punctuated<V, P> {
     /// The number of values for which we have allocated space in this Punctuated.
     #[inline]
     pub fn capacity(&self) -> usize { 1 + self.data.capacity() }
+
+    /// Returns whether there are any _values_ in this list.
+    ///
+    /// If there's only punctuation, this is ignored.
+    ///
+    /// # Returns
+    /// True if it's empty, or false otherwise.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        // NOTE: This _should_ be enough. Else there's bugs elsewhere in the program.
+        self.first.is_none()
+    }
 }
 
 impl<V: Debug, P: Debug> Debug for Punctuated<V, P> {

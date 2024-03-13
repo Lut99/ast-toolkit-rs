@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    26 Feb 2024, 16:03:40
+//    13 Mar 2024, 11:02:38
 //  Auto updated?
 //    Yes
 //
@@ -445,6 +445,18 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// The number of values for which we have allocated space in this PunctuatedTrailing.
     #[inline]
     pub fn capacity(&self) -> usize { 1 + self.data.capacity() }
+
+    /// Returns whether there are any _values_ in this list.
+    ///
+    /// If there's only punctuation, this is ignored.
+    ///
+    /// # Returns
+    /// True if it's empty, or false otherwise.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        // NOTE: This _should_ be enough. Else there's bugs elsewhere in the program.
+        self.first.is_none()
+    }
 }
 
 impl<V: Debug, P: Debug> Debug for PunctuatedTrailing<V, P> {
