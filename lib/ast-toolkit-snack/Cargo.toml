@@ -1,0 +1,19 @@
+[package]
+name = "ast-toolkit-snack"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly debug experience."
+
+
+[dependencies]
+ast-toolkit-span = { path = "../ast-toolkit-span" }
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
+
+
+[dev-dependencies]
+
+
+[features]
+default = []
