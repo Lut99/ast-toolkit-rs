@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    13 Mar 2024, 21:24:01
+//    08 Mar 2024, 16:25:22
 //  Auto updated?
 //    Yes
 //
@@ -59,7 +59,7 @@ impl<E: Error> Error for FromBytesError<E> {
 /***** AUXILLARY *****/
 /// Newtype wrapper that differentiates raw indices (e.g., byte indices) from [logic indices](LogicUsize) (e.g., grapheme indices).
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RawUsize(pub usize);
+pub struct RawUsize(usize);
 impl RawUsize {
     /// Constructor for zero.
     ///
@@ -101,7 +101,7 @@ impl From<usize> for RawUsize {
 
 /// Newtype wrapper that differentiates [raw indices](RawUsize) (e.g., byte indices) from logic indices (e.g., grapheme indices).
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct LogicUsize(pub usize);
+pub struct LogicUsize(usize);
 impl LogicUsize {
     /// Constructor for zero.
     ///
@@ -234,10 +234,16 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     fn slice<'s>(&'s self, range: Range<RawUsize>) -> Self::Slice<'s> { Cow::Borrowed(&self[range.start.0..range.end.0]) }
 
     #[inline]
-    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> { <&[u8]>::raw_to_logic(&&**self, raw) }
+    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> {
+        // Maps 1-to-1 if within range
+        if raw.0 < self.len() { Some(LogicUsize(raw.0)) } else { None }
+    }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> { <&[u8]>::logic_to_raw(&&**self, logic) }
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
+        // Maps 1-to-1 if within range
+        if logic.0 < self.len() { Ok(RawUsize(logic.0)) } else { Err(Some(RawUsize(1 + self.len() - logic.0))) }
+    }
 
     #[inline]
     fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
@@ -252,10 +258,16 @@ impl Spannable for Vec<u8> {
     fn slice<'s>(&'s self, range: Range<RawUsize>) -> Self::Slice<'s> { self[range.start.0..range.end.0].to_vec() }
 
     #[inline]
-    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> { <&[u8]>::raw_to_logic(&self.as_slice(), raw) }
+    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> {
+        // Maps 1-to-1 if within range
+        if raw.0 < self.len() { Some(LogicUsize(raw.0)) } else { None }
+    }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> { <&[u8]>::logic_to_raw(&self.as_slice(), logic) }
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
+        // Maps 1-to-1 if within range
+        if logic.0 < self.len() { Ok(RawUsize(logic.0)) } else { Err(Some(RawUsize(1 + self.len() - logic.0))) }
+    }
 
     #[inline]
     fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
@@ -273,21 +285,13 @@ impl<'s> Spannable for &'s str {
 
     #[inline]
     fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> {
-        if raw.0 > self.len() {
+        if raw.0 >= self.len() {
             return None;
         }
         Some(LogicUsize(
             self.grapheme_indices(true)
                 .enumerate()
-                .find_map(|(i, (b, c))| {
-                    if RawUsize(b) == raw {
-                        Some(i)
-                    } else if RawUsize(b + c.len()) == raw {
-                        Some(i + 1)
-                    } else {
-                        None
-                    }
-                })
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
                 .unwrap_or_else(|| panic!("Given raw index {raw:?} is not at a grapheme boundary")),
         ))
     }
@@ -295,18 +299,7 @@ impl<'s> Spannable for &'s str {
     #[inline]
     fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
         // Search graphemes to find it
-        self.grapheme_indices(true)
-            .enumerate()
-            .find_map(|(i, (b, c))| {
-                if LogicUsize(i) == logic {
-                    Some(RawUsize(b))
-                } else if LogicUsize(i + 1) == logic {
-                    Some(RawUsize(b + c.len()))
-                } else {
-                    None
-                }
-            })
-            .ok_or(None)
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
     }
 
     #[inline]
@@ -322,10 +315,23 @@ impl<'s> Spannable for Cow<'s, str> {
     fn slice<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Slice<'s2> { Cow::Borrowed(&self[range.start.0..range.end.0]) }
 
     #[inline]
-    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> { <&str>::raw_to_logic(&&**self, raw) }
+    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> {
+        if raw.0 >= self.len() {
+            return None;
+        }
+        Some(LogicUsize(
+            self.grapheme_indices(true)
+                .enumerate()
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
+                .unwrap_or_else(|| panic!("Given raw index {raw:?} is not at a grapheme boundary")),
+        ))
+    }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> { <&str>::logic_to_raw(&&**self, logic) }
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
+        // Search graphemes to find it
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
+    }
 
     #[inline]
     fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
@@ -340,10 +346,23 @@ impl Spannable for String {
     fn slice<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Slice<'s2> { self[range.start.0..range.end.0].to_string() }
 
     #[inline]
-    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> { <&str>::raw_to_logic(&self.as_str(), raw) }
+    fn raw_to_logic(&self, raw: RawUsize) -> Option<LogicUsize> {
+        if raw.0 >= self.len() {
+            return None;
+        }
+        Some(LogicUsize(
+            self.grapheme_indices(true)
+                .enumerate()
+                .find_map(|(i, (b, _))| if RawUsize(b) == raw { Some(i) } else { None })
+                .unwrap_or_else(|| panic!("Given raw index {raw:?} is not at a grapheme boundary")),
+        ))
+    }
 
     #[inline]
-    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> { <&str>::logic_to_raw(&self.as_str(), logic) }
+    fn logic_to_raw(&self, logic: LogicUsize) -> Result<RawUsize, Option<RawUsize>> {
+        // Search graphemes to find it
+        self.grapheme_indices(true).enumerate().find_map(|(i, (b, _))| if LogicUsize(i) == logic { Some(RawUsize(b)) } else { None }).ok_or(None)
+    }
 
     #[inline]
     fn raw_len(&self) -> RawUsize { RawUsize(self.len()) }
@@ -451,123 +470,129 @@ where
 
 
 
-// /// An abstraction over a [`Spannable`] that also makes it iterable.
-// #[cfg(feature = "nom")]
-// pub trait SpannableLogicIter: Spannable {
-//     /// The logic item that is iterated over.
-//     type Item;
-//     /// Iterator over logic items.
-//     type Iter: Iterator<Item = Self::Item>;
-//     /// Iterator over logic items and their raw indices.
-//     type IterIndices: Iterator<Item = (RawUsize, Self::Item)>;
+/// An abstraction over a [`Spannable`] that also makes it iterable.
+#[cfg(feature = "nom")]
+pub trait SpannableLogicIter: Spannable {
+    /// The logic item that is iterated over.
+    type Item<'i>
+    where
+        Self: 'i;
+    /// Iterator over logic items.
+    type Iter<'i>: Iterator<Item = Self::Item<'i>>
+    where
+        Self: 'i;
+    /// Iterator over logic items and their raw indices.
+    type IterIndices<'i>: Iterator<Item = (RawUsize, Self::Item<'i>)>
+    where
+        Self: 'i;
 
 
-//     /// Returns an iterator over the logical elements in this [`Spannable`].
-//     ///
-//     /// # Arguments
-//     /// - `range`: A range that determines which span of ourselves to iterate over.
-//     ///
-//     /// # Returns
-//     /// An iterator of type [`Self::Iter`](SpannableLogicIter::Iter) that produces elements of type [`Self::Item`](SpannableLogicIter::Item).
-//     fn spanned_iter_elems(&self, range: Range<RawUsize>) -> Self::Iter;
+    /// Returns an iterator over the logical elements in this [`Spannable`].
+    ///
+    /// # Arguments
+    /// - `range`: A range that determines which span of ourselves to iterate over.
+    ///
+    /// # Returns
+    /// An iterator of type [`Self::Iter`](SpannableLogicIter::Iter) that produces elements of type [`Self::Item`](SpannableLogicIter::Item).
+    fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter<'s>;
 
-//     /// Returns an iterator over the logical elements with their raw offsets in this [`Spannable`].
-//     ///
-//     /// # Arguments
-//     /// - `range`: A range that determines which span of ourselves to iterate over.
-//     ///
-//     /// # Returns
-//     /// An iterator of type [`Self::Iter`](SpannableLogicIter::Iter) that produces elements of type ([`RawUsize`], [`Self::Item`](SpannableLogicIter::Item)).
-//     fn spanned_iter_indices(&self, range: Range<RawUsize>) -> Self::IterIndices;
-// }
+    /// Returns an iterator over the logical elements with their raw offsets in this [`Spannable`].
+    ///
+    /// # Arguments
+    /// - `range`: A range that determines which span of ourselves to iterate over.
+    ///
+    /// # Returns
+    /// An iterator of type [`Self::Iter`](SpannableLogicIter::Iter) that produces elements of type ([`RawUsize`], [`Self::Item`](SpannableLogicIter::Item)).
+    fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices<'s>;
+}
 
-// // Default binary impls for [`SpannableLogicIter`]
-// #[cfg(feature = "nom")]
-// impl<'b> SpannableLogicIter for &'b [u8] {
-//     type Item = u8;
-//     type Iter = std::iter::Map<std::slice::Iter<'b, u8>, fn(&'b u8) -> u8>;
-//     type IterIndices = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'b, u8>>, fn((usize, &'b u8)) -> (RawUsize, u8)>;
+// Default binary impls for [`SpannableLogicIter`]
+#[cfg(feature = "nom")]
+impl<'b> SpannableLogicIter for &'b [u8] {
+    type Item<'i> = u8 where Self: 'i;
+    type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'i, u8>>, fn((usize, &'i u8)) -> (RawUsize, u8)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter { self[range.start.0..range.end.0].iter().map(|b| *b) }
+    #[inline]
+    fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter<'s> { self[range.start.0..range.end.0].iter().map(|b| *b) }
 
-//     #[inline]
-//     fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices {
-//         self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl<'b> SpannableLogicIter for Cow<'b, [u8]> {
-//     type Item = u8;
-//     type Iter = std::iter::Cloned<std::slice::Iter<'b, u8>>;
-//     type IterIndices = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'b, u8>>, fn((usize, &'b u8)) -> (RawUsize, u8)>;
+    #[inline]
+    fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices<'s> {
+        self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
+    }
+}
+#[cfg(feature = "nom")]
+impl<'b> SpannableLogicIter for Cow<'b, [u8]> {
+    type Item<'i> = u8 where Self: 'i;
+    type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'i, u8>>, fn((usize, &'i u8)) -> (RawUsize, u8)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems(&self, range: Range<RawUsize>) -> Self::Iter { self[range.start.0..range.end.0].iter().cloned() }
+    #[inline]
+    fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter<'s> { self[range.start.0..range.end.0].iter().map(|b| *b) }
 
-//     #[inline]
-//     fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices {
-//         self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl SpannableLogicIter for Vec<u8> {
-//     type Item<'i> = u8 where Self: 'i;
-//     type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
-//     type IterIndices<'i> = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'i, u8>>, fn((usize, &'i u8)) -> (RawUsize, u8)> where Self: 'i;
+    #[inline]
+    fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices<'s> {
+        self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
+    }
+}
+#[cfg(feature = "nom")]
+impl SpannableLogicIter for Vec<u8> {
+    type Item<'i> = u8 where Self: 'i;
+    type Iter<'i> = std::iter::Map<std::slice::Iter<'i, u8>, fn(&'i u8) -> u8> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<std::iter::Enumerate<std::slice::Iter<'i, u8>>, fn((usize, &'i u8)) -> (RawUsize, u8)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter<'s> { self[range.start.0..range.end.0].iter().map(|b| *b) }
+    #[inline]
+    fn spanned_iter_elems<'s>(&'s self, range: Range<RawUsize>) -> Self::Iter<'s> { self[range.start.0..range.end.0].iter().map(|b| *b) }
 
-//     #[inline]
-//     fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices<'s> {
-//         self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
-//     }
-// }
+    #[inline]
+    fn spanned_iter_indices<'s>(&'s self, range: Range<RawUsize>) -> Self::IterIndices<'s> {
+        self[range.start.0..range.end.0].iter().enumerate().map(|(i, b)| (RawUsize(i), *b))
+    }
+}
 
-// // Default string impls for [`SpannableLogicIter`]
-// #[cfg(feature = "nom")]
-// impl<'s> SpannableLogicIter for &'s str {
-//     type Item = &'s str;
-//     type Iter = unicode_segmentation::Graphemes<'s>;
-//     type IterIndices = std::iter::Map<unicode_segmentation::GraphemeIndices<'s>, fn((usize, &'s str)) -> (RawUsize, &'s str)>;
+// Default string impls for [`SpannableLogicIter`]
+#[cfg(feature = "nom")]
+impl<'s> SpannableLogicIter for &'s str {
+    type Item<'i> = &'i str where Self: 'i;
+    type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<unicode_segmentation::GraphemeIndices<'i>, fn((usize, &'i str)) -> (RawUsize, &'i str)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems(&self, range: Range<RawUsize>) -> Self::Iter { self[range.start.0..range.end.0].graphemes(true) }
+    #[inline]
+    fn spanned_iter_elems<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Iter<'s2> { self[range.start.0..range.end.0].graphemes(true) }
 
-//     #[inline]
-//     fn spanned_iter_indices(&self, range: Range<RawUsize>) -> Self::IterIndices {
-//         self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl<'s> SpannableLogicIter for Cow<'s, str> {
-//     type Item<'i> = &'i str where Self: 'i;
-//     type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
-//     type IterIndices<'i> = std::iter::Map<unicode_segmentation::GraphemeIndices<'i>, fn((usize, &'i str)) -> (RawUsize, &'i str)> where Self: 'i;
+    #[inline]
+    fn spanned_iter_indices<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::IterIndices<'s2> {
+        self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
+    }
+}
+#[cfg(feature = "nom")]
+impl<'s> SpannableLogicIter for Cow<'s, str> {
+    type Item<'i> = &'i str where Self: 'i;
+    type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<unicode_segmentation::GraphemeIndices<'i>, fn((usize, &'i str)) -> (RawUsize, &'i str)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Iter<'s2> { self[range.start.0..range.end.0].graphemes(true) }
+    #[inline]
+    fn spanned_iter_elems<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Iter<'s2> { self[range.start.0..range.end.0].graphemes(true) }
 
-//     #[inline]
-//     fn spanned_iter_indices<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::IterIndices<'s2> {
-//         self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
-//     }
-// }
-// #[cfg(feature = "nom")]
-// impl<'s> SpannableLogicIter for String {
-//     type Item<'i> = &'i str where Self: 'i;
-//     type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
-//     type IterIndices<'i> = std::iter::Map<unicode_segmentation::GraphemeIndices<'i>, fn((usize, &'i str)) -> (RawUsize, &'i str)> where Self: 'i;
+    #[inline]
+    fn spanned_iter_indices<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::IterIndices<'s2> {
+        self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
+    }
+}
+#[cfg(feature = "nom")]
+impl<'s> SpannableLogicIter for String {
+    type Item<'i> = &'i str where Self: 'i;
+    type Iter<'i> = unicode_segmentation::Graphemes<'i> where Self: 'i;
+    type IterIndices<'i> = std::iter::Map<unicode_segmentation::GraphemeIndices<'i>, fn((usize, &'i str)) -> (RawUsize, &'i str)> where Self: 'i;
 
-//     #[inline]
-//     fn spanned_iter_elems<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Iter<'s2> { self[range.start.0..range.end.0].graphemes(true) }
+    #[inline]
+    fn spanned_iter_elems<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::Iter<'s2> { self[range.start.0..range.end.0].graphemes(true) }
 
-//     #[inline]
-//     fn spanned_iter_indices<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::IterIndices<'s2> {
-//         self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
-//     }
-// }
+    #[inline]
+    fn spanned_iter_indices<'s2>(&'s2 self, range: Range<RawUsize>) -> Self::IterIndices<'s2> {
+        self[range.start.0..range.end.0].grapheme_indices(true).map(|(i, b)| (RawUsize(i), b))
+    }
+}
 
 
 
@@ -577,6 +602,11 @@ where
 /// Defines a wrapper around some input source text that allows us to track parts of it.
 ///
 /// Built to be [`nom`](https://github.com/rust-bakery/nom)-compatible; see the `nom`-feature.
+///
+/// # Example
+/// ```rust
+/// todo!() 
+/// ````
 #[derive(Clone, Copy, Debug)]
 pub struct Span<F, S> {
     /// Something describing the input (e.g., filename).
@@ -682,7 +712,6 @@ impl<F, S: Spannable> Span<F, S> {
     /// Constructor for the `Span` that initializes it to Span the entire given range.
     ///
     /// # Arguments
-    /// - `from`: Some description of the input wrapped (e.g., a filename).
     /// - `source`: The input source (text) to wrap.
     ///
     /// # Returns
@@ -691,52 +720,6 @@ impl<F, S: Spannable> Span<F, S> {
     pub fn new(from: F, source: S) -> Self {
         let len: RawUsize = source.raw_len();
         Self { from, source, start: RawUsize::zero(), end: len }
-    }
-
-    /// Constructor for the `Span` that initializes it with the given raw range (e.g., byte indices).
-    ///
-    /// # Arguments
-    /// - `from`: Some description of the input wrapped (e.g., a filename).
-    /// - `source`: The input source (text) to wrap.
-    /// - `range`: A [`RangeBound`] that denotes the range to span.
-    ///
-    /// # Returns
-    /// A new `Span` that spans the given `range` of the given `source`.
-    ///
-    /// # Panics
-    /// This function panics if:
-    /// - The range is invalid (start > end); or
-    /// - Either side of the `range` is out-of-bounds for the `source`.
-    #[inline]
-    #[track_caller]
-    pub fn ranged(from: F, source: S, range: impl RangeBounds<LogicUsize>) -> Self {
-        let mut span: Self = Self::empty(from, source);
-        span.set_range(range);
-        span
-    }
-
-    /// Constructor for the `Span` that initializes it with the given logical range (e.g., character indices).
-    ///
-    /// If you are sure your range fits the conditions below, then you could consider using the unsafe `Self::raw_ranged_unchecked()`.
-    ///
-    /// # Arguments
-    /// - `from`: Some description of the input wrapped (e.g., a filename).
-    /// - `source`: The input source (text) to wrap.
-    /// - `range`: A [`RangeBound`] that denotes the range to span.
-    ///
-    /// # Returns
-    /// A new `Span` that spans the given `range` of the given `source`.
-    ///
-    /// # Panics
-    /// This function panics if:
-    /// - The range is invalid (start > end); or
-    /// - Either side of the `range` is out-of-bounds for the `source`.
-    #[inline]
-    #[track_caller]
-    pub fn raw_ranged(from: F, source: S, range: impl RangeBounds<RawUsize>) -> Self {
-        let mut span: Self = Self::empty(from, source);
-        span.set_raw_range(range);
-        span
     }
 
     /// Provides access to the internal `source`-string, but only the spanned area.
@@ -758,7 +741,7 @@ impl<F, S: Spannable> Span<F, S> {
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
     pub fn start(&self) -> LogicUsize {
-        self.source.raw_to_logic(self.start).unwrap_or_else(|| panic!("Internal start index {:?} is not aligned on a logic boundary", self.start))
+        self.source.raw_to_logic(self.start).unwrap_or_else(|| panic!("Internal byte index is not aligned on a logic boundary"))
     }
 
     /// Returns the end position of the `Span` compared to the start of the full source.
@@ -773,7 +756,7 @@ impl<F, S: Spannable> Span<F, S> {
     /// - never be larger-or-equal-to the length of the input _unless_ the length is 0 (then this is 0).
     #[inline]
     pub fn end(&self) -> LogicUsize {
-        self.source.raw_to_logic(self.end).unwrap_or_else(|| panic!("Internal end index {:?} is not aligned on a logic boundary", self.end))
+        self.source.raw_to_logic(self.end).unwrap_or_else(|| panic!("Internal byte index is not aligned on a logic boundary"))
     }
 
     /// Allows mutation of the `start`-position in this `Span`.
@@ -857,10 +840,10 @@ impl<F, S: Spannable> Span<F, S> {
             panic!("Given start position {:?} is larger than given end position {:?}", start, end);
         }
         let input_len: RawUsize = self.source.raw_len();
-        if start >= input_len || (input_len == RawUsize::zero() && start == input_len) {
+        if start >= input_len {
             panic!("Given start position {:?} is larger-than-or-equal-to internal input length {:?}", start, input_len);
         }
-        if end > input_len {
+        if end > input_len || (input_len > RawUsize::zero() && end == input_len) {
             panic!("Given end position {:?} is larger-than-or-equal-to internal input length {:?}", end, input_len);
         }
 
@@ -886,11 +869,7 @@ impl<F, S: Spannable> Span<F, S> {
     #[track_caller]
     pub fn set_start(&mut self, start: impl Into<LogicUsize>) {
         self.set_range(
-            start.into()
-                ..self
-                    .source
-                    .raw_to_logic(self.end)
-                    .unwrap_or_else(|| panic!("Internal end index {:?} is not aligned on a logic boundary", self.end)),
+            start.into()..self.source.raw_to_logic(self.end).unwrap_or_else(|| panic!("Internal byte index is not aligned on a logic boundary")),
         )
     }
 
@@ -911,8 +890,7 @@ impl<F, S: Spannable> Span<F, S> {
     #[track_caller]
     pub fn set_end(&mut self, end: impl Into<LogicUsize>) {
         self.set_range(
-            self.source.raw_to_logic(self.start).unwrap_or_else(|| panic!("Internal start index {:?} is not aligned on a logic boundary", self.start))
-                ..end.into(),
+            self.source.raw_to_logic(self.start).unwrap_or_else(|| panic!("Internal byte index is not aligned on a logic boundary"))..end.into(),
         )
     }
 
@@ -1038,40 +1016,40 @@ where
     #[inline]
     fn find_token(&self, token: T) -> bool { self.spanned().find_token(token) }
 }
-// #[cfg(feature = "nom")]
-// impl<F, S, I1, I2, I3> nom::InputIter for Span<F, S>
-// where
-//     for<'s> S: 's + SpannableLogicIter<Item = I1, IterIndices = I2, Iter = I3>,
-//     for<'s> S::Slice<'s>: Spannable,
-//     I2: Iterator<Item = (usize, I1)>,
-//     I3: Iterator<Item = I1>,
-// {
-//     type Item = I1;
-//     type Iter = I2;
-//     type IterElem = I3;
+#[cfg(feature = "nom")]
+impl<F, S, I1, I2, I3> nom::InputIter for Span<F, S>
+where
+    for<'s> S: 's + SpannableLogicIter<Item<'s> = I1, IterIndices<'s> = I2, Iter<'s> = I3>,
+    for<'s> S::Slice<'s>: Spannable,
+    I2: Iterator<Item = (usize, I1)>,
+    I3: Iterator<Item = I1>,
+{
+    type Item = I1;
+    type Iter = I2;
+    type IterElem = I3;
 
-//     #[inline]
-//     fn iter_indices(&self) -> Self::Iter { self.source.spanned_iter_indices(self.start..self.end) }
+    #[inline]
+    fn iter_indices(&self) -> Self::Iter { self.source.spanned_iter_indices(self.start..self.end) }
 
-//     #[inline]
-//     fn iter_elements(&self) -> Self::IterElem { self.source.spanned_iter_elems(self.start..self.end) }
+    #[inline]
+    fn iter_elements(&self) -> Self::IterElem { self.source.spanned_iter_elems(self.start..self.end) }
 
-//     #[inline]
-//     fn position<P>(&self, predicate: P) -> Option<usize>
-//     where
-//         P: Fn(Self::Item) -> bool,
-//     {
-//         self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, e)| if predicate(e) { Some(i) } else { None })
-//     }
+    #[inline]
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        self.source.spanned_iter_indices(self.start..self.end).find_map(|(i, e)| if predicate(e) { Some(i) } else { None })
+    }
 
-//     #[inline]
-//     fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-//         self.spanned()
-//             .logic_to_raw(LogicUsize(count))
-//             .map(|i| *i)
-//             .map_err(|needed| if let Some(count) = needed { nom::Needed::Size(NonZeroUsize::new(count.0).unwrap()) } else { nom::Needed::Unknown })
-//     }
-// }
+    #[inline]
+    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+        self.spanned()
+            .logic_to_raw(LogicUsize(count))
+            .map(|i| *i)
+            .map_err(|needed| if let Some(count) = needed { nom::Needed::Size(NonZeroUsize::new(count.0).unwrap()) } else { nom::Needed::Unknown })
+    }
+}
 #[cfg(feature = "nom")]
 impl<F, S> nom::InputLength for Span<F, S> {
     #[inline]
@@ -1099,16 +1077,16 @@ where
         let first: Self = self.take(count);
 
         // Return it + the second split
-        (Self { from: self.from.clone(), source: self.source.clone(), start: self.start + RawUsize(count), end: self.end }, first)
+        (first, Self { from: self.from.clone(), source: self.source.clone(), start: self.start + RawUsize(count), end: self.end })
     }
 }
 #[cfg(feature = "nom")]
-impl<F, S> nom::InputTakeAtPosition for Span<F, S>
+impl<F, S, I> nom::InputTakeAtPosition for Span<F, S>
 where
     F: Clone,
-    S: Clone + Spannable,
+    for<'s> S: 's + Clone + SpannableLogicIter<Item<'s> = I>,
 {
-    // type Item = S::Slice;
+    type Item = I;
 
     fn split_at_position<P, E: nom::error::ParseError<Self>>(&self, predicate: P) -> nom::IResult<Self, Self, E>
     where
