@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    08 Mar 2024, 16:25:22
+//    14 Mar 2024, 08:33:29
 //  Auto updated?
 //    Yes
 //
@@ -59,7 +59,7 @@ impl<E: Error> Error for FromBytesError<E> {
 /***** AUXILLARY *****/
 /// Newtype wrapper that differentiates raw indices (e.g., byte indices) from [logic indices](LogicUsize) (e.g., grapheme indices).
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RawUsize(usize);
+pub struct RawUsize(pub usize);
 impl RawUsize {
     /// Constructor for zero.
     ///
@@ -101,7 +101,7 @@ impl From<usize> for RawUsize {
 
 /// Newtype wrapper that differentiates [raw indices](RawUsize) (e.g., byte indices) from logic indices (e.g., grapheme indices).
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct LogicUsize(usize);
+pub struct LogicUsize(pub usize);
 impl LogicUsize {
     /// Constructor for zero.
     ///
@@ -720,6 +720,52 @@ impl<F, S: Spannable> Span<F, S> {
     pub fn new(from: F, source: S) -> Self {
         let len: RawUsize = source.raw_len();
         Self { from, source, start: RawUsize::zero(), end: len }
+    }
+
+    /// Constructor for the `Span` that initializes it with the given raw range (e.g., byte indices).
+    ///
+    /// # Arguments
+    /// - `from`: Some description of the input wrapped (e.g., a filename).
+    /// - `source`: The input source (text) to wrap.
+    /// - `range`: A [`RangeBound`] that denotes the range to span.
+    ///
+    /// # Returns
+    /// A new `Span` that spans the given `range` of the given `source`.
+    ///
+    /// # Panics
+    /// This function panics if:
+    /// - The range is invalid (start > end); or
+    /// - Either side of the `range` is out-of-bounds for the `source`.
+    #[inline]
+    #[track_caller]
+    pub fn ranged(from: F, source: S, range: impl RangeBounds<LogicUsize>) -> Self {
+        let mut span: Self = Self::empty(from, source);
+        span.set_range(range);
+        span
+    }
+
+    /// Constructor for the `Span` that initializes it with the given logical range (e.g., character indices).
+    ///
+    /// If you are sure your range fits the conditions below, then you could consider using the unsafe `Self::raw_ranged_unchecked()`.
+    ///
+    /// # Arguments
+    /// - `from`: Some description of the input wrapped (e.g., a filename).
+    /// - `source`: The input source (text) to wrap.
+    /// - `range`: A [`RangeBound`] that denotes the range to span.
+    ///
+    /// # Returns
+    /// A new `Span` that spans the given `range` of the given `source`.
+    ///
+    /// # Panics
+    /// This function panics if:
+    /// - The range is invalid (start > end); or
+    /// - Either side of the `range` is out-of-bounds for the `source`.
+    #[inline]
+    #[track_caller]
+    pub fn raw_ranged(from: F, source: S, range: impl RangeBounds<RawUsize>) -> Self {
+        let mut span: Self = Self::empty(from, source);
+        span.set_raw_range(range);
+        span
     }
 
     /// Provides access to the internal `source`-string, but only the spanned area.
