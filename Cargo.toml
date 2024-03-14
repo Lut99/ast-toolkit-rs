@@ -23,7 +23,6 @@ punctuated-normal = [ "punctuated", "ast-toolkit-punctuated/normal", "ast-toolki
 punctuated-trailing = [ "punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing" ]
 railroad = [ "dep:ast-toolkit-railroad" ]
 span = [ "dep:ast-toolkit-span" ]
-span-nom = [ "span", "ast-toolkit-span/nom" ]
 
 
 [workspace]

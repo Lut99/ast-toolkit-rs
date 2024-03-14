@@ -4,12 +4,11 @@ version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Provides a [nom](https://github.com/rust-bakery/nom)-compatible Span that is used to track AST nodes to their location in the source text. Used in various other parts of the ast-toolkit."
+description = "Provides a Span that is akin to a slice but with more context. Used in various other parts of the ast-toolkit."
 
 
 [dependencies]
 console = "0.15"
-nom = { version = "7.1", optional = true }
 unicode-segmentation = "1.11"
 
 
@@ -19,4 +18,3 @@ function_name = "0.3"
 
 [features]
 default = []
-nom = [ "dep:nom" ]
