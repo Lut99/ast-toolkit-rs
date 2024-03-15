@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    14 Mar 2024, 08:33:29
+//    15 Mar 2024, 10:45:24
 //  Auto updated?
 //    Yes
 //
@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::ops::{Add, AddAssign, Bound, Deref, Range, RangeBounds, Sub, SubAssign};
 use std::str::FromStr;
@@ -149,6 +150,13 @@ pub trait Spannable {
     where
         Self: 's;
 
+    /// Computes a _really_ quick hash for this Spannable.
+    ///
+    /// Propably just hashes the pointer or something.
+    ///
+    /// # Arguments
+    /// - `hasher`: The [`Hasher`] to hash in.
+    fn hash(&self, hasher: &mut impl Hasher);
     /// Asserts this [`Spannable`] refers to the same one as some other [`Spannable`].
     ///
     /// Used to see if comparing two Spans makes sense or not.
@@ -204,6 +212,9 @@ impl<'b> Spannable for &'b [u8] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) { hasher.write_usize(self.as_ptr() as usize); }
+
+    #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
@@ -226,6 +237,14 @@ impl<'b> Spannable for &'b [u8] {
 }
 impl<'b> Spannable for Cow<'b, [u8]> {
     type Slice<'s> = Cow<'s, [u8]> where Self: 's;
+
+    #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) {
+        match self {
+            Cow::Borrowed(b) => hasher.write_usize(b.as_ptr() as usize),
+            Cow::Owned(o) => <Vec<u8> as Hash>::hash(o, hasher),
+        }
+    }
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
@@ -252,6 +271,9 @@ impl Spannable for Vec<u8> {
     type Slice<'s> = Vec<u8> where Self: 's;
 
     #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) { <Vec<u8> as Hash>::hash(self, hasher) }
+
+    #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
@@ -276,6 +298,9 @@ impl Spannable for Vec<u8> {
 // Default string impls for [`Spannable`]
 impl<'s> Spannable for &'s str {
     type Slice<'s2> = &'s2 str where Self: 's2;
+
+    #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) { hasher.write_usize(self.as_ptr() as usize); }
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
@@ -309,6 +334,14 @@ impl<'s> Spannable for Cow<'s, str> {
     type Slice<'s2> = Cow<'s2, str> where Self: 's2;
 
     #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) {
+        match self {
+            Cow::Borrowed(b) => hasher.write_usize(b.as_ptr() as usize),
+            Cow::Owned(o) => <String as Hash>::hash(o, hasher),
+        }
+    }
+
+    #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
@@ -338,6 +371,9 @@ impl<'s> Spannable for Cow<'s, str> {
 }
 impl Spannable for String {
     type Slice<'s2> = String where Self: 's2;
+
+    #[inline]
+    fn hash(&self, hasher: &mut impl Hasher) { <String as Hash>::hash(self, hasher) }
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
@@ -1010,6 +1046,19 @@ impl<F, S> Span<F, S> {
     // /// ``
     // #[inline]
     // pub fn text_snippet(&self) -> TextSnippetFormatter<F, I> { TextSnippetFormatter { span: self, shown: None, style: Box::new(()) } }
+}
+impl<F, S: Spannable> Eq for Span<F, S> {}
+impl<F, S: Spannable> Hash for Span<F, S> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.source.hash(state);
+        self.start.hash(state);
+        self.end.hash(state);
+    }
+}
+impl<F, S: Spannable> PartialEq for Span<F, S> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { self.source.is_same(&other.source) && self.start == other.start && self.end == other.end }
 }
 
 #[cfg(feature = "nom")]
