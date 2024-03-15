@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    15 Mar 2024, 15:03:43
+//    15 Mar 2024, 16:54:39
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,71 @@
 
 use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
+use std::ops::{Index, IndexMut};
 
 use enum_debug::EnumDebug;
+
+use crate::common::{PunctIndex, ValueIndex};
+
+
+/***** MACROS *****/
+/// Builds a [`PunctuatedTrailing`] conveniently from a list.
+///
+/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values, optionally ending in a comma:
+/// ```rust
+/// use ast_toolkit_punctuated::{punct_trail, PunctIndex, PunctuatedTrailing};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Value;
+/// #[derive(Debug, PartialEq)]
+/// struct Punct;
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![];
+/// assert!(punct.is_empty());
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value, !Punct];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value, !Punct, Value];
+/// assert_eq!(punct.len(), 2);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+/// assert_eq!(punct[1], Value);
+/// ```
+#[macro_export]
+macro_rules! punct_trail {
+    [$($items:tt)*] => {{
+        // Define a special recursive macro
+        macro_rules! __punct_trail_internal {
+            // Nothing to be done if nothing is given
+            (__recursion $list:ident) => {};
+            // Pop values
+            (__recursion $list:ident $value:expr $(, $($items:tt)+)?) => {
+                $list.push_value($value);
+                __punct_trail_internal!(__recursion $list $($($items)+)?);
+            };
+            // Pop punctuation
+            (__recursion $list:ident ! $punct:expr $(, $($items:tt)+)?) => {
+                $list.push_punct($value);
+                __punct_trail_internal!(__recursion $list $($($items)+)?);
+            };
+        }
+
+        // Call the macro
+        let mut punct = ::ast_toolkit_punctuated::trailing::PunctuatedTrailing::new();
+        __punct_trail_internal!(__recursion punct $($items)*);
+        punct
+    }};
+}
+
+
+
 
 
 /***** ITERATORS *****/
@@ -474,6 +537,95 @@ impl<V: Debug, P: Debug> Debug for PunctuatedTrailing<V, P> {
             }
         }
         list.finish()
+    }
+}
+impl<V, P> Index<usize> for PunctuatedTrailing<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: usize) -> &Self::Output {
+        if index == 0 {
+            match &self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            match self.data.get(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} values", index, self.len()),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<usize> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index == 0 {
+            match &mut self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            let self_len: usize = self.len();
+            match self.data.get_mut(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with {self_len} values"),
+            }
+        }
+    }
+}
+impl<V, P> Index<ValueIndex> for PunctuatedTrailing<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: ValueIndex) -> &Self::Output { &self[*index] }
+}
+impl<V, P> IndexMut<ValueIndex> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: ValueIndex) -> &mut Self::Output { &mut self[*index] }
+}
+impl<V, P> Index<PunctIndex> for PunctuatedTrailing<V, P> {
+    type Output = P;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: PunctIndex) -> &Self::Output {
+        let self_len: usize = self.len();
+        if *index == self_len - 1 {
+            // It's the last one
+            match &self.trail {
+                Some(p) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        } else {
+            match self.data.get(*index) {
+                Some((p, _)) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<PunctIndex> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: PunctIndex) -> &mut Self::Output {
+        let self_len: usize = self.len();
+        if *index == self_len - 1 {
+            // It's the last one
+            match &mut self.trail {
+                Some(p) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        } else {
+            match self.data.get_mut(*index) {
+                Some((p, _)) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        }
     }
 }
 

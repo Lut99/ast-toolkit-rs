@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    15 Mar 2024, 15:03:13
+//    15 Mar 2024, 16:36:58
 //  Auto updated?
 //    Yes
 //
@@ -15,6 +15,60 @@
 
 use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
+use std::ops::{Index, IndexMut};
+
+use crate::common::{PunctIndex, ValueIndex};
+
+
+/***** MACROS *****/
+/// Builds a [`Punctuated`] conveniently from a list.
+///
+/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values, optionally ending in a comma:
+/// ```rust
+/// use ast_toolkit_punctuated::{punct, PunctIndex, Punctuated};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Value;
+/// #[derive(Debug, PartialEq)]
+/// struct Punct;
+///
+/// let punct: Punctuated<Value, Punct> = punct![];
+/// assert!(punct.is_empty());
+///
+/// let punct: Punctuated<Value, Punct> = punct![Value];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+///
+/// let punct: Punctuated<Value, Punct> = punct![Value, Punct, Value];
+/// assert_eq!(punct.len(), 2);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+/// assert_eq!(punct[1], Value);
+/// ```
+#[macro_export]
+macro_rules! punct {
+    [$($items:expr),*] => {{
+        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
+        ::ast_toolkit_punctuated::punct!(__recursion punct $($items),*);
+        punct
+    }};
+
+    // Nothing to be done if nothing is given
+    (__recursion $list:ident) => {};
+    // A double value means we push a value and a punctuation
+    (__recursion $list:ident $value:expr, $punct:expr $(, $($items:expr),+)?) => {
+        $list.push($punct, $value);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items),+)?);
+    };
+    // A single value means we only push a value
+    (__recursion $list:ident $value:expr $(, $($items:expr),+)?) => {
+        $list.push_first($value);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items),+)?);
+    };
+}
+
+
+
 
 
 /***** ITERATORS *****/
@@ -391,6 +445,78 @@ impl<V: Debug, P: Debug> Debug for Punctuated<V, P> {
             }
         }
         list.finish()
+    }
+}
+impl<V, P> Index<usize> for Punctuated<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: usize) -> &Self::Output {
+        if index == 0 {
+            match &self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            match self.data.get(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} values", index, self.len()),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<usize> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index == 0 {
+            match &mut self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            let self_len: usize = self.len();
+            match self.data.get_mut(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with {self_len} values"),
+            }
+        }
+    }
+}
+impl<V, P> Index<ValueIndex> for Punctuated<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: ValueIndex) -> &Self::Output { &self[*index] }
+}
+impl<V, P> IndexMut<ValueIndex> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: ValueIndex) -> &mut Self::Output { &mut self[*index] }
+}
+impl<V, P> Index<PunctIndex> for Punctuated<V, P> {
+    type Output = P;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: PunctIndex) -> &Self::Output {
+        match self.data.get(*index) {
+            Some((p, _)) => p,
+            None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self.data.len()),
+        }
+    }
+}
+impl<V, P> IndexMut<PunctIndex> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: PunctIndex) -> &mut Self::Output {
+        let data_len: usize = self.data.len();
+        match self.data.get_mut(*index) {
+            Some((p, _)) => p,
+            None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, data_len),
+        }
     }
 }
 
