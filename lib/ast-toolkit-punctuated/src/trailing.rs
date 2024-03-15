@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    13 Mar 2024, 11:02:38
+//    15 Mar 2024, 15:03:43
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,7 @@
 //
 
 use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
+use std::hash::{Hash, Hasher};
 
 use enum_debug::EnumDebug;
 
@@ -496,4 +497,50 @@ impl<'p, V, P> IntoIterator for &'p mut PunctuatedTrailing<V, P> {
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter { self.pairs_mut() }
+}
+
+impl<V: Eq, P> Eq for PunctuatedTrailing<V, P> {}
+impl<V: Hash, P> Hash for PunctuatedTrailing<V, P> {
+    /// Implements hashing for the Punctuated.
+    ///
+    /// Note that this ignores the punctuation!
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for v in self.values() {
+            v.hash(state);
+        }
+    }
+}
+impl<V: PartialEq, P> PartialEq for PunctuatedTrailing<V, P> {
+    /// Implements equality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs != rhs {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Implements inequality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn ne(&self, other: &Self) -> bool {
+        if self.len() == other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs == rhs {
+                return false;
+            }
+        }
+        true
+    }
 }
