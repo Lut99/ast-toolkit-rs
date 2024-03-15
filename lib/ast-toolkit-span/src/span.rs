@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    14 Mar 2024, 10:09:36
+//    15 Mar 2024, 14:58:16
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,7 @@
 //
 
 use std::borrow::Cow;
+use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
 
 
@@ -45,17 +46,6 @@ pub trait Spannable {
     where
         Self: 's;
 
-    /// Asserts this [`Spannable`] refers to the same one as some other [`Spannable`].
-    ///
-    /// Used to see if comparing two Spans makes sense or not.
-    ///
-    /// # Arguments
-    /// - `other`: Some other `Self` that we want to compare.
-    ///
-    /// # Returns
-    /// True if this is conceptually the same source, or false otherwise.
-    fn is_same(&self, other: &Self) -> bool;
-
     /// Slices this Spannable by raw index.
     ///
     /// # Returns
@@ -77,9 +67,6 @@ impl<'b> Spannable for &'b [u8] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
-
-    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
@@ -90,9 +77,6 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     type Slice<'s> = Cow<'s, [u8]> where Self: 's;
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
-
-    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
@@ -101,9 +85,6 @@ impl<'b> Spannable for Cow<'b, [u8]> {
 }
 impl Spannable for Vec<u8> {
     type Slice<'s> = Vec<u8> where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     #[track_caller]
@@ -118,9 +99,6 @@ impl<'s> Spannable for &'s str {
     type Slice<'s2> = &'s2 str where Self: 's2;
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
-
-    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
@@ -131,9 +109,6 @@ impl<'s> Spannable for Cow<'s, str> {
     type Slice<'s2> = Cow<'s2, str> where Self: 's2;
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
-
-    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
@@ -142,9 +117,6 @@ impl<'s> Spannable for Cow<'s, str> {
 }
 impl Spannable for String {
     type Slice<'s2> = String where Self: 's2;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool { std::ptr::eq(self, other) }
 
     #[inline]
     #[track_caller]
@@ -229,7 +201,7 @@ impl MatchBytes for String {
 /// ```rust
 /// todo!() 
 /// ````
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct Span<F, S> {
     /// Something describing the input (e.g., filename).
     from:   F,
@@ -344,24 +316,25 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     }
 }
 impl<F: Clone, S: Clone + Spannable + MatchBytes> Span<F, S> {}
-impl<F, S> Eq for Span<F, S>
+impl<F, S: Spannable> Eq for Span<F, S>
 where
-    F: Eq,
     S: Spannable,
-    for<'s> S::Slice<'s>: Eq,
+    for<'s> S::Slice<'s>: PartialEq,
 {
+}
+impl<F, S> Hash for Span<F, S>
+where
+    S: Spannable,
+    for<'s> S::Slice<'s>: Hash,
+{
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) { self.value().hash(state); }
 }
 impl<F, S> PartialEq for Span<F, S>
 where
-    F: PartialEq,
     S: Spannable,
     for<'s> S::Slice<'s>: PartialEq,
 {
     #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.source.is_same(&other.source)
-            && self.start == other.start
-            && self.end == other.end
-            && self.source.slice(self.start..self.end) == other.source.slice(other.start..other.end)
-    }
+    fn eq(&self, other: &Self) -> bool { self.value() == other.value() }
 }
