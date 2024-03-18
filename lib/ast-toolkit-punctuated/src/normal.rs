@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    15 Mar 2024, 16:36:58
+//    18 Mar 2024, 09:56:32
 //  Auto updated?
 //    Yes
 //
@@ -23,7 +23,7 @@ use crate::common::{PunctIndex, ValueIndex};
 /***** MACROS *****/
 /// Builds a [`Punctuated`] conveniently from a list.
 ///
-/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values, optionally ending in a comma:
+/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values:
 /// ```rust
 /// use ast_toolkit_punctuated::{punct, PunctIndex, Punctuated};
 ///
@@ -35,11 +35,11 @@ use crate::common::{PunctIndex, ValueIndex};
 /// let punct: Punctuated<Value, Punct> = punct![];
 /// assert!(punct.is_empty());
 ///
-/// let punct: Punctuated<Value, Punct> = punct![Value];
+/// let punct: Punctuated<Value, Punct> = punct![v => Value];
 /// assert_eq!(punct.len(), 1);
 /// assert_eq!(punct[0], Value);
 ///
-/// let punct: Punctuated<Value, Punct> = punct![Value, Punct, Value];
+/// let punct: Punctuated<Value, Punct> = punct![v => Value, p => Punct, v => Value];
 /// assert_eq!(punct.len(), 2);
 /// assert_eq!(punct[0], Value);
 /// assert_eq!(punct[PunctIndex(0)], Punct);
@@ -47,24 +47,25 @@ use crate::common::{PunctIndex, ValueIndex};
 /// ```
 #[macro_export]
 macro_rules! punct {
-    [$($items:expr),*] => {{
-        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
-        ::ast_toolkit_punctuated::punct!(__recursion punct $($items),*);
-        punct
-    }};
-
     // Nothing to be done if nothing is given
     (__recursion $list:ident) => {};
-    // A double value means we push a value and a punctuation
-    (__recursion $list:ident $value:expr, $punct:expr $(, $($items:expr),+)?) => {
-        $list.push($punct, $value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items),+)?);
-    };
-    // A single value means we only push a value
-    (__recursion $list:ident $value:expr $(, $($items:expr),+)?) => {
+    // Pop first value
+    (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_first($value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items),+)?);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
     };
+    // Pop punctuation, value pairs
+    (__recursion $list:ident p => $punct:expr, v => $value:expr $(, $($items:tt)+)?) => {
+        $list.push($punct, $value);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+    };
+
+    [$($items:tt)*] => {{
+        // Call the macro
+        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
+        ::ast_toolkit_punctuated::punct!(__recursion punct $($items)*);
+        punct
+    }};
 }
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    15 Mar 2024, 16:54:39
+//    18 Mar 2024, 09:53:09
 //  Auto updated?
 //    Yes
 //
@@ -37,16 +37,16 @@ use crate::common::{PunctIndex, ValueIndex};
 /// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![];
 /// assert!(punct.is_empty());
 ///
-/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value];
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value];
 /// assert_eq!(punct.len(), 1);
 /// assert_eq!(punct[0], Value);
 ///
-/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value, !Punct];
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value, p => Punct];
 /// assert_eq!(punct.len(), 1);
 /// assert_eq!(punct[0], Value);
 /// assert_eq!(punct[PunctIndex(0)], Punct);
 ///
-/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![Value, !Punct, Value];
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value, p => Punct, v => Value];
 /// assert_eq!(punct.len(), 2);
 /// assert_eq!(punct[0], Value);
 /// assert_eq!(punct[PunctIndex(0)], Punct);
@@ -54,26 +54,23 @@ use crate::common::{PunctIndex, ValueIndex};
 /// ```
 #[macro_export]
 macro_rules! punct_trail {
-    [$($items:tt)*] => {{
-        // Define a special recursive macro
-        macro_rules! __punct_trail_internal {
-            // Nothing to be done if nothing is given
-            (__recursion $list:ident) => {};
-            // Pop values
-            (__recursion $list:ident $value:expr $(, $($items:tt)+)?) => {
-                $list.push_value($value);
-                __punct_trail_internal!(__recursion $list $($($items)+)?);
-            };
-            // Pop punctuation
-            (__recursion $list:ident ! $punct:expr $(, $($items:tt)+)?) => {
-                $list.push_punct($value);
-                __punct_trail_internal!(__recursion $list $($($items)+)?);
-            };
-        }
+    // Nothing to be done if nothing is given
+    (__recursion $list:ident) => {};
+    // Pop values
+    (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
+        $list.push_value($value);
+        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+    };
+    // Pop punctuation
+    (__recursion $list:ident p => $punct:expr $(, $($items:tt)+)?) => {
+        $list.push_punct($punct);
+        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+    };
 
+    [$($items:tt)*] => {{
         // Call the macro
         let mut punct = ::ast_toolkit_punctuated::trailing::PunctuatedTrailing::new();
-        __punct_trail_internal!(__recursion punct $($items)*);
+        ::ast_toolkit_punctuated::punct_trail!(__recursion punct $($items)*);
         punct
     }};
 }
