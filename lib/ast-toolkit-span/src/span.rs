@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    19 Mar 2024, 11:20:46
+//    19 Mar 2024, 14:37:45
 //  Auto updated?
 //    Yes
 //
@@ -59,12 +59,36 @@ pub trait Spannable {
 
     /// Slices this Spannable by raw index.
     ///
+    /// # Arguments
+    /// - `range`: The range that slices this Spannable. Can be anything implementing [`RangeBounds`].
+    ///
     /// # Returns
     /// A new instance of type `Self::Slice`, that is self but sliced.
     ///
     /// # Panics
     /// This function panics if out-of-bounds.
     fn slice<'s>(&'s self, range: impl RangeBounds<usize>) -> Self::Slice<'s>;
+    /// Checks if the slices range of this Spannable is the same for the given sliced range of the same type.
+    ///
+    /// # Arguments
+    /// - `range`: The range that slices this Spannable. Can be anything implementing [`RangeBounds`].
+    /// - `other`: Some other Spannable of type Self to check with.
+    ///
+    /// # Returns
+    /// True if they are equal, or false otherwise.
+    ///
+    /// # Panics
+    /// This function panics if out-of-bounds.
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool;
+    /// Computes a hash for the given range of this Spannable.
+    ///
+    /// # Arguments
+    /// - `range`: The range that slices this Spannable. Can be anything implementing [`RangeBounds`].
+    /// - `state`: Some [`Hasher`] that does the tough work.
+    ///
+    /// # Panics
+    /// This function panics if out-of-bounds.
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H);
 
     /// Returns the number of currently spanned "raw" items (e.g., bytes).
     ///
@@ -95,6 +119,16 @@ impl<'b> Spannable for &'b [u8] {
     #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -129,6 +163,16 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
     #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+
+    #[inline]
     fn byte_len(&self) -> usize { self.len() }
 }
 impl Spannable for Vec<u8> {
@@ -140,6 +184,16 @@ impl Spannable for Vec<u8> {
     #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range).to_vec() }
+
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -167,6 +221,16 @@ impl<'s> Spannable for &'s str {
     #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -202,6 +266,16 @@ impl<'s> Spannable for Cow<'s, str> {
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
     #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+
+    #[inline]
     fn byte_len(&self) -> usize { self.len() }
 }
 impl Spannable for String {
@@ -213,6 +287,16 @@ impl Spannable for String {
     #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range).to_string() }
+
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -448,25 +532,12 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     }
 }
 impl<F: Clone, S: Clone + Spannable + MatchBytes> Span<F, S> {}
-impl<F, S: Spannable> Eq for Span<F, S>
-where
-    S: Spannable,
-    for<'s> S::Slice<'s>: PartialEq,
-{
-}
-impl<F, S> Hash for Span<F, S>
-where
-    S: Spannable,
-    for<'s> S::Slice<'s>: Hash,
-{
+impl<F, S: Spannable> Eq for Span<F, S> {}
+impl<F, S: Spannable> Hash for Span<F, S> {
     #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) { self.value().hash(state); }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.start..self.end, state) }
 }
-impl<F, S> PartialEq for Span<F, S>
-where
-    S: Spannable,
-    for<'s> S::Slice<'s>: PartialEq,
-{
+impl<F, S: Spannable> PartialEq for Span<F, S> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool { self.value() == other.value() }
+    fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.start..self.end, &other.source, other.start..other.end) }
 }
