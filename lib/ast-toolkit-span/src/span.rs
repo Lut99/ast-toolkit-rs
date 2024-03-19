@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    15 Mar 2024, 14:58:16
+//    19 Mar 2024, 11:20:46
 //  Auto updated?
 //    Yes
 //
@@ -46,6 +46,17 @@ pub trait Spannable {
     where
         Self: 's;
 
+    /// Checks if this Spannable is the same (for all intends and purposes) as another Spannable of the same type.
+    ///
+    /// While it suffices to show that two [`Span`]s are the same semantically (e.g., using a simple byte-wise compare), it's also allowed to compare by pointer equality if possible for performance. Implementations for [`&[u8]`] and [`&str`] do this, for example.
+    ///
+    /// # Arguments
+    /// - `other`: Some other Spannable of type Self to check with.
+    ///
+    /// # Returns
+    /// True if these Spannables are the same, or false otherwise.
+    fn is_same(&self, other: &Self) -> bool;
+
     /// Slices this Spannable by raw index.
     ///
     /// # Returns
@@ -67,6 +78,21 @@ impl<'b> Spannable for &'b [u8] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = std::ptr::eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The &[u8]-implementation \
+                     for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
@@ -77,6 +103,28 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     type Slice<'s> = Cow<'s, [u8]> where Self: 's;
 
     #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Compare by pointer if possible
+            (Self::Borrowed(b1), Self::Borrowed(b2)) => {
+                let ptr_eq: bool = std::ptr::eq(*b1, *b2);
+                #[cfg(debug_assertions)]
+                {
+                    if !ptr_eq && self == other {
+                        eprintln!(
+                            "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The \
+                             Cow<u8>-implementation for Spannable assumes comparing them by pointer equality if they're both borrowed is sufficient."
+                        );
+                    }
+                }
+                ptr_eq
+            },
+            // Otherwise, fall back to equality testing
+            (o1, o2) => o1 == o2,
+        }
+    }
+
+    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
@@ -85,6 +133,9 @@ impl<'b> Spannable for Cow<'b, [u8]> {
 }
 impl Spannable for Vec<u8> {
     type Slice<'s> = Vec<u8> where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { self == other }
 
     #[inline]
     #[track_caller]
@@ -99,6 +150,21 @@ impl<'s> Spannable for &'s str {
     type Slice<'s2> = &'s2 str where Self: 's2;
 
     #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = std::ptr::eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two string slices do not share the same pointer but are semantically equal. The &str-implementation \
+                     for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
@@ -109,6 +175,29 @@ impl<'s> Spannable for Cow<'s, str> {
     type Slice<'s2> = Cow<'s2, str> where Self: 's2;
 
     #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Compare by pointer if possible
+            (Self::Borrowed(b1), Self::Borrowed(b2)) => {
+                let ptr_eq: bool = std::ptr::eq(*b1, *b2);
+                #[cfg(debug_assertions)]
+                {
+                    if !ptr_eq && self == other {
+                        eprintln!(
+                            "DEBUG ASSERTION WARNING: Two string slices do not share the same pointer but are semantically equal. The \
+                             Cow<str>-implementation for Spannable assumes comparing them by pointer equality if they're both borrowed is \
+                             sufficient."
+                        );
+                    }
+                }
+                ptr_eq
+            },
+            // Otherwise, fall back to equality testing
+            (o1, o2) => o1 == o2,
+        }
+    }
+
+    #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
@@ -117,6 +206,9 @@ impl<'s> Spannable for Cow<'s, str> {
 }
 impl Spannable for String {
     type Slice<'s2> = String where Self: 's2;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool { self == other }
 
     #[inline]
     #[track_caller]
@@ -262,6 +354,26 @@ impl<F, S: Spannable> Span<F, S> {
     /// A reference to the internal `source`-string.
     #[inline]
     pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.start..self.end) }
+
+    /// Extends this Span to also cover the other Span.
+    ///
+    /// This is like [`Span::join()`], except that no cloning of the source is performed.
+    ///
+    /// # Arguments
+    /// - `other`: The other [`Span`] to join with.
+    ///
+    /// # Returns
+    /// Returns `true` if the join was successful, or `false` if the `other` Span pointed to another source than we did (i.e., unjoinable).
+    #[inline]
+    #[must_use]
+    pub fn join_mut(&mut self, other: &Self) -> bool {
+        if !self.source.is_same(&other.source) {
+            return false;
+        }
+        self.start = std::cmp::min(self.start, other.start);
+        self.end = std::cmp::max(self.end, other.end);
+        true
+    }
 }
 impl<F: Copy, S> Span<F, S> {
     /// Provides access to the internal `from`-string.
@@ -284,6 +396,26 @@ impl<F, S: Copy> Span<F, S> {
     pub fn source(&self) -> S { self.source }
 }
 impl<F: Clone, S: Clone + Spannable> Span<F, S> {
+    /// Combines this span with another Span to span both areas.
+    ///
+    /// Specifically, given a span `s1..e1` and `s2..e2`, produces a new span `s1..e2`.
+    ///
+    /// # Arguments
+    /// - `other`: The other [`Span`] to join with.
+    ///
+    /// # Returns
+    /// A new [`Span`] that is the combination of both spans, unless the Spans span different sources (then [`None`] is returned).
+    #[inline]
+    pub fn join(&self, other: &Self) -> Option<Self> {
+        if self.source.is_same(&other.source) {
+            let start: usize = std::cmp::min(self.start, other.start);
+            let end: usize = std::cmp::max(self.end, other.end);
+            Some(Self { from: self.from.clone(), source: self.source.clone(), start, end })
+        } else {
+            None
+        }
+    }
+
     /// Returns a new [`Span`] that represents a sub-span of this one.
     ///
     /// # Arguments
