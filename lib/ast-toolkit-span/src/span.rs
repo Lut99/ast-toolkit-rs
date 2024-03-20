@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    19 Mar 2024, 14:37:45
+//    20 Mar 2024, 16:42:28
 //  Auto updated?
 //    Yes
 //
@@ -388,6 +388,7 @@ pub struct Span<F, S> {
     /// An end position in this input as it is on the disk (e.g., bytes). Exclusive.
     end:    usize,
 }
+
 impl<F, S> Span<F, S> {
     /// Constructor for the `Span` that initializes it from a source text, but spanning nothing.
     ///
@@ -531,7 +532,16 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
         Self { from: self.from.clone(), source: self.source.clone(), start, end }
     }
 }
-impl<F: Clone, S: Clone + Spannable + MatchBytes> Span<F, S> {}
+
+impl<F, S> MatchBytes for Span<F, S>
+where
+    S: Spannable,
+    for<'s> S::Slice<'s>: MatchBytes,
+{
+    #[inline]
+    fn match_bytes(&self, bytes: &[u8]) -> usize { self.value().match_bytes(bytes) }
+}
+
 impl<F, S: Spannable> Eq for Span<F, S> {}
 impl<F, S: Spannable> Hash for Span<F, S> {
     #[inline]

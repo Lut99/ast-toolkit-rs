@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    14 Mar 2024, 09:04:35
+//    20 Mar 2024, 16:36:16
 //  Auto updated?
 //    Yes
 //
@@ -19,14 +19,14 @@ use std::fmt::{Display, Formatter, Result as FResult};
 /***** HELPER MACROS *****/
 /// Defines the fields of the [`Failure`], but macro'ified to make implementing them for [`Error`] easier.
 macro_rules! failure_impl {
-    ($(#[$attrs:meta])* pub enum $name:ident <'t> {
+    ($(#[$attrs:meta])* pub enum $name:ident {
         $($fields:ident {},)*
     }) => {
         $(#[$attrs])*
-        pub enum $name <'t> {
+        pub enum $name {
             // Failure fields first
             /// Failed to match a particular tag.
-            Tag { tag: &'t dyn std::fmt::Debug },
+            Tag { tag: &'static dyn std::fmt::Debug },
 
             // Then any fields given by e.g. Error
             $($fields:ident {},)*
@@ -45,5 +45,5 @@ failure_impl! {
     ///
     /// One can think of this as a more restricted version of [`Error`](crate::error::Error), as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Copy, Debug)]
-    pub enum Failure <'t> {}
+    pub enum Failure {}
 }

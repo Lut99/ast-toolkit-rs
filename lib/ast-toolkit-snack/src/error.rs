@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    14 Mar 2024, 09:03:41
+//    20 Mar 2024, 16:36:24
 //  Auto updated?
 //    Yes
 //
@@ -24,5 +24,5 @@ failure_impl! {
     ///
     /// One can think of this as a more verbose version of [`Failure`], as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Copy, Debug)]
-    pub enum Error<'t> {}
+    pub enum Error {}
 }
