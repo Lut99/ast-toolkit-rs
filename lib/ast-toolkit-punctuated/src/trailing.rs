@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    26 Mar 2024, 16:44:01
+//    26 Mar 2024, 17:49:51
 //  Auto updated?
 //    Yes
 //
@@ -636,6 +636,15 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter(), next: self.trail.map(|p| *p) } }
+
+    /// Reserves more space for values in this iterator.
+    ///
+    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
+    ///
+    /// # Arguments
+    /// - `additional`: The additional number of elements to reserve space for.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
 
     /// Gets the total number of elements in the list.
     ///

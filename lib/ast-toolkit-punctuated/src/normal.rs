@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    26 Mar 2024, 16:38:04
+//    26 Mar 2024, 17:50:03
 //  Auto updated?
 //    Yes
 //
@@ -527,6 +527,15 @@ impl<V, P> Punctuated<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
+
+    /// Reserves more space for values in this iterator.
+    ///
+    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
+    ///
+    /// # Arguments
+    /// - `additional`: The additional number of elements to reserve space for.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
 
     /// Gets the total number of elements in the list.
     ///
