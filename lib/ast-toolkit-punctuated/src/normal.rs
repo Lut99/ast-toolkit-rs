@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    18 Mar 2024, 09:56:32
+//    26 Mar 2024, 16:38:04
 //  Auto updated?
 //    Yes
 //
@@ -73,6 +73,145 @@ macro_rules! punct {
 
 
 /***** ITERATORS *****/
+/// Iterates over the values in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Values<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for Values<'p, V, P> {
+    type Item = &'p V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct ValuesMut<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p mut V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for ValuesMut<'p, V, P> {
+    type Item = &'p mut V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoValues<V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<V>,
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+}
+impl<V, P> Iterator for IntoValues<V, P> {
+    type Item = V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+
+
+/// Iterates over the punctuation in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Puncts<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for Puncts<'p, V, P> {
+    type Item = &'p P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        self.data.next().map(|(p, _)| p)
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct PunctsMut<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for PunctsMut<'p, V, P> {
+    type Item = &'p mut P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        self.data.next().map(|(p, _)| p)
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoPuncts<V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+}
+impl<V, P> Iterator for IntoPuncts<V, P> {
+    type Item = P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> { self.data.next().map(|(p, _)| p) }
+}
+
+
+
 /// Iterates over the pairs in a [`Punctuated`] by reference.
 #[derive(Debug)]
 pub struct Iter<'p, V, P> {
@@ -325,55 +464,42 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An [`Iterator`] that iterates over the values by reference.
     #[inline]
-    pub fn values<'p>(
-        &'p self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p V>, std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p V>> {
-        self.first.as_ref().map(|v| v.as_ref()).into_iter().chain(self.data.iter().map(|(_, v)| v))
-    }
+    pub fn values(&self) -> Values<V, P> { Values { prev: self.first.as_ref().map(|v| v.as_ref()), data: self.data.iter() } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn values_mut<'p>(
-        &'p mut self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p mut V>, std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut V>>
-    {
-        self.first.as_mut().map(|v| v.as_mut()).into_iter().chain(self.data.iter_mut().map(|(_, v)| v))
-    }
+    pub fn values_mut(&mut self) -> ValuesMut<V, P> { ValuesMut { prev: self.first.as_mut().map(|v| v.as_mut()), data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_values(self) -> std::iter::Chain<std::option::IntoIter<V>, std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> V>> {
-        self.first.map(|v| *v).into_iter().chain(self.data.into_iter().map(|(_, v)| v))
-    }
+    pub fn into_values(self) -> IntoValues<V, P> { IntoValues { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
 
     /// Returns an iterator over references to the punctuation in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the punctuation by reference.
     #[inline]
-    pub fn puncts<'p>(&'p self) -> std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p P> { self.data.iter().map(|(p, _)| p) }
+    pub fn puncts(&self) -> Puncts<V, P> { Puncts { data: self.data.iter() } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn puncts_mut<'p>(&'p mut self) -> std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut P> {
-        self.data.iter_mut().map(|(p, _)| p)
-    }
+    pub fn puncts_mut<'p>(&'p mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_puncts(self) -> std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> P> { self.data.into_iter().map(|(p, _)| p) }
+    pub fn into_puncts(self) -> IntoPuncts<V, P> { IntoPuncts { data: self.data.into_iter() } }
 
     /// Returns an iterator over references to pairs of value and punctuation in this Puncuated.
     ///
