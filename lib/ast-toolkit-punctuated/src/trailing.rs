@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    26 Mar 2024, 17:49:51
+//    26 Mar 2024, 18:05:42
 //  Auto updated?
 //    Yes
 //
@@ -636,6 +636,16 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter(), next: self.trail.map(|p| *p) } }
+
+    /// Clears all elements from this vector.
+    ///
+    /// Doesn't de-allocate the vector, so the capacity does not change.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.first = None;
+        self.data.clear();
+        self.trail = None;
+    }
 
     /// Reserves more space for values in this iterator.
     ///

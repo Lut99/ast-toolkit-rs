@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    26 Mar 2024, 17:50:03
+//    26 Mar 2024, 18:05:24
 //  Auto updated?
 //    Yes
 //
@@ -527,6 +527,15 @@ impl<V, P> Punctuated<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
+
+    /// Clears all elements from this vector.
+    ///
+    /// Doesn't de-allocate the vector, so the capacity does not change.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.first = None;
+        self.data.clear();
+    }
 
     /// Reserves more space for values in this iterator.
     ///
