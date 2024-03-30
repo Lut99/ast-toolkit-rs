@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    30 Mar 2024, 11:22:24
+//    30 Mar 2024, 12:20:37
 //  Auto updated?
 //    Yes
 //
@@ -62,6 +62,93 @@ pub enum SpanRange {
     Empty,
 }
 impl SpanRange {
+    /// Creates a new SpanRange that is self further spanned by the given range.
+    ///
+    /// This means that the given range is assumed to be relative to this range, e.g.,
+    /// ```plain
+    /// (0..10).span(2..4) => 2..4
+    /// (5..10).span(2..4) => 7..9
+    /// (5..10).span(2..) => 7..10
+    /// ```
+    ///
+    /// # Arguments
+    /// - `span`: The other SpanRange that spans ourselves.
+    ///
+    /// # Returns
+    /// A new SpanRange that is `self` but spanned by `span`.
+    #[inline]
+    pub fn span(&self, span: &Self) -> Self {
+        // Get the simplified range of self
+        let lhs: (Option<usize>, Option<usize>) = match self {
+            Self::Closed(s, e) => (Some(*s), Some(*e)),
+            Self::ClosedOpen(s) => (Some(*s), None),
+            Self::OpenClosed(e) => (None, Some(*e)),
+            Self::Open => (None, None),
+            // If we're empty, not a lot to span
+            Self::Empty => return Self::Empty,
+        };
+
+        // Get the simplified range of other
+        let rhs: (Option<usize>, Option<usize>) = match span {
+            Self::Closed(s, e) => (Some(*s), Some(*e)),
+            Self::ClosedOpen(s) => (Some(*s), None),
+            Self::OpenClosed(e) => (None, Some(*e)),
+            Self::Open => (None, None),
+            // If the other is empty, the span is quite empty too
+            Self::Empty => return Self::Empty,
+        };
+
+        // Attempt to combine the start & end separately
+        let start: Option<usize> = match (lhs.0, rhs.0) {
+            (Some(s1), Some(s2)) => Some(s1 + s2),
+            (Some(s1), None) => Some(s1),
+            (None, Some(s2)) => Some(s2),
+            (None, None) => None,
+        };
+        let end: Option<usize> = match (lhs.0, lhs.1, rhs.1) {
+            (Some(s), Some(_), Some(e2)) => Some(s + e2),
+            (Some(_), Some(e1), None) => Some(e1),
+            (Some(s), None, Some(e2)) => Some(s + e2),
+            (Some(_), None, None) => None,
+            (None, Some(_), Some(e2)) => Some(e2),
+            (None, Some(e1), None) => Some(e1),
+            (None, None, Some(e2)) => Some(e2),
+            (None, None, None) => None,
+        };
+
+        // Now create the self
+        match (start, end) {
+            (Some(s), Some(e)) => {
+                // Double-check the range isn't empty
+                if s < e {
+                    // Double-check that both s and e are before the old one
+                    if let Some(oe) = lhs.1 {
+                        if s < oe { if e <= oe { Self::Closed(s, e) } else { Self::Closed(s, oe) } } else { Self::Empty }
+                    } else {
+                        Self::Closed(s, e)
+                    }
+                } else {
+                    Self::Empty
+                }
+            },
+            (Some(s), None) => {
+                if let Some(oe) = lhs.1 {
+                    if s < oe { Self::ClosedOpen(s) } else { Self::Empty }
+                } else {
+                    Self::ClosedOpen(s)
+                }
+            },
+            (None, Some(e)) => {
+                if let Some(oe) = lhs.1 {
+                    if e <= oe { Self::OpenClosed(e) } else { Self::OpenClosed(oe) }
+                } else {
+                    Self::OpenClosed(e)
+                }
+            },
+            (None, None) => Self::Open,
+        }
+    }
+
     /// Creates a new SpanRange that is the merger of both self and the given one.
     ///
     /// # Arguments
@@ -143,6 +230,30 @@ impl SpanRange {
             (None, None) => Self::Open,
         };
     }
+
+    /// Applies this SpanRange to a given slice.
+    ///
+    /// This slice can be anything, as long as it's a slice.
+    ///
+    /// # Arguments
+    /// - `slice`: The slice (of type [`&[T]`]) to apply this range to.
+    ///
+    /// # Returns
+    /// A new slice of type `[T]` that is the sliced counterpart.
+    #[inline]
+    pub fn apply_to<'s, T>(&self, slice: &'s [T]) -> &'s [T] { index_range_bound!(slice, *self) }
+
+    /// Applies this SpanRange to a given [`str`].
+    ///
+    /// This is the overload of [`Self::apply_to`](SpanRange::apply_to) but then to [`str`]s.
+    ///
+    /// # Arguments
+    /// - `string`: The string (of type [`&str`]) to apply this range to.
+    ///
+    /// # Returns
+    /// A new slice of type `str` that is the sliced counterpart.
+    #[inline]
+    pub fn apply_to_str<'s>(&self, string: &'s str) -> &'s str { index_range_bound!(string, *self) }
 }
 
 
@@ -416,21 +527,22 @@ pub trait MatchBytes {
     /// Returns the position up to which the given bytes are a match.
     ///
     /// # Arguments
+    /// - `range`: The actual range of `self` to match.
     /// - `bytes`: The byte pattern to match.
     ///
     /// # Returns
     /// A `usize` that indicates the first "wrong" character. Some notes:
     /// - If result is the length of `self`, the entire source was matched (but `bytes` may be longer!)
     /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    fn match_bytes(&self, bytes: &[u8]) -> usize;
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize;
 }
 
 // Default binary impls for [`MatchBytes`]
 impl<'b> MatchBytes for &'b [u8] {
-    fn match_bytes(&self, bytes: &[u8]) -> usize {
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
         // Match the prefixes
         let mut i: usize = 0;
-        for (b1, b2) in self.iter().zip(bytes.iter()) {
+        for (b1, b2) in range.apply_to(self).iter().zip(bytes.iter()) {
             if b1 != b2 {
                 return i;
             }
@@ -441,19 +553,19 @@ impl<'b> MatchBytes for &'b [u8] {
 }
 impl<'b> MatchBytes for Cow<'b, [u8]> {
     #[inline]
-    fn match_bytes(&self, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&&**self, bytes) }
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&&**self, range, bytes) }
 }
 impl MatchBytes for Vec<u8> {
     #[inline]
-    fn match_bytes(&self, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&self.as_slice(), bytes) }
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&self.as_slice(), range, bytes) }
 }
 
 // Default string impls for [`Spannable`]
 impl<'s> MatchBytes for &'s str {
-    fn match_bytes(&self, bytes: &[u8]) -> usize {
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
         // Match the prefixes
         let mut i: usize = 0;
-        for (b1, b2) in self.as_bytes().iter().zip(bytes.iter()) {
+        for (b1, b2) in range.apply_to(self.as_bytes()).iter().zip(bytes.iter()) {
             if b1 != b2 {
                 return i;
             }
@@ -464,11 +576,11 @@ impl<'s> MatchBytes for &'s str {
 }
 impl<'s> MatchBytes for Cow<'s, str> {
     #[inline]
-    fn match_bytes(&self, bytes: &[u8]) -> usize { <&str>::match_bytes(&&**self, bytes) }
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&&**self, range, bytes) }
 }
 impl MatchBytes for String {
     #[inline]
-    fn match_bytes(&self, bytes: &[u8]) -> usize { <&str>::match_bytes(&self.as_str(), bytes) }
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&self.as_str(), range, bytes) }
 }
 
 
@@ -542,13 +654,6 @@ impl<F, S> Span<F, S> {
     pub fn range(&self) -> SpanRange { self.range }
 }
 impl<F, S: Spannable> Span<F, S> {
-    /// Provides access to the internal `source`-string, but only the spanned area.
-    ///
-    /// # Returns
-    /// A reference to the internal `source`-string.
-    #[inline]
-    pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.range) }
-
     /// Extends this Span to also cover the other Span.
     ///
     /// This is like [`Span::join()`], except that no cloning of the source is performed.
@@ -567,6 +672,13 @@ impl<F, S: Spannable> Span<F, S> {
         self.range.join_mut(&other.range);
         true
     }
+
+    /// Provides access to the internal `source`-string, but only the spanned area.
+    ///
+    /// # Returns
+    /// A reference to the internal `source`-string.
+    #[inline]
+    pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.range) }
 }
 impl<F: Copy, S> Span<F, S> {
     /// Provides access to the internal `from`-string.
@@ -616,6 +728,9 @@ impl<F: Clone, S: Clone> Span<F, S> {
             (Bound::Unbounded, Bound::Unbounded) => SpanRange::Open,
         };
 
+        // Merge the found range to apply to self instead of the full one
+        let range: SpanRange = self.range.span(&range);
+
         // Build self
         Self { from: self.from.clone(), source: self.source.clone(), range }
     }
@@ -640,13 +755,18 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     }
 }
 
-impl<F, S> MatchBytes for Span<F, S>
-where
-    S: Spannable,
-    for<'s> S::Slice<'s>: MatchBytes,
-{
+impl<F, S: MatchBytes> Span<F, S> {
+    /// Returns the position up to which the given bytes are a match for the spanned area.
+    ///
+    /// # Arguments
+    /// - `bytes`: The byte pattern to match.
+    ///
+    /// # Returns
+    /// A `usize` that indicates the first "wrong" character. Some notes:
+    /// - If result is the length of `self`, the entire span was matched (but `bytes` may be longer!)
+    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
     #[inline]
-    fn match_bytes(&self, bytes: &[u8]) -> usize { self.value().match_bytes(bytes) }
+    pub fn match_bytes(&self, bytes: &[u8]) -> usize { self.source.match_bytes(self.range, bytes) }
 }
 
 impl<F, S: Spannable> Eq for Span<F, S> {}

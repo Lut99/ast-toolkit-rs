@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:34:14
 //  Last edited:
-//    20 Mar 2024, 17:22:01
+//    30 Mar 2024, 12:28:50
 //  Auto updated?
 //    Yes
 //
@@ -21,10 +21,45 @@ pub mod utf8;
 // Imports
 use std::fmt::Debug;
 
-use ast_toolkit_span::{MatchBytes, Span, Spannable};
+use ast_toolkit_span::{MatchBytes, Span};
 
 use crate::fail::Failure;
-use crate::{Combinator, Result};
+use crate::Result;
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::tag;
+    use crate::fail::Failure;
+    use crate::Result;
+
+    type Span = ast_toolkit_span::Span<&'static str, &'static str>;
+
+
+    #[test]
+    fn test_tag() {
+        // Some success stories
+        let input: Span = Span::new("<test>", "Hello, world!");
+        let (rem, res) = tag(&"Hello")(input).unwrap();
+        assert_eq!(rem, input.slice(5..));
+        assert_eq!(res, input.slice(..5));
+        let (rem, res) = tag(&", ")(rem).unwrap();
+        assert_eq!(rem, input.slice(7..));
+        assert_eq!(res, input.slice(5..7));
+        let (rem, res) = tag(&"world!")(rem).unwrap();
+        assert_eq!(rem, input.slice(13..));
+        assert_eq!(res, input.slice(7..13));
+
+        // Failure
+        assert!(matches!(tag(&"Goodbye")(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Ho")(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"hello, world!")(input), Result::Fail(Failure::Tag { .. })));
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -37,13 +72,12 @@ use crate::{Combinator, Result};
 ///
 /// # Returns
 /// A [`Combinator`] that matches the given `tag`.
-pub fn tag<T, F, S>(tag: &'static T) -> impl Combinator<F, S, Output = Span<F, S>>
+pub fn tag<T, F, S>(tag: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
 where
     T: Debug,
     &'static T: AsRef<[u8]>,
     F: Clone,
-    S: Clone + Spannable,
-    for<'s> S::Slice<'s>: MatchBytes,
+    S: Clone + MatchBytes,
 {
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
         // See if we can parse the input
@@ -55,7 +89,7 @@ where
         } else {
             #[cfg(debug_assertions)]
             assert!(match_point == btag.len());
-            Result::Ok((input.slice(..match_point), input.slice(match_point..)))
+            Result::Ok(input.slice(match_point..), input.slice(..match_point))
         }
     }
 }

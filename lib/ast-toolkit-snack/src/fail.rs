@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    20 Mar 2024, 16:36:16
+//    30 Mar 2024, 11:51:06
 //  Auto updated?
 //    Yes
 //
@@ -19,9 +19,12 @@ use std::fmt::{Display, Formatter, Result as FResult};
 /***** HELPER MACROS *****/
 /// Defines the fields of the [`Failure`], but macro'ified to make implementing them for [`Error`] easier.
 macro_rules! failure_impl {
-    ($(#[$attrs:meta])* pub enum $name:ident {
-        $($fields:ident {},)*
-    }) => {
+    (
+        $(#[$attrs:meta])*
+        pub enum $name:ident {
+            $($fields:ident {},)*
+        }
+    ) => {
         $(#[$attrs])*
         pub enum $name {
             // Failure fields first
@@ -30,6 +33,19 @@ macro_rules! failure_impl {
 
             // Then any fields given by e.g. Error
             $($fields:ident {},)*
+        }
+        impl $name {
+            /// Comparable to [`PartialEq::eq`], but then only to see if the variants match.
+            ///
+            /// # Returns
+            /// True if `self` has the same variant as `other`.
+            pub fn is_same(&self, other: &Self) -> bool {
+                match (self, other) {
+                    (Self::Tag { .. }, Self::Tag { .. }) => true,
+                    $((Self::$fields { .. }, Self::$fields { .. }) => true,)*
+                    _ => false,
+                }
+            }
         }
     };
 }
