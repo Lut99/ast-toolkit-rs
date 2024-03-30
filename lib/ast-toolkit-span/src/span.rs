@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    20 Mar 2024, 16:42:28
+//    30 Mar 2024, 11:22:24
 //  Auto updated?
 //    Yes
 //
@@ -22,15 +22,12 @@ use std::ops::{Bound, RangeBounds};
 macro_rules! index_range_bound {
     ($slice:expr, $range:expr) => {{
         let slice = $slice;
-        let range = $range;
-        match (range.start_bound(), range.end_bound()) {
-            (Bound::Included(s), Bound::Included(e)) => &slice[*s..=*e],
-            (Bound::Included(s), Bound::Excluded(e)) => &slice[*s..*e],
-            (Bound::Included(s), Bound::Unbounded) => &slice[*s..],
-            (Bound::Excluded(_), _) => unimplemented!(),
-            (Bound::Unbounded, Bound::Included(e)) => &slice[..=*e],
-            (Bound::Unbounded, Bound::Excluded(e)) => &slice[..*e],
-            (Bound::Unbounded, Bound::Unbounded) => &slice[..],
+        match $range {
+            SpanRange::Closed(s, e) => &slice[s..e],
+            SpanRange::ClosedOpen(s) => &slice[s..],
+            SpanRange::OpenClosed(e) => &slice[..e],
+            SpanRange::Open => &slice[..],
+            SpanRange::Empty => &slice[0..0],
         }
     }};
 }
@@ -40,6 +37,116 @@ macro_rules! index_range_bound {
 
 
 /***** AUXILLARY *****/
+/// Defines a range in some [`Span`]ned area.
+///
+/// This range can either be open- or closed on either end. 'Open' means 'everything on that side', i.e., if the left is Open, it refers to the start of the source; and if the right is Open, it refers to the end.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SpanRange {
+    /// Closed on both ends.
+    ///
+    /// Given as: inclusive start, exclusive end.
+    Closed(usize, usize),
+    /// Closed on the left, open on the right.
+    ///
+    /// Left is inclusive.
+    ClosedOpen(usize),
+    /// Open on the left, closed on the right.
+    ///
+    /// Right is exclusive.
+    OpenClosed(usize),
+    /// Fully open on both ends.
+    ///
+    /// Spans the entire source.
+    Open,
+    /// Special case of a range that doesn't span anything.
+    Empty,
+}
+impl SpanRange {
+    /// Creates a new SpanRange that is the merger of both self and the given one.
+    ///
+    /// # Arguments
+    /// - `other`: The other SpanRange to join with this one.
+    ///
+    /// # Returns
+    /// A new SpanRange that covers both ranges and everything in between, e.g.,
+    /// ```plain
+    /// self           other
+    /// <------>       <------------->
+    ///
+    /// result
+    /// <---------------------------->
+    /// ```
+    #[inline]
+    pub fn join(&self, other: &Self) -> Self {
+        let mut res: Self = *self;
+        res.join_mut(other);
+        res
+    }
+
+    /// Extends this SpanRange to also cover another.
+    ///
+    /// To illustrate:
+    /// ```plain
+    /// self           other
+    /// <------>       <------------->
+    ///
+    /// self.join_mut(other)
+    /// <---------------------------->
+    /// ```
+    ///
+    /// # Arguments
+    /// - `other`: The other SpanRange to join with this one.
+    #[inline]
+    pub fn join_mut(&mut self, other: &Self) {
+        // Get the simplified range of self
+        let lhs: (Option<usize>, Option<usize>) = match self {
+            Self::Closed(s, e) => (Some(*s), Some(*e)),
+            Self::ClosedOpen(s) => (Some(*s), None),
+            Self::OpenClosed(e) => (None, Some(*e)),
+            Self::Open => (None, None),
+            // If we're empty, the other determines everything
+            Self::Empty => {
+                *self = *other;
+                return;
+            },
+        };
+
+        // Get the simplified range of other
+        let rhs: (Option<usize>, Option<usize>) = match other {
+            Self::Closed(s, e) => (Some(*s), Some(*e)),
+            Self::ClosedOpen(s) => (Some(*s), None),
+            Self::OpenClosed(e) => (None, Some(*e)),
+            Self::Open => (None, None),
+            // If the other is empty, nothing needs changing
+            Self::Empty => return,
+        };
+
+        // Now compare those ones to make a proper start & end
+        let start: Option<usize> = match (lhs, rhs) {
+            // If they're both closed, we need the leftmost;
+            ((Some(s1), _), (Some(s2), _)) => Some(std::cmp::min(s1, s2)),
+            // Else, one of the lefties is open, so then so are we.
+            _ => None,
+        };
+        let end: Option<usize> = match (lhs, rhs) {
+            // If they're both closed, we need the rightmost;
+            ((_, Some(e1)), (_, Some(e2))) => Some(std::cmp::max(e1, e2)),
+            // Else, one of the righties is open, so then so are we.
+            _ => None,
+        };
+
+        // OK, finally build a new self
+        *self = match (start, end) {
+            (Some(s), Some(e)) => Self::Closed(s, e),
+            (Some(s), None) => Self::ClosedOpen(s),
+            (None, Some(e)) => Self::OpenClosed(e),
+            (None, None) => Self::Open,
+        };
+    }
+}
+
+
+
 /// A helper trait for the [`Span`] that can be implemented for anything used as input.
 pub trait Spannable {
     type Slice<'s>: 's
@@ -67,7 +174,7 @@ pub trait Spannable {
     ///
     /// # Panics
     /// This function panics if out-of-bounds.
-    fn slice<'s>(&'s self, range: impl RangeBounds<usize>) -> Self::Slice<'s>;
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s>;
     /// Checks if the slices range of this Spannable is the same for the given sliced range of the same type.
     ///
     /// # Arguments
@@ -79,7 +186,7 @@ pub trait Spannable {
     ///
     /// # Panics
     /// This function panics if out-of-bounds.
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool;
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool;
     /// Computes a hash for the given range of this Spannable.
     ///
     /// # Arguments
@@ -88,7 +195,7 @@ pub trait Spannable {
     ///
     /// # Panics
     /// This function panics if out-of-bounds.
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H);
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H);
 
     /// Returns the number of currently spanned "raw" items (e.g., bytes).
     ///
@@ -118,17 +225,17 @@ impl<'b> Spannable for &'b [u8] {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -160,17 +267,17 @@ impl<'b> Spannable for Cow<'b, [u8]> {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -183,17 +290,17 @@ impl Spannable for Vec<u8> {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range).to_vec() }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range).to_vec() }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -220,17 +327,17 @@ impl<'s> Spannable for &'s str {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -263,17 +370,17 @@ impl<'s> Spannable for Cow<'s, str> {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -286,17 +393,17 @@ impl Spannable for String {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: impl RangeBounds<usize>) -> Self::Slice<'s2> { index_range_bound!(self, range).to_string() }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range).to_string() }
 
     #[inline]
     #[track_caller]
-    fn slice_eq(&self, range: impl RangeBounds<usize>, other: &Self, other_range: impl RangeBounds<usize>) -> bool {
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: impl RangeBounds<usize>, state: &mut H) { index_range_bound!(self, range).hash(state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -383,10 +490,8 @@ pub struct Span<F, S> {
     from:   F,
     /// An input of \*something\* spannable.
     source: S,
-    /// A start position in this input as it is on the disk (e.g., bytes). Inclusive.
-    start:  usize,
-    /// An end position in this input as it is on the disk (e.g., bytes). Exclusive.
-    end:    usize,
+    /// The [`SpanRange`] of this Span over the `source`.
+    range:  SpanRange,
 }
 
 impl<F, S> Span<F, S> {
@@ -399,7 +504,17 @@ impl<F, S> Span<F, S> {
     /// # Returns
     /// A new `Span` that spans none of the given `source`.
     #[inline]
-    pub fn empty(from: F, source: S) -> Self { Self { from, source, start: 0, end: 0 } }
+    pub fn empty(from: F, source: S) -> Self { Self { from, source, range: SpanRange::Empty } }
+
+    /// Constructor for the `Span` that initializes it to Span the entire given range.
+    ///
+    /// # Arguments
+    /// - `source`: The input source (text) to wrap.
+    ///
+    /// # Returns
+    /// A new `Span` that spans the entire given `source`.
+    #[inline]
+    pub fn new(from: F, source: S) -> Self { Self { from, source, range: SpanRange::Open } }
 
     /// Provides access to the internal `from`-string.
     ///
@@ -418,27 +533,21 @@ impl<F, S> Span<F, S> {
     /// A reference to the internal `source`-string.
     #[inline]
     pub fn source_ref(&self) -> &S { &self.source }
-}
-impl<F, S: Spannable> Span<F, S> {
-    /// Constructor for the `Span` that initializes it to Span the entire given range.
-    ///
-    /// # Arguments
-    /// - `source`: The input source (text) to wrap.
+
+    /// Returns the inner range over the source text.
     ///
     /// # Returns
-    /// A new `Span` that spans the entire given `source`.
+    /// A [`SpanRange`] describing the spanned area.
     #[inline]
-    pub fn new(from: F, source: S) -> Self {
-        let len: usize = source.byte_len();
-        Self { from, source, start: 0, end: len }
-    }
-
+    pub fn range(&self) -> SpanRange { self.range }
+}
+impl<F, S: Spannable> Span<F, S> {
     /// Provides access to the internal `source`-string, but only the spanned area.
     ///
     /// # Returns
     /// A reference to the internal `source`-string.
     #[inline]
-    pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.start..self.end) }
+    pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.range) }
 
     /// Extends this Span to also cover the other Span.
     ///
@@ -455,8 +564,7 @@ impl<F, S: Spannable> Span<F, S> {
         if !self.source.is_same(&other.source) {
             return false;
         }
-        self.start = std::cmp::min(self.start, other.start);
-        self.end = std::cmp::max(self.end, other.end);
+        self.range.join_mut(&other.range);
         true
     }
 }
@@ -480,27 +588,7 @@ impl<F, S: Copy> Span<F, S> {
     #[inline]
     pub fn source(&self) -> S { self.source }
 }
-impl<F: Clone, S: Clone + Spannable> Span<F, S> {
-    /// Combines this span with another Span to span both areas.
-    ///
-    /// Specifically, given a span `s1..e1` and `s2..e2`, produces a new span `s1..e2`.
-    ///
-    /// # Arguments
-    /// - `other`: The other [`Span`] to join with.
-    ///
-    /// # Returns
-    /// A new [`Span`] that is the combination of both spans, unless the Spans span different sources (then [`None`] is returned).
-    #[inline]
-    pub fn join(&self, other: &Self) -> Option<Self> {
-        if self.source.is_same(&other.source) {
-            let start: usize = std::cmp::min(self.start, other.start);
-            let end: usize = std::cmp::max(self.end, other.end);
-            Some(Self { from: self.from.clone(), source: self.source.clone(), start, end })
-        } else {
-            None
-        }
-    }
-
+impl<F: Clone, S: Clone> Span<F, S> {
     /// Returns a new [`Span`] that represents a sub-span of this one.
     ///
     /// # Arguments
@@ -516,20 +604,39 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     #[inline]
     pub fn slice(&self, range: impl RangeBounds<usize>) -> Self {
         // Examine the bounds to find new start & stop
-        let (start, end): (usize, usize) = match (range.start_bound(), range.end_bound()) {
-            (Bound::Included(s), Bound::Included(e)) => (*s, *e + 1),
-            (Bound::Included(s), Bound::Excluded(e)) => (*s, *e),
-            (Bound::Included(s), Bound::Unbounded) => (*s, self.source.byte_len()),
-            (Bound::Excluded(s), Bound::Included(e)) => (*s + 1, *e + 1),
-            (Bound::Excluded(s), Bound::Excluded(e)) => (*s + 1, *e),
-            (Bound::Excluded(s), Bound::Unbounded) => (*s + 1, self.source.byte_len()),
-            (Bound::Unbounded, Bound::Included(e)) => (0, *e + 1),
-            (Bound::Unbounded, Bound::Excluded(e)) => (0, *e),
-            (Bound::Unbounded, Bound::Unbounded) => (0, self.source.byte_len()),
+        let range: SpanRange = match (range.start_bound(), range.end_bound()) {
+            (Bound::Included(s), Bound::Included(e)) => SpanRange::Closed(*s, *e + 1),
+            (Bound::Included(s), Bound::Excluded(e)) => SpanRange::Closed(*s, *e),
+            (Bound::Included(s), Bound::Unbounded) => SpanRange::ClosedOpen(*s),
+            (Bound::Excluded(s), Bound::Included(e)) => SpanRange::Closed(*s + 1, *e + 1),
+            (Bound::Excluded(s), Bound::Excluded(e)) => SpanRange::Closed(*s + 1, *e),
+            (Bound::Excluded(s), Bound::Unbounded) => SpanRange::ClosedOpen(*s + 1),
+            (Bound::Unbounded, Bound::Included(e)) => SpanRange::OpenClosed(*e + 1),
+            (Bound::Unbounded, Bound::Excluded(e)) => SpanRange::OpenClosed(*e),
+            (Bound::Unbounded, Bound::Unbounded) => SpanRange::Open,
         };
 
         // Build self
-        Self { from: self.from.clone(), source: self.source.clone(), start, end }
+        Self { from: self.from.clone(), source: self.source.clone(), range }
+    }
+}
+impl<F: Clone, S: Clone + Spannable> Span<F, S> {
+    /// Combines this span with another Span to span both areas.
+    ///
+    /// Specifically, given a span `s1..e1` and `s2..e2`, produces a new span `s1..e2`.
+    ///
+    /// # Arguments
+    /// - `other`: The other [`Span`] to join with.
+    ///
+    /// # Returns
+    /// A new [`Span`] that is the combination of both spans, unless the Spans span different sources (then [`None`] is returned).
+    #[inline]
+    pub fn join(&self, other: &Self) -> Option<Self> {
+        if self.source.is_same(&other.source) {
+            Some(Self { from: self.from.clone(), source: self.source.clone(), range: self.range.join(&other.range) })
+        } else {
+            None
+        }
     }
 }
 
@@ -545,9 +652,9 @@ where
 impl<F, S: Spannable> Eq for Span<F, S> {}
 impl<F, S: Spannable> Hash for Span<F, S> {
     #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.start..self.end, state) }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.range, state) }
 }
 impl<F, S: Spannable> PartialEq for Span<F, S> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.start..self.end, &other.source, other.start..other.end) }
+    fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
 }
