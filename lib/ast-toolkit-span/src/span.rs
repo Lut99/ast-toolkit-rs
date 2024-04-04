@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    30 Mar 2024, 12:20:37
+//    04 Apr 2024, 16:39:07
 //  Auto updated?
 //    Yes
 //
@@ -679,6 +679,27 @@ impl<F, S: Spannable> Span<F, S> {
     /// A reference to the internal `source`-string.
     #[inline]
     pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.range) }
+
+    /// Returns if the spanned area is empty.
+    ///
+    /// # Returns
+    /// True if this Span does not cover a substantial range, or false otherwise.
+    pub fn is_empty(&self) -> bool {
+        // If the source is empty, so are we
+        let source_len: usize = self.source.byte_len();
+        if source_len == 0 {
+            return true;
+        }
+
+        // Then, match on the range type
+        match self.range {
+            SpanRange::Closed(s, e) => s >= e,
+            SpanRange::ClosedOpen(s) => s >= source_len,
+            SpanRange::OpenClosed(e) => e == 0,
+            SpanRange::Open => source_len == 0,
+            SpanRange::Empty => true,
+        }
+    }
 }
 impl<F: Copy, S> Span<F, S> {
     /// Provides access to the internal `from`-string.

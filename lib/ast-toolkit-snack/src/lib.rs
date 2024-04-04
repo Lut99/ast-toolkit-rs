@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    30 Mar 2024, 12:25:33
+//    04 Apr 2024, 16:58:31
 //  Auto updated?
 //    Yes
 //
@@ -21,11 +21,42 @@
 pub mod complete;
 pub mod error;
 pub mod fail;
+pub mod sequence;
 pub mod streaming;
 
 // Imports
 use ast_toolkit_span::{Span, Spannable};
 use enum_debug::EnumDebug;
+
+
+/***** HELPER MACROS *****/
+/// Implements [`Combinator`] for various sizes of tuples for us.
+macro_rules! tuple_impl {
+    ($(($i:tt, $name:ident)),*) => {
+        impl<F, S, $($name: Combinator<F, S>),*> Combinator<F, S> for ($($name,)*) {
+            type Output = ($($name::Output,)*);
+
+            fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+                #[allow(unused_mut)]
+                let mut rem: Span<F, S> = input;
+                let res: ($($name::Output,)*) = ($(
+                    match self.$i.parse(rem) {
+                        Result::Ok(partial, res) => {
+                            rem = partial;
+                            res
+                        },
+                        Result::Fail(f) => return Result::Fail(f),
+                        Result::Error(f) => return Result::Error(f),
+                    },
+                )*);
+                Result::Ok(rem, res)
+            }
+        }
+    };
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -47,13 +78,65 @@ pub trait Combinator<F, S> {
     fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
 }
 
-// Default impls
+// Default impls for functions
 impl<R, F, S, T: FnMut(Span<F, S>) -> Result<R, F, S>> Combinator<F, S> for T {
     type Output = R;
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<R, F, S> { self(input) }
 }
+
+// Default impls for tuples
+tuple_impl!();
+tuple_impl!((0, C1));
+tuple_impl!((0, C1), (1, C2));
+tuple_impl!((0, C1), (1, C2), (2, C3));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13));
+tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13), (13, C14));
+tuple_impl!(
+    (0, C1),
+    (1, C2),
+    (2, C3),
+    (3, C4),
+    (4, C5),
+    (5, C6),
+    (6, C7),
+    (7, C8),
+    (8, C9),
+    (9, C10),
+    (10, C11),
+    (11, C12),
+    (12, C13),
+    (13, C14),
+    (14, C15)
+);
+tuple_impl!(
+    (0, C1),
+    (1, C2),
+    (2, C3),
+    (3, C4),
+    (4, C5),
+    (5, C6),
+    (6, C7),
+    (7, C8),
+    (8, C9),
+    (9, C10),
+    (10, C11),
+    (11, C12),
+    (12, C13),
+    (13, C14),
+    (14, C15),
+    (15, C16)
+);
 
 
 
