@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:37:16
 //  Last edited:
-//    05 Apr 2024, 11:18:10
+//    05 Apr 2024, 13:13:33
 //  Auto updated?
 //    Yes
 //
@@ -13,11 +13,9 @@
 //!   UTF-8 input.
 //
 
-use std::fmt::Debug;
-
 use ast_toolkit_span::{OneOfBytes, OneOfUtf8, Span};
 
-use crate::fail::Failure;
+use crate::fail::{DebugAsRef, Failure};
 use crate::Result;
 
 
@@ -56,13 +54,13 @@ where
 #[inline]
 pub fn one_of1<T, F, S>(charset: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
 where
-    T: Debug,
+    T: DebugAsRef,
     &'static T: AsRef<[&'static str]>,
     F: Clone,
     S: Clone + OneOfUtf8,
 {
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
-        let match_point: usize = input.one_of_utf8(charset.as_ref());
+        let match_point: usize = input.one_of_utf8(<&'static T as AsRef<[&'static str]>>::as_ref(&charset));
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {

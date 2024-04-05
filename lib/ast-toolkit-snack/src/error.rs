@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    05 Apr 2024, 11:37:46
+//    05 Apr 2024, 13:15:37
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,28 @@ use crate::fail::{failure_impl, Failure};
 use crate::{Combinator, Result};
 
 
+/***** ERRORS *****/
+/// Defines an error that may occur when casting [`Failure`]s to [`Error`]s.
+#[derive(Debug)]
+pub enum FromFailureError {
+    /// Failed to cast [`Failure::NotEnough`] because it is [`Failure`]-only.
+    NotEnough,
+}
+impl Display for FromFailureError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use FromFailureError::*;
+        match self {
+            NotEnough => write!(f, "Cannot convert Failure::NotEnough to an Error because there is no equivalent in Error"),
+        }
+    }
+}
+impl error::Error for FromFailureError {}
+
+
+
+
+
 /***** COMBINATORS *****/
 /// "Commits" this parser path, by turning any [`Failure`]s that occur into [`Error`]s.
 ///
@@ -33,13 +55,20 @@ use crate::{Combinator, Result};
 /// # Returns
 /// The result of `comb`.
 ///
+/// # Fails
+/// This function may fail if `comb` is streaming and returns [`Failure::NotEnough`]. This is not casted to an error because not enough should only be resolved as an error when more input is attempted to be gotten but that fails.
+///
 /// # Errors
 /// If `comb` fails, then it is re-casted as an [`Error`]. Any errors already being emitted by `comb` are passed as-is.
+///
+/// Note that one type of failure is never re-casted: and that is [`Failure::NotEnough`]. See [Fails](#Fails) above for more details.
 pub fn commit<F, S, C: Combinator<F, S>>(mut comb: C) -> impl FnMut(Span<F, S>) -> Result<C::Output, F, S> {
     move |input: Span<F, S>| -> Result<C::Output, F, S> {
         match comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, res),
-            Result::Fail(fail) => Result::Error(fail.into()),
+            Result::Fail(Failure::NotEnough) => Result::Fail(Failure::NotEnough),
+            // SAFETY: We can `unwrap()` because we caught the only case for which it fails above.
+            Result::Fail(fail) => Result::Error(fail.try_into().unwrap()),
             Result::Error(err) => Result::Error(err),
         }
     }
@@ -113,15 +142,21 @@ failure_impl! {
         },
     }
 }
-impl From<Failure> for Error {
+impl TryFrom<Failure> for Error {
+    type Error = FromFailureError;
+
     #[inline]
-    fn from(value: Failure) -> Self {
+    fn try_from(value: Failure) -> std::result::Result<Self, Self::Error> {
         match value {
-            Failure::Digit1 => Self::Digit1,
-            Failure::OneOfBytes1 { byteset } => Self::OneOfBytes1 { byteset },
-            Failure::OneOfUtf81 { charset } => Self::OneOfUtf81 { charset },
-            Failure::Tag { tag } => Self::Tag { tag },
-            Failure::Whitespace1 => Self::Whitespace1,
+            Failure::Alt { branches } => Ok(Self::Alt {
+                branches: branches.into_iter().map(|fail| fail.try_into()).collect::<std::result::Result<Vec<Self>, FromFailureError>>()?,
+            }),
+            Failure::Digit1 => Ok(Self::Digit1),
+            Failure::NotEnough => Err(FromFailureError::NotEnough),
+            Failure::OneOfBytes1 { byteset } => Ok(Self::OneOfBytes1 { byteset }),
+            Failure::OneOfUtf81 { charset } => Ok(Self::OneOfUtf81 { charset }),
+            Failure::Tag { tag } => Ok(Self::Tag { tag }),
+            Failure::Whitespace1 => Ok(Self::Whitespace1),
         }
     }
 }

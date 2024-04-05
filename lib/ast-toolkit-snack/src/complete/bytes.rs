@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:37:25
 //  Last edited:
-//    05 Apr 2024, 11:16:51
+//    05 Apr 2024, 13:12:15
 //  Auto updated?
 //    Yes
 //
@@ -13,11 +13,9 @@
 //!   bytes.
 //
 
-use std::fmt::Debug;
-
 use ast_toolkit_span::{OneOfBytes, Span};
 
-use crate::fail::Failure;
+use crate::fail::{DebugAsRef, Failure};
 use crate::Result;
 
 
@@ -56,7 +54,7 @@ where
 #[inline]
 pub fn one_of1<T, F, S>(byteset: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
 where
-    T: Debug,
+    T: DebugAsRef,
     &'static T: AsRef<[u8]>,
     F: Clone,
     S: Clone + OneOfBytes,

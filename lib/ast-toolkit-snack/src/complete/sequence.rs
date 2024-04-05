@@ -4,12 +4,14 @@
 //  Created:
 //    04 Apr 2024, 16:24:37
 //  Last edited:
-//    05 Apr 2024, 10:39:37
+//    05 Apr 2024, 11:42:42
 //  Auto updated?
 //    Yes
 //
 //  Description:
 //!   Defines combinators that apply multiple combinators in-order.
+//!   
+//!   These combinators are complete, and will directly fail if they didn't find enough input.
 //
 
 use ast_toolkit_span::Span;
@@ -20,7 +22,7 @@ use crate::{Combinator, Result};
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
-    use super::super::complete::tag;
+    use super::super::tag;
     use super::pair;
     use crate::fail::Failure;
     use crate::Result;

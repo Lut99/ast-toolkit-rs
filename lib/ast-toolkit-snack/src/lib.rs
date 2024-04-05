@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 11:35:16
+//    05 Apr 2024, 13:15:03
 //  Auto updated?
 //    Yes
 //
@@ -18,10 +18,10 @@
 //
 
 // Declare submodules
+pub mod branch;
 pub mod complete;
 pub mod error;
 pub mod fail;
-pub mod sequence;
 pub mod streaming;
 
 // Imports
@@ -218,8 +218,8 @@ impl<R: PartialEq, F, S: PartialEq + Spannable> PartialEq for Result<R, F, S> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Ok(rem1, res1), Self::Ok(rem2, res2)) => rem1 == rem2 && res1 == res2,
-            (Self::Fail(fail1), Self::Fail(fail2)) => fail1.is_same(fail2),
-            (Self::Error(err1), Self::Error(err2)) => err1.is_same(err2),
+            (Self::Fail(fail1), Self::Fail(fail2)) => fail1 == fail2,
+            (Self::Error(err1), Self::Error(err2)) => err1 == err2,
 
             // Otherwise, different variants, always bad
             _ => false,

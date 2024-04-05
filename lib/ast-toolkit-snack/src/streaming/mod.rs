@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:34:56
 //  Last edited:
-//    20 Mar 2024, 16:38:26
+//    05 Apr 2024, 11:42:18
 //  Auto updated?
 //    Yes
 //
@@ -16,4 +16,5 @@
 
 // Declare submodules
 pub mod bytes;
+pub mod sequence;
 pub mod utf8;

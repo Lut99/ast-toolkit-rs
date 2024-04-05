@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:34:14
 //  Last edited:
-//    05 Apr 2024, 10:57:15
+//    05 Apr 2024, 13:13:47
 //  Auto updated?
 //    Yes
 //
@@ -16,14 +16,13 @@
 
 // Declare submodules
 pub mod bytes;
+pub mod sequence;
 pub mod utf8;
 
 // Imports
-use std::fmt::Debug;
-
 use ast_toolkit_span::{MatchBytes, Span};
 
-use crate::fail::Failure;
+use crate::fail::{DebugAsRef, Failure};
 use crate::Result;
 
 
@@ -74,7 +73,7 @@ mod tests {
 /// A [`Combinator`] that matches the given `tag`.
 pub fn tag<T, F, S>(tag: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
 where
-    T: Debug,
+    T: DebugAsRef,
     &'static T: AsRef<[u8]>,
     F: Clone,
     S: Clone + MatchBytes,
