@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 13:45:18
+//    05 Apr 2024, 13:45:47
 //  Auto updated?
 //    Yes
 //
@@ -32,7 +32,7 @@ use fail::Failure;
 
 /***** HELPER MACROS *****/
 /// Implements [`Combinator`] for various sizes of tuples for us.
-macro_rules! tuple_impl {
+macro_rules! tuple_combinator_impl {
     ($(($i:tt, $name:ident)),*) => {
         impl<F, S, $($name: Combinator<F, S>),*> Combinator<F, S> for ($($name,)*) {
             type Output = ($($name::Output,)*);
@@ -88,22 +88,37 @@ impl<R, F, S, T: FnMut(Span<F, S>) -> Result<R, F, S>> Combinator<F, S> for T {
 }
 
 // Default impls for tuples
-tuple_impl!();
-tuple_impl!((0, C1));
-tuple_impl!((0, C1), (1, C2));
-tuple_impl!((0, C1), (1, C2), (2, C3));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13));
-tuple_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13), (13, C14));
-tuple_impl!(
+tuple_combinator_impl!();
+tuple_combinator_impl!((0, C1));
+tuple_combinator_impl!((0, C1), (1, C2));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12));
+tuple_combinator_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13));
+tuple_combinator_impl!(
+    (0, C1),
+    (1, C2),
+    (2, C3),
+    (3, C4),
+    (4, C5),
+    (5, C6),
+    (6, C7),
+    (7, C8),
+    (8, C9),
+    (9, C10),
+    (10, C11),
+    (11, C12),
+    (12, C13),
+    (13, C14)
+);
+tuple_combinator_impl!(
     (0, C1),
     (1, C2),
     (2, C3),
@@ -120,7 +135,7 @@ tuple_impl!(
     (13, C14),
     (14, C15)
 );
-tuple_impl!(
+tuple_combinator_impl!(
     (0, C1),
     (1, C2),
     (2, C3),
