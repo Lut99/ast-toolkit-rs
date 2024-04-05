@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 13:45:47
+//    05 Apr 2024, 13:47:50
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,7 @@
 pub mod branch;
 pub mod error;
 pub mod fail;
+pub mod multi;
 pub mod sequence;
 pub mod value;
 
