@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    05 Apr 2024, 11:16:06
+//    05 Apr 2024, 11:33:31
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,15 @@ macro_rules! failure_impl {
     (
         $(#[$attrs:meta])*
         pub enum $name:ident {
-            $($fields:ident {},)*
+            $(
+                $(#[$var_attrs:meta])*
+                $variants:ident {
+                    $(
+                        $(#[$field_attrs:meta])*
+                        $fields_name:ident: $fields_ty:ty
+                    ),* $(,)?
+                },
+            )*
         }
     ) => {
         $(#[$attrs])*
@@ -40,7 +48,16 @@ macro_rules! failure_impl {
             Whitespace1,
 
             // Then any fields given by e.g. Error
-            $($fields:ident {},)*
+            $(
+
+                $(#[$var_attrs])*
+                $variants {
+                    $(
+                        $(#[$field_attrs])*
+                        $fields_name: $fields_ty,
+                    )*
+                },
+            )*
         }
         impl $name {
             /// Comparable to [`PartialEq::eq`], but then only to see if the variants match.
@@ -49,8 +66,17 @@ macro_rules! failure_impl {
             /// True if `self` has the same variant as `other`.
             pub fn is_same(&self, other: &Self) -> bool {
                 match (self, other) {
+                    // Failure fields first
+                    (Self::Digit1 { .. }, Self::Digit1 { .. }) => true,
+                    (Self::OneOfBytes1 { .. }, Self::OneOfBytes1 { .. }) => true,
+                    (Self::OneOfUtf81 { .. }, Self::OneOfUtf81 { .. }) => true,
                     (Self::Tag { .. }, Self::Tag { .. }) => true,
-                    $((Self::$fields { .. }, Self::$fields { .. }) => true,)*
+                    (Self::Whitespace1 { .. }, Self::Whitespace1 { .. }) => true,
+
+                    // Then any fields given by e.g. Error
+                    $((Self::$variants { .. }, Self::$variants { .. }) => true,)*
+
+                    // Not a match if not the same
                     _ => false,
                 }
             }

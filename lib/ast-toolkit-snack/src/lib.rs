@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 11:13:15
+//    05 Apr 2024, 11:35:16
 //  Auto updated?
 //    Yes
 //
@@ -142,7 +142,7 @@ tuple_impl!(
 
 
 /// Defines the shape of the output of [`Combinators`].
-#[derive(Clone, Copy, Debug, EnumDebug)]
+#[derive(Clone, Debug, EnumDebug)]
 pub enum Result<R, F, S> {
     /// An `output` of type `R` was parsed (1), with the remainder left unparsed (0).
     Ok(Span<F, S>, R),
