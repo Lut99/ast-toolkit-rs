@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    05 Apr 2024, 13:15:33
+//    05 Apr 2024, 17:59:10
 //  Auto updated?
 //    Yes
 //
@@ -40,10 +40,24 @@ macro_rules! failure_impl {
             Alt { branches: Vec<Self> },
             /// Failed to match at least one digit.
             Digit1,
+            /// Failed to match exactly `times` custom combinators.
+            ManyN { times: usize, got: usize, fail: Box<Self> },
             /// Failed to match a one-of byteset.
             OneOfBytes1 { byteset: &'static dyn crate::fail::DebugAsRef },
             /// Failed to match a one-of charset.
             OneOfUtf81 { charset: &'static dyn crate::fail::DebugAsRef },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator, where it's the punct that we failed to parse.
+            PunctuatedNPunct { times: usize, got: usize, fail: Box<Self> },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator.
+            PunctuatedNValue { times: usize, got: usize, fail: Box<Self> },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator, where it's the punct that we failed to parse.
+            PunctuatedTrailingNPunct { times: usize, got: usize, fail: Box<Self> },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator.
+            PunctuatedTrailingNValue { times: usize, got: usize, fail: Box<Self> },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator, where it's the punct that we failed to parse.
+            SeparatedListNPunct { times: usize, got: usize, fail: Box<Self> },
+            /// Failed to match exactly `times` custom combinators separated by some other combinator.
+            SeparatedListNValue { times: usize, got: usize, fail: Box<Self> },
             /// Failed to match a particular tag.
             Tag { tag: &'static dyn crate::fail::DebugAsRef },
             /// Failed to match at least one whitespace.
@@ -69,8 +83,15 @@ macro_rules! failure_impl {
                         // Failure fields first
                         (Self::Alt { branches: lhs }, Self::Alt { branches: rhs }) => lhs == rhs,
                         (Self::Digit1, Self::Digit1) => true,
+                        (Self::ManyN { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::ManyN { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::OneOfBytes1 { byteset: lhs }, Self::OneOfBytes1 { byteset: rhs }) => lhs.as_ref() == rhs.as_ref(),
                         (Self::OneOfUtf81 { charset: lhs }, Self::OneOfUtf81 { charset: rhs }) => lhs.as_ref() == rhs.as_ref(),
+                        (Self::SeparatedListNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::SeparatedListNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::PunctuatedNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::PunctuatedNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::PunctuatedTrailingNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::PunctuatedTrailingNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::Tag { tag: lhs }, Self::Tag { tag: rhs }) => lhs.as_ref() == rhs.as_ref(),
                         (Self::Whitespace1, Self::Whitespace1) => true,
 

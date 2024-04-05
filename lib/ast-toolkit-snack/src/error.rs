@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    05 Apr 2024, 13:15:37
+//    05 Apr 2024, 17:59:26
 //  Auto updated?
 //    Yes
 //
@@ -152,9 +152,20 @@ impl TryFrom<Failure> for Error {
                 branches: branches.into_iter().map(|fail| fail.try_into()).collect::<std::result::Result<Vec<Self>, FromFailureError>>()?,
             }),
             Failure::Digit1 => Ok(Self::Digit1),
+            Failure::ManyN { times, got, fail } => Ok(Self::ManyN { times, got, fail: Box::new((*fail).try_into()?) }),
             Failure::NotEnough => Err(FromFailureError::NotEnough),
             Failure::OneOfBytes1 { byteset } => Ok(Self::OneOfBytes1 { byteset }),
             Failure::OneOfUtf81 { charset } => Ok(Self::OneOfUtf81 { charset }),
+            Failure::PunctuatedNPunct { times, got, fail } => Ok(Self::PunctuatedNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
+            Failure::PunctuatedNValue { times, got, fail } => Ok(Self::PunctuatedNValue { times, got, fail: Box::new((*fail).try_into()?) }),
+            Failure::PunctuatedTrailingNPunct { times, got, fail } => {
+                Ok(Self::PunctuatedTrailingNPunct { times, got, fail: Box::new((*fail).try_into()?) })
+            },
+            Failure::PunctuatedTrailingNValue { times, got, fail } => {
+                Ok(Self::PunctuatedTrailingNValue { times, got, fail: Box::new((*fail).try_into()?) })
+            },
+            Failure::SeparatedListNPunct { times, got, fail } => Ok(Self::SeparatedListNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
+            Failure::SeparatedListNValue { times, got, fail } => Ok(Self::SeparatedListNValue { times, got, fail: Box::new((*fail).try_into()?) }),
             Failure::Tag { tag } => Ok(Self::Tag { tag }),
             Failure::Whitespace1 => Ok(Self::Whitespace1),
         }
