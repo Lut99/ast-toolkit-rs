@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    30 Mar 2024, 11:51:06
+//    05 Apr 2024, 11:16:06
 //  Auto updated?
 //    Yes
 //
@@ -28,8 +28,16 @@ macro_rules! failure_impl {
         $(#[$attrs])*
         pub enum $name {
             // Failure fields first
+            /// Failed to match at least one digit.
+            Digit1,
+            /// Failed to match a one-of byteset.
+            OneOfBytes1 { byteset: &'static dyn std::fmt::Debug },
+            /// Failed to match a one-of charset.
+            OneOfUtf81 { charset: &'static dyn std::fmt::Debug },
             /// Failed to match a particular tag.
             Tag { tag: &'static dyn std::fmt::Debug },
+            /// Failed to match at least one whitespace.
+            Whitespace1,
 
             // Then any fields given by e.g. Error
             $($fields:ident {},)*
@@ -59,7 +67,7 @@ pub(crate) use failure_impl;
 failure_impl! {
     /// `snack`'s extensive failure type that can be used to generate explanatory diagnostics.
     ///
-    /// One can think of this as a more restricted version of [`Error`](crate::error::Error), as any recoverable error may be turned into an unrecoverable one.
+    /// One can think of this as a subset of [`Error`](crate::error::Error), as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Copy, Debug)]
     pub enum Failure {}
 }

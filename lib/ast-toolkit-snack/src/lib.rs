@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    04 Apr 2024, 16:58:31
+//    05 Apr 2024, 11:13:15
 //  Auto updated?
 //    Yes
 //
@@ -27,6 +27,7 @@ pub mod streaming;
 // Imports
 use ast_toolkit_span::{Span, Spannable};
 use enum_debug::EnumDebug;
+use fail::Failure;
 
 
 /***** HELPER MACROS *****/
@@ -151,6 +152,22 @@ pub enum Result<R, F, S> {
     Error(error::Error),
 }
 impl<R, F, S> Result<R, F, S> {
+    /// Maps this result's [`Result::Fail`]-case.
+    ///
+    /// # Arguments
+    /// - `fail`: The [`Failure`] to return in case `self` is a [`Result::Fail`].
+    ///
+    /// # Returns
+    /// The given `fail`ure if `self` is a [`Result::Fail`]. Else, `self` is returned as-is.
+    #[inline]
+    pub fn map_fail(self, map_fn: impl FnOnce(Failure) -> Failure) -> Self {
+        match self {
+            Self::Ok(rem, res) => Self::Ok(rem, res),
+            Self::Fail(fail) => Self::Fail(map_fn(fail)),
+            Self::Error(err) => Self::Error(err),
+        }
+    }
+
     /// Unwraps this Result as if it's a [`Result::Ok`].
     ///
     /// # Returns

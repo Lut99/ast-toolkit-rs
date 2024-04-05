@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    30 Mar 2024, 11:29:58
+//    05 Apr 2024, 10:38:48
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,7 @@ use crate::fail::{failure_impl, Failure};
 failure_impl! {
     /// `snack`'s extensive error type that can be used to generate explanatory diagnostics.
     ///
-    /// One can think of this as a more verbose version of [`Failure`], as any recoverable error may be turned into an unrecoverable one.
+    /// One can think of this as a superset of [`Failure`], as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Copy, Debug)]
     pub enum Error {}
 }

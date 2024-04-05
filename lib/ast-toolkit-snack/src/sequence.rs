@@ -4,7 +4,7 @@
 //  Created:
 //    04 Apr 2024, 16:24:37
 //  Last edited:
-//    04 Apr 2024, 17:07:00
+//    05 Apr 2024, 10:39:37
 //  Auto updated?
 //    Yes
 //
@@ -83,6 +83,10 @@ pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(
 ///
 /// This combinator will try the given ones one-by-one. It either returns the first non-OK [`Result`], or a same-sized tuple of all the combinator's results.
 ///
+/// # Note
+/// Actually, this combinator is really a no-op, and simply returns the given combinator. This is possible because tuples simply implement [`Combinator`].  
+/// Only tuples up to a size of 16 is implemented. For more, consider nesting tuples within each other.
+///
 /// # Arguments
 /// - `combs`: The tuple of combinators to apply.
 ///
@@ -91,9 +95,6 @@ pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-///
-/// # Note
-/// Actually, this combinator is really a no-op, and simply returns the given combinator. This is possible because tuples simply implement [`Combinator`].
 pub fn tuple<F, S, C: Combinator<F, S>>(mut combs: C) -> impl FnMut(Span<F, S>) -> Result<C::Output, F, S> { move |input| combs.parse(input) }
 
 /// Applies the first combinator, then applies the second and discards the result.

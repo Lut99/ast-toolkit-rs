@@ -4,7 +4,7 @@
 //  Created:
 //    20 Mar 2024, 16:34:14
 //  Last edited:
-//    30 Mar 2024, 12:28:50
+//    05 Apr 2024, 10:57:15
 //  Auto updated?
 //    Yes
 //
@@ -83,13 +83,14 @@ where
         // See if we can parse the input
         let btag: &[u8] = tag.as_ref();
         let match_point: usize = input.match_bytes(btag);
-        if match_point < btag.len() {
-            // Didn't match the entire tag
-            Result::Fail(Failure::Tag { tag })
-        } else {
+        if match_point >= btag.len() {
+            // Matched the entire tag
             #[cfg(debug_assertions)]
             assert!(match_point == btag.len());
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
+        } else {
+            // Didn't match the entire tag
+            Result::Fail(Failure::Tag { tag })
         }
     }
 }
