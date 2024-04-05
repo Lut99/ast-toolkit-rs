@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    05 Apr 2024, 13:42:59
+//    05 Apr 2024, 18:16:47
 //  Auto updated?
 //    Yes
 //
@@ -17,8 +17,9 @@ pub mod complete;
 pub mod streaming;
 
 // Imports
-use ast_toolkit_span::{OneOfBytes, Span};
+use ast_toolkit_span::{Span, SpanRange};
 
+use crate::span::OneOfBytes;
 use crate::Result;
 
 
@@ -40,7 +41,7 @@ where
     S: Clone + OneOfBytes,
 {
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
-        let match_point: usize = input.one_of_bytes(byteset.as_ref());
+        let match_point: usize = input.one_of_bytes(SpanRange::Open, byteset.as_ref());
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
 }

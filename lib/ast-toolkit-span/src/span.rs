@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    05 Apr 2024, 11:07:12
+//    05 Apr 2024, 18:40:37
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,6 @@
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
-
-use unicode_segmentation::UnicodeSegmentation as _;
 
 
 /***** HELPER MACROS *****/
@@ -524,156 +522,13 @@ impl Spannable for String {
 
 
 
-/// Extends a [`Spannable`] with the power to be match-prefix'ed by a byte-like object.
-pub trait MatchBytes {
-    /// Returns the position up to which the given bytes are a match.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `bytes`: The byte pattern to match.
+/// A helper trait formalizing things that return [`Span`]s.
+pub trait Spanning<F, S> {
+    /// Returns some [`Span`] representing self's relation to the source text it was parsed from.
     ///
     /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched (but `bytes` may be longer!)
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize;
-}
-
-// Default binary impls for [`MatchBytes`]
-impl<'b> MatchBytes for &'b [u8] {
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
-        // Match the prefixes
-        let mut i: usize = 0;
-        for (b1, b2) in range.apply_to(self).iter().zip(bytes.iter()) {
-            if b1 != b2 {
-                return i;
-            }
-            i += 1;
-        }
-        i
-    }
-}
-impl<'b> MatchBytes for Cow<'b, [u8]> {
-    #[inline]
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&&**self, range, bytes) }
-}
-impl MatchBytes for Vec<u8> {
-    #[inline]
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&self.as_slice(), range, bytes) }
-}
-
-// Default string impls for [`MatchBytes`]
-impl<'s> MatchBytes for &'s str {
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
-        // Do a byte-wise comparison
-        self.as_bytes().match_bytes(range, bytes)
-    }
-}
-impl<'s> MatchBytes for Cow<'s, str> {
-    #[inline]
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&&**self, range, bytes) }
-}
-impl MatchBytes for String {
-    #[inline]
-    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&self.as_str(), range, bytes) }
-}
-
-
-
-/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed a set of possible bytes.
-pub trait OneOfBytes {
-    /// Returns the position up to which self starts with the given bytes.
-    ///
-    /// Precisely, given a set of bytes, will attempt to match the prefix of self for as long as it consists of one of those bytes.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `bytes`: The set of bytes to match.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize;
-}
-
-// Default binary impls for [`OneOfBytes`]
-impl<'b> OneOfBytes for &'b [u8] {
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
-        // Match the prefixes
-        let mut i: usize = 0;
-        for b in range.apply_to(self).iter() {
-            if !bytes.contains(b) {
-                return i;
-            }
-            i += 1;
-        }
-        i
-    }
-}
-impl<'b> OneOfBytes for Cow<'b, [u8]> {
-    #[inline]
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::one_of_bytes(&&**self, range, bytes) }
-}
-impl OneOfBytes for Vec<u8> {
-    #[inline]
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::one_of_bytes(&self.as_slice(), range, bytes) }
-}
-
-// Default string impls for [`OneOfBytes`]
-impl<'s> OneOfBytes for &'s str {
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
-        // Do a byte-wise comparison
-        self.as_bytes().one_of_bytes(range, bytes)
-    }
-}
-impl<'s> OneOfBytes for Cow<'s, str> {
-    #[inline]
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::one_of_bytes(&&**self, range, bytes) }
-}
-impl OneOfBytes for String {
-    #[inline]
-    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::one_of_bytes(&self.as_str(), range, bytes) }
-}
-
-
-
-/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed a set of possible graphemes.
-pub trait OneOfUtf8 {
-    /// Returns the position up to which self starts with the given characters.
-    ///
-    /// Precisely, given a set of graphemes, will attempt to match the prefix of self for as long as it consists of one of those graphemes.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `chars`: The set of graphemes (given as [`str`]-pointers) to match.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize;
-}
-
-// Default string impls for [`OneOfUtf8`]
-impl<'s> OneOfUtf8 for &'s str {
-    fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize {
-        // Match the prefixes
-        for (i, c) in range.apply_to_str(self).grapheme_indices(true) {
-            if !chars.contains(&c) {
-                return i;
-            }
-        }
-        self.len()
-    }
-}
-impl<'s> OneOfUtf8 for Cow<'s, str> {
-    #[inline]
-    fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize { <&str>::one_of_utf8(&&**self, range, chars) }
-}
-impl OneOfUtf8 for String {
-    #[inline]
-    fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize { <&str>::one_of_utf8(&self.as_str(), range, chars) }
+    /// A new [`Span`] that represents the spanned area.
+    fn span(&self) -> Span<F, S>;
 }
 
 
@@ -848,6 +703,24 @@ impl<F: Clone, S: Clone> Span<F, S> {
         // Build self
         Self { from: self.from.clone(), source: self.source.clone(), range }
     }
+
+    /// Returns a new Span that is equal to this one, but with an open end bound.
+    ///
+    /// This is useful during parsing to indicate a "from this moment onwards" kind of span.
+    ///
+    /// # Returns
+    /// A new Span that has the same start bound as `self` but and open end bound.
+    #[inline]
+    pub fn start_onwards(&self) -> Self {
+        let range: SpanRange = match self.range {
+            SpanRange::Closed(s, _) => SpanRange::ClosedOpen(s),
+            SpanRange::ClosedOpen(s) => SpanRange::ClosedOpen(s),
+            SpanRange::OpenClosed(_) => SpanRange::Open,
+            SpanRange::Open => SpanRange::Open,
+            SpanRange::Empty => SpanRange::Empty,
+        };
+        Self { from: self.from.clone(), source: self.source.clone(), range }
+    }
 }
 impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     /// Combines this span with another Span to span both areas.
@@ -869,52 +742,6 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     }
 }
 
-impl<F, S: MatchBytes> Span<F, S> {
-    /// Returns the position up to which the given bytes are a match for the spanned area.
-    ///
-    /// # Arguments
-    /// - `bytes`: The byte pattern to match.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire span was matched (but `bytes` may be longer!)
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    #[inline]
-    pub fn match_bytes(&self, bytes: &[u8]) -> usize { self.source.match_bytes(self.range, bytes) }
-}
-impl<F, S: OneOfBytes> Span<F, S> {
-    /// Returns the position up to which self starts with the given bytes.
-    ///
-    /// Precisely, given a set of bytes, will attempt to match the prefix of self for as long as it consists of one of those bytes.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `bytes`: The set of bytes to match.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    #[inline]
-    pub fn one_of_bytes(&self, bytes: &[u8]) -> usize { self.source.one_of_bytes(self.range, bytes) }
-}
-impl<F, S: OneOfUtf8> Span<F, S> {
-    /// Returns the position up to which self starts with the given characters.
-    ///
-    /// Precisely, given a set of graphemes, will attempt to match the prefix of self for as long as it consists of one of those graphemes.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `chars`: The set of graphemes (given as [`str`]-pointers) to match.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first "wrong" character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    #[inline]
-    pub fn one_of_utf8(&self, chars: &[&str]) -> usize { self.source.one_of_utf8(self.range, chars) }
-}
-
 impl<F, S: Spannable> Eq for Span<F, S> {}
 impl<F, S: Spannable> Hash for Span<F, S> {
     #[inline]
@@ -923,4 +750,9 @@ impl<F, S: Spannable> Hash for Span<F, S> {
 impl<F, S: Spannable> PartialEq for Span<F, S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
+}
+
+impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
+    #[inline]
+    fn span(&self) -> Span<F, S> { self.clone() }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    05 Apr 2024, 13:41:44
+//    05 Apr 2024, 18:55:31
 //  Auto updated?
 //    Yes
 //
@@ -13,9 +13,10 @@
 //!   consider not enough input an actualy failure.
 //
 
-use ast_toolkit_span::{OneOfBytes, OneOfUtf8, Span};
+use ast_toolkit_span::{Span, SpanRange, Spannable, Spanning as _};
 
 use crate::fail::{DebugAsRef, Failure};
+use crate::span::{OneOfBytes, OneOfUtf8};
 use crate::Result;
 
 
@@ -38,11 +39,11 @@ where
     S: Clone + OneOfUtf8,
 {
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
-        let match_point: usize = input.one_of_utf8(<&'static T as AsRef<[&'static str]>>::as_ref(&charset));
+        let match_point: usize = input.one_of_utf8(SpanRange::Open, <&'static T as AsRef<[&'static str]>>::as_ref(&charset));
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {
-            Result::Fail(Failure::OneOfUtf81 { charset })
+            Result::Fail(Failure::OneOfUtf81 { charset, span: input.start_onwards() })
         }
     }
 }
@@ -63,9 +64,9 @@ where
 pub fn digit1<F, S>(input: Span<F, S>) -> Result<Span<F, S>, F, S>
 where
     F: Clone,
-    S: Clone + OneOfBytes,
+    S: Clone + OneOfBytes + Spannable,
 {
-    super::super::bytes::complete::one_of1(b" \t\r\n")(input).map_fail(|_| Failure::Digit1)
+    super::super::bytes::complete::one_of1(b" \t\r\n")(input).map_fail(|f| Failure::Digit1 { span: f.span() })
 }
 
 /// Matches as many whitespace characters as possible.
@@ -90,7 +91,7 @@ where
 pub fn whitespace1<F, S>(input: Span<F, S>) -> Result<Span<F, S>, F, S>
 where
     F: Clone,
-    S: Clone + OneOfBytes,
+    S: Clone + OneOfBytes + Spannable,
 {
-    super::super::bytes::complete::one_of1(b" \t\r\n")(input).map_fail(|_| Failure::Whitespace1)
+    super::super::bytes::complete::one_of1(b" \t\r\n")(input).map_fail(|f| Failure::Whitespace1 { span: f.span() })
 }

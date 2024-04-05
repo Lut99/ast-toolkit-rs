@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    05 Apr 2024, 17:59:10
+//    05 Apr 2024, 19:19:13
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,7 @@
 //!   Defines `snack`'s extensive failure type.
 //
 
-use std::error;
+use std::error::{self, Error};
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 
@@ -21,7 +21,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 macro_rules! failure_impl {
     (
         $(#[$attrs:meta])*
-        pub enum $name:ident {
+        pub enum $name:ident<F, S> {
             $(
                 $(#[$var_attrs:meta])*
                 $variants:ident $({
@@ -32,20 +32,28 @@ macro_rules! failure_impl {
                 })?,
             )*
         }
+        impl<F, S> Spanning<F, S> {
+            $($spanning_variants:ident $({ $($spanning_fields:ident),* $(,)? $(..)? })? => $spanning_spans:expr),*
+            $(,)?
+        }
     ) => {
         $(#[$attrs])*
-        pub enum $name {
+        pub enum $name<F, S> {
             // Failure fields first
             /// All possible options failed.
             Alt { branches: Vec<Self> },
+            /// A `map_fallible()` failed because the user interfered with it.
+            Custom { problem: std::rc::Rc<dyn crate::fail::ErrorSpanning<F, S>> },
             /// Failed to match at least one digit.
-            Digit1,
+            Digit1 { span: Span<F, S> },
             /// Failed to match exactly `times` custom combinators.
             ManyN { times: usize, got: usize, fail: Box<Self> },
+            /// A combinator succeeded... when it shouldn't!
+            Not { span: Span<F, S> },
             /// Failed to match a one-of byteset.
-            OneOfBytes1 { byteset: &'static dyn crate::fail::DebugAsRef },
+            OneOfBytes1 { byteset: &'static dyn crate::fail::DebugAsRef, span: Span<F, S> },
             /// Failed to match a one-of charset.
-            OneOfUtf81 { charset: &'static dyn crate::fail::DebugAsRef },
+            OneOfUtf81 { charset: &'static dyn crate::fail::DebugAsRef, span: Span<F, S> },
             /// Failed to match exactly `times` custom combinators separated by some other combinator, where it's the punct that we failed to parse.
             PunctuatedNPunct { times: usize, got: usize, fail: Box<Self> },
             /// Failed to match exactly `times` custom combinators separated by some other combinator.
@@ -59,9 +67,9 @@ macro_rules! failure_impl {
             /// Failed to match exactly `times` custom combinators separated by some other combinator.
             SeparatedListNValue { times: usize, got: usize, fail: Box<Self> },
             /// Failed to match a particular tag.
-            Tag { tag: &'static dyn crate::fail::DebugAsRef },
+            Tag { tag: &'static dyn crate::fail::DebugAsRef, span: Span<F, S> },
             /// Failed to match at least one whitespace.
-            Whitespace1,
+            Whitespace1 { span: Span<F, S> },
 
             // Then any fields given by e.g. Error
             $(
@@ -74,26 +82,28 @@ macro_rules! failure_impl {
                 })?,
             )*
         }
-        impl Eq for $name {}
+        impl<F, S: ast_toolkit_span::Spannable> Eq for $name<F, S> {}
         ::paste::paste! {
-            impl PartialEq for $name {
+            impl<F, S: ast_toolkit_span::Spannable> PartialEq for $name<F, S> {
                 #[inline]
                 fn eq(&self, other: &Self) -> bool {
                     match (self, other) {
                         // Failure fields first
-                        (Self::Alt { branches: lhs }, Self::Alt { branches: rhs }) => lhs == rhs,
-                        (Self::Digit1, Self::Digit1) => true,
+                        (Self::Alt { branches: branches1 }, Self::Alt { branches: branches2 }) => branches1 == branches2,
+                        (Self::Custom { .. }, Self::Custom { .. }) => true,
+                        (Self::Digit1 { span: span1 }, Self::Digit1 { span: span2 }) => span1 == span2,
                         (Self::ManyN { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::ManyN { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
-                        (Self::OneOfBytes1 { byteset: lhs }, Self::OneOfBytes1 { byteset: rhs }) => lhs.as_ref() == rhs.as_ref(),
-                        (Self::OneOfUtf81 { charset: lhs }, Self::OneOfUtf81 { charset: rhs }) => lhs.as_ref() == rhs.as_ref(),
+                        (Self::Not { span: span1 }, Self::Not { span: span2 }) => span1 == span2,
+                        (Self::OneOfBytes1 { byteset: lhs, span: span1 }, Self::OneOfBytes1 { byteset: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
+                        (Self::OneOfUtf81 { charset: lhs, span: span1 }, Self::OneOfUtf81 { charset: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
                         (Self::SeparatedListNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::SeparatedListNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedTrailingNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedTrailingNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
-                        (Self::Tag { tag: lhs }, Self::Tag { tag: rhs }) => lhs.as_ref() == rhs.as_ref(),
-                        (Self::Whitespace1, Self::Whitespace1) => true,
+                        (Self::Tag { tag: lhs, span: span1 }, Self::Tag { tag: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
+                        (Self::Whitespace1 { span: span1 }, Self::Whitespace1 { span: span2 }) => span1 == span2,
 
                         // Then any fields given by e.g. Error
                         $(
@@ -111,8 +121,45 @@ macro_rules! failure_impl {
                 }
             }
         }
+        impl<F: Clone, S: Clone + ast_toolkit_span::Spannable> ast_toolkit_span::Spanning<F, S> for $name<F, S> {
+            #[inline]
+            fn span(&self) -> Span<F, S> {
+                match self {
+                    // Failure fields first
+                    Self::Alt { branches } => {
+                        // Collect all spans into one.
+                        let mut combs = branches.iter();
+                        let mut span: Span<F, S> = combs.next().unwrap().span();
+                        for comb in combs {
+                            span.join_mut(&comb.span());
+                        }
+                        span
+                    },
+                    Self::Custom { problem } => problem.span(),
+                    Self::Digit1 { span } => span.clone(),
+                    Self::ManyN { fail, .. } => fail.span(),
+                    Self::Not { span } => span.clone(),
+                    Self::OneOfBytes1 { span, .. } => span.clone(),
+                    Self::OneOfUtf81 { span, .. } => span.clone(),
+                    Self::PunctuatedNPunct { fail, .. } => fail.span(),
+                    Self::PunctuatedNValue { fail, .. } => fail.span(),
+                    Self::PunctuatedTrailingNPunct { fail, .. } => fail.span(),
+                    Self::PunctuatedTrailingNValue { fail, .. } => fail.span(),
+                    Self::SeparatedListNPunct { fail, .. } => fail.span(),
+                    Self::SeparatedListNValue { fail, .. } => fail.span(),
+                    Self::Tag { span, .. } => span.clone(),
+                    Self::Whitespace1 { span } => span.clone(),
+
+                    // Then any fields given by e.g. Error
+                    $(
+                        Self::$spanning_variants $({ $($spanning_fields,)* .. })? => $spanning_spans,
+                    )*
+                }
+            }
+        }
     };
 }
+use ast_toolkit_span::{Span, Spanning};
 pub(crate) use failure_impl;
 
 
@@ -124,6 +171,10 @@ pub(crate) use failure_impl;
 pub trait DebugAsRef: Debug + AsRef<[u8]> {}
 impl<T: ?Sized + Debug + AsRef<[u8]>> DebugAsRef for T {}
 
+/// A helper trait that abstracts over things both [`Debug`] and [`Spanning`].
+pub trait ErrorSpanning<F, S>: Error + Spanning<F, S> {}
+impl<F, S, T: ?Sized + Error + Spanning<F, S>> ErrorSpanning<F, S> for T {}
+
 
 
 
@@ -134,8 +185,11 @@ failure_impl! {
     ///
     /// One can think of this as a subset of [`Error`](crate::error::Error), as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Debug)]
-    pub enum Failure {
+    pub enum Failure<F, S> {
         /// There wasn't enough input yet to parse. Only returned by streaming combinators.
-        NotEnough,
+        NotEnough { span: Span<F, S> },
+    }
+    impl<F, S> Spanning<F, S> {
+        NotEnough { span } => span.clone(),
     }
 }

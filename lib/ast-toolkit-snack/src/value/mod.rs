@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:31:45
 //  Last edited:
-//    05 Apr 2024, 13:36:47
+//    05 Apr 2024, 18:40:48
 //  Auto updated?
 //    Yes
 //
@@ -20,9 +20,10 @@ pub mod bytes;
 pub mod utf8;
 
 // Imports
-use ast_toolkit_span::{MatchBytes, Span};
+use ast_toolkit_span::{Span, SpanRange};
 
 use crate::fail::{DebugAsRef, Failure};
+use crate::span::MatchBytes;
 use crate::Result;
 
 
@@ -81,7 +82,7 @@ where
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
         // See if we can parse the input
         let btag: &[u8] = tag.as_ref();
-        let match_point: usize = input.match_bytes(btag);
+        let match_point: usize = input.match_bytes(SpanRange::Open, btag);
         if match_point >= btag.len() {
             // Matched the entire tag
             #[cfg(debug_assertions)]
@@ -89,7 +90,7 @@ where
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {
             // Didn't match the entire tag
-            Result::Fail(Failure::Tag { tag })
+            Result::Fail(Failure::Tag { tag, span: input.start_onwards() })
         }
     }
 }

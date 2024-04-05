@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 13:47:50
+//    05 Apr 2024, 18:33:19
 //  Auto updated?
 //    Yes
 //
@@ -19,10 +19,12 @@
 
 // Declare submodules
 pub mod branch;
+pub mod comb;
 pub mod error;
 pub mod fail;
 pub mod multi;
 pub mod sequence;
+pub mod span;
 pub mod value;
 
 // Imports
@@ -163,9 +165,9 @@ pub enum Result<R, F, S> {
     /// An `output` of type `R` was parsed (1), with the remainder left unparsed (0).
     Ok(Span<F, S>, R),
     /// Failed to parse input with the given reason, but recoverably so.
-    Fail(fail::Failure),
+    Fail(fail::Failure<F, S>),
     /// Failed to parse input with the given reason, but unrecoverably so.
-    Error(error::Error),
+    Error(error::Error<F, S>),
 }
 impl<R, F, S> Result<R, F, S> {
     /// Maps this result's [`Result::Fail`]-case.
@@ -176,7 +178,7 @@ impl<R, F, S> Result<R, F, S> {
     /// # Returns
     /// The given `fail`ure if `self` is a [`Result::Fail`]. Else, `self` is returned as-is.
     #[inline]
-    pub fn map_fail(self, map_fn: impl FnOnce(Failure) -> Failure) -> Self {
+    pub fn map_fail(self, map_fn: impl FnOnce(Failure<F, S>) -> Failure<F, S>) -> Self {
         match self {
             Self::Ok(rem, res) => Self::Ok(rem, res),
             Self::Fail(fail) => Self::Fail(map_fn(fail)),

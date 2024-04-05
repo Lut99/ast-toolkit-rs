@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    05 Apr 2024, 17:59:26
+//    05 Apr 2024, 19:18:14
 //  Auto updated?
 //    Yes
 //
@@ -66,7 +66,7 @@ pub fn commit<F, S, C: Combinator<F, S>>(mut comb: C) -> impl FnMut(Span<F, S>) 
     move |input: Span<F, S>| -> Result<C::Output, F, S> {
         match comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, res),
-            Result::Fail(Failure::NotEnough) => Result::Fail(Failure::NotEnough),
+            Result::Fail(Failure::NotEnough { span }) => Result::Fail(Failure::NotEnough { span }),
             // SAFETY: We can `unwrap()` because we caught the only case for which it fails above.
             Result::Fail(fail) => Result::Error(fail.try_into().unwrap()),
             Result::Error(err) => Result::Error(err),
@@ -130,7 +130,7 @@ failure_impl! {
     ///
     /// One can think of this as a superset of [`Failure`], as any recoverable error may be turned into an unrecoverable one.
     #[derive(Clone, Debug)]
-    pub enum Error {
+    pub enum Error<F, S> {
         /// Defines that some nested error has some context string and span.
         Context {
             /// The context string describing what it is we're parsing.
@@ -141,21 +141,26 @@ failure_impl! {
             err: Box<Self>,
         },
     }
+    impl<F, S> Spanning<F, S> {
+        Context { err, .. } => err.span(),
+    }
 }
-impl TryFrom<Failure> for Error {
+impl<F, S> TryFrom<Failure<F, S>> for Error<F, S> {
     type Error = FromFailureError;
 
     #[inline]
-    fn try_from(value: Failure) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Failure<F, S>) -> std::result::Result<Self, Self::Error> {
         match value {
             Failure::Alt { branches } => Ok(Self::Alt {
                 branches: branches.into_iter().map(|fail| fail.try_into()).collect::<std::result::Result<Vec<Self>, FromFailureError>>()?,
             }),
-            Failure::Digit1 => Ok(Self::Digit1),
+            Failure::Custom { problem } => Ok(Self::Custom { problem }),
+            Failure::Digit1 { span } => Ok(Self::Digit1 { span }),
             Failure::ManyN { times, got, fail } => Ok(Self::ManyN { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::NotEnough => Err(FromFailureError::NotEnough),
-            Failure::OneOfBytes1 { byteset } => Ok(Self::OneOfBytes1 { byteset }),
-            Failure::OneOfUtf81 { charset } => Ok(Self::OneOfUtf81 { charset }),
+            Failure::Not { span } => Ok(Self::Not { span }),
+            Failure::NotEnough { .. } => Err(FromFailureError::NotEnough),
+            Failure::OneOfBytes1 { byteset, span } => Ok(Self::OneOfBytes1 { byteset, span }),
+            Failure::OneOfUtf81 { charset, span } => Ok(Self::OneOfUtf81 { charset, span }),
             Failure::PunctuatedNPunct { times, got, fail } => Ok(Self::PunctuatedNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
             Failure::PunctuatedNValue { times, got, fail } => Ok(Self::PunctuatedNValue { times, got, fail: Box::new((*fail).try_into()?) }),
             Failure::PunctuatedTrailingNPunct { times, got, fail } => {
@@ -166,8 +171,8 @@ impl TryFrom<Failure> for Error {
             },
             Failure::SeparatedListNPunct { times, got, fail } => Ok(Self::SeparatedListNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
             Failure::SeparatedListNValue { times, got, fail } => Ok(Self::SeparatedListNValue { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::Tag { tag } => Ok(Self::Tag { tag }),
-            Failure::Whitespace1 => Ok(Self::Whitespace1),
+            Failure::Tag { tag, span } => Ok(Self::Tag { tag, span }),
+            Failure::Whitespace1 { span } => Ok(Self::Whitespace1 { span }),
         }
     }
 }

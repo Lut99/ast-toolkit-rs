@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    05 Apr 2024, 13:40:20
+//    05 Apr 2024, 18:17:51
 //  Auto updated?
 //    Yes
 //
@@ -20,8 +20,9 @@ pub mod complete;
 pub mod streaming;
 
 // Imports
-use ast_toolkit_span::{OneOfBytes, OneOfUtf8, Span};
+use ast_toolkit_span::{Span, SpanRange};
 
+use crate::span::{OneOfBytes, OneOfUtf8};
 use crate::Result;
 
 
@@ -43,7 +44,7 @@ where
     S: Clone + OneOfUtf8,
 {
     move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
-        let match_point: usize = input.one_of_utf8(charset.as_ref());
+        let match_point: usize = input.one_of_utf8(SpanRange::Open, charset.as_ref());
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
 }

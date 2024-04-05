@@ -13,6 +13,7 @@ ast-toolkit-span = { path = "../ast-toolkit-span" }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 paste = "1.0"
 stackvec = { git = "https://github.com/Lut99/stackvec-rs" }
+unicode-segmentation = "1.11"
 
 
 [dev-dependencies]

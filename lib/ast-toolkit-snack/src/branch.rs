@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    05 Apr 2024, 13:33:16
+//    05 Apr 2024, 18:37:09
 //  Auto updated?
 //    Yes
 //
@@ -42,7 +42,12 @@ mod tests {
         // Failure
         assert_eq!(
             alt((tag(&"Goodbye"), tag(&"Extra goodbye")))(input),
-            Result::Fail(Failure::Alt { branches: vec![Failure::Tag { tag: &"Goodbye" }, Failure::Tag { tag: &"Extra goodbye" }] })
+            Result::Fail(Failure::Alt {
+                branches: vec![Failure::Tag { tag: &"Goodbye", span: input.slice(0..) }, Failure::Tag {
+                    tag:  &"Extra goodbye",
+                    span: input.slice(0..),
+                }],
+            })
         );
     }
 }
@@ -101,7 +106,7 @@ macro_rules! tuple_branchable_impl {
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 // Some cheap store for collecting failures
-                let mut fails: StackVec<{ count!($fname $($name)+) }, Failure> = StackVec::new();
+                let mut fails: StackVec<{ count!($fname $($name)+) }, Failure<F, S>> = StackVec::new();
 
                 // Go over all
                 tuple_branchable_impl!(last self, input, fails, $fi, $($i),+);
