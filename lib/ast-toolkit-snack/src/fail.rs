@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    05 Apr 2024, 19:19:13
+//    05 Apr 2024, 19:35:01
 //  Auto updated?
 //    Yes
 //
@@ -31,6 +31,14 @@ macro_rules! failure_impl {
                     ),* $(,)?
                 })?,
             )*
+        }
+        impl Expects {
+            $($expects_variants:ident $({ $($expects_fields:ident),* $(,)? $(..)? })? => $expects_spans:expr),*
+            $(,)?
+        }
+        impl Display {
+            $($display_variants:ident $({ $($display_fields:ident),* $(,)? $(..)? })? => $display_spans:expr),*
+            $(,)?
         }
         impl<F, S> Spanning<F, S> {
             $($spanning_variants:ident $({ $($spanning_fields:ident),* $(,)? $(..)? })? => $spanning_spans:expr),*
@@ -82,6 +90,7 @@ macro_rules! failure_impl {
                 })?,
             )*
         }
+
         impl<F, S: ast_toolkit_span::Spannable> Eq for $name<F, S> {}
         ::paste::paste! {
             impl<F, S: ast_toolkit_span::Spannable> PartialEq for $name<F, S> {
@@ -121,6 +130,34 @@ macro_rules! failure_impl {
                 }
             }
         }
+
+        impl<F, S> $name<F, S> {
+            /// Returns some string description of what this variant expected to parse.
+            ///
+            /// # Returns
+            /// Some [`String`] describing what was expected.
+            pub fn expects(&self) -> String {
+                match self {
+                    // Failure fields first
+                    Self::Alt { branches } => branches.iter().map(|b| b.expects()).collect::<Vec<String>>().join(", "),
+                    Self::Custom { .. } => todo!(),
+                    Self::Digit1 { .. } => "(a digit [0-9])".into(),
+                    Self::ManyN { times, fail, .. } => format!("({} times {})", times, fail.expects()),
+                    Self::Not { span } => format!("(anything else)"),
+                    Self::OneOfBytes1 { byteset } => format!("({})", byteset.as_ref().iter().map(|b| format!("{:0x}"))),
+                }
+            }
+        }
+        impl<F, S> Display for $name<F, S> {
+            fn fmt(&self, f: &mut Formatter) -> FResult {
+                match self {
+                    // Failure fields first
+                    Self::Alt { branches } => write!(f, "(Expected one of: {})", self.expects()),
+                    _ => todo!(),
+                }
+            }
+        }
+
         impl<F: Clone, S: Clone + ast_toolkit_span::Spannable> ast_toolkit_span::Spanning<F, S> for $name<F, S> {
             #[inline]
             fn span(&self) -> Span<F, S> {
@@ -188,6 +225,9 @@ failure_impl! {
     pub enum Failure<F, S> {
         /// There wasn't enough input yet to parse. Only returned by streaming combinators.
         NotEnough { span: Span<F, S> },
+    }
+    impl Display {
+        NotEnough { .. } => write!(f, "Not enough input"),
     }
     impl<F, S> Spanning<F, S> {
         NotEnough { span } => span.clone(),

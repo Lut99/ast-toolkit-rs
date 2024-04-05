@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    05 Apr 2024, 19:18:14
+//    05 Apr 2024, 19:27:10
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::{Span, SpanRange};
+use ast_toolkit_span::Span;
 
 use crate::fail::{failure_impl, Failure};
 use crate::{Combinator, Result};
@@ -102,20 +102,12 @@ where
     C: Combinator<F, S>,
 {
     move |input: Span<F, S>| -> Result<C::Output, F, S> {
-        // Extract the start of the range that is contextualized
-        let start_range: SpanRange = match input.range() {
-            SpanRange::Closed(s, _) => SpanRange::ClosedOpen(s),
-            SpanRange::ClosedOpen(s) => SpanRange::ClosedOpen(s),
-            SpanRange::OpenClosed(_) => SpanRange::Open,
-            SpanRange::Open => SpanRange::Open,
-            SpanRange::Empty => SpanRange::Empty,
-        };
-
         // Run the parsing, wrapping any errors
+        let span: Span<F, S> = input.start_onwards();
         match comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, res),
             Result::Fail(fail) => Result::Fail(fail),
-            Result::Error(err) => Result::Error(Error::Context { context, start_range, err: Box::new(err) }),
+            Result::Error(err) => Result::Error(Error::Context { context, span, err: Box::new(err) }),
         }
     }
 }
@@ -136,13 +128,16 @@ failure_impl! {
             /// The context string describing what it is we're parsing.
             context: &'static str,
             /// Some span that indicates where this context started.
-            start_range: SpanRange,
+            span: Span<F, S>,
             /// The error that we wrap and display with context.
             err: Box<Self>,
         },
     }
+    impl Display {
+        Context { context, .. } => write!(f, "The above occurred while parsing {context}"),
+    }
     impl<F, S> Spanning<F, S> {
-        Context { err, .. } => err.span(),
+        Context { span, err, .. } => span.join(&err.span()).expect("`span` and `err` are from different source texts; cannot merge them!"),
     }
 }
 impl<F, S> TryFrom<Failure<F, S>> for Error<F, S> {
