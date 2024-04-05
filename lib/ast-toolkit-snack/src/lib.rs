@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 13:15:03
+//    05 Apr 2024, 13:45:18
 //  Auto updated?
 //    Yes
 //
@@ -19,10 +19,10 @@
 
 // Declare submodules
 pub mod branch;
-pub mod complete;
 pub mod error;
 pub mod fail;
-pub mod streaming;
+pub mod sequence;
+pub mod value;
 
 // Imports
 use ast_toolkit_span::{Span, Spannable};

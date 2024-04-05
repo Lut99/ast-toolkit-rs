@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    05 Apr 2024, 13:28:51
+//    05 Apr 2024, 13:33:16
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,7 @@ use crate::{Combinator, Result};
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
-    use super::super::complete::tag;
+    use super::super::value::tag;
     use super::*;
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;

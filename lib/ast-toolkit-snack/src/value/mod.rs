@@ -2,21 +2,21 @@
 //    by Lut99
 //
 //  Created:
-//    20 Mar 2024, 16:34:14
+//    05 Apr 2024, 13:31:45
 //  Last edited:
-//    05 Apr 2024, 13:13:47
+//    05 Apr 2024, 13:36:47
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Defines complete versions of various combinators, which assume that
-//!   the entire input source is known and not having enough is a hard
-//!   error.
+//!   Defines combinators for matching input by its value.
+//!   
+//!   This defines all the "hands on" combinators, which actually touch the
+//!   input stream instead of only other combinators.
 //
 
 // Declare submodules
 pub mod bytes;
-pub mod sequence;
 pub mod utf8;
 
 // Imports
