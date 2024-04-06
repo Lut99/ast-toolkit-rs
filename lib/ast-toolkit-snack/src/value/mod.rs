@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:31:45
 //  Last edited:
-//    05 Apr 2024, 18:40:48
+//    06 Apr 2024, 12:40:20
 //  Auto updated?
 //    Yes
 //
@@ -19,12 +19,15 @@
 pub mod bytes;
 pub mod utf8;
 
+use std::borrow::Cow;
+use std::marker::PhantomData;
+
 // Imports
 use ast_toolkit_span::{Span, SpanRange};
 
 use crate::fail::{DebugAsRef, Failure};
 use crate::span::MatchBytes;
-use crate::Result;
+use crate::{Combinator, Expects, Result};
 
 
 /***** TESTS *****/
@@ -32,7 +35,7 @@ use crate::Result;
 mod tests {
     use super::tag;
     use crate::fail::Failure;
-    use crate::Result;
+    use crate::{Combinator as _, Result};
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
 
@@ -41,20 +44,20 @@ mod tests {
     fn test_tag() {
         // Some success stories
         let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = tag(&"Hello")(input).unwrap();
+        let (rem, res) = tag(&"Hello").parse(input).unwrap();
         assert_eq!(rem, input.slice(5..));
         assert_eq!(res, input.slice(..5));
-        let (rem, res) = tag(&", ")(rem).unwrap();
+        let (rem, res) = tag(&", ").parse(rem).unwrap();
         assert_eq!(rem, input.slice(7..));
         assert_eq!(res, input.slice(5..7));
-        let (rem, res) = tag(&"world!")(rem).unwrap();
+        let (rem, res) = tag(&"world!").parse(rem).unwrap();
         assert_eq!(rem, input.slice(13..));
         assert_eq!(res, input.slice(7..13));
 
         // Failure
-        assert!(matches!(tag(&"Goodbye")(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"Ho")(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"hello, world!")(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Tag { .. })));
     }
 }
 
@@ -72,25 +75,54 @@ mod tests {
 ///
 /// # Returns
 /// A [`Combinator`] that matches the given `tag`.
-pub fn tag<T, F, S>(tag: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
+pub fn tag<F, S, T>(tag: &'static T) -> impl Combinator<F, S, Output = Span<F, S>>
 where
-    T: DebugAsRef,
-    &'static T: AsRef<[u8]>,
     F: Clone,
     S: Clone + MatchBytes,
+    T: DebugAsRef,
+    &'static T: AsRef<[u8]>,
 {
-    move |input: Span<F, S>| -> Result<Span<F, S>, F, S> {
-        // See if we can parse the input
-        let btag: &[u8] = tag.as_ref();
-        let match_point: usize = input.match_bytes(SpanRange::Open, btag);
-        if match_point >= btag.len() {
-            // Matched the entire tag
-            #[cfg(debug_assertions)]
-            assert!(match_point == btag.len());
-            Result::Ok(input.slice(match_point..), input.slice(..match_point))
-        } else {
-            // Didn't match the entire tag
-            Result::Fail(Failure::Tag { tag, span: input.start_onwards() })
+    /// The concrete combinator returned by `tag()`.
+    pub struct Tag<F, S, T: 'static> {
+        tag: &'static T,
+        _f:  PhantomData<F>,
+        _s:  PhantomData<S>,
+    }
+    impl<F, S, T> Expects for Tag<F, S, T>
+    where
+        T: 'static,
+        &'static T: AsRef<[u8]>,
+    {
+        fn what(&self) -> std::borrow::Cow<str> {
+            Cow::Owned(format!("one of {}", self.tag.as_ref().iter().map(|b| format!("{b:#04X}")).collect::<Vec<String>>().join(", ")))
+        }
+
+        fn context(&self) -> Option<&dyn Expects> { None }
+    }
+    impl<F, S, T> Combinator<F, S> for Tag<F, S, T>
+    where
+        F: Clone,
+        S: Clone + MatchBytes,
+        T: DebugAsRef,
+        &'static T: AsRef<[u8]>,
+    {
+        type Output = Span<F, S>;
+
+        fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+            // See if we can parse the input
+            let btag: &[u8] = self.tag.as_ref();
+            let match_point: usize = input.match_bytes(SpanRange::Open, btag);
+            if match_point >= btag.len() {
+                // Matched the entire tag
+                #[cfg(debug_assertions)]
+                assert!(match_point == btag.len());
+                Result::Ok(input.slice(match_point..), input.slice(..match_point))
+            } else {
+                // Didn't match the entire tag
+                Result::Fail(Failure::Tag { tag: self.tag, span: input.start_onwards() })
+            }
         }
     }
+
+    Tag { tag, _f: PhantomData::default(), _s: PhantomData::default() }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    05 Apr 2024, 18:33:19
+//    06 Apr 2024, 13:05:02
 //  Auto updated?
 //    Yes
 //
@@ -28,6 +28,8 @@ pub mod span;
 pub mod value;
 
 // Imports
+use std::fmt::{Display, Formatter, Result as FResult};
+
 use ast_toolkit_span::{Span, Spannable};
 use enum_debug::EnumDebug;
 use fail::Failure;
@@ -36,7 +38,27 @@ use fail::Failure;
 /***** HELPER MACROS *****/
 /// Implements [`Combinator`] for various sizes of tuples for us.
 macro_rules! tuple_combinator_impl {
+    (replace $name:ident) => { "{}" };
+
     ($(($i:tt, $name:ident)),*) => {
+        impl<$($name: Expects),*> Expects for ($($name,)*) {
+            fn plain_fmt(&self, f: &mut Formatter) -> FResult {
+                write!(f, "a sequence of ")?;
+                $(if $i > 0 { write!(f, ", ")?; }; self.$i.plain_fmt(f)?;)*
+                Ok(())
+            }
+
+            fn context_fmt(&self, f: &mut Formatter, context: Option<&dyn Expects>) -> FResult {
+                // There never would be any further details, so just hit it with this
+                write!(f, "Expected ")?;
+                self.plain_fmt(f)?;
+                writeln!(f)?;
+                writeln!(f)
+            }
+
+            fn details(&self) -> Option<&dyn Expects> { None }
+        }
+
         impl<F, S, $($name: Combinator<F, S>),*> Combinator<F, S> for ($($name,)*) {
             type Output = ($($name::Output,)*);
 
@@ -63,9 +85,101 @@ macro_rules! tuple_combinator_impl {
 
 
 
+/***** FORMATTERS *****/
+/// Allows something implementing [`Expects`] to be nicely formatted.
+pub struct ExpectsFormatter<'e, 'd> {
+    exp:     &'e dyn Expects,
+    details: Option<&'d dyn Expects>,
+}
+impl<'e, 'd> Display for ExpectsFormatter<'e, 'd> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self.details {
+            // If there's any details, format it with ourselves as context
+            Some(details) => details.context_fmt(f, Some(self.exp)),
+            // Else, just format plainly
+            None => self.exp.plain_fmt(f),
+        }
+    }
+}
+
+
+
+
+
 /***** LIBRARY *****/
-/// The trait that unifies ALL (...output) snack parser combinators.
-pub trait Combinator<F, S> {
+/// A trait that allows something (probably a combinator) to express what it expect(s|ed) as input.
+///
+/// The expects string should be returned by the parent type's [`Display`]-implementation.
+pub trait Expects {
+    /// Formats this Expects plainly, just writing what it itself expects.
+    ///
+    /// The string written should be something along the lines of filling in `XXX` in:
+    /// ```plain
+    /// Expected XXX
+    /// ```
+    ///
+    /// # Arguments
+    /// - `f`: Some [`Formatter`] to write to.
+    ///
+    /// # Errors
+    /// This function should only error if it failed to write to the given `f`ormatter.
+    fn plain_fmt(&self, f: &mut Formatter) -> FResult;
+
+    /// Formats this Expects with additional context, writing a more complete Expects-experience.
+    ///
+    /// The string written should be something along the lines of:
+    /// ```plain
+    /// Expected something.
+    ///
+    /// This happened while parsing:
+    /// - Something else;
+    /// - Something yet entirely different;
+    /// - Something super duper different.
+    /// ```
+    ///
+    /// # Arguments
+    /// - `f`: Some [`Formatter`] to write to.
+    /// - `context`: An optional additional [`Expects`] that should be given as context. If [`None`], then this is the leaf node of the stack.
+    ///
+    /// # Errors
+    /// This function should only error if it failed to write to the given `f`ormatter.
+    fn context_fmt(&self, f: &mut Formatter, context: Option<&dyn Expects>) -> FResult;
+
+
+    /// Returns some more specified expects string than this.
+    ///
+    /// You could say that `self` is the context of this more specific expects.
+    ///
+    /// # Returns
+    /// Some Expects if there is a more specified one, or else [`None`].
+    fn details(&self) -> Option<&dyn Expects>;
+}
+
+/// Extends [`Expects`] to make it nicer to work with.
+pub trait ExpectsExt: Expects {
+    /// Returns a formatter that only writes what this Expects expects, no context.
+    ///
+    /// # Returns
+    /// An [`ExpectsFormatter`] implementing [`Display`].
+    fn expects<'e>(&'e self) -> ExpectsFormatter<'e, 'static>;
+
+    /// Returns a formatter that writes what this Expects expects, with context.
+    ///
+    /// # Returns
+    /// An [`ExpectsFormatter`] implementing [`Display`].
+    fn expects_with_context(&self) -> ExpectsFormatter;
+}
+impl<T: Expects> ExpectsExt for T {
+    fn expects<'e>(&'e self) -> ExpectsFormatter<'e, 'static> { ExpectsFormatter { exp: self, details: None } }
+
+    fn expects_with_context<'e>(&'e self) -> ExpectsFormatter<'e, 'e> { ExpectsFormatter { exp: self, details: self.details() } }
+}
+
+
+
+/// The trait that unifies ALL snack parser combinators.
+pub trait Combinator<F, S>: Expects {
     /// The output type for this Combinator.
     type Output;
 
@@ -80,14 +194,6 @@ pub trait Combinator<F, S> {
     /// - [`SnackResult::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
     /// - [`SnackResult::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
     fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
-}
-
-// Default impls for functions
-impl<R, F, S, T: FnMut(Span<F, S>) -> Result<R, F, S>> Combinator<F, S> for T {
-    type Output = R;
-
-    #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<R, F, S> { self(input) }
 }
 
 // Default impls for tuples

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    05 Apr 2024, 18:37:09
+//    06 Apr 2024, 12:31:07
 //  Auto updated?
 //    Yes
 //
@@ -12,11 +12,14 @@
 //!   Implements branching combinators. Actually just [`alt()`].
 //
 
+use std::borrow::Cow;
+use std::marker::PhantomData;
+
 use ast_toolkit_span::Span;
 use stackvec::StackVec;
 
 use crate::fail::Failure;
-use crate::{Combinator, Result};
+use crate::{Combinator, Expects, Result};
 
 
 /***** TESTS *****/
@@ -31,17 +34,17 @@ mod tests {
     fn test_alt() {
         // Some success stories
         let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = alt((tag(&"Hello"), tag(&"Goodbye")))(input).unwrap();
+        let (rem, res) = alt((tag(&"Hello"), tag(&"Goodbye"))).parse(input).unwrap();
         assert_eq!(rem, input.slice(5..));
         assert_eq!(res, input.slice(..5));
         let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = alt((tag(&"Goodbye"), tag(&"Hello")))(input).unwrap();
+        let (rem, res) = alt((tag(&"Goodbye"), tag(&"Hello"))).parse(input).unwrap();
         assert_eq!(rem, input.slice(5..));
         assert_eq!(res, input.slice(..5));
 
         // Failure
         assert_eq!(
-            alt((tag(&"Goodbye"), tag(&"Extra goodbye")))(input),
+            alt((tag(&"Goodbye"), tag(&"Extra goodbye"))).parse(input),
             Result::Fail(Failure::Alt {
                 branches: vec![Failure::Tag { tag: &"Goodbye", span: input.slice(0..) }, Failure::Tag {
                     tag:  &"Extra goodbye",
@@ -68,6 +71,8 @@ macro_rules! count {
 
 /// Implements [`Branchable`] for a tuple with given number of parameters.
 macro_rules! tuple_branchable_impl {
+    (replace $name:ident) => { "\n - {}" };
+
     (last $self:ident, $input:ident, $fails:ident, $fi:tt, $($i:tt),+) => {
         // First, do a non-last one
         match $self.$fi.parse($input.clone()) {
@@ -91,6 +96,9 @@ macro_rules! tuple_branchable_impl {
         impl<F, S, $fname: Combinator<F, S>> Branchable<F, S> for ($fname,) {
             type Output = $fname::Output;
 
+            fn what(&self) -> Cow<str> { self.0.what() }
+            fn context(&self) -> Option<&dyn Expects> { self.0.context() }
+
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 match self.$fi.parse(input) {
                     Result::Ok(rem, res) => Result::Ok(rem, res),
@@ -103,6 +111,13 @@ macro_rules! tuple_branchable_impl {
     (($fi:tt, $fname:ident), $(($i:tt, $name:ident)),+) => {
         impl<F: Clone, S: Clone, R, $fname: Combinator<F, S, Output = R> $(, $name: Combinator<F, S, Output = R>)+> Branchable<F, S> for ($fname, $($name),*) {
             type Output = R;
+
+            fn what(&self) -> Cow<str> { Cow::Owned(format!(
+                concat!("Expecting one of\n - {}", $(tuple_branchable_impl!(replace $name)),+),
+                self.$fi.what(),
+                $(self.$i.what()),+
+            )) }
+            fn context(&self) -> Option<&dyn Expects> { self.0.context() }
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 // Some cheap store for collecting failures
@@ -127,6 +142,21 @@ macro_rules! tuple_branchable_impl {
 pub trait Branchable<F, S> {
     /// The output of all the branched combinators.
     type Output;
+
+
+    /// Returns some string describing what this Expects is actually expecting.
+    ///
+    /// # Returns
+    /// A string(-like) that described swhat to expect.
+    fn what(&self) -> Cow<str>;
+
+    /// Returns another Expects-implementing type that provides some context as to why this is expected.
+    ///
+    /// For example, if a list is being parsed, this might say "expected a comma", and then the list's expectation is returned to describe it is expecting more elements.
+    ///
+    /// # Returns
+    /// Some Expects-type that can be called to find a full context stack, or [`None`] if there is no such context for this Expects.
+    fn context(&self) -> Option<&dyn Expects>;
 
 
     /// Runs all combinators in this Branchable.
@@ -216,6 +246,36 @@ tuple_branchable_impl!(
 
 
 /***** LIBRARY *****/
+/// The concrete type returned by [`alt()`].
+pub struct Alt<F, S, B> {
+    branches: B,
+    _f: PhantomData<F>,
+    _s: PhantomData<S>,
+}
+impl<F, S, B> Expects for Alt<F, S, B>
+where
+    B: Branchable<F, S>,
+{
+    #[inline]
+    fn what(&self) -> std::borrow::Cow<str> { self.branches.what() }
+
+    #[inline]
+    fn context(&self) -> Option<&dyn Expects> { self.branches.context() }
+}
+impl<F, S, B> Combinator<F, S> for Alt<F, S, B>
+where
+    F: Clone,
+    S: Clone,
+    B: Branchable<F, S>,
+{
+    type Output = B::Output;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> { self.branches.branch(input) }
+}
+
+
+
 /// Tries different possible combinators and returns the first one that succeeds.
 ///
 /// The combinators are tried in-order. They must all returns the same result (so use enums if you want to have options).
@@ -231,14 +291,11 @@ tuple_branchable_impl!(
 ///
 /// # Errors
 /// This function errors if _any_ of the branches errors. This is then returned as-is.
-pub fn alt<F, S, T>(mut branches: T) -> impl FnMut(Span<F, S>) -> Result<T::Output, F, S>
+pub fn alt<F, S, B>(branches: B) -> Alt<F, S, B>
 where
     F: Clone,
     S: Clone,
-    T: Branchable<F, S>,
+    B: Branchable<F, S>,
 {
-    move |input: Span<F, S>| -> Result<T::Output, F, S> {
-        // Just hit the `T` one
-        branches.branch(input)
-    }
+    Alt { branches, _f: PhantomData::default(), _s: PhantomData::default() }
 }

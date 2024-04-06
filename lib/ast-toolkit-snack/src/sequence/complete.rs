@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    05 Apr 2024, 13:44:49
+//    06 Apr 2024, 12:41:05
 //  Auto updated?
 //    Yes
 //
@@ -24,7 +24,7 @@ mod tests {
     use super::pair;
     use crate::fail::Failure;
     use crate::value::tag;
-    use crate::Result;
+    use crate::{Combinator as _, Result};
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
 
@@ -40,9 +40,9 @@ mod tests {
         assert_eq!(res2, input.slice(5..));
 
         // Failure
-        assert!(matches!(tag(&"Goodbye")(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"Ho")(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"hello, world!")(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Tag { .. })));
     }
 }
 
