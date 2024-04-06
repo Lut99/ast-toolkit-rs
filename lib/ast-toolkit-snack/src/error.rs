@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:51:38
 //  Last edited:
-//    05 Apr 2024, 19:27:10
+//    06 Apr 2024, 11:15:04
 //  Auto updated?
 //    Yes
 //
@@ -133,6 +133,7 @@ failure_impl! {
             err: Box<Self>,
         },
     }
+    impl Expects {}
     impl Display {
         Context { context, .. } => write!(f, "The above occurred while parsing {context}"),
     }

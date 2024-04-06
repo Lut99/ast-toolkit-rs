@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    05 Apr 2024, 18:55:31
+//    06 Apr 2024, 11:17:03
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 
 use ast_toolkit_span::{Span, SpanRange, Spannable, Spanning as _};
 
-use crate::fail::{DebugAsRef, Failure};
+use crate::fail::{DebugUnicodeSegmentation, Failure};
 use crate::span::{OneOfBytes, OneOfUtf8};
 use crate::Result;
 
@@ -33,7 +33,7 @@ use crate::Result;
 #[inline]
 pub fn one_of1<T, F, S>(charset: &'static T) -> impl FnMut(Span<F, S>) -> Result<Span<F, S>, F, S>
 where
-    T: DebugAsRef,
+    T: DebugUnicodeSegmentation,
     &'static T: AsRef<[&'static str]>,
     F: Clone,
     S: Clone + OneOfUtf8,

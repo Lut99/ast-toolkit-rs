@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    05 Apr 2024, 19:35:01
+//    06 Apr 2024, 11:16:48
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,8 @@
 
 use std::error::{self, Error};
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
+
+use unicode_segmentation::UnicodeSegmentation;
 
 
 /***** HELPER MACROS *****/
@@ -61,7 +63,7 @@ macro_rules! failure_impl {
             /// Failed to match a one-of byteset.
             OneOfBytes1 { byteset: &'static dyn crate::fail::DebugAsRef, span: Span<F, S> },
             /// Failed to match a one-of charset.
-            OneOfUtf81 { charset: &'static dyn crate::fail::DebugAsRef, span: Span<F, S> },
+            OneOfUtf81 { charset: &'static dyn crate::fail::DebugUnicodeSegmentation, span: Span<F, S> },
             /// Failed to match exactly `times` custom combinators separated by some other combinator, where it's the punct that we failed to parse.
             PunctuatedNPunct { times: usize, got: usize, fail: Box<Self> },
             /// Failed to match exactly `times` custom combinators separated by some other combinator.
@@ -104,13 +106,13 @@ macro_rules! failure_impl {
                         (Self::ManyN { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::ManyN { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::Not { span: span1 }, Self::Not { span: span2 }) => span1 == span2,
                         (Self::OneOfBytes1 { byteset: lhs, span: span1 }, Self::OneOfBytes1 { byteset: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
-                        (Self::OneOfUtf81 { charset: lhs, span: span1 }, Self::OneOfUtf81 { charset: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
-                        (Self::SeparatedListNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
-                        (Self::SeparatedListNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::OneOfUtf81 { charset: lhs, span: span1 }, Self::OneOfUtf81 { charset: rhs, span: span2 }) => crate::fail::grapheme_eq(lhs.graphemes(true), rhs.graphemes(true)) && span1 == span2,
                         (Self::PunctuatedNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedTrailingNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::PunctuatedTrailingNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::PunctuatedTrailingNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::SeparatedListNPunct { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNPunct { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
+                        (Self::SeparatedListNValue { times: times_lhs, got: got_lhs, fail: fail_lhs }, Self::SeparatedListNValue { times: times_rhs, got: got_rhs, fail: fail_rhs }) => times_lhs == times_rhs && got_lhs == got_rhs && fail_lhs == fail_rhs,
                         (Self::Tag { tag: lhs, span: span1 }, Self::Tag { tag: rhs, span: span2 }) => lhs.as_ref() == rhs.as_ref() && span1 == span2,
                         (Self::Whitespace1 { span: span1 }, Self::Whitespace1 { span: span2 }) => span1 == span2,
 
@@ -127,33 +129,6 @@ macro_rules! failure_impl {
                         // Anything else is not the same variant, never matches
                         (_, _) => false,
                     }
-                }
-            }
-        }
-
-        impl<F, S> $name<F, S> {
-            /// Returns some string description of what this variant expected to parse.
-            ///
-            /// # Returns
-            /// Some [`String`] describing what was expected.
-            pub fn expects(&self) -> String {
-                match self {
-                    // Failure fields first
-                    Self::Alt { branches } => branches.iter().map(|b| b.expects()).collect::<Vec<String>>().join(", "),
-                    Self::Custom { .. } => todo!(),
-                    Self::Digit1 { .. } => "(a digit [0-9])".into(),
-                    Self::ManyN { times, fail, .. } => format!("({} times {})", times, fail.expects()),
-                    Self::Not { span } => format!("(anything else)"),
-                    Self::OneOfBytes1 { byteset } => format!("({})", byteset.as_ref().iter().map(|b| format!("{:0x}"))),
-                }
-            }
-        }
-        impl<F, S> Display for $name<F, S> {
-            fn fmt(&self, f: &mut Formatter) -> FResult {
-                match self {
-                    // Failure fields first
-                    Self::Alt { branches } => write!(f, "(Expected one of: {})", self.expects()),
-                    _ => todo!(),
                 }
             }
         }
@@ -203,12 +178,42 @@ pub(crate) use failure_impl;
 
 
 
+/***** HELPER FUNCTIONS *****/
+/// Does some kind of equality based on graphemes.
+///
+/// # Arguments
+/// - `lhs`: One iterator over graphemes to compare with the `rhs`.
+/// - `rhs`: Another iterator over graphmes to compare with the `lhs`.
+///
+/// # Returns
+/// True if these iterators return the same, or false otherwise.
+pub(crate) fn grapheme_eq<'l, 'r>(lhs: impl IntoIterator<Item = &'l str>, rhs: impl IntoIterator<Item = &'r str>) -> bool {
+    let mut lhs = lhs.into_iter();
+    let mut rhs = rhs.into_iter();
+    while let (lhs, rhs) = (lhs.next(), rhs.next()) {
+        if lhs != rhs {
+            return false;
+        } else if matches!(lhs, None) && matches!(rhs, None) {
+            return true;
+        }
+    }
+    unreachable!()
+}
+
+
+
+
+
 /***** AUXILLARY *****/
 /// A helper trait that abstracts over things both [`Debug`] and [`AsRef<[u8]>`].
 pub trait DebugAsRef: Debug + AsRef<[u8]> {}
 impl<T: ?Sized + Debug + AsRef<[u8]>> DebugAsRef for T {}
 
-/// A helper trait that abstracts over things both [`Debug`] and [`Spanning`].
+/// A helper trait that abstracts over things both [`Debug`] and [`UnicodeSegmentation`].
+pub trait DebugUnicodeSegmentation: Debug + UnicodeSegmentation {}
+impl<T: ?Sized + Debug + UnicodeSegmentation> DebugUnicodeSegmentation for T {}
+
+/// A helper trait that abstracts over things both [`Error`] and [`Spanning`].
 pub trait ErrorSpanning<F, S>: Error + Spanning<F, S> {}
 impl<F, S, T: ?Sized + Error + Spanning<F, S>> ErrorSpanning<F, S> for T {}
 
@@ -226,6 +231,7 @@ failure_impl! {
         /// There wasn't enough input yet to parse. Only returned by streaming combinators.
         NotEnough { span: Span<F, S> },
     }
+    impl Expects {}
     impl Display {
         NotEnough { .. } => write!(f, "Not enough input"),
     }
