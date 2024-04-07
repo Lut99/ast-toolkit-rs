@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    06 Apr 2024, 12:31:07
+//    07 Apr 2024, 17:53:52
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,14 @@
 //!   Implements branching combinators. Actually just [`alt()`].
 //
 
-use std::borrow::Cow;
+use std::fmt::{Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 use stackvec::StackVec;
 
 use crate::fail::Failure;
-use crate::{Combinator, Expects, Result};
+use crate::{Combinator, Expects, Result, EXPECTS_INDENT_SIZE};
 
 
 /***** TESTS *****/
@@ -71,8 +71,6 @@ macro_rules! count {
 
 /// Implements [`Branchable`] for a tuple with given number of parameters.
 macro_rules! tuple_branchable_impl {
-    (replace $name:ident) => { "\n - {}" };
-
     (last $self:ident, $input:ident, $fails:ident, $fi:tt, $($i:tt),+) => {
         // First, do a non-last one
         match $self.$fi.parse($input.clone()) {
@@ -96,8 +94,7 @@ macro_rules! tuple_branchable_impl {
         impl<F, S, $fname: Combinator<F, S>> Branchable<F, S> for ($fname,) {
             type Output = $fname::Output;
 
-            fn what(&self) -> Cow<str> { self.0.what() }
-            fn context(&self) -> Option<&dyn Expects> { self.0.context() }
+            fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.0.fmt(f, indent) }
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 match self.$fi.parse(input) {
@@ -112,12 +109,18 @@ macro_rules! tuple_branchable_impl {
         impl<F: Clone, S: Clone, R, $fname: Combinator<F, S, Output = R> $(, $name: Combinator<F, S, Output = R>)+> Branchable<F, S> for ($fname, $($name),*) {
             type Output = R;
 
-            fn what(&self) -> Cow<str> { Cow::Owned(format!(
-                concat!("Expecting one of\n - {}", $(tuple_branchable_impl!(replace $name)),+),
-                self.$fi.what(),
-                $(self.$i.what()),+
-            )) }
-            fn context(&self) -> Option<&dyn Expects> { self.0.context() }
+            fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+                writeln!(f, "one of:")?;
+                write!(f, "{} - ", (0..EXPECTS_INDENT_SIZE * indent).map(|_| ' ').collect::<String>())?;
+                self.$fi.fmt(f, indent + 1)?;
+                writeln!(f)?;
+                $(
+                    write!(f, "{} - ", (0..EXPECTS_INDENT_SIZE * indent).map(|_| ' ').collect::<String>())?;
+                    self.$i.fmt(f, indent + 1)?;
+                    writeln!(f)?;
+                )+
+                Ok(())
+            }
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 // Some cheap store for collecting failures
@@ -131,48 +134,6 @@ macro_rules! tuple_branchable_impl {
             }
         }
     };
-}
-
-
-
-
-
-/***** AUXILLARY *****/
-/// Abstracts over types that can be [`branch()`]ed over. Most notably, these are tuples.
-pub trait Branchable<F, S> {
-    /// The output of all the branched combinators.
-    type Output;
-
-
-    /// Returns some string describing what this Expects is actually expecting.
-    ///
-    /// # Returns
-    /// A string(-like) that described swhat to expect.
-    fn what(&self) -> Cow<str>;
-
-    /// Returns another Expects-implementing type that provides some context as to why this is expected.
-    ///
-    /// For example, if a list is being parsed, this might say "expected a comma", and then the list's expectation is returned to describe it is expecting more elements.
-    ///
-    /// # Returns
-    /// Some Expects-type that can be called to find a full context stack, or [`None`] if there is no such context for this Expects.
-    fn context(&self) -> Option<&dyn Expects>;
-
-
-    /// Runs all combinators in this Branchable.
-    ///
-    /// # Arguments
-    /// - `input`: The input to run it with.
-    ///
-    /// # Returns
-    /// A [`Result::Ok`] with the result of the _first_ combinator that returned OK.
-    ///
-    /// # Fails
-    /// This function returns [`Result::Fail`] with [`Failure::Branch`] if _all_ internal combinators failed.
-    ///
-    /// # Errors
-    /// This function returns [`Result:Error`] if _any_ of the internal combinators failed.
-    fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
 }
 
 // Default [`Branchable`] impls for tuples.
@@ -245,6 +206,49 @@ tuple_branchable_impl!(
 
 
 
+/***** AUXILLARY *****/
+/// Abstracts over types that can be [`branch()`]ed over. Most notably, these are tuples.
+pub trait Branchable<F, S> {
+    /// The output of all the branched combinators.
+    type Output;
+
+
+    /// Formats the thing that this Expects expected as input.
+    ///
+    /// The string written should be something along the lines of filling in `XXX` in:
+    /// ```plain
+    /// Expected XXX.
+    /// ```
+    ///
+    /// # Arguments
+    /// - `f`: Some [`Formatter`] to write to.
+    /// - `indent`: If this formatter writes newlines, they should be indented by this amount.
+    ///
+    /// # Errors
+    /// This function should only error if it failed to write to the given `f`ormatter.
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
+
+
+    /// Runs all combinators in this Branchable.
+    ///
+    /// # Arguments
+    /// - `input`: The input to run it with.
+    ///
+    /// # Returns
+    /// A [`Result::Ok`] with the result of the _first_ combinator that returned OK.
+    ///
+    /// # Fails
+    /// This function returns [`Result::Fail`] with [`Failure::Branch`] if _all_ internal combinators failed.
+    ///
+    /// # Errors
+    /// This function returns [`Result:Error`] if _any_ of the internal combinators failed.
+    fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The concrete type returned by [`alt()`].
 pub struct Alt<F, S, B> {
@@ -257,10 +261,7 @@ where
     B: Branchable<F, S>,
 {
     #[inline]
-    fn what(&self) -> std::borrow::Cow<str> { self.branches.what() }
-
-    #[inline]
-    fn context(&self) -> Option<&dyn Expects> { self.branches.context() }
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.branches.fmt(f, indent) }
 }
 impl<F, S, B> Combinator<F, S> for Alt<F, S, B>
 where
@@ -284,7 +285,7 @@ where
 /// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to size 16 implement this.
 ///
 /// # Returns
-/// The output of the first combinator in `branches` that succeeds.
+/// A combinator [`Alt`] that will run the given branches and try them one-by-one.
 ///
 /// # Fails
 /// This function may fail if _all_ combinators in `branches` fails. In that case, all of the failures are collected in a [`Failure::Branch`].

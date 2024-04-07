@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:53:58
 //  Last edited:
-//    06 Apr 2024, 11:16:48
+//    07 Apr 2024, 18:31:51
 //  Auto updated?
 //    Yes
 //
@@ -93,8 +93,8 @@ macro_rules! failure_impl {
             )*
         }
 
-        impl<F, S: ast_toolkit_span::Spannable> Eq for $name<F, S> {}
         ::paste::paste! {
+            impl<F, S: ast_toolkit_span::Spannable> Eq for $name<F, S> {}
             impl<F, S: ast_toolkit_span::Spannable> PartialEq for $name<F, S> {
                 #[inline]
                 fn eq(&self, other: &Self) -> bool {
@@ -143,7 +143,9 @@ macro_rules! failure_impl {
                         let mut combs = branches.iter();
                         let mut span: Span<F, S> = combs.next().unwrap().span();
                         for comb in combs {
-                            span.join_mut(&comb.span());
+                            if !span.join_mut(&comb.span()) {
+                                panic!("Cannot join branches that are parsed from different files")
+                            }
                         }
                         span
                     },
@@ -190,14 +192,14 @@ pub(crate) use failure_impl;
 pub(crate) fn grapheme_eq<'l, 'r>(lhs: impl IntoIterator<Item = &'l str>, rhs: impl IntoIterator<Item = &'r str>) -> bool {
     let mut lhs = lhs.into_iter();
     let mut rhs = rhs.into_iter();
-    while let (lhs, rhs) = (lhs.next(), rhs.next()) {
+    loop {
+        let (lhs, rhs) = (lhs.next(), rhs.next());
         if lhs != rhs {
             return false;
         } else if matches!(lhs, None) && matches!(rhs, None) {
             return true;
         }
     }
-    unreachable!()
 }
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:31:45
 //  Last edited:
-//    06 Apr 2024, 12:40:20
+//    07 Apr 2024, 17:54:57
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@
 pub mod bytes;
 pub mod utf8;
 
-use std::borrow::Cow;
+use std::fmt::{Debug, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 // Imports
@@ -66,6 +66,46 @@ mod tests {
 
 
 /***** LIBRARY *****/
+/// The concrete combinator returned by `tag()`.
+pub struct Tag<F, S, T: 'static> {
+    tag: &'static T,
+    _f:  PhantomData<F>,
+    _s:  PhantomData<S>,
+}
+impl<F, S, T> Expects for Tag<F, S, T>
+where
+    T: Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:?}", self.tag) }
+}
+impl<F, S, T> Combinator<F, S> for Tag<F, S, T>
+where
+    F: Clone,
+    S: Clone + MatchBytes,
+    T: DebugAsRef,
+    &'static T: AsRef<[u8]>,
+{
+    type Output = Span<F, S>;
+
+    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+        // See if we can parse the input
+        let btag: &[u8] = self.tag.as_ref();
+        let match_point: usize = input.match_bytes(SpanRange::Open, btag);
+        if match_point >= btag.len() {
+            // Matched the entire tag
+            #[cfg(debug_assertions)]
+            assert!(match_point == btag.len());
+            Result::Ok(input.slice(match_point..), input.slice(..match_point))
+        } else {
+            // Didn't match the entire tag
+            Result::Fail(Failure::Tag { tag: self.tag, span: input.start_onwards() })
+        }
+    }
+}
+
+
+
 /// Matches a specific "tag", i.e., static input.
 ///
 /// Useful for matching keywords.
@@ -75,54 +115,12 @@ mod tests {
 ///
 /// # Returns
 /// A [`Combinator`] that matches the given `tag`.
-pub fn tag<F, S, T>(tag: &'static T) -> impl Combinator<F, S, Output = Span<F, S>>
+pub fn tag<F, S, T>(tag: &'static T) -> Tag<F, S, T>
 where
     F: Clone,
     S: Clone + MatchBytes,
     T: DebugAsRef,
     &'static T: AsRef<[u8]>,
 {
-    /// The concrete combinator returned by `tag()`.
-    pub struct Tag<F, S, T: 'static> {
-        tag: &'static T,
-        _f:  PhantomData<F>,
-        _s:  PhantomData<S>,
-    }
-    impl<F, S, T> Expects for Tag<F, S, T>
-    where
-        T: 'static,
-        &'static T: AsRef<[u8]>,
-    {
-        fn what(&self) -> std::borrow::Cow<str> {
-            Cow::Owned(format!("one of {}", self.tag.as_ref().iter().map(|b| format!("{b:#04X}")).collect::<Vec<String>>().join(", ")))
-        }
-
-        fn context(&self) -> Option<&dyn Expects> { None }
-    }
-    impl<F, S, T> Combinator<F, S> for Tag<F, S, T>
-    where
-        F: Clone,
-        S: Clone + MatchBytes,
-        T: DebugAsRef,
-        &'static T: AsRef<[u8]>,
-    {
-        type Output = Span<F, S>;
-
-        fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
-            // See if we can parse the input
-            let btag: &[u8] = self.tag.as_ref();
-            let match_point: usize = input.match_bytes(SpanRange::Open, btag);
-            if match_point >= btag.len() {
-                // Matched the entire tag
-                #[cfg(debug_assertions)]
-                assert!(match_point == btag.len());
-                Result::Ok(input.slice(match_point..), input.slice(..match_point))
-            } else {
-                // Didn't match the entire tag
-                Result::Fail(Failure::Tag { tag: self.tag, span: input.start_onwards() })
-            }
-        }
-    }
-
     Tag { tag, _f: PhantomData::default(), _s: PhantomData::default() }
 }
