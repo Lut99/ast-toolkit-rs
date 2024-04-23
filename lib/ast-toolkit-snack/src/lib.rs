@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    07 Apr 2024, 18:02:19
+//    23 Apr 2024, 17:25:48
 //  Auto updated?
 //    Yes
 //
@@ -43,6 +43,7 @@ macro_rules! tuple_combinator_impl {
 
     ($(($i:tt, $name:ident)),*) => {
         impl<$($name: Expects),*> Expects for ($($name,)*) {
+            #[allow(unused_variables)]
             fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
                 write!(f, "a sequence of:")?;
                 $(

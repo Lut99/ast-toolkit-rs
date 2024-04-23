@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    07 Apr 2024, 17:53:52
+//    23 Apr 2024, 17:49:54
 //  Auto updated?
 //    Yes
 //
@@ -18,8 +18,9 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 use stackvec::StackVec;
 
+use crate::error_new::expects_alt;
 use crate::fail::Failure;
-use crate::{Combinator, Expects, Result, EXPECTS_INDENT_SIZE};
+use crate::{Combinator, Expects, Result};
 
 
 /***** TESTS *****/
@@ -106,20 +107,32 @@ macro_rules! tuple_branchable_impl {
         }
     };
     (($fi:tt, $fname:ident), $(($i:tt, $name:ident)),+) => {
+        ::paste::paste! {
         impl<F: Clone, S: Clone, R, $fname: Combinator<F, S, Output = R> $(, $name: Combinator<F, S, Output = R>)+> Branchable<F, S> for ($fname, $($name),*) {
             type Output = R;
 
+            #[inline]
             fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-                writeln!(f, "one of:")?;
-                write!(f, "{} - ", (0..EXPECTS_INDENT_SIZE * indent).map(|_| ' ').collect::<String>())?;
-                self.$fi.fmt(f, indent + 1)?;
-                writeln!(f)?;
-                $(
-                    write!(f, "{} - ", (0..EXPECTS_INDENT_SIZE * indent).map(|_| ' ').collect::<String>())?;
-                    self.$i.fmt(f, indent + 1)?;
-                    writeln!(f)?;
-                )+
-                Ok(())
+                struct ExpectsIter<'a, $fname $(, $name)+> { count: usize, data: (&'a $fname $(, &'a $name)+) }
+                impl<'a, $fname: Expects $(, $name: Expects)+> Iterator for ExpectsIter<'a, $fname $(, $name)+> {
+                    type Item = &'a dyn Expects;
+                    #[inline]
+                    fn next(&mut self) -> Option<Self::Item> {
+                        if self.count == $fi {
+                            self.count += 1;
+                            Some(self.data.$fi)
+                        }
+                        $(else if self.count == $i {
+                            self.count += 1;
+                            Some(self.data.$i)
+                        })+
+                        else {
+                            None
+                        }
+                    }
+                }
+
+                expects_alt(f, indent, ExpectsIter { count: 0, data: (&self.$fi $(, &self.$i)+) })
             }
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
@@ -132,6 +145,7 @@ macro_rules! tuple_branchable_impl {
                 // If we made it here, none of them early quit
                 Result::Fail(Failure::Alt { branches: fails.into() })
             }
+        }
         }
     };
 }
@@ -249,6 +263,35 @@ pub trait Branchable<F, S> {
 
 
 
+/***** LIBRARY FUNCTIONS *****/
+/// Tries different possible combinators and returns the first one that succeeds.
+///
+/// The combinators are tried in-order. They must all returns the same result (so use enums if you want to have options).
+///
+/// # Arguments
+/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to size 16 implement this.
+///
+/// # Returns
+/// A combinator [`Alt`] that will run the given branches and try them one-by-one.
+///
+/// # Fails
+/// This function may fail if _all_ combinators in `branches` fails. In that case, all of the failures are collected in a [`Failure::Branch`].
+///
+/// # Errors
+/// This function errors if _any_ of the branches errors. This is then returned as-is.
+pub fn alt<F, S, B>(branches: B) -> Alt<F, S, B>
+where
+    F: Clone,
+    S: Clone,
+    B: Branchable<F, S>,
+{
+    Alt { branches, _f: PhantomData::default(), _s: PhantomData::default() }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The concrete type returned by [`alt()`].
 pub struct Alt<F, S, B> {
@@ -273,30 +316,4 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> { self.branches.branch(input) }
-}
-
-
-
-/// Tries different possible combinators and returns the first one that succeeds.
-///
-/// The combinators are tried in-order. They must all returns the same result (so use enums if you want to have options).
-///
-/// # Arguments
-/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to size 16 implement this.
-///
-/// # Returns
-/// A combinator [`Alt`] that will run the given branches and try them one-by-one.
-///
-/// # Fails
-/// This function may fail if _all_ combinators in `branches` fails. In that case, all of the failures are collected in a [`Failure::Branch`].
-///
-/// # Errors
-/// This function errors if _any_ of the branches errors. This is then returned as-is.
-pub fn alt<F, S, B>(branches: B) -> Alt<F, S, B>
-where
-    F: Clone,
-    S: Clone,
-    B: Branchable<F, S>,
-{
-    Alt { branches, _f: PhantomData::default(), _s: PhantomData::default() }
 }

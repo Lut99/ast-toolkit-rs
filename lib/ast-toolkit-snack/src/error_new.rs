@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    07 Apr 2024, 18:36:05
+//    23 Apr 2024, 17:48:53
 //  Auto updated?
 //    Yes
 //
@@ -46,6 +46,30 @@ impl error::Error for TryFromFailureError {}
 
 
 
+/***** EXPECTS *****/
+/// Defines what we expect from an [`Alt`](crate::branch::alt).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Some indentation level to apply when writing new lines.
+/// - `branches`: Some iterator yielding [`Expects`] for all branches.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl IntoIterator<Item = &'b dyn Expects>) -> FResult {
+    writeln!(f, "one of:")?;
+    for b in branches {
+        write!(f, "{} - ", (0..indent).map(|_| ' ').collect::<String>())?;
+        b.fmt(f, indent + 1)?;
+        writeln!(f)?;
+    }
+    writeln!(f)
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// Defines a common set of problems raised by snack combinators.
 ///
@@ -64,15 +88,7 @@ pub enum Common<F, S> {
 impl<F, S> Expects for Common<F, S> {
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         match self {
-            Self::Alt { branches, .. } => {
-                writeln!(f, "one of:")?;
-                for b in branches {
-                    write!(f, "{} - ", (0..indent).map(|_| ' ').collect::<String>())?;
-                    <Self as Expects>::fmt(b, f, indent + 1)?;
-                    writeln!(f)?;
-                }
-                writeln!(f)
-            },
+            Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
         }
     }
 }

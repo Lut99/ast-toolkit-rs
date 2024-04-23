@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    05 Apr 2024, 19:21:52
+//    23 Apr 2024, 18:02:26
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,7 @@
 //
 
 use std::error;
+use std::fmt::{Formatter, Result as FResult};
 use std::rc::Rc;
 
 use ast_toolkit_span::{Span, Spanning};
@@ -20,7 +21,7 @@ use enum_debug::EnumDebug;
 
 use crate::error::Error;
 use crate::fail::Failure;
-use crate::{Combinator, Result};
+use crate::{Combinator, Expects, Result};
 
 
 /***** AUXILLARY *****/
@@ -60,7 +61,7 @@ impl<R, F, E> MapResult<R, F, E> {
 
 
 
-/***** LIBRARY *****/
+/***** LIBRARY FUNCTIONS *****/
 /// Implements the reverse of a combinator.
 ///
 /// Specifically, will return `Result::Ok(())` if the combinator [`Result::Fail`]s, or a [`Result::Fail`] if it [`Result::Ok`]'s.
@@ -72,20 +73,15 @@ impl<R, F, E> MapResult<R, F, E> {
 /// A new [`Combinator`] that will do the same as `comb` but reversed. Note that this combinator is the exact opposite of the given one!
 ///
 /// Also note that errors are left untouched.
-pub fn not<F, S, C>(mut comb: C) -> impl FnMut(Span<F, S>) -> Result<(), F, S>
+#[inline]
+pub fn not<F, S, C>(comb: C) -> Not<C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<F, S>,
     C::Output: Spanning<F, S>,
 {
-    move |input: Span<F, S>| -> Result<(), F, S> {
-        match comb.parse(input.clone()) {
-            Result::Ok(_, res) => Result::Fail(Failure::Not { span: res.span() }),
-            Result::Fail(_) => Result::Ok(input, ()),
-            Result::Error(err) => Result::Error(err),
-        }
-    }
+    Not { comb }
 }
 
 
@@ -104,18 +100,13 @@ where
 ///
 /// # Errors
 /// This combinator inherits the error state of the given one.
-pub fn map<F, S, R1, R2, C, M>(mut comb: C, mut func: M) -> impl FnMut(Span<F, S>) -> Result<R2, F, S>
+#[inline]
+pub fn map<F, S, R1, R2, C, M>(comb: C, func: M) -> Map<C, M>
 where
     C: Combinator<F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
-    move |input: Span<F, S>| -> Result<R2, F, S> {
-        match comb.parse(input) {
-            Result::Ok(rem, res) => Result::Ok(rem, func(res)),
-            Result::Fail(fail) => Result::Fail(fail),
-            Result::Error(err) => Result::Error(err),
-        }
-    }
+    Map { comb, func }
 }
 
 /// Maps the result of a combinator to something else.
@@ -134,16 +125,106 @@ where
 ///
 /// # Errors
 /// This combinator inherits the error state of the given one, plus if `func` decides to error.
-pub fn map_fallible<F, S, R1, C, MF, MS, R2, M>(mut comb: C, mut func: M) -> impl FnMut(Span<F, S>) -> Result<R2, F, S>
+pub fn map_fallible<F, S, R1, C, MF, MS, R2, M>(comb: C, func: M) -> MapFallible<C, M>
 where
     C: Combinator<F, S, Output = R1>,
     MF: 'static + error::Error + Spanning<F, S>,
     MS: 'static + error::Error + Spanning<F, S>,
     M: FnMut(R1) -> MapResult<R2, MF, MS>,
 {
-    move |input: Span<F, S>| -> Result<R2, F, S> {
-        match comb.parse(input) {
-            Result::Ok(rem, res) => func(res).promote(rem),
+    MapFallible { comb, func }
+}
+
+
+
+
+
+/***** LIBRARY *****/
+/// The concrete type returned by [`not()`].
+pub struct Not<C> {
+    /// The combinator to negate.
+    comb: C,
+}
+impl<C: Expects> Expects for Not<C> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        write!(f, "not ")?;
+        self.comb.fmt(f, indent)
+    }
+}
+impl<F, S, C> Combinator<F, S> for Not<C>
+where
+    F: Clone,
+    S: Clone,
+    C: Combinator<F, S>,
+    C::Output: Spanning<F, S>,
+{
+    type Output = ();
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+        match self.comb.parse(input.clone()) {
+            Result::Ok(_, res) => Result::Fail(Failure::Not { span: res.span() }),
+            Result::Fail(_) => Result::Ok(input, ()),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+
+
+/// The concrete type returned by [`map()`].
+pub struct Map<C, M> {
+    /// The combinator who's output to negate.
+    comb: C,
+    /// The mapping closure.
+    func: M,
+}
+impl<C: Expects, M> Expects for Map<C, M> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
+}
+impl<F, S, R1, R2, C, M> Combinator<F, S> for Map<C, M>
+where
+    C: Combinator<F, S, Output = R1>,
+    M: FnMut(R1) -> R2,
+{
+    type Output = R2;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, (self.func)(res)),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// The concrete type returned by [`map_fallible()`].
+pub struct MapFallible<C, M> {
+    /// The combinator who's output to negate.
+    comb: C,
+    /// The mapping closure.
+    func: M,
+}
+impl<C: Expects, M> Expects for MapFallible<C, M> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
+}
+impl<F, S, R1, MF, MS, R2, C, M> Combinator<F, S> for MapFallible<C, M>
+where
+    C: Combinator<F, S, Output = R1>,
+    MF: 'static + error::Error + Spanning<F, S>,
+    MS: 'static + error::Error + Spanning<F, S>,
+    M: FnMut(R1) -> MapResult<R2, MF, MS>,
+{
+    type Output = R2;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, res) => (self.func)(res).promote(rem),
             Result::Fail(fail) => Result::Fail(fail),
             Result::Error(err) => Result::Error(err),
         }
