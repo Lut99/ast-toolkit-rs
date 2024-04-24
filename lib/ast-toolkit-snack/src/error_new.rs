@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    23 Apr 2024, 17:48:53
+//    24 Apr 2024, 15:13:56
 //  Auto updated?
 //    Yes
 //
@@ -22,10 +22,11 @@
 //
 
 use std::error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::Expects;
 
@@ -46,8 +47,25 @@ impl error::Error for TryFromFailureError {}
 
 
 
+/***** HELPERS *****/
+/// A helper trait that abstracts over things both [`Debug`] and [`AsRef<[u8]>`].
+pub trait DebugAsRef: Debug + AsRef<[u8]> {}
+impl<T: ?Sized + Debug + AsRef<[u8]>> DebugAsRef for T {}
+
+/// A helper trait that abstracts over things both [`Debug`] and [`UnicodeSegmentation`].
+pub trait DebugUnicodeSegmentation: Debug + UnicodeSegmentation {}
+impl<T: ?Sized + Debug + UnicodeSegmentation> DebugUnicodeSegmentation for T {}
+
+/// A helper trait that abstracts over things both [`Error`] and [`Spanning`].
+pub trait ErrorSpanning<F, S>: error::Error + Spanning<F, S> {}
+impl<F, S, T: ?Sized + error::Error + Spanning<F, S>> ErrorSpanning<F, S> for T {}
+
+
+
+
+
 /***** EXPECTS *****/
-/// Defines what we expect from an [`Alt`](crate::branch::alt).
+/// Defines what we expect from an [`Alt`](crate::branch::Alt).
 ///
 /// # Arguments
 /// - `f`: Some [`Formatter`] to write what we expect to.
@@ -66,6 +84,53 @@ pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl I
     writeln!(f)
 }
 
+/// Defines what we expect from a [`Digit1`](crate::value::utf8::complete::Digit1).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.\
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "a digit") }
+
+/// Defines what we expect from a UTF-8-based [`OneOf1`](crate::value::utf8::complete::OneOf1).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `chars`: The set of characters we're expecting.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: impl Debug) -> FResult { write!(f, "one of {chars:?}") }
+
+/// Defines what we expect from a [`Tag`](crate::value::complete::Tag).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `tag`: The thing that we are looking for.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_tag(f: &mut Formatter, tag: impl Debug) -> FResult { write!(f, "{tag:?}") }
+
+/// Defines what we expect from a [`While1`](crate::value::utf8::complete::While1).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.\
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "specific characters") }
+
+/// Defines what we expect from a [`Whitespace1`](crate::value::utf8::complete::Whitespace1).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.\
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "whitespace") }
+
 
 
 
@@ -79,16 +144,25 @@ pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl I
 /// be made unrecoverable or that isn't recoverable in the first place).
 #[derive(Clone, Debug, EnumDebug)]
 pub enum Common<F, S> {
-    /// All possible branches in an [`alt()`](super::branch::alt())-combinator have failed.
+    /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
     Alt { branches: Vec<Self>, span: Span<F, S> },
+    /// Expected at least one of the following characters.
+    OneOf1Utf8 { charset: &'static dyn DebugUnicodeSegmentation, span: Span<F, S> },
+    /// Failed to match something particular with the [`tag()`](crate::value::complete::tag())-combinator.
+    Tag { tag: &'static dyn DebugAsRef, span: Span<F, S> },
+    /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::value::utf8::complete::while1())-combinator.
+    While1Utf8 { span: Span<F, S> },
 }
 
 impl<F, S> Expects for Common<F, S> {
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         match self {
             Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
+            Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
+            Self::Tag { tag, .. } => expects_tag(f, tag),
+            Self::While1Utf8 { .. } => expects_while1_utf8(f),
         }
     }
 }
@@ -96,6 +170,9 @@ impl<F: Clone, S: Clone> Spanning<F, S> for Common<F, S> {
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
+            Self::OneOf1Utf8 { span, .. } => span.clone(),
+            Self::Tag { span, .. } => span.clone(),
+            Self::While1Utf8 { span } => span.clone(),
         }
     }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    23 Apr 2024, 17:49:54
+//    24 Apr 2024, 14:41:27
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,7 @@ use crate::{Combinator, Expects, Result};
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
-    use super::super::value::tag;
+    use super::super::value::complete::tag;
     use super::*;
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
@@ -285,7 +285,7 @@ where
     S: Clone,
     B: Branchable<F, S>,
 {
-    Alt { branches, _f: PhantomData::default(), _s: PhantomData::default() }
+    Alt { branches, _f: Default::default(), _s: Default::default() }
 }
 
 

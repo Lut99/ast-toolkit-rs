@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    05 Apr 2024, 18:18:16
+//    24 Apr 2024, 15:07:44
 //  Auto updated?
 //    Yes
 //
@@ -187,4 +187,50 @@ impl OneOfUtf8 for String {
 impl<F, S: OneOfUtf8> OneOfUtf8 for Span<F, S> {
     #[inline]
     fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize { self.source_ref().one_of_utf8(self.range().span(&range), chars) }
+}
+
+
+
+/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed based on a predicate over graphemes.
+pub trait WhileUtf8 {
+    /// Returns the position up to which a predicate over graphemes returns false.
+    ///
+    /// # Arguments
+    /// - `range`: The actual range of `self` to match.
+    /// - `predicate`: Some predicate (accepting graphemes, returning true or false) that will be used to decide if a grapheme matches the predicate.
+    ///
+    /// # Returns
+    /// A `usize` that indicates the first unmatched character. Some notes:
+    /// - If result is the length of `self`, the entire source was matched
+    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize;
+}
+
+// Default string impls for [`OneOfUtf8`]
+impl<'s> WhileUtf8 for &'s str {
+    fn while_utf8(&self, range: SpanRange, mut predicate: impl FnMut(&str) -> bool) -> usize {
+        // Match the prefixes
+        for (i, c) in range.apply_to_str(self).grapheme_indices(true) {
+            if !predicate(c) {
+                return i;
+            }
+        }
+        self.len()
+    }
+}
+impl<'s> WhileUtf8 for Cow<'s, str> {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&&**self, range, predicate) }
+}
+impl WhileUtf8 for String {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&self.as_str(), range, predicate) }
+}
+
+// The implementation for a [`Span`].
+impl<F, S: WhileUtf8> WhileUtf8 for Span<F, S> {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize {
+        self.source_ref().while_utf8(self.range().span(&range), predicate)
+    }
 }

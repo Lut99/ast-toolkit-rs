@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    23 Apr 2024, 18:02:26
+//    24 Apr 2024, 14:41:16
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,7 @@
 
 use std::error;
 use std::fmt::{Formatter, Result as FResult};
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use ast_toolkit_span::{Span, Spanning};
@@ -74,14 +75,14 @@ impl<R, F, E> MapResult<R, F, E> {
 ///
 /// Also note that errors are left untouched.
 #[inline]
-pub fn not<F, S, C>(comb: C) -> Not<C>
+pub fn not<F, S, C>(comb: C) -> Not<F, S, C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<F, S>,
     C::Output: Spanning<F, S>,
 {
-    Not { comb }
+    Not { comb, _f: Default::default(), _s: Default::default() }
 }
 
 
@@ -101,12 +102,12 @@ where
 /// # Errors
 /// This combinator inherits the error state of the given one.
 #[inline]
-pub fn map<F, S, R1, R2, C, M>(comb: C, func: M) -> Map<C, M>
+pub fn map<F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
 where
     C: Combinator<F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
-    Map { comb, func }
+    Map { comb, func, _f: Default::default(), _s: Default::default() }
 }
 
 /// Maps the result of a combinator to something else.
@@ -125,14 +126,14 @@ where
 ///
 /// # Errors
 /// This combinator inherits the error state of the given one, plus if `func` decides to error.
-pub fn map_fallible<F, S, R1, C, MF, MS, R2, M>(comb: C, func: M) -> MapFallible<C, M>
+pub fn map_fallible<F, S, R1, C, MF, MS, R2, M>(comb: C, func: M) -> MapFallible<F, S, C, M>
 where
     C: Combinator<F, S, Output = R1>,
     MF: 'static + error::Error + Spanning<F, S>,
     MS: 'static + error::Error + Spanning<F, S>,
     M: FnMut(R1) -> MapResult<R2, MF, MS>,
 {
-    MapFallible { comb, func }
+    MapFallible { comb, func, _f: Default::default(), _s: Default::default() }
 }
 
 
@@ -141,18 +142,22 @@ where
 
 /***** LIBRARY *****/
 /// The concrete type returned by [`not()`].
-pub struct Not<C> {
+pub struct Not<F, S, C> {
     /// The combinator to negate.
     comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
 }
-impl<C: Expects> Expects for Not<C> {
+impl<F, S, C: Expects> Expects for Not<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "not ")?;
         self.comb.fmt(f, indent)
     }
 }
-impl<F, S, C> Combinator<F, S> for Not<C>
+impl<F, S, C> Combinator<F, S> for Not<F, S, C>
 where
     F: Clone,
     S: Clone,
@@ -174,17 +179,21 @@ where
 
 
 /// The concrete type returned by [`map()`].
-pub struct Map<C, M> {
+pub struct Map<F, S, C, M> {
     /// The combinator who's output to negate.
     comb: C,
     /// The mapping closure.
     func: M,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
 }
-impl<C: Expects, M> Expects for Map<C, M> {
+impl<F, S, C: Expects, M> Expects for Map<F, S, C, M> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
 }
-impl<F, S, R1, R2, C, M> Combinator<F, S> for Map<C, M>
+impl<F, S, R1, R2, C, M> Combinator<F, S> for Map<F, S, C, M>
 where
     C: Combinator<F, S, Output = R1>,
     M: FnMut(R1) -> R2,
@@ -202,17 +211,21 @@ where
 }
 
 /// The concrete type returned by [`map_fallible()`].
-pub struct MapFallible<C, M> {
+pub struct MapFallible<F, S, C, M> {
     /// The combinator who's output to negate.
     comb: C,
     /// The mapping closure.
     func: M,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
 }
-impl<C: Expects, M> Expects for MapFallible<C, M> {
+impl<F, S, C: Expects, M> Expects for MapFallible<F, S, C, M> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
 }
-impl<F, S, R1, MF, MS, R2, C, M> Combinator<F, S> for MapFallible<C, M>
+impl<F, S, R1, MF, MS, R2, C, M> Combinator<F, S> for MapFallible<F, S, C, M>
 where
     C: Combinator<F, S, Output = R1>,
     MF: 'static + error::Error + Spanning<F, S>,
