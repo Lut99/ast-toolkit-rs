@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    23 Apr 2024, 17:25:48
+//    25 Apr 2024, 17:54:50
 //  Auto updated?
 //    Yes
 //
@@ -19,21 +19,20 @@
 
 // Declare submodules
 pub mod branch;
-pub mod comb;
-pub mod error;
+pub mod bytes;
+pub mod combinator;
 pub mod error_new;
-pub mod fail;
 pub mod multi;
 pub mod sequence;
 pub mod span;
-pub mod value;
+pub mod utf8;
 
 // Imports
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::Span;
 use enum_debug::EnumDebug;
-use fail::Failure;
+use error_new::{Error, Failure};
 
 
 /***** HELPER MACROS *****/
@@ -158,12 +157,25 @@ const EXPECTS_INDENT_SIZE: usize = 4;
 
 /***** FORMATTERS *****/
 /// Allows something implementing [`Expects`] to be nicely formatted.
+#[derive(Clone, Copy)]
 pub struct ExpectsFormatter<'e> {
     exp: &'e dyn Expects,
 }
+impl<'e> Debug for ExpectsFormatter<'e> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        let mut dbg = f.debug_struct("ExpectsFormatter");
+        dbg.field("exp", &"<no debug available>");
+        dbg.finish()
+    }
+}
 impl<'e> Display for ExpectsFormatter<'e> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.exp.fmt(f, 0) }
+    fn fmt(&self, f: &mut Formatter) -> FResult { self.exp.fmt(f, 0) }
+}
+impl<'e> Expects for ExpectsFormatter<'e> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.exp.fmt(f, indent) }
 }
 
 
@@ -217,25 +229,25 @@ pub trait Combinator<F, S>: Expects {
     ///
     /// # Returns
     /// A snack [`Result`] that encodes:
-    /// - [`SnackResult::Ok((rem, output))`]: We parsed an `output` of type `R`, with `rem` left unparsed.
-    /// - [`SnackResult::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
-    /// - [`SnackResult::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
+    /// - [`Result::Ok((rem, output))`]: We parsed an `output` of type `R`, with `rem` left unparsed.
+    /// - [`Result::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
+    /// - [`Result::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S>;
 }
 
 
 
 /// Defines the shape of the output of [`Combinators`].
-#[derive(Clone, Debug, EnumDebug)]
-pub enum Result<R, F, S> {
+#[derive(Debug, EnumDebug)]
+pub enum Result<'a, R, F, S> {
     /// An `output` of type `R` was parsed (1), with the remainder left unparsed (0).
     Ok(Span<F, S>, R),
     /// Failed to parse input with the given reason, but recoverably so.
-    Fail(fail::Failure<F, S>),
+    Fail(Failure<'a, F, S>),
     /// Failed to parse input with the given reason, but unrecoverably so.
-    Error(error::Error<F, S>),
+    Error(Error<'a, F, S>),
 }
-impl<R, F, S> Result<R, F, S> {
+impl<'a, R, F, S> Result<'a, R, F, S> {
     /// Maps this result's [`Result::Fail`]-case.
     ///
     /// # Arguments
@@ -296,17 +308,17 @@ impl<R, F, S> Result<R, F, S> {
     #[inline]
     pub fn is_not_ok(&self) -> bool { !self.is_ok() }
 }
-impl<R: Eq, F, S: Eq + Spannable> Eq for Result<R, F, S> {}
-impl<R: PartialEq, F, S: PartialEq + Spannable> PartialEq for Result<R, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Ok(rem1, res1), Self::Ok(rem2, res2)) => rem1 == rem2 && res1 == res2,
-            (Self::Fail(fail1), Self::Fail(fail2)) => fail1 == fail2,
-            (Self::Error(err1), Self::Error(err2)) => err1 == err2,
+// impl<R: Eq, F, S: Eq + Spannable> Eq for Result<R, F, S> {}
+// impl<R: PartialEq, F, S: PartialEq + Spannable> PartialEq for Result<R, F, S> {
+//     #[inline]
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Self::Ok(rem1, res1), Self::Ok(rem2, res2)) => rem1 == rem2 && res1 == res2,
+//             (Self::Fail(fail1), Self::Fail(fail2)) => fail1 == fail2,
+//             (Self::Error(err1), Self::Error(err2)) => err1 == err2,
 
-            // Otherwise, different variants, always bad
-            _ => false,
-        }
-    }
-}
+//             // Otherwise, different variants, always bad
+//             _ => false,
+//         }
+//     }
+// }

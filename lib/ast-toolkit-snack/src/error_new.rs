@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    24 Apr 2024, 15:13:56
+//    25 Apr 2024, 18:01:39
 //  Auto updated?
 //    Yes
 //
@@ -26,12 +26,22 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
-use unicode_segmentation::UnicodeSegmentation;
 
-use crate::Expects;
+use crate::{Expects, ExpectsFormatter};
 
 
 /***** ERRORS *****/
+/// Defines an error that may occur when casting [`Commons`]s to [`Failure`]s or [`Error`]s.
+#[derive(Debug)]
+pub struct TryFromCommonError(String, &'static str);
+impl Display for TryFromCommonError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Cannot convert Common::{} to {} because there is no equivalent in Error", self.0, self.1)
+    }
+}
+impl error::Error for TryFromCommonError {}
+
 /// Defines an error that may occur when casting [`Failure`]s to [`Error`]s.
 #[derive(Debug)]
 pub struct TryFromFailureError(String);
@@ -42,23 +52,6 @@ impl Display for TryFromFailureError {
     }
 }
 impl error::Error for TryFromFailureError {}
-
-
-
-
-
-/***** HELPERS *****/
-/// A helper trait that abstracts over things both [`Debug`] and [`AsRef<[u8]>`].
-pub trait DebugAsRef: Debug + AsRef<[u8]> {}
-impl<T: ?Sized + Debug + AsRef<[u8]>> DebugAsRef for T {}
-
-/// A helper trait that abstracts over things both [`Debug`] and [`UnicodeSegmentation`].
-pub trait DebugUnicodeSegmentation: Debug + UnicodeSegmentation {}
-impl<T: ?Sized + Debug + UnicodeSegmentation> DebugUnicodeSegmentation for T {}
-
-/// A helper trait that abstracts over things both [`Error`] and [`Spanning`].
-pub trait ErrorSpanning<F, S>: error::Error + Spanning<F, S> {}
-impl<F, S, T: ?Sized + error::Error + Spanning<F, S>> ErrorSpanning<F, S> for T {}
 
 
 
@@ -91,7 +84,21 @@ pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl I
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "a digit") }
+pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "at least one digit") }
+
+/// Defines what we expect from a [`Not`](crate::combinator::Not).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Some indentation level to apply when writing new lines.
+/// - `what`: Something that was expected to _not_ occur.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_not(f: &mut Formatter, indent: usize, what: &ExpectsFormatter) -> FResult {
+    write!(f, "not ")?;
+    <ExpectsFormatter as Expects>::fmt(what, f, indent)
+}
 
 /// Defines what we expect from a UTF-8-based [`OneOf1`](crate::value::utf8::complete::OneOf1).
 ///
@@ -101,7 +108,19 @@ pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "a digit"
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: impl Debug) -> FResult { write!(f, "one of {chars:?}") }
+pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
+    write!(f, "at least one of ")?;
+    for i in 0..chars.len() {
+        if i == 0 {
+            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
+        } else if i < chars.len() - 1 {
+            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
+        } else {
+            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
+        }
+    }
+    Ok(())
+}
 
 /// Defines what we expect from a [`Tag`](crate::value::complete::Tag).
 ///
@@ -111,7 +130,7 @@ pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: impl Debug) -> FRes
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_tag(f: &mut Formatter, tag: impl Debug) -> FResult { write!(f, "{tag:?}") }
+pub(crate) fn expects_tag_utf8(f: &mut Formatter, tag: &str) -> FResult { write!(f, "{tag:?}") }
 
 /// Defines what we expect from a [`While1`](crate::value::utf8::complete::While1).
 ///
@@ -120,7 +139,7 @@ pub(crate) fn expects_tag(f: &mut Formatter, tag: impl Debug) -> FResult { write
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "specific characters") }
+pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "at least one specific character") }
 
 /// Defines what we expect from a [`Whitespace1`](crate::value::utf8::complete::Whitespace1).
 ///
@@ -129,7 +148,7 @@ pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "spe
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "whitespace") }
+pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at least one whitespace") }
 
 
 
@@ -142,37 +161,49 @@ pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "whi
 /// into unrecoverable [`Error`]s by usage of the [`commit()`]-combinator. Both
 /// enums also define a small set that cannot do this change (i.e., that cannot
 /// be made unrecoverable or that isn't recoverable in the first place).
-#[derive(Clone, Debug, EnumDebug)]
-pub enum Common<F, S> {
+#[derive(Debug, EnumDebug)]
+pub enum Common<'a, F, S> {
     /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
     Alt { branches: Vec<Self>, span: Span<F, S> },
+    /// Failed to match at least one digit.
+    Digit1 { span: Span<F, S> },
+    /// Failed to _not_ apply a combinator.
+    Not { expects: ExpectsFormatter<'a>, span: Span<F, S> },
     /// Expected at least one of the following characters.
-    OneOf1Utf8 { charset: &'static dyn DebugUnicodeSegmentation, span: Span<F, S> },
-    /// Failed to match something particular with the [`tag()`](crate::value::complete::tag())-combinator.
-    Tag { tag: &'static dyn DebugAsRef, span: Span<F, S> },
+    OneOf1Utf8 { charset: &'a [&'a str], span: Span<F, S> },
+    /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
+    TagUtf8 { tag: &'a str, span: Span<F, S> },
     /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::value::utf8::complete::while1())-combinator.
     While1Utf8 { span: Span<F, S> },
+    /// Failed to match at least one whitespace.
+    Whitespace1 { span: Span<F, S> },
 }
 
-impl<F, S> Expects for Common<F, S> {
+impl<'a, F, S> Expects for Common<'a, F, S> {
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         match self {
             Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
+            Self::Digit1 { .. } => expects_digit1(f),
+            Self::Not { expects, .. } => expects_not(f, indent, expects),
             Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
-            Self::Tag { tag, .. } => expects_tag(f, tag),
+            Self::TagUtf8 { tag, .. } => expects_tag_utf8(f, tag),
             Self::While1Utf8 { .. } => expects_while1_utf8(f),
+            Self::Whitespace1 { .. } => expects_whitespace1(f),
         }
     }
 }
-impl<F: Clone, S: Clone> Spanning<F, S> for Common<F, S> {
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
+            Self::Digit1 { span } => span.clone(),
+            Self::Not { span, .. } => span.clone(),
             Self::OneOf1Utf8 { span, .. } => span.clone(),
-            Self::Tag { span, .. } => span.clone(),
+            Self::TagUtf8 { span, .. } => span.clone(),
             Self::While1Utf8 { span } => span.clone(),
+            Self::Whitespace1 { span } => span.clone(),
         }
     }
 }
@@ -180,18 +211,18 @@ impl<F: Clone, S: Clone> Spanning<F, S> for Common<F, S> {
 
 
 /// Defines a problems emitted by snack combinators that are recoverable.
-#[derive(Clone, Debug, EnumDebug)]
-pub enum Failure<F, S> {
+#[derive(Debug, EnumDebug)]
+pub enum Failure<'a, F, S> {
     /// There wasn't enough input data and the combinator was a streaming combinator.
     ///
     /// The `needed` is an optional hint provided by the combinator to guess how many more bytes would be needed.
     NotEnough { needed: Option<usize>, span: Span<F, S> },
 
     /// It's a type of failure that can be made a non-recoverable [`Error`].
-    Common(Common<F, S>),
+    Common(Common<'a, F, S>),
 }
 
-impl<F, S> Expects for Failure<F, S> {
+impl<'a, F, S> Expects for Failure<'a, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         match self {
@@ -207,7 +238,7 @@ impl<F, S> Expects for Failure<F, S> {
         }
     }
 }
-impl<F: Clone, S: Clone> Spanning<F, S> for Failure<F, S> {
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Failure<'a, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -218,16 +249,27 @@ impl<F: Clone, S: Clone> Spanning<F, S> for Failure<F, S> {
     }
 }
 
-impl<F, S> From<Common<F, S>> for Failure<F, S> {
+impl<'a, F, S> From<Common<'a, F, S>> for Failure<'a, F, S> {
     #[inline]
     fn from(value: Common<F, S>) -> Self { Self::Common(value) }
+}
+impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Common<'a, F, S> {
+    type Error = TryFromCommonError;
+
+    #[inline]
+    fn try_from(value: Failure<F, S>) -> Result<Self, Self::Error> {
+        match value {
+            Failure::Common(c) => Ok(c),
+            Failure::NotEnough { .. } => Err(TryFromCommonError(value.variant().to_string(), "a Failure")),
+        }
+    }
 }
 
 
 
 /// Defines a problems emitted by snack combinators that are non-recoverable.
-#[derive(Clone, Debug, EnumDebug)]
-pub enum Error<F, S> {
+#[derive(Debug, EnumDebug)]
+pub enum Error<'a, F, S> {
     /// There is a specific context in which the parsing failed.
     ///
     /// This is usually used through the [`context()`]-combinator, and allows
@@ -235,10 +277,10 @@ pub enum Error<F, S> {
     Context { context: &'static str, span: Span<F, S>, err: Box<Self> },
 
     /// It's a type of error that can come from recoverable [`Failure`]s.
-    Common(Common<F, S>),
+    Common(Common<'a, F, S>),
 }
 
-impl<F, S> Expects for Error<F, S> {
+impl<'a, F, S> Expects for Error<'a, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         match self {
@@ -250,7 +292,7 @@ impl<F, S> Expects for Error<F, S> {
         }
     }
 }
-impl<F: Clone, S: Clone> Spanning<F, S> for Error<F, S> {
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Error<'a, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -261,11 +303,22 @@ impl<F: Clone, S: Clone> Spanning<F, S> for Error<F, S> {
     }
 }
 
-impl<F, S> From<Common<F, S>> for Error<F, S> {
+impl<'a, F, S> From<Common<'a, F, S>> for Error<'a, F, S> {
     #[inline]
     fn from(value: Common<F, S>) -> Self { Self::Common(value) }
 }
-impl<F, S> TryFrom<Failure<F, S>> for Error<F, S> {
+impl<'a, F, S> TryFrom<Error<'a, F, S>> for Common<'a, F, S> {
+    type Error = TryFromCommonError;
+
+    #[inline]
+    fn try_from(value: Error<F, S>) -> Result<Self, Self::Error> {
+        match value {
+            Error::Common(c) => Ok(c),
+            Error::Context { .. } => Err(TryFromCommonError(value.variant().to_string(), "an Error")),
+        }
+    }
+}
+impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Error<'a, F, S> {
     type Error = TryFromFailureError;
 
     #[inline]

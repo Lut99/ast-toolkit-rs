@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    24 Apr 2024, 14:41:27
+//    25 Apr 2024, 17:48:58
 //  Auto updated?
 //    Yes
 //
@@ -15,18 +15,17 @@
 use std::fmt::{Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spanning as _};
 use stackvec::StackVec;
 
-use crate::error_new::expects_alt;
-use crate::fail::Failure;
+use crate::error_new::{expects_alt, Common, Failure};
 use crate::{Combinator, Expects, Result};
 
 
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
-    use super::super::value::complete::tag;
+    use super::super::utf8::complete::tag;
     use super::*;
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
@@ -44,15 +43,7 @@ mod tests {
         assert_eq!(res, input.slice(..5));
 
         // Failure
-        assert_eq!(
-            alt((tag(&"Goodbye"), tag(&"Extra goodbye"))).parse(input),
-            Result::Fail(Failure::Alt {
-                branches: vec![Failure::Tag { tag: &"Goodbye", span: input.slice(0..) }, Failure::Tag {
-                    tag:  &"Extra goodbye",
-                    span: input.slice(0..),
-                }],
-            })
-        );
+        assert!(alt((tag(&"Goodbye"), tag(&"Extra goodbye"))).parse(input).is_fail());
     }
 }
 
@@ -76,7 +67,8 @@ macro_rules! tuple_branchable_impl {
         // First, do a non-last one
         match $self.$fi.parse($input.clone()) {
             Result::Ok(rem, res) => return Result::Ok(rem, res),
-            Result::Fail(fail) => $fails.push(fail),
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => $fails.push(fail.try_into().unwrap()),
             Result::Error(err) => return Result::Error(err),
         }
         // Do any others
@@ -86,13 +78,14 @@ macro_rules! tuple_branchable_impl {
         // The last one
         match $self.$fi.parse($input) {
             Result::Ok(rem, res) => return Result::Ok(rem, res),
-            Result::Fail(fail) => $fails.push(fail),
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => $fails.push(fail.try_into().unwrap()),
             Result::Error(err) => return Result::Error(err),
         }
     };
 
     (($fi:tt, $fname:ident)) => {
-        impl<F, S, $fname: Combinator<F, S>> Branchable<F, S> for ($fname,) {
+        impl<F: Clone, S: Clone, $fname: Combinator<F, S>> Branchable<F, S> for ($fname,) {
             type Output = $fname::Output;
 
             fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.0.fmt(f, indent) }
@@ -100,7 +93,8 @@ macro_rules! tuple_branchable_impl {
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 match self.$fi.parse(input) {
                     Result::Ok(rem, res) => Result::Ok(rem, res),
-                    Result::Fail(fail) => Result::Fail(Failure::Alt { branches: vec![ fail ]}),
+                    Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+                    Result::Fail(fail) => { let span = fail.span(); Result::Fail(Failure::Common(Common::Alt { branches: vec![ fail.try_into().unwrap() ], span })) },
                     Result::Error(err) => Result::Error(err),
                 }
             }
@@ -137,13 +131,14 @@ macro_rules! tuple_branchable_impl {
 
             fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
                 // Some cheap store for collecting failures
-                let mut fails: StackVec<{ count!($fname $($name)+) }, Failure<F, S>> = StackVec::new();
+                let mut fails: StackVec<{ count!($fname $($name)+) }, Common<F, S>> = StackVec::new();
+                let mut span: Option<Span<F, S>> = None;
 
                 // Go over all
                 tuple_branchable_impl!(last self, input, fails, $fi, $($i),+);
 
                 // If we made it here, none of them early quit
-                Result::Fail(Failure::Alt { branches: fails.into() })
+                Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: span.unwrap() }))
             }
         }
         }
