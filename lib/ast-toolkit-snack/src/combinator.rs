@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    25 Apr 2024, 17:33:35
+//    26 Apr 2024, 10:42:07
 //  Auto updated?
 //    Yes
 //
@@ -17,8 +17,27 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
 
-use crate::error_new::{expects_not, Common, Failure};
-use crate::{Combinator, Expects, ExpectsExt as _, Result};
+use crate::error_new::{Common, Failure};
+use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
+
+
+/***** EXPECTS FUNCTIONS *****/
+/// Defines what we expect from a [`Not`](crate::combinator::Not).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Some indentation level to apply when writing new lines.
+/// - `what`: Something that was expected to _not_ occur.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_not(f: &mut Formatter, indent: usize, what: &ExpectsFormatter) -> FResult {
+    write!(f, "not ")?;
+    <ExpectsFormatter as Expects>::fmt(what, f, indent)
+}
+
+
+
 
 
 /***** LIBRARY FUNCTIONS *****/

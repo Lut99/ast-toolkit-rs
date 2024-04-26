@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    25 Apr 2024, 17:48:58
+//    26 Apr 2024, 10:39:48
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spanning as _};
 use stackvec::StackVec;
 
-use crate::error_new::{expects_alt, Common, Failure};
+use crate::error_new::{Common, Failure};
 use crate::{Combinator, Expects, Result};
 
 
@@ -210,6 +210,30 @@ tuple_branchable_impl!(
     (14, C15),
     (15, C16)
 );
+
+
+
+
+
+/***** EXPECTS FUNCTIONS *****/
+/// Defines what we expect from an [`Alt`](crate::branch::Alt).
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Some indentation level to apply when writing new lines.
+/// - `branches`: Some iterator yielding [`Expects`] for all branches.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl IntoIterator<Item = &'b dyn Expects>) -> FResult {
+    writeln!(f, "one of:")?;
+    for b in branches {
+        write!(f, "{} - ", (0..indent).map(|_| ' ').collect::<String>())?;
+        b.fmt(f, indent + 1)?;
+        writeln!(f)?;
+    }
+    writeln!(f)
+}
 
 
 

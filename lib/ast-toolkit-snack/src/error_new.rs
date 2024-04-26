@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    25 Apr 2024, 18:01:39
+//    26 Apr 2024, 11:17:49
 //  Auto updated?
 //    Yes
 //
@@ -27,7 +27,12 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
 
-use crate::{Expects, ExpectsFormatter};
+use crate::branch::expects_alt;
+use crate::bytes::{expects_one_of1_bytes, expects_tag_bytes};
+use crate::combinator::expects_not;
+use crate::multi::{expects_many1, expects_many_n, expects_separated_list1_fail};
+use crate::utf8::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
+use crate::{Expects, ExpectsExt, ExpectsFormatter};
 
 
 /***** ERRORS *****/
@@ -57,103 +62,6 @@ impl error::Error for TryFromFailureError {}
 
 
 
-/***** EXPECTS *****/
-/// Defines what we expect from an [`Alt`](crate::branch::Alt).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `indent`: Some indentation level to apply when writing new lines.
-/// - `branches`: Some iterator yielding [`Expects`] for all branches.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl IntoIterator<Item = &'b dyn Expects>) -> FResult {
-    writeln!(f, "one of:")?;
-    for b in branches {
-        write!(f, "{} - ", (0..indent).map(|_| ' ').collect::<String>())?;
-        b.fmt(f, indent + 1)?;
-        writeln!(f)?;
-    }
-    writeln!(f)
-}
-
-/// Defines what we expect from a [`Digit1`](crate::value::utf8::complete::Digit1).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.\
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "at least one digit") }
-
-/// Defines what we expect from a [`Not`](crate::combinator::Not).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `indent`: Some indentation level to apply when writing new lines.
-/// - `what`: Something that was expected to _not_ occur.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_not(f: &mut Formatter, indent: usize, what: &ExpectsFormatter) -> FResult {
-    write!(f, "not ")?;
-    <ExpectsFormatter as Expects>::fmt(what, f, indent)
-}
-
-/// Defines what we expect from a UTF-8-based [`OneOf1`](crate::value::utf8::complete::OneOf1).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `chars`: The set of characters we're expecting.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
-    write!(f, "at least one of ")?;
-    for i in 0..chars.len() {
-        if i == 0 {
-            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
-        } else if i < chars.len() - 1 {
-            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
-        } else {
-            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
-        }
-    }
-    Ok(())
-}
-
-/// Defines what we expect from a [`Tag`](crate::value::complete::Tag).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `tag`: The thing that we are looking for.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_tag_utf8(f: &mut Formatter, tag: &str) -> FResult { write!(f, "{tag:?}") }
-
-/// Defines what we expect from a [`While1`](crate::value::utf8::complete::While1).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.\
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "at least one specific character") }
-
-/// Defines what we expect from a [`Whitespace1`](crate::value::utf8::complete::Whitespace1).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.\
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at least one whitespace") }
-
-
-
-
-
 /***** LIBRARY *****/
 /// Defines a common set of problems raised by snack combinators.
 ///
@@ -169,10 +77,22 @@ pub enum Common<'a, F, S> {
     Alt { branches: Vec<Self>, span: Span<F, S> },
     /// Failed to match at least one digit.
     Digit1 { span: Span<F, S> },
+    /// Failed to match a combinator at least once.
+    Many1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times.
+    ManyN { n: usize, i: usize, fail: Box<Self> },
     /// Failed to _not_ apply a combinator.
     Not { expects: ExpectsFormatter<'a>, span: Span<F, S> },
+    /// Expected at least one of the following bytes.
+    OneOf1Bytes { byteset: &'a [u8], span: Span<F, S> },
     /// Expected at least one of the following characters.
     OneOf1Utf8 { charset: &'a [&'a str], span: Span<F, S> },
+    /// Failed to match a combinator at least once, separated by some other thing.
+    SeparatedList1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing.
+    SeparatedListNValue { n: usize, i: usize, fail: Box<Self> },
+    /// Failed to match something particular with byte version of the [`tag()`](crate::bytes::complete::tag())-combinator.
+    TagBytes { tag: &'a [u8], span: Span<F, S> },
     /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
     TagUtf8 { tag: &'a str, span: Span<F, S> },
     /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::value::utf8::complete::while1())-combinator.
@@ -186,8 +106,13 @@ impl<'a, F, S> Expects for Common<'a, F, S> {
         match self {
             Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
             Self::Digit1 { .. } => expects_digit1(f),
+            Self::Many1 { fail } => expects_many1(f, indent, fail.expects()),
+            Self::ManyN { n, i: _, fail } => expects_many_n(f, indent, *n, fail.expects()),
             Self::Not { expects, .. } => expects_not(f, indent, expects),
+            Self::OneOf1Bytes { byteset, .. } => expects_one_of1_bytes(f, byteset),
             Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
+            Self::SeparatedList1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
+            Self::TagBytes { tag, .. } => expects_tag_bytes(f, tag),
             Self::TagUtf8 { tag, .. } => expects_tag_utf8(f, tag),
             Self::While1Utf8 { .. } => expects_while1_utf8(f),
             Self::Whitespace1 { .. } => expects_whitespace1(f),
@@ -199,8 +124,13 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
             Self::Digit1 { span } => span.clone(),
+            Self::Many1 { fail } => fail.span(),
+            Self::ManyN { fail, .. } => fail.span(),
             Self::Not { span, .. } => span.clone(),
+            Self::OneOf1Bytes { span, .. } => span.clone(),
             Self::OneOf1Utf8 { span, .. } => span.clone(),
+            Self::SeparatedList1 { fail } => fail.span(),
+            Self::TagBytes { span, .. } => span.clone(),
             Self::TagUtf8 { span, .. } => span.clone(),
             Self::While1Utf8 { span } => span.clone(),
             Self::Whitespace1 { span } => span.clone(),

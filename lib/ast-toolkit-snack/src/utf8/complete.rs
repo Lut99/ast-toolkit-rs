@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    25 Apr 2024, 18:03:42
+//    26 Apr 2024, 10:49:00
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,8 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, SpanRange};
 
-use crate::error_new::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1, Common, Failure};
+use super::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
+use crate::error_new::{Common, Failure};
 use crate::span::{MatchBytes, OneOfUtf8, WhileUtf8};
 use crate::{Combinator, Expects, Result};
 

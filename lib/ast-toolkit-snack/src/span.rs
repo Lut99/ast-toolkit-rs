@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    24 Apr 2024, 15:07:44
+//    26 Apr 2024, 09:50:53
 //  Auto updated?
 //    Yes
 //
@@ -232,5 +232,67 @@ impl<F, S: WhileUtf8> WhileUtf8 for Span<F, S> {
     #[inline]
     fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize {
         self.source_ref().while_utf8(self.range().span(&range), predicate)
+    }
+}
+
+
+
+/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed based on a predicate over graphemes.
+pub trait WhileBytes {
+    /// Returns the position up to which a predicate over bytes returns false.
+    ///
+    /// # Arguments
+    /// - `range`: The actual range of `self` to match.
+    /// - `predicate`: Some predicate (accepting bytes, returning true or false) that will be used to decide if a byte matches the predicate.
+    ///
+    /// # Returns
+    /// A `usize` that indicates the first unmatched byte. Some notes:
+    /// - If result is the length of `self`, the entire source was matched
+    /// - If result is 0, then none of `self` could be matched (i.e., first byte is wrong ...or `self` is empty!)
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize;
+}
+
+// Default binary impls for [`WhileBytes`]
+impl<'b> WhileBytes for &'b [u8] {
+    fn while_bytes(&self, range: SpanRange, mut predicate: impl FnMut(u8) -> bool) -> usize {
+        // Match the prefixes
+        let mut i: usize = 0;
+        for b in range.apply_to(self).iter() {
+            if !predicate(*b) {
+                return i;
+            }
+            i += 1;
+        }
+        i
+    }
+}
+impl<'b> WhileBytes for Cow<'b, [u8]> {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { <&[u8]>::while_bytes(&&**self, range, predicate) }
+}
+impl WhileBytes for Vec<u8> {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { <&[u8]>::while_bytes(&self.as_slice(), range, predicate) }
+}
+
+// Default string impls for [`OneOfUtf8`]
+impl<'s> WhileBytes for &'s str {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { self.as_bytes().while_bytes(range, predicate) }
+}
+impl<'s> WhileBytes for Cow<'s, str> {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { <&str>::while_bytes(&&**self, range, predicate) }
+}
+impl WhileBytes for String {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { <&str>::while_bytes(&self.as_str(), range, predicate) }
+}
+
+// The implementation for a [`Span`].
+impl<F, S: WhileBytes> WhileBytes for Span<F, S> {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize {
+        self.source_ref().while_bytes(self.range().span(&range), predicate)
     }
 }

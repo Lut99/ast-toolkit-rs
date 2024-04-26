@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    25 Apr 2024, 18:06:46
+//    26 Apr 2024, 10:49:42
 //  Auto updated?
 //    Yes
 //
@@ -27,6 +27,126 @@ use ast_toolkit_span::{Span, SpanRange};
 
 use crate::span::{OneOfBytes, OneOfUtf8, WhileUtf8};
 use crate::{Combinator, Expects, Result};
+
+
+/***** EXPECTS FUNCTIONS *****/
+/// Defines what we expect from a [`Digit0`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.\
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_digit0(f: &mut Formatter) -> FResult { write!(f, "digits") }
+
+/// Defines what we expect from a [`Digit1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.\
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "at least one digit") }
+
+/// Defines what we expect from a UTF-8-based [`OneOf0`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `chars`: The set of characters we're expecting.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_one_of0_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
+    write!(f, "some of ")?;
+    for i in 0..chars.len() {
+        if i == 0 {
+            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
+        } else if i < chars.len() - 1 {
+            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
+        } else {
+            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
+        }
+    }
+    Ok(())
+}
+
+/// Defines what we expect from a UTF-8-based [`OneOf1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `chars`: The set of characters we're expecting.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
+    write!(f, "at least one of ")?;
+    for i in 0..chars.len() {
+        if i == 0 {
+            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
+        } else if i < chars.len() - 1 {
+            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
+        } else {
+            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
+        }
+    }
+    Ok(())
+}
+
+/// Defines what we expect from a [`Tag`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `tag`: The thing that we are looking for.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_tag_utf8(f: &mut Formatter, tag: &str) -> FResult { write!(f, "{tag:?}") }
+
+/// Defines what we expect from a [`While0`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_while0_utf8(f: &mut Formatter) -> FResult { write!(f, "specific characters") }
+
+/// Defines what we expect from a [`While1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "at least one specific character") }
+
+/// Defines what we expect from a [`Whitespace0`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_whitespace0(f: &mut Formatter) -> FResult { write!(f, "whitespace") }
+
+/// Defines what we expect from a [`Whitespace1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at least one whitespace") }
+
+
+
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -117,7 +237,7 @@ pub struct Digit0<F, S> {
 }
 impl<F, S> Expects for Digit0<F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "digits") }
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_digit0(f) }
 }
 impl<F, S> Combinator<F, S> for Digit0<F, S>
 where
@@ -152,19 +272,8 @@ pub struct OneOf0<'t, F, S> {
     _s:      PhantomData<S>,
 }
 impl<'t, F, S> Expects for OneOf0<'t, F, S> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        write!(f, "either ")?;
-        for i in 0..self.charset.len() {
-            if i == 0 {
-                write!(f, "{:?}", unsafe { self.charset.get_unchecked(i) })?;
-            } else if i < self.charset.len() - 1 {
-                write!(f, ", {:?}", unsafe { self.charset.get_unchecked(i) })?;
-            } else {
-                write!(f, " or {:?}", unsafe { self.charset.get_unchecked(i) })?;
-            }
-        }
-        Ok(())
-    }
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of0_utf8(f, self.charset) }
 }
 impl<'t, F, S> Combinator<F, S> for OneOf0<'t, F, S>
 where
@@ -190,7 +299,8 @@ pub struct While0<F, S, P> {
     _s: PhantomData<S>,
 }
 impl<F, S, P> Expects for While0<F, S, P> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific characters") }
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while0_utf8(f) }
 }
 impl<F, S, P> Combinator<F, S> for While0<F, S, P>
 where
@@ -216,7 +326,7 @@ pub struct Whitespace0<F, S> {
 }
 impl<F, S> Expects for Whitespace0<F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "whitespace") }
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_whitespace0(f) }
 }
 impl<F, S> Combinator<F, S> for Whitespace0<F, S>
 where
