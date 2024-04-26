@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    26 Apr 2024, 11:17:49
+//    26 Apr 2024, 15:53:46
 //  Auto updated?
 //    Yes
 //
@@ -30,7 +30,9 @@ use enum_debug::EnumDebug;
 use crate::branch::expects_alt;
 use crate::bytes::{expects_one_of1_bytes, expects_tag_bytes};
 use crate::combinator::expects_not;
-use crate::multi::{expects_many1, expects_many_n, expects_separated_list1_fail};
+use crate::multi::{expects_many1, expects_many_n, expects_separated_list1_fail, expects_separated_list_n_punct, expects_separated_list_n_value};
+#[cfg(feature = "punctuated")]
+use crate::multi::{expects_punctuated_trailing1_fail, expects_punctuated_trailing_n_punct, expects_punctuated_trailing_n_value};
 use crate::utf8::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
 use crate::{Expects, ExpectsExt, ExpectsFormatter};
 
@@ -88,9 +90,29 @@ pub enum Common<'a, F, S> {
     /// Expected at least one of the following characters.
     OneOf1Utf8 { charset: &'a [&'a str], span: Span<F, S> },
     /// Failed to match a combinator at least once, separated by some other thing.
+    #[cfg(feature = "punctuated")]
+    Punctuated1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
+    /// Failed to match a combinator at least once, separated by some other thing.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailing1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailingNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailingNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
+    /// Failed to match a combinator at least once, separated by some other thing.
     SeparatedList1 { fail: Box<Self> },
-    /// Failed to match a combinator exactly N times, separated by some other thing.
-    SeparatedListNValue { n: usize, i: usize, fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    SeparatedListNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    SeparatedListNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
     /// Failed to match something particular with byte version of the [`tag()`](crate::bytes::complete::tag())-combinator.
     TagBytes { tag: &'a [u8], span: Span<F, S> },
     /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
@@ -111,7 +133,25 @@ impl<'a, F, S> Expects for Common<'a, F, S> {
             Self::Not { expects, .. } => expects_not(f, indent, expects),
             Self::OneOf1Bytes { byteset, .. } => expects_one_of1_bytes(f, byteset),
             Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
+            #[cfg(feature = "punctuated")]
+            Self::Punctuated1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailing1 { fail } => expects_punctuated_trailing1_fail(f, indent, fail.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNPunct { n, i: _, values, puncts } => {
+                expects_punctuated_trailing_n_punct(f, indent, *n, *values, puncts.expects())
+            },
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNValue { n, i: _, values, puncts } => {
+                expects_punctuated_trailing_n_value(f, indent, *n, values.expects(), *puncts)
+            },
             Self::SeparatedList1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
+            Self::SeparatedListNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
+            Self::SeparatedListNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
             Self::TagBytes { tag, .. } => expects_tag_bytes(f, tag),
             Self::TagUtf8 { tag, .. } => expects_tag_utf8(f, tag),
             Self::While1Utf8 { .. } => expects_while1_utf8(f),
@@ -129,7 +169,21 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
             Self::Not { span, .. } => span.clone(),
             Self::OneOf1Bytes { span, .. } => span.clone(),
             Self::OneOf1Utf8 { span, .. } => span.clone(),
+            #[cfg(feature = "punctuated")]
+            Self::Punctuated1 { fail } => fail.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNPunct { puncts, .. } => puncts.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNValue { values, .. } => values.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailing1 { fail } => fail.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNPunct { puncts, .. } => puncts.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNValue { values, .. } => values.span(),
             Self::SeparatedList1 { fail } => fail.span(),
+            Self::SeparatedListNPunct { puncts, .. } => puncts.span(),
+            Self::SeparatedListNValue { values, .. } => values.span(),
             Self::TagBytes { span, .. } => span.clone(),
             Self::TagUtf8 { span, .. } => span.clone(),
             Self::While1Utf8 { span } => span.clone(),

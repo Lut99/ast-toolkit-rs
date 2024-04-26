@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    06 Apr 2024, 12:41:05
+//    26 Apr 2024, 16:49:39
 //  Auto updated?
 //    Yes
 //
@@ -13,17 +13,20 @@
 //!   consider not enough input a hard failure.
 //
 
+use std::fmt::{Formatter, Result as FResult};
+use std::marker::PhantomData;
+
 use ast_toolkit_span::Span;
 
-use crate::{Combinator, Result};
+use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
 
 
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
     use super::pair;
-    use crate::fail::Failure;
-    use crate::value::tag;
+    use crate::error_new::{Common, Failure};
+    use crate::utf8::complete::tag;
     use crate::{Combinator as _, Result};
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
@@ -40,9 +43,9 @@ mod tests {
         assert_eq!(res2, input.slice(5..));
 
         // Failure
-        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Tag { .. })));
-        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Tag { .. })));
+        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
     }
 }
 
@@ -50,7 +53,30 @@ mod tests {
 
 
 
-/***** LIBRARY *****/
+/***** EXPECTS FUNCTIONS *****/
+/// Defines what we expect from a [`Pair`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `expects1`: Some nested [`ExpectsFormatter`] of the first combinator that is being applied.
+/// - `expects2`: Some nested [`ExpectsFormatter`] of the second combinator that is being applied.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_pair(f: &mut Formatter, indent: usize, expects1: ExpectsFormatter, expects2: ExpectsFormatter) -> FResult {
+    write!(f, "first ")?;
+    <ExpectsFormatter as Expects>::fmt(&expects1, f, indent)?;
+    write!(f, ", then ")?;
+    <ExpectsFormatter as Expects>::fmt(&expects2, f, indent)
+}
+
+
+
+
+
+/***** LIBRARY FUNCTIONS *****/
 /// Applies the first combinator, then applies the second.
 ///
 /// # Arguments
@@ -62,23 +88,7 @@ mod tests {
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(
-    mut first: C1,
-    mut second: C2,
-) -> impl FnMut(Span<F, S>) -> Result<(C1::Output, C2::Output), F, S> {
-    move |input: Span<F, S>| -> Result<(C1::Output, C2::Output), F, S> {
-        let (rem, res1) = match first.parse(input) {
-            Result::Ok(rem, res) => (rem, res),
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        match second.parse(rem) {
-            Result::Ok(rem, res2) => Result::Ok(rem, (res1, res2)),
-            Result::Fail(f) => Result::Fail(f),
-            Result::Error(f) => Result::Error(f),
-        }
-    }
-}
+pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(first: C1, second: C2) -> (C1, C2) { (first, second) }
 
 /// Applies a tuple of combinators, in-order.
 ///
@@ -232,3 +242,9 @@ pub fn delimited<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinato
         }
     }
 }
+
+
+
+
+
+/***** LIBRARY COMBINATORS *****/

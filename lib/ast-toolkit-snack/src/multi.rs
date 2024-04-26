@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:46:57
 //  Last edited:
-//    26 Apr 2024, 11:20:00
+//    26 Apr 2024, 16:01:31
 //  Auto updated?
 //    Yes
 //
@@ -55,6 +55,146 @@ pub(crate) fn expects_many1(f: &mut Formatter, indent: usize, expects: ExpectsFo
 pub(crate) fn expects_many_n(f: &mut Formatter, indent: usize, n: usize, expects: ExpectsFormatter) -> FResult {
     write!(f, "{n} repetitions of ")?;
     <ExpectsFormatter as Expects>::fmt(&expects, f, indent)
+}
+
+
+
+/// Defines what we expect from a [`Punctuated1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated1(f: &mut Formatter, indent: usize, values: ExpectsFormatter, puncts: ExpectsFormatter) -> FResult {
+    write!(f, "a list of at least one ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)
+}
+
+
+
+/// Defines what we expect from a [`PunctuatedTrailing1`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated_trailing1(f: &mut Formatter, indent: usize, values: ExpectsFormatter, puncts: ExpectsFormatter) -> FResult {
+    write!(f, "a list of at least one time ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)?;
+    write!(f, ", with optional trailing punctuation")
+}
+
+/// Defines what we expect from a [`PunctuatedTrailing1`] when it fails.
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `fail`: Some nested [`ExpectsFormatter`] of the value combinator that actually failed.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated_trailing1_fail(f: &mut Formatter, indent: usize, fail: ExpectsFormatter) -> FResult {
+    write!(f, "at least one time ")?;
+    fail.fmt(f, indent)
+}
+
+/// Defines what we expect from a [`PunctuatedTrailingN`].
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `n`: The number of times to apply the combinator.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated_trailing_n(
+    f: &mut Formatter,
+    indent: usize,
+    n: usize,
+    values: ExpectsFormatter,
+    puncts: ExpectsFormatter,
+) -> FResult {
+    write!(f, "a list of {n} times ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)?;
+    write!(f, ", with optional trailing punctuation")
+}
+
+/// Defines what we expect from a [`PunctuatedTrailingN`] when it fails to parse a value.
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `n`: The number of times to apply the combinator.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated_trailing_n_value(
+    f: &mut Formatter,
+    indent: usize,
+    n: usize,
+    values: ExpectsFormatter,
+    puncts: ExpectsFormatter,
+) -> FResult {
+    write!(f, "the next value in a list of {n} times ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)?;
+    write!(f, ", with optional trailing punctuation")
+}
+
+/// Defines what we expect from a [`PunctuatedTrailingN`] when it fails to parse a punctuation.
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `n`: The number of times to apply the combinator.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[cfg(feature = "punctuated")]
+#[inline]
+pub(crate) fn expects_punctuated_trailing_n_punct(
+    f: &mut Formatter,
+    indent: usize,
+    n: usize,
+    values: ExpectsFormatter,
+    puncts: ExpectsFormatter,
+) -> FResult {
+    write!(f, "the next punctuation in a list of {n} times ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)?;
+    write!(f, ", with optional trailing punctuation")
 }
 
 
@@ -118,6 +258,7 @@ pub(crate) fn expects_separated_list_n(f: &mut Formatter, indent: usize, n: usiz
 /// - `indent`: Any indentation to apply should the nested expects write new lines.
 /// - `n`: The number of times to apply the combinator.
 /// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
 ///
 /// # Errors
 /// This function errors if it failed to write to the given `f`ormatter.
@@ -129,7 +270,32 @@ pub(crate) fn expects_separated_list_n_value(
     values: ExpectsFormatter,
     puncts: ExpectsFormatter,
 ) -> FResult {
-    write!(f, "a list of {n} times ")?;
+    write!(f, "the next value in a list of {n} times ")?;
+    values.fmt(f, indent)?;
+    write!(f, " separated by ")?;
+    puncts.fmt(f, indent)
+}
+
+/// Defines what we expect from a [`SeparatedListN`] when it fails to parse a punctuation.
+///
+/// # Arguments
+/// - `f`: Some [`Formatter`] to write what we expect to.
+/// - `indent`: Any indentation to apply should the nested expects write new lines.
+/// - `n`: The number of times to apply the combinator.
+/// - `values`: Some nested [`ExpectsFormatter`] of the values combinator that is being applied `n` times.
+/// - `puncts`: Some nested [`ExpectsFormatter`] of the punctuation combinator.
+///
+/// # Errors
+/// This function errors if it failed to write to the given `f`ormatter.
+#[inline]
+pub(crate) fn expects_separated_list_n_punct(
+    f: &mut Formatter,
+    indent: usize,
+    n: usize,
+    values: ExpectsFormatter,
+    puncts: ExpectsFormatter,
+) -> FResult {
+    write!(f, "the next punctuation in a list of {n} times ")?;
     values.fmt(f, indent)?;
     write!(f, " separated by ")?;
     puncts.fmt(f, indent)
@@ -287,50 +453,15 @@ where
 ///
 /// # Fails
 /// This function returns a [`Failure::ManyN`] if it failed to apply `value` exactly `N` times.
-pub fn separated_list_n<F: Clone, S: Clone, CV: Combinator<F, S>, CP: Combinator<F, S>>(
-    n: usize,
-    mut value: CV,
-    mut punct: CP,
-) -> impl FnMut(Span<F, S>) -> Result<Vec<CV::Output>, F, S> {
-    move |input: Span<F, S>| -> Result<Vec<CV::Output>, F, S> {
-        // Do nothing if n == 0
-        if n == 0 {
-            return Result::Ok(input, Vec::new());
-        }
-
-        // First parse a possible first value
-        let (mut rem, mut res): (Span<F, S>, Vec<CV::Output>) = match value.parse(input.clone()) {
-            Result::Ok(rem, res) => (rem, vec![res]),
-            Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNValue { times: n, got: 0, fail: Box::new(fail) }),
-            Result::Error(err) => return Result::Error(err),
-        };
-
-        // Then we parse punctuation/value pairs
-        for i in 1..n {
-            // Only parse punctuation after the first value has been parsed
-            let punct_rem: Span<F, S> = match punct.parse(rem.clone()) {
-                Result::Ok(rem, _) => rem,
-                // If we fail, that's the end of the list
-                Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNPunct { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            };
-
-            // Then we attempt to parse a value
-            match value.parse(punct_rem) {
-                Result::Ok(new_rem, new_res) => {
-                    rem = new_rem;
-                    res.push(new_res);
-                },
-                Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNValue { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            }
-        }
-
-        // OK, we now made it this far
-        #[cfg(debug_assertions)]
-        assert_eq!(res.len(), n);
-        Result::Ok(rem, res)
-    }
+#[inline]
+pub fn separated_list_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> SeparatedListN<F, S, CV, CP>
+where
+    F: Clone,
+    S: Clone,
+    CV: Combinator<F, S>,
+    CP: Combinator<F, S>,
+{
+    SeparatedListN { values, puncts, n, _f: PhantomData::default(), _s: PhantomData::default() }
 }
 
 
@@ -412,54 +543,16 @@ where
 ///
 /// # Fails
 /// This function returns a [`Failure::PunctuatedN`] if it failed to apply `value` exactly `N` times.
-pub fn punctuated_n<F: Clone, S: Clone, CV: Combinator<F, S>, CP: Combinator<F, S>>(
-    n: usize,
-    mut value: CV,
-    mut punct: CP,
-) -> impl FnMut(Span<F, S>) -> Result<Punctuated<CV::Output, CP::Output>, F, S> {
-    move |input: Span<F, S>| -> Result<Punctuated<CV::Output, CP::Output>, F, S> {
-        // Do nothing if n == 0
-        if n == 0 {
-            return Result::Ok(input, Punctuated::new());
-        }
-
-        // First parse a possible first value
-        let mut res: Punctuated<CV::Output, CP::Output> = Punctuated::new();
-        let mut rem: Span<F, S> = match value.parse(input) {
-            Result::Ok(rem, value_res) => {
-                res.push_first(value_res);
-                rem
-            },
-            Result::Fail(fail) => return Result::Fail(Failure::PunctuatedNValue { times: n, got: 0, fail: Box::new(fail) }),
-            Result::Error(err) => return Result::Error(err),
-        };
-
-        // Then we parse punctuation/value pairs
-        for i in 1..n {
-            // Only parse punctuation after the first value has been parsed
-            let (punct_rem, punct_res): (Span<F, S>, CP::Output) = match punct.parse(rem.clone()) {
-                Result::Ok(rem, res) => (rem, res),
-                // If we fail, that's the end of the list
-                Result::Fail(fail) => return Result::Fail(Failure::PunctuatedNPunct { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            };
-
-            // Then we attempt to parse a value
-            match value.parse(punct_rem) {
-                Result::Ok(value_rem, value_res) => {
-                    rem = value_rem;
-                    res.push(punct_res, value_res);
-                },
-                Result::Fail(fail) => return Result::Fail(Failure::PunctuatedNValue { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            }
-        }
-
-        // OK, we now made it this far
-        #[cfg(debug_assertions)]
-        assert_eq!(res.len(), n);
-        Result::Ok(rem, res)
-    }
+#[cfg(feature = "punctuated")]
+#[inline]
+pub fn punctuated_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedN<F, S, CV, CP>
+where
+    F: Clone,
+    S: Clone,
+    CV: Combinator<F, S>,
+    CP: Combinator<F, S>,
+{
+    PunctuatedN { values, puncts, n, _f: Default::default(), _s: Default::default() }
 }
 
 
@@ -541,57 +634,16 @@ where
 ///
 /// # Fails
 /// This function returns a [`Failure::PunctuatedTrailingN`] if it failed to apply `value` exactly `N` times.
-pub fn punctuated_trailing_n<F: Clone, S: Clone, CV: Combinator<F, S>, CP: Combinator<F, S>>(
-    n: usize,
-    mut value: CV,
-    mut punct: CP,
-) -> impl FnMut(Span<F, S>) -> Result<PunctuatedTrailing<CV::Output, CP::Output>, F, S> {
-    move |input: Span<F, S>| -> Result<PunctuatedTrailing<CV::Output, CP::Output>, F, S> {
-        // Do nothing if n == 0
-        if n == 0 {
-            return Result::Ok(input, PunctuatedTrailing::new());
-        }
-
-        // First parse a possible first value
-        let mut res: PunctuatedTrailing<CV::Output, CP::Output> = PunctuatedTrailing::new();
-        let mut rem: Span<F, S> = match value.parse(input) {
-            Result::Ok(rem, value_res) => {
-                res.push_value(value_res);
-                rem
-            },
-            Result::Fail(fail) => return Result::Fail(Failure::PunctuatedTrailingNValue { times: n, got: 0, fail: Box::new(fail) }),
-            Result::Error(err) => return Result::Error(err),
-        };
-
-        // Then we parse punctuation/value pairs
-        for i in 1..n {
-            // Only parse punctuation after the first value has been parsed
-            let punct_rem: Span<F, S> = match punct.parse(rem.clone()) {
-                Result::Ok(rem, punct_res) => {
-                    res.push_punct(punct_res);
-                    rem
-                },
-                // If we fail, that's the end of the list
-                Result::Fail(fail) => return Result::Fail(Failure::PunctuatedTrailingNPunct { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            };
-
-            // Then we attempt to parse a value
-            match value.parse(punct_rem) {
-                Result::Ok(value_rem, value_res) => {
-                    rem = value_rem;
-                    res.push_value(value_res);
-                },
-                Result::Fail(fail) => return Result::Fail(Failure::PunctuatedTrailingNValue { times: n, got: i, fail: Box::new(fail) }),
-                Result::Error(err) => return Result::Error(err),
-            }
-        }
-
-        // OK, we now made it this far
-        #[cfg(debug_assertions)]
-        assert_eq!(res.len(), n);
-        Result::Ok(rem, res)
-    }
+#[cfg(feature = "punctuated")]
+#[inline]
+pub fn punctuated_trailing_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedTrailingN<F, S, CV, CP>
+where
+    F: Clone,
+    S: Clone,
+    CV: Combinator<F, S>,
+    CP: Combinator<F, S>,
+{
+    PunctuatedTrailingN { values, puncts, n, _f: Default::default(), _s: Default::default() }
 }
 
 
@@ -897,7 +949,14 @@ where
         let (mut rem, mut res): (Span<F, S>, Vec<CV::Output>) = match self.values.parse(input.clone()) {
             Result::Ok(rem, res) => (rem, vec![res]),
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNValue { times: n, got: 0, fail: Box::new(fail) }),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::SeparatedListNValue {
+                    n:      self.n,
+                    i:      0,
+                    values: Box::new(fail.try_into().unwrap()),
+                    puncts: self.puncts.expects(),
+                }));
+            },
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -908,7 +967,14 @@ where
                 Result::Ok(rem, _) => rem,
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 // If we fail, that's the end of the list
-                Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNPunct { times: n, got: i, fail: Box::new(fail) }),
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::SeparatedListNPunct {
+                        n: self.n,
+                        i,
+                        values: self.values.expects(),
+                        puncts: Box::new(fail.try_into().unwrap()),
+                    }));
+                },
                 Result::Error(err) => return Result::Error(err),
             };
 
@@ -919,7 +985,14 @@ where
                     res.push(new_res);
                 },
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-                Result::Fail(fail) => return Result::Fail(Failure::SeparatedListNValue { times: n, got: i, fail: Box::new(fail) }),
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::SeparatedListNValue {
+                        n: self.n,
+                        i,
+                        values: Box::new(fail.try_into().unwrap()),
+                        puncts: self.puncts.expects(),
+                    }));
+                },
                 Result::Error(err) => return Result::Error(err),
             }
         }
@@ -1022,12 +1095,7 @@ pub struct Punctuated1<F, S, CV, CP> {
 #[cfg(feature = "punctuated")]
 impl<F, S, CV: Expects, CP: Expects> Expects for Punctuated1<F, S, CV, CP> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "a list of at least one ")?;
-        self.values.fmt(f, indent)?;
-        write!(f, " separated by ")?;
-        self.puncts.fmt(f, indent)
-    }
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_punctuated1(f, indent, self.values.expects(), self.puncts.expects()) }
 }
 #[cfg(feature = "punctuated")]
 impl<F, S, CV, CP> Combinator<F, S> for Punctuated1<F, S, CV, CP>
@@ -1049,7 +1117,7 @@ where
                 new_rem
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::Punctuated1 { fail: Box::new(fail.try_into().unwrap()) })),
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1078,6 +1146,106 @@ where
                 Result::Error(err) => return Result::Error(err),
             }
         }
+    }
+}
+
+/// The combinator returned by [`punctuated1()`].
+#[cfg(feature = "punctuated")]
+pub struct PunctuatedN<F, S, CV, CP> {
+    /// Some nested combinator for the values.
+    values: CV,
+    /// Some nested combinator for the punctuation.
+    puncts: CP,
+    /// The amount of values to parse.
+    n:      usize,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:     PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:     PhantomData<S>,
+}
+#[cfg(feature = "punctuated")]
+impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedN<F, S, CV, CP> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        expects_separated_list_n(f, indent, self.n, self.values.expects(), self.puncts.expects())
+    }
+}
+#[cfg(feature = "punctuated")]
+impl<F, S, CV, CP> Combinator<F, S> for PunctuatedN<F, S, CV, CP>
+where
+    F: Clone,
+    S: Clone,
+    CV: Combinator<F, S>,
+    CP: Combinator<F, S>,
+{
+    type Output = Punctuated<CV::Output, CP::Output>;
+
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Do nothing if n == 0
+        if self.n == 0 {
+            return Result::Ok(input, Punctuated::new());
+        }
+
+        // First parse a possible first value
+        let mut res: Punctuated<CV::Output, CP::Output> = Punctuated::new();
+        let mut rem: Span<F, S> = match self.values.parse(input) {
+            Result::Ok(rem, value_res) => {
+                res.push_first(value_res);
+                rem
+            },
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::PunctuatedNValue {
+                    n:      self.n,
+                    i:      0,
+                    values: Box::new(fail.try_into().unwrap()),
+                    puncts: self.puncts.expects(),
+                }));
+            },
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Then we parse punctuation/value pairs
+        for i in 1..self.n {
+            // Only parse punctuation after the first value has been parsed
+            let (punct_rem, punct_res): (Span<F, S>, CP::Output) = match self.puncts.parse(rem.clone()) {
+                Result::Ok(rem, res) => (rem, res),
+                Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                // If we fail, that's the end of the list
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::PunctuatedNPunct {
+                        n: self.n,
+                        i,
+                        values: self.values.expects(),
+                        puncts: Box::new(fail.try_into().unwrap()),
+                    }));
+                },
+                Result::Error(err) => return Result::Error(err),
+            };
+
+            // Then we attempt to parse a value
+            match self.values.parse(punct_rem) {
+                Result::Ok(value_rem, value_res) => {
+                    rem = value_rem;
+                    res.push(punct_res, value_res);
+                },
+                Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::PunctuatedNValue {
+                        n: self.n,
+                        i,
+                        values: Box::new(fail.try_into().unwrap()),
+                        puncts: self.puncts.expects(),
+                    }));
+                },
+                Result::Error(err) => return Result::Error(err),
+            }
+        }
+
+        // OK, we now made it this far
+        #[cfg(debug_assertions)]
+        assert_eq!(res.len(), self.n);
+        Result::Ok(rem, res)
     }
 }
 
@@ -1177,11 +1345,7 @@ pub struct PunctuatedTrailing1<F, S, CV, CP> {
 impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedTrailing1<F, S, CV, CP> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "a list of at least one ")?;
-        self.values.fmt(f, indent)?;
-        write!(f, " separated by ")?;
-        self.puncts.fmt(f, indent)?;
-        write!(f, ", with optional trailing punctuation")
+        expects_punctuated_trailing1(f, indent, self.values.expects(), self.puncts.expects())
     }
 }
 #[cfg(feature = "punctuated")]
@@ -1204,7 +1368,7 @@ where
                 new_rem
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::PunctuatedTrailing1 { fail: Box::new(fail.try_into().unwrap()) })),
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1236,5 +1400,108 @@ where
                 Result::Error(err) => return Result::Error(err),
             }
         }
+    }
+}
+
+/// The combinator returned by [`punctuated_trailing_n()`].
+#[cfg(feature = "punctuated")]
+pub struct PunctuatedTrailingN<F, S, CV, CP> {
+    /// Some nested combinator for the values.
+    values: CV,
+    /// Some nested combinator for the punctuation.
+    puncts: CP,
+    /// The amount of values to parse.
+    n:      usize,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:     PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:     PhantomData<S>,
+}
+#[cfg(feature = "punctuated")]
+impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedTrailingN<F, S, CV, CP> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        expects_punctuated_trailing_n(f, indent, self.n, self.values.expects(), self.puncts.expects())
+    }
+}
+#[cfg(feature = "punctuated")]
+impl<F, S, CV, CP> Combinator<F, S> for PunctuatedTrailingN<F, S, CV, CP>
+where
+    F: Clone,
+    S: Clone,
+    CV: Combinator<F, S>,
+    CP: Combinator<F, S>,
+{
+    type Output = PunctuatedTrailing<CV::Output, CP::Output>;
+
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Do nothing if n == 0
+        if self.n == 0 {
+            return Result::Ok(input, PunctuatedTrailing::new());
+        }
+
+        // First parse a possible first value
+        let mut res: PunctuatedTrailing<CV::Output, CP::Output> = PunctuatedTrailing::new();
+        let mut rem: Span<F, S> = match self.values.parse(input) {
+            Result::Ok(rem, value_res) => {
+                res.push_value(value_res);
+                rem
+            },
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::PunctuatedTrailingNValue {
+                    n:      self.n,
+                    i:      0,
+                    values: Box::new(fail.try_into().unwrap()),
+                    puncts: self.puncts.expects(),
+                }));
+            },
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Then we parse punctuation/value pairs
+        for i in 1..self.n {
+            // Only parse punctuation after the first value has been parsed
+            let punct_rem: Span<F, S> = match self.puncts.parse(rem.clone()) {
+                Result::Ok(rem, punct_res) => {
+                    res.push_punct(punct_res);
+                    rem
+                },
+                Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                // If we fail, that's the end of the list
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::PunctuatedTrailingNPunct {
+                        n: self.n,
+                        i,
+                        values: self.values.expects(),
+                        puncts: Box::new(fail.try_into().unwrap()),
+                    }));
+                },
+                Result::Error(err) => return Result::Error(err),
+            };
+
+            // Then we attempt to parse a value
+            match self.values.parse(punct_rem) {
+                Result::Ok(value_rem, value_res) => {
+                    rem = value_rem;
+                    res.push_value(value_res);
+                },
+                Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                Result::Fail(fail) => {
+                    return Result::Fail(Failure::Common(Common::PunctuatedTrailingNValue {
+                        n: self.n,
+                        i,
+                        values: Box::new(fail.try_into().unwrap()),
+                        puncts: self.puncts.expects(),
+                    }));
+                },
+                Result::Error(err) => return Result::Error(err),
+            }
+        }
+
+        // OK, we now made it this far
+        #[cfg(debug_assertions)]
+        assert_eq!(res.len(), self.n);
+        Result::Ok(rem, res)
     }
 }

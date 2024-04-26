@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    25 Apr 2024, 17:54:50
+//    26 Apr 2024, 16:51:34
 //  Auto updated?
 //    Yes
 //
@@ -308,17 +308,3 @@ impl<'a, R, F, S> Result<'a, R, F, S> {
     #[inline]
     pub fn is_not_ok(&self) -> bool { !self.is_ok() }
 }
-// impl<R: Eq, F, S: Eq + Spannable> Eq for Result<R, F, S> {}
-// impl<R: PartialEq, F, S: PartialEq + Spannable> PartialEq for Result<R, F, S> {
-//     #[inline]
-//     fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (Self::Ok(rem1, res1), Self::Ok(rem2, res2)) => rem1 == rem2 && res1 == res2,
-//             (Self::Fail(fail1), Self::Fail(fail2)) => fail1 == fail2,
-//             (Self::Error(err1), Self::Error(err2)) => err1 == err2,
-
-//             // Otherwise, different variants, always bad
-//             _ => false,
-//         }
-//     }
-// }
