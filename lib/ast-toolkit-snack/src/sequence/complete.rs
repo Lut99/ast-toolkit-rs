@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    30 Apr 2024, 11:23:35
+//    30 Apr 2024, 13:43:11
 //  Auto updated?
 //    Yes
 //
@@ -134,22 +134,13 @@ where
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn terminated<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(
-    mut first: C1,
-    mut sep: C2,
-) -> impl FnMut(Span<F, S>) -> Result<C1::Output, F, S> {
-    move |input: Span<F, S>| -> Result<C1::Output, F, S> {
-        let (rem, res1) = match first.parse(input) {
-            Result::Ok(rem, res) => (rem, res),
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        match sep.parse(rem) {
-            Result::Ok(rem, _) => Result::Ok(rem, res1),
-            Result::Fail(f) => Result::Fail(f),
-            Result::Error(f) => Result::Error(f),
-        }
-    }
+#[inline]
+pub fn terminated<F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
+where
+    C1: Combinator<F, S>,
+    C2: Combinator<F, S>,
+{
+    Terminated { first, sep, _f: Default::default(), _s: Default::default() }
 }
 
 /// Applies the first combinator and discards the result, then applies the second.
@@ -165,19 +156,13 @@ pub fn terminated<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn preceded<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(mut sep: C1, mut second: C2) -> impl FnMut(Span<F, S>) -> Result<C2::Output, F, S> {
-    move |input: Span<F, S>| -> Result<C2::Output, F, S> {
-        let rem = match sep.parse(input) {
-            Result::Ok(rem, _) => rem,
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        match second.parse(rem) {
-            Result::Ok(rem, res2) => Result::Ok(rem, res2),
-            Result::Fail(f) => Result::Fail(f),
-            Result::Error(f) => Result::Error(f),
-        }
-    }
+#[inline]
+pub fn preceded<F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
+where
+    C1: Combinator<F, S>,
+    C2: Combinator<F, S>,
+{
+    Preceded { sep, second, _f: Default::default(), _s: Default::default() }
 }
 
 /// Parses two values separated by some combinator who's value we don't care about.
@@ -187,35 +172,21 @@ pub fn preceded<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(mut sep: C1, m
 /// # Arguments
 /// - `first`: The first combinator to match.
 /// - `sep`: The second combinator to match and then discard the value of.
-/// - `second`: The third combinator to match.
+/// - `third`: The third combinator to match.
 ///
 /// # Returns
 /// A tuple with the output of the `first` and `second` combinators, but only if all three match.
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn separated_pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>>(
-    mut first: C1,
-    mut sep: C2,
-    mut second: C3,
-) -> impl FnMut(Span<F, S>) -> Result<(C1::Output, C3::Output), F, S> {
-    move |input: Span<F, S>| -> Result<(C1::Output, C3::Output), F, S> {
-        let (rem, res1) = match first.parse(input) {
-            Result::Ok(rem, res1) => (rem, res1),
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        let rem = match sep.parse(rem) {
-            Result::Ok(rem, _) => rem,
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        match second.parse(rem) {
-            Result::Ok(rem, res3) => Result::Ok(rem, (res1, res3)),
-            Result::Fail(f) => Result::Fail(f),
-            Result::Error(f) => Result::Error(f),
-        }
-    }
+#[inline]
+pub fn separated_pair<F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
+where
+    C1: Combinator<F, S>,
+    C2: Combinator<F, S>,
+    C3: Combinator<F, S>,
+{
+    SeparatedPair { first, sep, third, _f: Default::default(), _s: Default::default() }
 }
 
 /// Parses one value surrounded by a preceding and a terminating combinator we don't care about.
@@ -223,37 +194,23 @@ pub fn separated_pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Comb
 /// This is useful to parse some parenthesis, where we only care about the middle value but not anything else.
 ///
 /// # Arguments
-/// - `pre_sep`: The first combinator to match and then discard the value of.
-/// - `first`: The second combinator to match.
-/// - `aft_sep`: The third combinator to match and then discard the value of.
+/// - `sep1`: The first combinator to match and then discard the value of.
+/// - `second`: The second combinator to match.
+/// - `sep3`: The third combinator to match and then discard the value of.
 ///
 /// # Returns
-/// The output of the `first` combinator, but only if all three match.
+/// The output of the `second` combinator, but only if all three match.
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn delimited<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>>(
-    mut pre_sep: C1,
-    mut first: C2,
-    mut aft_sep: C3,
-) -> impl FnMut(Span<F, S>) -> Result<C2::Output, F, S> {
-    move |input: Span<F, S>| -> Result<C2::Output, F, S> {
-        let rem = match pre_sep.parse(input) {
-            Result::Ok(rem, _) => rem,
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        let (rem, res2) = match first.parse(rem) {
-            Result::Ok(rem, res2) => (rem, res2),
-            Result::Fail(f) => return Result::Fail(f),
-            Result::Error(f) => return Result::Error(f),
-        };
-        match aft_sep.parse(rem) {
-            Result::Ok(rem, _) => Result::Ok(rem, res2),
-            Result::Fail(f) => Result::Fail(f),
-            Result::Error(f) => Result::Error(f),
-        }
-    }
+#[inline]
+pub fn delimited<F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
+where
+    C1: Combinator<F, S>,
+    C2: Combinator<F, S>,
+    C3: Combinator<F, S>,
+{
+    Delimited { sep1, second, sep3, _f: Default::default(), _s: Default::default() }
 }
 
 
@@ -279,4 +236,186 @@ impl<F, S, T: Combinator<F, S>> Combinator<F, S> for Tuple<F, S, T> {
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> { self.tuple.parse(input) }
+}
+
+/// Combinator returned by [`terminated()`].
+pub struct Terminated<F, S, C1, C2> {
+    /// The first combinator, which we parse.
+    first: C1,
+    /// The second combinator, which we parse but discard.
+    sep:   C2,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:    PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:    PhantomData<S>,
+}
+impl<F, S, C1: Expects, C2: Expects> Expects for Terminated<F, S, C1, C2> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.first.fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.sep.fmt(f, indent)
+    }
+}
+impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>> Combinator<F, S> for Terminated<F, S, C1, C2> {
+    type Output = C1::Output;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Parse the first first
+        let (rem, res): (Span<F, S>, C1::Output) = match self.first.parse(input) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Parse the second
+        match self.sep.parse(rem) {
+            Result::Ok(rem, _) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// Combinator returned by [`preceded()`].
+pub struct Preceded<F, S, C1, C2> {
+    /// The first combinator, which we parse but discard.
+    sep:    C1,
+    /// The second combinator, which we parse.
+    second: C2,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:     PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:     PhantomData<S>,
+}
+impl<F, S, C1: Expects, C2: Expects> Expects for Preceded<F, S, C1, C2> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.sep.fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.second.fmt(f, indent)
+    }
+}
+impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>> Combinator<F, S> for Preceded<F, S, C1, C2> {
+    type Output = C2::Output;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Parse the first first
+        let rem: Span<F, S> = match self.sep.parse(input) {
+            Result::Ok(rem, _) => rem,
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Parse the second
+        match self.second.parse(rem) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// Combinator returned by [`separated_pair()`].
+pub struct SeparatedPair<F, S, C1, C2, C3> {
+    /// The first combinator, which we parse.
+    first: C1,
+    /// The second combinator, which we parse but discard.
+    sep:   C2,
+    /// The third combinator, which we parse.
+    third: C3,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:    PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:    PhantomData<S>,
+}
+impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for SeparatedPair<F, S, C1, C2, C3> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.first.fmt(f, indent)?;
+        write!(f, ", ")?;
+        self.sep.fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.third.fmt(f, indent)
+    }
+}
+impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>> Combinator<F, S> for SeparatedPair<F, S, C1, C2, C3> {
+    type Output = (C1::Output, C3::Output);
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Parse the first first
+        let (rem, res1): (Span<F, S>, C1::Output) = match self.first.parse(input) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Parse the second, discarding the result
+        let rem: Span<F, S> = match self.sep.parse(rem) {
+            Result::Ok(rem, _) => rem,
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Finally, parse the third
+        match self.third.parse(rem) {
+            Result::Ok(rem, res3) => Result::Ok(rem, (res1, res3)),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// Combinator returned by [`delimited()`].
+pub struct Delimited<F, S, C1, C2, C3> {
+    /// The first combinator, which we parse but discard.
+    sep1:   C1,
+    /// The second combinator, which we parse.
+    second: C2,
+    /// The third combinator, which we parse but discard.
+    sep3:   C3,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:     PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:     PhantomData<S>,
+}
+impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for Delimited<F, S, C1, C2, C3> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.sep1.fmt(f, indent)?;
+        write!(f, ", ")?;
+        self.second.fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.sep3.fmt(f, indent)
+    }
+}
+impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>> Combinator<F, S> for Delimited<F, S, C1, C2, C3> {
+    type Output = C2::Output;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+        // Parse the first first, discarding the result
+        let rem: Span<F, S> = match self.sep1.parse(input) {
+            Result::Ok(rem, _) => rem,
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Parse the second
+        let (rem, res): (Span<F, S>, C2::Output) = match self.second.parse(rem) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Finally, parse the third and discard its result also
+        match self.sep3.parse(rem) {
+            Result::Ok(rem, _) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
 }
