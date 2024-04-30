@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    26 Apr 2024, 16:49:39
+//    30 Apr 2024, 11:23:35
 //  Auto updated?
 //    Yes
 //
@@ -36,7 +36,7 @@ mod tests {
     fn test_pair() {
         // Some success stories
         let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, (res1, res2)) = pair(tag(&"Hello"), tag(&", world!"))(input).unwrap();
+        let (rem, (res1, res2)) = pair(tag(&"Hello"), tag(&", world!")).parse(input).unwrap();
         println!("\"{}\"", rem.value());
         assert!(rem.is_empty());
         assert_eq!(res1, input.slice(0..5));
@@ -88,7 +88,14 @@ pub(crate) fn expects_pair(f: &mut Formatter, indent: usize, expects1: ExpectsFo
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(first: C1, second: C2) -> (C1, C2) { (first, second) }
+#[inline]
+pub fn pair<F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
+where
+    C1: Combinator<F, S>,
+    C2: Combinator<F, S>,
+{
+    Tuple { tuple: (first, second), _f: Default::default(), _s: Default::default() }
+}
 
 /// Applies a tuple of combinators, in-order.
 ///
@@ -106,7 +113,13 @@ pub fn pair<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>>(first: C1, second:
 ///
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
-pub fn tuple<F, S, C: Combinator<F, S>>(mut combs: C) -> impl FnMut(Span<F, S>) -> Result<C::Output, F, S> { move |input| combs.parse(input) }
+#[inline]
+pub fn tuple<F, S, C>(combs: C) -> Tuple<F, S, C>
+where
+    C: Combinator<F, S>,
+{
+    Tuple { tuple: combs, _f: Default::default(), _s: Default::default() }
+}
 
 /// Applies the first combinator, then applies the second and discards the result.
 ///
@@ -248,3 +261,22 @@ pub fn delimited<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinato
 
 
 /***** LIBRARY COMBINATORS *****/
+/// Combinator returned by [`pair()`] and [`tuple()`].
+pub struct Tuple<F, S, T> {
+    /// The tuple combinator to wrap.
+    tuple: T,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:    PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:    PhantomData<S>,
+}
+impl<F, S, T: Expects> Expects for Tuple<F, S, T> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.tuple.fmt(f, indent) }
+}
+impl<F, S, T: Combinator<F, S>> Combinator<F, S> for Tuple<F, S, T> {
+    type Output = T::Output;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> { self.tuple.parse(input) }
+}
