@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    26 Apr 2024, 10:39:48
+//    30 Apr 2024, 16:41:46
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spanning as _};
 use stackvec::StackVec;
 
-use crate::error_new::{Common, Failure};
+use crate::error::{Common, Failure};
 use crate::{Combinator, Expects, Result};
 
 
@@ -76,7 +76,7 @@ macro_rules! tuple_branchable_impl {
     };
     (last $self:ident, $input:ident, $fails:ident, $fi:tt) => {
         // The last one
-        match $self.$fi.parse($input) {
+        match $self.$fi.parse($input.clone()) {
             Result::Ok(rem, res) => return Result::Ok(rem, res),
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
             Result::Fail(fail) => $fails.push(fail.try_into().unwrap()),
@@ -85,12 +85,12 @@ macro_rules! tuple_branchable_impl {
     };
 
     (($fi:tt, $fname:ident)) => {
-        impl<F: Clone, S: Clone, $fname: Combinator<F, S>> Branchable<F, S> for ($fname,) {
+        impl<'c, F: Clone, S: Clone, $fname: Combinator<'c, F, S>> Branchable<'c, F, S> for ($fname,) {
             type Output = $fname::Output;
 
             fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.0.fmt(f, indent) }
 
-            fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+            fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
                 match self.$fi.parse(input) {
                     Result::Ok(rem, res) => Result::Ok(rem, res),
                     Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
@@ -102,7 +102,7 @@ macro_rules! tuple_branchable_impl {
     };
     (($fi:tt, $fname:ident), $(($i:tt, $name:ident)),+) => {
         ::paste::paste! {
-        impl<F: Clone, S: Clone, R, $fname: Combinator<F, S, Output = R> $(, $name: Combinator<F, S, Output = R>)+> Branchable<F, S> for ($fname, $($name),*) {
+        impl<'c, F: Clone, S: Clone, R, $fname: Combinator<'c, F, S, Output = R> $(, $name: Combinator<'c, F, S, Output = R>)+> Branchable<'c, F, S> for ($fname, $($name),*) {
             type Output = R;
 
             #[inline]
@@ -129,16 +129,15 @@ macro_rules! tuple_branchable_impl {
                 expects_alt(f, indent, ExpectsIter { count: 0, data: (&self.$fi $(, &self.$i)+) })
             }
 
-            fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+            fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
                 // Some cheap store for collecting failures
                 let mut fails: StackVec<{ count!($fname $($name)+) }, Common<F, S>> = StackVec::new();
-                let mut span: Option<Span<F, S>> = None;
 
                 // Go over all
                 tuple_branchable_impl!(last self, input, fails, $fi, $($i),+);
 
                 // If we made it here, none of them early quit
-                Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: span.unwrap() }))
+                Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: input.start_onwards() }))
             }
         }
         }
@@ -241,7 +240,7 @@ pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl I
 
 /***** AUXILLARY *****/
 /// Abstracts over types that can be [`branch()`]ed over. Most notably, these are tuples.
-pub trait Branchable<F, S> {
+pub trait Branchable<'c, F, S> {
     /// The output of all the branched combinators.
     type Output;
 
@@ -275,7 +274,7 @@ pub trait Branchable<F, S> {
     ///
     /// # Errors
     /// This function returns [`Result:Error`] if _any_ of the internal combinators failed.
-    fn branch(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S>;
+    fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S>;
 }
 
 
@@ -298,11 +297,11 @@ pub trait Branchable<F, S> {
 ///
 /// # Errors
 /// This function errors if _any_ of the branches errors. This is then returned as-is.
-pub fn alt<F, S, B>(branches: B) -> Alt<F, S, B>
+pub fn alt<'c, F, S, B>(branches: B) -> Alt<F, S, B>
 where
     F: Clone,
     S: Clone,
-    B: Branchable<F, S>,
+    B: Branchable<'c, F, S>,
 {
     Alt { branches, _f: Default::default(), _s: Default::default() }
 }
@@ -318,21 +317,21 @@ pub struct Alt<F, S, B> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<F, S, B> Expects for Alt<F, S, B>
+impl<'c, F, S, B> Expects for Alt<F, S, B>
 where
-    B: Branchable<F, S>,
+    B: Branchable<'c, F, S>,
 {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.branches.fmt(f, indent) }
 }
-impl<F, S, B> Combinator<F, S> for Alt<F, S, B>
+impl<'c, F, S, B> Combinator<'c, F, S> for Alt<F, S, B>
 where
     F: Clone,
     S: Clone,
-    B: Branchable<F, S>,
+    B: Branchable<'c, F, S>,
 {
     type Output = B::Output;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> { self.branches.branch(input) }
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> { self.branches.branch(input) }
 }

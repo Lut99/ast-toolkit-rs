@@ -2,173 +2,314 @@
 //    by Lut99
 //
 //  Created:
-//    14 Mar 2024, 08:51:38
+//    07 Apr 2024, 17:58:35
 //  Last edited:
-//    06 Apr 2024, 11:15:04
+//    30 Apr 2024, 16:42:43
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Defines `snack`'s extensive error type.
+//!   Defines problems raised by parsing with `snack`.
+//!   
+//!   There two types of problems defined by the crate:
+//!   - Recoverable problems, called [`Failure`]s; and
+//!   - Unrecoverable problems, called [`Error`]s.
+//!   
+//!   Note, however, that they share quite some overlap, because the [`commit()`]
+//!   combinator allows promoting (almost) all recoverable [`Failure`]s into
+//!   non-recoverable [`Error`]s. The common set that can do this is called
+//!   [`Common`].
 //
 
 use std::error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spanning};
+use enum_debug::EnumDebug;
 
-use crate::fail::{failure_impl, Failure};
-use crate::{Combinator, Result};
+use crate::branch::expects_alt;
+use crate::bytes::{expects_one_of1_bytes, expects_tag_bytes};
+use crate::combinator::expects_not;
+use crate::multi::{expects_many1, expects_many_n, expects_separated_list1_fail, expects_separated_list_n_punct, expects_separated_list_n_value};
+#[cfg(feature = "punctuated")]
+use crate::multi::{expects_punctuated_trailing1_fail, expects_punctuated_trailing_n_punct, expects_punctuated_trailing_n_value};
+use crate::utf8::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
+use crate::{Expects, ExpectsExt, ExpectsFormatter};
 
 
 /***** ERRORS *****/
-/// Defines an error that may occur when casting [`Failure`]s to [`Error`]s.
+/// Defines an error that may occur when casting [`Commons`]s to [`Failure`]s or [`Error`]s.
 #[derive(Debug)]
-pub enum FromFailureError {
-    /// Failed to cast [`Failure::NotEnough`] because it is [`Failure`]-only.
-    NotEnough,
-}
-impl Display for FromFailureError {
+pub struct TryFromCommonError(String, &'static str);
+impl Display for TryFromCommonError {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        use FromFailureError::*;
-        match self {
-            NotEnough => write!(f, "Cannot convert Failure::NotEnough to an Error because there is no equivalent in Error"),
-        }
+        write!(f, "Cannot convert Common::{} to {} because there is no equivalent in Error", self.0, self.1)
     }
 }
-impl error::Error for FromFailureError {}
+impl error::Error for TryFromCommonError {}
 
-
-
-
-
-/***** COMBINATORS *****/
-/// "Commits" this parser path, by turning any [`Failure`]s that occur into [`Error`]s.
-///
-/// This is useful for when you have recognized a specific path and are now expecting a certain input.
-/// And example of this would be matching parenthesis, where you always want to match the second one after you found the first.
-///
-/// # Arguments
-/// - `comb`: Some [`Combinator`] that will be executed.
-///
-/// # Returns
-/// The result of `comb`.
-///
-/// # Fails
-/// This function may fail if `comb` is streaming and returns [`Failure::NotEnough`]. This is not casted to an error because not enough should only be resolved as an error when more input is attempted to be gotten but that fails.
-///
-/// # Errors
-/// If `comb` fails, then it is re-casted as an [`Error`]. Any errors already being emitted by `comb` are passed as-is.
-///
-/// Note that one type of failure is never re-casted: and that is [`Failure::NotEnough`]. See [Fails](#Fails) above for more details.
-pub fn commit<F, S, C: Combinator<F, S>>(mut comb: C) -> impl FnMut(Span<F, S>) -> Result<C::Output, F, S> {
-    move |input: Span<F, S>| -> Result<C::Output, F, S> {
-        match comb.parse(input) {
-            Result::Ok(rem, res) => Result::Ok(rem, res),
-            Result::Fail(Failure::NotEnough { span }) => Result::Fail(Failure::NotEnough { span }),
-            // SAFETY: We can `unwrap()` because we caught the only case for which it fails above.
-            Result::Fail(fail) => Result::Error(fail.try_into().unwrap()),
-            Result::Error(err) => Result::Error(err),
-        }
+/// Defines an error that may occur when casting [`Failure`]s to [`Error`]s.
+#[derive(Debug)]
+pub struct TryFromFailureError(String);
+impl Display for TryFromFailureError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Cannot convert Failure::{} to an Error because there is no equivalent in Error", self.0)
     }
 }
-
-/// Provides some context to what it is we're parsing.
-///
-/// This is useful for explaining to the user why something is being parsed. This is commonly used in combination with [`commit()`] to show what route was being chosen.
-///
-/// For example, if you're parsing perenthesis, one might see:
-/// ```ignore
-/// sequence::pair(complete::tag("("), error::context("parenthesis", error::commit(sequence::pair(complete::tag("Hello, world!"), complete::tag(")")))));
-/// ```
-///
-/// # Arguments
-/// - `context`: Some string describing the context. This should be filling in `X` in: `While parsing X`.
-/// - `comb`: Some [`Combinator`] that will be executed in the given `context`.
-///
-/// # Returns
-/// The result of `comb`.
-///
-/// # Fails
-/// This combinator fails if `comb` fails. These are propagated untouched.
-///
-/// # Errors
-/// If `comb` error, then its error is wrapped in an [`Error::Context`].
-pub fn context<F, S, C>(context: &'static str, mut comb: C) -> impl FnMut(Span<F, S>) -> Result<C::Output, F, S>
-where
-    F: Clone,
-    S: Clone,
-    C: Combinator<F, S>,
-{
-    move |input: Span<F, S>| -> Result<C::Output, F, S> {
-        // Run the parsing, wrapping any errors
-        let span: Span<F, S> = input.start_onwards();
-        match comb.parse(input) {
-            Result::Ok(rem, res) => Result::Ok(rem, res),
-            Result::Fail(fail) => Result::Fail(fail),
-            Result::Error(err) => Result::Error(Error::Context { context, span, err: Box::new(err) }),
-        }
-    }
-}
+impl error::Error for TryFromFailureError {}
 
 
 
 
 
 /***** LIBRARY *****/
-failure_impl! {
-    /// `snack`'s extensive error type that can be used to generate explanatory diagnostics.
+/// Defines a common set of problems raised by snack combinators.
+///
+/// These are usually emitted as recoverable [`Failure`]s, but can be turned
+/// into unrecoverable [`Error`]s by usage of the [`commit()`]-combinator. Both
+/// enums also define a small set that cannot do this change (i.e., that cannot
+/// be made unrecoverable or that isn't recoverable in the first place).
+#[derive(Debug, EnumDebug)]
+pub enum Common<'a, F, S> {
+    /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
-    /// One can think of this as a superset of [`Failure`], as any recoverable error may be turned into an unrecoverable one.
-    #[derive(Clone, Debug)]
-    pub enum Error<F, S> {
-        /// Defines that some nested error has some context string and span.
-        Context {
-            /// The context string describing what it is we're parsing.
-            context: &'static str,
-            /// Some span that indicates where this context started.
-            span: Span<F, S>,
-            /// The error that we wrap and display with context.
-            err: Box<Self>,
-        },
-    }
-    impl Expects {}
-    impl Display {
-        Context { context, .. } => write!(f, "The above occurred while parsing {context}"),
-    }
-    impl<F, S> Spanning<F, S> {
-        Context { span, err, .. } => span.join(&err.span()).expect("`span` and `err` are from different source texts; cannot merge them!"),
+    /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
+    Alt { branches: Vec<Self>, span: Span<F, S> },
+    /// Failed to match at least one digit.
+    Digit1 { span: Span<F, S> },
+    /// Failed to match a combinator at least once.
+    Many1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times.
+    ManyN { n: usize, i: usize, fail: Box<Self> },
+    /// Failed to _not_ apply a combinator.
+    Not { expects: ExpectsFormatter<'a>, span: Span<F, S> },
+    /// Expected at least one of the following bytes.
+    OneOf1Bytes { byteset: &'a [u8], span: Span<F, S> },
+    /// Expected at least one of the following characters.
+    OneOf1Utf8 { charset: &'a [&'a str], span: Span<F, S> },
+    /// Failed to match a combinator at least once, separated by some other thing.
+    #[cfg(feature = "punctuated")]
+    Punctuated1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
+    /// Failed to match a combinator at least once, separated by some other thing.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailing1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailingNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    #[cfg(feature = "punctuated")]
+    PunctuatedTrailingNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
+    /// Failed to match a combinator at least once, separated by some other thing.
+    SeparatedList1 { fail: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
+    SeparatedListNPunct { n: usize, i: usize, values: ExpectsFormatter<'a>, puncts: Box<Self> },
+    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
+    SeparatedListNValue { n: usize, i: usize, values: Box<Self>, puncts: ExpectsFormatter<'a> },
+    /// Failed to match something particular with byte version of the [`tag()`](crate::bytes::complete::tag())-combinator.
+    TagBytes { tag: &'a [u8], span: Span<F, S> },
+    /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
+    TagUtf8 { tag: &'a str, span: Span<F, S> },
+    /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::value::utf8::complete::while1())-combinator.
+    While1Utf8 { span: Span<F, S> },
+    /// Failed to match at least one whitespace.
+    Whitespace1 { span: Span<F, S> },
+}
+
+impl<'a, F, S> Expects for Common<'a, F, S> {
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        match self {
+            Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
+            Self::Digit1 { .. } => expects_digit1(f),
+            Self::Many1 { fail } => expects_many1(f, indent, fail.expects()),
+            Self::ManyN { n, i: _, fail } => expects_many_n(f, indent, *n, fail.expects()),
+            Self::Not { expects, .. } => expects_not(f, indent, expects),
+            Self::OneOf1Bytes { byteset, .. } => expects_one_of1_bytes(f, byteset),
+            Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
+            #[cfg(feature = "punctuated")]
+            Self::Punctuated1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailing1 { fail } => expects_punctuated_trailing1_fail(f, indent, fail.expects()),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNPunct { n, i: _, values, puncts } => {
+                expects_punctuated_trailing_n_punct(f, indent, *n, *values, puncts.expects())
+            },
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNValue { n, i: _, values, puncts } => {
+                expects_punctuated_trailing_n_value(f, indent, *n, values.expects(), *puncts)
+            },
+            Self::SeparatedList1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
+            Self::SeparatedListNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
+            Self::SeparatedListNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
+            Self::TagBytes { tag, .. } => expects_tag_bytes(f, tag),
+            Self::TagUtf8 { tag, .. } => expects_tag_utf8(f, tag),
+            Self::While1Utf8 { .. } => expects_while1_utf8(f),
+            Self::Whitespace1 { .. } => expects_whitespace1(f),
+        }
     }
 }
-impl<F, S> TryFrom<Failure<F, S>> for Error<F, S> {
-    type Error = FromFailureError;
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
+    fn span(&self) -> Span<F, S> {
+        match self {
+            Self::Alt { span, .. } => span.clone(),
+            Self::Digit1 { span } => span.clone(),
+            Self::Many1 { fail } => fail.span(),
+            Self::ManyN { fail, .. } => fail.span(),
+            Self::Not { span, .. } => span.clone(),
+            Self::OneOf1Bytes { span, .. } => span.clone(),
+            Self::OneOf1Utf8 { span, .. } => span.clone(),
+            #[cfg(feature = "punctuated")]
+            Self::Punctuated1 { fail } => fail.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNPunct { puncts, .. } => puncts.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedNValue { values, .. } => values.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailing1 { fail } => fail.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNPunct { puncts, .. } => puncts.span(),
+            #[cfg(feature = "punctuated")]
+            Self::PunctuatedTrailingNValue { values, .. } => values.span(),
+            Self::SeparatedList1 { fail } => fail.span(),
+            Self::SeparatedListNPunct { puncts, .. } => puncts.span(),
+            Self::SeparatedListNValue { values, .. } => values.span(),
+            Self::TagBytes { span, .. } => span.clone(),
+            Self::TagUtf8 { span, .. } => span.clone(),
+            Self::While1Utf8 { span } => span.clone(),
+            Self::Whitespace1 { span } => span.clone(),
+        }
+    }
+}
+
+
+
+/// Defines a problems emitted by snack combinators that are recoverable.
+#[derive(Debug, EnumDebug)]
+pub enum Failure<'a, F, S> {
+    /// There wasn't enough input data and the combinator was a streaming combinator.
+    ///
+    /// The `needed` is an optional hint provided by the combinator to guess how many more bytes would be needed.
+    NotEnough { needed: Option<usize>, span: Span<F, S> },
+
+    /// It's a type of failure that can be made a non-recoverable [`Error`].
+    Common(Common<'a, F, S>),
+}
+
+impl<'a, F, S> Expects for Failure<'a, F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        match self {
+            Self::NotEnough { needed, .. } => {
+                if let Some(needed) = needed {
+                    write!(f, "{needed} more input bytes")
+                } else {
+                    write!(f, "more input")
+                }
+            },
+
+            Self::Common(p) => <Common<F, S> as Expects>::fmt(p, f, indent),
+        }
+    }
+}
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Failure<'a, F, S> {
+    #[inline]
+    fn span(&self) -> Span<F, S> {
+        match self {
+            Self::NotEnough { span, .. } => span.clone(),
+
+            Self::Common(p) => p.span(),
+        }
+    }
+}
+
+impl<'a, F, S> From<Common<'a, F, S>> for Failure<'a, F, S> {
+    #[inline]
+    fn from(value: Common<'a, F, S>) -> Self { Self::Common(value) }
+}
+impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Common<'a, F, S> {
+    type Error = TryFromCommonError;
 
     #[inline]
-    fn try_from(value: Failure<F, S>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Failure<'a, F, S>) -> Result<Self, Self::Error> {
         match value {
-            Failure::Alt { branches } => Ok(Self::Alt {
-                branches: branches.into_iter().map(|fail| fail.try_into()).collect::<std::result::Result<Vec<Self>, FromFailureError>>()?,
-            }),
-            Failure::Custom { problem } => Ok(Self::Custom { problem }),
-            Failure::Digit1 { span } => Ok(Self::Digit1 { span }),
-            Failure::ManyN { times, got, fail } => Ok(Self::ManyN { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::Not { span } => Ok(Self::Not { span }),
-            Failure::NotEnough { .. } => Err(FromFailureError::NotEnough),
-            Failure::OneOfBytes1 { byteset, span } => Ok(Self::OneOfBytes1 { byteset, span }),
-            Failure::OneOfUtf81 { charset, span } => Ok(Self::OneOfUtf81 { charset, span }),
-            Failure::PunctuatedNPunct { times, got, fail } => Ok(Self::PunctuatedNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::PunctuatedNValue { times, got, fail } => Ok(Self::PunctuatedNValue { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::PunctuatedTrailingNPunct { times, got, fail } => {
-                Ok(Self::PunctuatedTrailingNPunct { times, got, fail: Box::new((*fail).try_into()?) })
+            Failure::Common(c) => Ok(c),
+            Failure::NotEnough { .. } => Err(TryFromCommonError(value.variant().to_string(), "a Failure")),
+        }
+    }
+}
+
+
+
+/// Defines a problems emitted by snack combinators that are non-recoverable.
+#[derive(Debug, EnumDebug)]
+pub enum Error<'a, F, S> {
+    /// There is a specific context in which the parsing failed.
+    ///
+    /// This is usually used through the [`context()`]-combinator, and allows
+    /// one to hint to the user that something larger was being parsed (e.g., expressions).
+    Context { context: &'static str, span: Span<F, S>, err: Box<Self> },
+
+    /// It's a type of error that can come from recoverable [`Failure`]s.
+    Common(Common<'a, F, S>),
+}
+
+impl<'a, F, S> Expects for Error<'a, F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        match self {
+            Self::Context { context, .. } => {
+                write!(f, "{context}")
             },
-            Failure::PunctuatedTrailingNValue { times, got, fail } => {
-                Ok(Self::PunctuatedTrailingNValue { times, got, fail: Box::new((*fail).try_into()?) })
-            },
-            Failure::SeparatedListNPunct { times, got, fail } => Ok(Self::SeparatedListNPunct { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::SeparatedListNValue { times, got, fail } => Ok(Self::SeparatedListNValue { times, got, fail: Box::new((*fail).try_into()?) }),
-            Failure::Tag { tag, span } => Ok(Self::Tag { tag, span }),
-            Failure::Whitespace1 { span } => Ok(Self::Whitespace1 { span }),
+
+            Self::Common(p) => <Common<F, S> as Expects>::fmt(p, f, indent),
+        }
+    }
+}
+impl<'a, F: Clone, S: Clone> Spanning<F, S> for Error<'a, F, S> {
+    #[inline]
+    fn span(&self) -> Span<F, S> {
+        match self {
+            Self::Context { span, .. } => span.clone(),
+
+            Self::Common(p) => p.span(),
+        }
+    }
+}
+
+impl<'a, F, S> From<Common<'a, F, S>> for Error<'a, F, S> {
+    #[inline]
+    fn from(value: Common<'a, F, S>) -> Self { Self::Common(value) }
+}
+impl<'a, F, S> TryFrom<Error<'a, F, S>> for Common<'a, F, S> {
+    type Error = TryFromCommonError;
+
+    #[inline]
+    fn try_from(value: Error<'a, F, S>) -> Result<Self, Self::Error> {
+        match value {
+            Error::Common(c) => Ok(c),
+            Error::Context { .. } => Err(TryFromCommonError(value.variant().to_string(), "an Error")),
+        }
+    }
+}
+impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Error<'a, F, S> {
+    type Error = TryFromFailureError;
+
+    #[inline]
+    fn try_from(value: Failure<'a, F, S>) -> Result<Self, Self::Error> {
+        match value {
+            Failure::Common(p) => Ok(Self::Common(p)),
+            other => Err(TryFromFailureError(other.variant().to_string())),
         }
     }
 }

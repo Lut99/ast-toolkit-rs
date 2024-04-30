@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    26 Apr 2024, 10:51:51
+//    30 Apr 2024, 16:29:22
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, SpanRange};
 
 use super::{expects_one_of1_bytes, expects_tag_bytes, expects_while1_bytes};
-use crate::error_new::{Common, Failure};
+use crate::error::{Common, Failure};
 use crate::span::{MatchBytes, OneOfBytes, WhileBytes};
 use crate::{Combinator, Expects, Result};
 
@@ -96,7 +96,7 @@ pub struct OneOf1<'b, F, S> {
 impl<'b, F, S> Expects for OneOf1<'b, F, S> {
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of1_bytes(f, self.byteset) }
 }
-impl<'b, F, S> Combinator<F, S> for OneOf1<'b, F, S>
+impl<'b, F, S> Combinator<'b, F, S> for OneOf1<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
@@ -104,7 +104,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'b, Self::Output, F, S> {
         let match_point: usize = input.one_of_bytes(SpanRange::Open, self.byteset);
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
@@ -127,14 +127,14 @@ impl<'t, F, S> Expects for Tag<'t, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_tag_bytes(f, self.tag) }
 }
-impl<'t, F, S> Combinator<F, S> for Tag<'t, F, S>
+impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
 {
     type Output = Span<F, S>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
         // See if we can parse the input
         let match_point: usize = input.match_bytes(SpanRange::Open, self.tag);
         if match_point >= self.tag.len() {
@@ -161,7 +161,7 @@ pub struct While1<F, S, P> {
 impl<F, S, P> Expects for While1<F, S, P> {
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while1_bytes(f) }
 }
-impl<F, S, P> Combinator<F, S> for While1<F, S, P>
+impl<'c, F, S, P> Combinator<'static, F, S> for While1<F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
@@ -170,8 +170,8 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
-        let match_point: usize = input.while_bytes(SpanRange::Open, self.predicate);
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+        let match_point: usize = input.while_bytes(SpanRange::Open, &mut self.predicate);
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {

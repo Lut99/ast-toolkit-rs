@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Apr 2024, 10:42:07
+//    30 Apr 2024, 16:35:47
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
 
-use crate::error_new::{Common, Failure};
+use crate::error::{Common, Failure};
 use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
 
 
@@ -53,11 +53,11 @@ pub(crate) fn expects_not(f: &mut Formatter, indent: usize, what: &ExpectsFormat
 ///
 /// Also note that errors are left untouched.
 #[inline]
-pub fn not<F, S, C>(comb: C) -> Not<F, S, C>
+pub fn not<'c, F, S, C>(comb: C) -> Not<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
     C::Output: Spanning<F, S>,
 {
     Not { comb, _f: Default::default(), _s: Default::default() }
@@ -80,9 +80,9 @@ where
 /// # Errors
 /// This combinator inherits the error state of the given one.
 #[inline]
-pub fn map<F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
+pub fn map<'c, F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
 where
-    C: Combinator<F, S, Output = R1>,
+    C: Combinator<'c, F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
     Map { comb, func, _f: Default::default(), _s: Default::default() }
@@ -106,17 +106,17 @@ impl<F, S, C: Expects> Expects for Not<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_not(f, indent, &self.comb.expects()) }
 }
-impl<F, S, C> Combinator<F, S> for Not<F, S, C>
+impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
     C::Output: Spanning<F, S>,
 {
     type Output = ();
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         match self.comb.parse(input.clone()) {
             Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { expects: self.comb.expects(), span: res.span() })),
             Result::Fail(_) => Result::Ok(input, ()),
@@ -142,15 +142,15 @@ impl<F, S, C: Expects, M> Expects for Map<F, S, C, M> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
 }
-impl<F, S, R1, R2, C, M> Combinator<F, S> for Map<F, S, C, M>
+impl<'c, F, S, R1, R2, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
 where
-    C: Combinator<F, S, Output = R1>,
+    C: Combinator<'c, F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
     type Output = R2;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         match self.comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, (self.func)(res)),
             Result::Fail(fail) => Result::Fail(fail),

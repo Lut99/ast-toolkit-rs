@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    30 Apr 2024, 13:43:11
+//    30 Apr 2024, 16:32:05
 //  Auto updated?
 //    Yes
 //
@@ -18,14 +18,14 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** TESTS *****/
 #[cfg(test)]
 mod tests {
     use super::pair;
-    use crate::error_new::{Common, Failure};
+    use crate::error::{Common, Failure};
     use crate::utf8::complete::tag;
     use crate::{Combinator as _, Result};
 
@@ -89,10 +89,10 @@ pub(crate) fn expects_pair(f: &mut Formatter, indent: usize, expects1: ExpectsFo
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn pair<F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
+pub fn pair<'c, F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
 where
-    C1: Combinator<F, S>,
-    C2: Combinator<F, S>,
+    C1: Combinator<'c, F, S>,
+    C2: Combinator<'c, F, S>,
 {
     Tuple { tuple: (first, second), _f: Default::default(), _s: Default::default() }
 }
@@ -114,9 +114,9 @@ where
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn tuple<F, S, C>(combs: C) -> Tuple<F, S, C>
+pub fn tuple<'c, F, S, C>(combs: C) -> Tuple<F, S, C>
 where
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     Tuple { tuple: combs, _f: Default::default(), _s: Default::default() }
 }
@@ -135,10 +135,10 @@ where
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn terminated<F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
+pub fn terminated<'c, F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
 where
-    C1: Combinator<F, S>,
-    C2: Combinator<F, S>,
+    C1: Combinator<'c, F, S>,
+    C2: Combinator<'c, F, S>,
 {
     Terminated { first, sep, _f: Default::default(), _s: Default::default() }
 }
@@ -157,10 +157,10 @@ where
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn preceded<F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
+pub fn preceded<'c, F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
 where
-    C1: Combinator<F, S>,
-    C2: Combinator<F, S>,
+    C1: Combinator<'c, F, S>,
+    C2: Combinator<'c, F, S>,
 {
     Preceded { sep, second, _f: Default::default(), _s: Default::default() }
 }
@@ -180,11 +180,11 @@ where
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn separated_pair<F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
+pub fn separated_pair<'c, F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
 where
-    C1: Combinator<F, S>,
-    C2: Combinator<F, S>,
-    C3: Combinator<F, S>,
+    C1: Combinator<'c, F, S>,
+    C2: Combinator<'c, F, S>,
+    C3: Combinator<'c, F, S>,
 {
     SeparatedPair { first, sep, third, _f: Default::default(), _s: Default::default() }
 }
@@ -204,11 +204,11 @@ where
 /// # Errors
 /// This function will inherit errors of the input combinators, in-order.
 #[inline]
-pub fn delimited<F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
+pub fn delimited<'c, F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
 where
-    C1: Combinator<F, S>,
-    C2: Combinator<F, S>,
-    C3: Combinator<F, S>,
+    C1: Combinator<'c, F, S>,
+    C2: Combinator<'c, F, S>,
+    C3: Combinator<'c, F, S>,
 {
     Delimited { sep1, second, sep3, _f: Default::default(), _s: Default::default() }
 }
@@ -231,11 +231,11 @@ impl<F, S, T: Expects> Expects for Tuple<F, S, T> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.tuple.fmt(f, indent) }
 }
-impl<F, S, T: Combinator<F, S>> Combinator<F, S> for Tuple<F, S, T> {
+impl<'c, F, S, T: Combinator<'c, F, S>> Combinator<'c, F, S> for Tuple<F, S, T> {
     type Output = T::Output;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> { self.tuple.parse(input) }
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> { self.tuple.parse(input) }
 }
 
 /// Combinator returned by [`terminated()`].
@@ -257,11 +257,11 @@ impl<F, S, C1: Expects, C2: Expects> Expects for Terminated<F, S, C1, C2> {
         self.sep.fmt(f, indent)
     }
 }
-impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>> Combinator<F, S> for Terminated<F, S, C1, C2> {
+impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Terminated<F, S, C1, C2> {
     type Output = C1::Output;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Parse the first first
         let (rem, res): (Span<F, S>, C1::Output) = match self.first.parse(input) {
             Result::Ok(rem, res) => (rem, res),
@@ -297,11 +297,11 @@ impl<F, S, C1: Expects, C2: Expects> Expects for Preceded<F, S, C1, C2> {
         self.second.fmt(f, indent)
     }
 }
-impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>> Combinator<F, S> for Preceded<F, S, C1, C2> {
+impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Preceded<F, S, C1, C2> {
     type Output = C2::Output;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Parse the first first
         let rem: Span<F, S> = match self.sep.parse(input) {
             Result::Ok(rem, _) => rem,
@@ -341,11 +341,13 @@ impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for SeparatedPair<F, S
         self.third.fmt(f, indent)
     }
 }
-impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>> Combinator<F, S> for SeparatedPair<F, S, C1, C2, C3> {
+impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S>
+    for SeparatedPair<F, S, C1, C2, C3>
+{
     type Output = (C1::Output, C3::Output);
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Parse the first first
         let (rem, res1): (Span<F, S>, C1::Output) = match self.first.parse(input) {
             Result::Ok(rem, res) => (rem, res),
@@ -392,11 +394,11 @@ impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for Delimited<F, S, C1
         self.sep3.fmt(f, indent)
     }
 }
-impl<F, S, C1: Combinator<F, S>, C2: Combinator<F, S>, C3: Combinator<F, S>> Combinator<F, S> for Delimited<F, S, C1, C2, C3> {
+impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S> for Delimited<F, S, C1, C2, C3> {
     type Output = C2::Output;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Parse the first first, discarding the result
         let rem: Span<F, S> = match self.sep1.parse(input) {
             Result::Ok(rem, _) => rem,

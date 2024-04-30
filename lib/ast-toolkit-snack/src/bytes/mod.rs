@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    26 Apr 2024, 10:51:25
+//    30 Apr 2024, 16:29:49
 //  Auto updated?
 //    Yes
 //
@@ -160,7 +160,7 @@ impl<'b, F, S> Expects for OneOf0<'b, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of0_bytes(f, self.byteset) }
 }
-impl<'b, F, S> Combinator<F, S> for OneOf0<'b, F, S>
+impl<'b, F, S> Combinator<'b, F, S> for OneOf0<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
@@ -168,7 +168,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'b, Self::Output, F, S> {
         let match_point: usize = input.one_of_bytes(SpanRange::Open, self.byteset);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -187,7 +187,7 @@ impl<F, S, P> Expects for While0<F, S, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while0_bytes(f) }
 }
-impl<F, S, P> Combinator<F, S> for While0<F, S, P>
+impl<'c, F, S, P> Combinator<'c, F, S> for While0<F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
@@ -196,8 +196,8 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
-        let match_point: usize = input.while_bytes(SpanRange::Open, self.predicate);
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+        let match_point: usize = input.while_bytes(SpanRange::Open, &mut self.predicate);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
 }

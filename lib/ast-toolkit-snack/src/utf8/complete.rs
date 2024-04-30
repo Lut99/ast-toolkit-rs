@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    26 Apr 2024, 10:49:00
+//    30 Apr 2024, 16:33:36
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, SpanRange};
 
 use super::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
-use crate::error_new::{Common, Failure};
+use crate::error::{Common, Failure};
 use crate::span::{MatchBytes, OneOfUtf8, WhileUtf8};
 use crate::{Combinator, Expects, Result};
 
@@ -28,7 +28,7 @@ use crate::{Combinator, Expects, Result};
 #[cfg(test)]
 mod tests {
     use super::tag;
-    use crate::error_new::{Common, Failure};
+    use crate::error::{Common, Failure};
     use crate::{Combinator as _, Result};
 
     type Span = ast_toolkit_span::Span<&'static str, &'static str>;
@@ -165,7 +165,7 @@ impl<F, S> Expects for Digit1<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_digit1(f) }
 }
-impl<F, S> Combinator<F, S> for Digit1<F, S>
+impl<F, S> Combinator<'static, F, S> for Digit1<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -173,7 +173,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         While1 {
             predicate: |c: &str| -> bool {
                 c.len() == 1 && {
@@ -200,7 +200,7 @@ pub struct OneOf1<'t, F, S> {
 impl<'t, F, S> Expects for OneOf1<'t, F, S> {
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of1_utf8(f, self.charset) }
 }
-impl<'t, F, S> Combinator<F, S> for OneOf1<'t, F, S>
+impl<'t, F, S> Combinator<'t, F, S> for OneOf1<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -208,7 +208,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
         let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
@@ -231,14 +231,14 @@ impl<'t, F, S> Expects for Tag<'t, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_tag_utf8(f, self.tag) }
 }
-impl<'t, F, S> Combinator<F, S> for Tag<'t, F, S>
+impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
 {
     type Output = Span<F, S>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
         // See if we can parse the input
         let tag: &'t [u8] = self.tag.as_bytes();
         let match_point: usize = input.match_bytes(SpanRange::Open, tag);
@@ -266,7 +266,7 @@ pub struct While1<F, S, P> {
 impl<F, S, P> Expects for While1<F, S, P> {
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while1_utf8(f) }
 }
-impl<F, S, P> Combinator<F, S> for While1<F, S, P>
+impl<F, S, P> Combinator<'static, F, S> for While1<F, S, P>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -275,8 +275,8 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
-        let match_point: usize = input.while_utf8(SpanRange::Open, self.predicate);
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+        let match_point: usize = input.while_utf8(SpanRange::Open, &mut self.predicate);
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {
@@ -296,7 +296,7 @@ impl<F, S> Expects for Whitespace1<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_whitespace1(f) }
 }
-impl<F, S> Combinator<F, S> for Whitespace1<F, S>
+impl<F, S> Combinator<'static, F, S> for Whitespace1<F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -304,7 +304,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         // Note: last '\r\n' is a unicode windows line end :)
         OneOf1 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() }.parse(input)
     }

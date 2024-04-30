@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:46:57
 //  Last edited:
-//    26 Apr 2024, 16:01:31
+//    30 Apr 2024, 16:37:38
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 use ast_toolkit_punctuated::{Punctuated, PunctuatedTrailing};
 use ast_toolkit_span::Span;
 
-use crate::error_new::{Common, Failure};
+use crate::error::{Common, Failure};
 use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
 
 
@@ -319,11 +319,11 @@ pub(crate) fn expects_separated_list_n_punct(
 /// # Returns
 /// A new combinator that will apply the given `comb`inator as much as humanly possible.
 #[inline]
-pub fn many0<F, S, C>(comb: C) -> Many0<F, S, C>
+pub fn many0<'c, F, S, C>(comb: C) -> Many0<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     Many0 { comb, _f: Default::default(), _s: Default::default() }
 }
@@ -344,11 +344,11 @@ where
 /// # Fails
 /// This function returns the failure returned by `value` if not at least one of those was parsed.
 #[inline]
-pub fn many1<F, S, C>(comb: C) -> Many1<F, S, C>
+pub fn many1<'c, F, S, C>(comb: C) -> Many1<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     Many1 { comb, _f: Default::default(), _s: Default::default() }
 }
@@ -367,11 +367,11 @@ where
 /// # Fails
 /// This function returns a [`Failure::ManyN`] if it failed to apply `comb` exactly `N` times.
 #[inline]
-pub fn many_n<F, S, C>(n: usize, comb: C) -> ManyN<F, S, C>
+pub fn many_n<'c, F, S, C>(n: usize, comb: C) -> ManyN<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     ManyN { comb, n, _f: Default::default(), _s: Default::default() }
 }
@@ -396,12 +396,12 @@ where
 ///
 /// Note that any trailing punctuation is not parsed by this combinator.
 #[inline]
-pub fn separated_list0<F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList0<F, S, CV, CP>
+pub fn separated_list0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     SeparatedList0 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -427,12 +427,12 @@ where
 /// # Fails
 /// This function returns the failure returned by `value` if not at least one of those was parsed.
 #[inline]
-pub fn separated_list1<F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList1<F, S, CV, CP>
+pub fn separated_list1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     SeparatedList1 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -454,12 +454,12 @@ where
 /// # Fails
 /// This function returns a [`Failure::ManyN`] if it failed to apply `value` exactly `N` times.
 #[inline]
-pub fn separated_list_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> SeparatedListN<F, S, CV, CP>
+pub fn separated_list_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> SeparatedListN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     SeparatedListN { values, puncts, n, _f: PhantomData::default(), _s: PhantomData::default() }
 }
@@ -485,12 +485,12 @@ where
 /// Note that any trailing punctuation is not parsed by this combinator.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated0<F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated0<F, S, CV, CP>
+pub fn punctuated0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     Punctuated0 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -517,12 +517,12 @@ where
 /// This function returns the failure returned by `value` if not at least one of those was parsed.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated1<F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated1<F, S, CV, CP>
+pub fn punctuated1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     Punctuated1 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -545,12 +545,12 @@ where
 /// This function returns a [`Failure::PunctuatedN`] if it failed to apply `value` exactly `N` times.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedN<F, S, CV, CP>
+pub fn punctuated_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     PunctuatedN { values, puncts, n, _f: Default::default(), _s: Default::default() }
 }
@@ -576,12 +576,12 @@ where
 /// Note that any trailing punctuation is parsed by this combinator and added to the returned result.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing0<F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing0<F, S, CV, CP>
+pub fn punctuated_trailing0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     PunctuatedTrailing0 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -608,12 +608,12 @@ where
 /// This function returns the failure returned by `value` if not at least one of those was parsed.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing1<F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing1<F, S, CV, CP>
+pub fn punctuated_trailing1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     PunctuatedTrailing1 { values, puncts, _f: Default::default(), _s: Default::default() }
 }
@@ -636,12 +636,12 @@ where
 /// This function returns a [`Failure::PunctuatedTrailingN`] if it failed to apply `value` exactly `N` times.
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing_n<F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedTrailingN<F, S, CV, CP>
+pub fn punctuated_trailing_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedTrailingN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     PunctuatedTrailingN { values, puncts, n, _f: Default::default(), _s: Default::default() }
 }
@@ -667,15 +667,15 @@ impl<F, S, C: Expects> Expects for Many0<F, S, C> {
         self.comb.fmt(f, indent)
     }
 }
-impl<F, S, C> Combinator<F, S> for Many0<F, S, C>
+impl<'c, F, S, C> Combinator<'c, F, S> for Many0<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     type Output = Vec<C::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut rem: Span<F, S> = input;
         let mut res: Vec<C::Output> = Vec::with_capacity(1);
         loop {
@@ -705,15 +705,15 @@ impl<F, S, C: Expects> Expects for Many1<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_many1(f, indent, self.comb.expects()) }
 }
-impl<F, S, C> Combinator<F, S> for Many1<F, S, C>
+impl<'c, F, S, C> Combinator<'c, F, S> for Many1<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     type Output = Vec<C::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Run the combinator at least once
         let (mut rem, mut res): (Span<F, S>, Vec<C::Output>) = match self.comb.parse(input) {
             Result::Ok(rem, res) => (rem, vec![res]),
@@ -752,15 +752,15 @@ impl<F, S, C: Expects> Expects for ManyN<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_many_n(f, indent, self.n, self.comb.expects()) }
 }
-impl<F, S, C> Combinator<F, S> for ManyN<F, S, C>
+impl<'c, F, S, C> Combinator<'c, F, S> for ManyN<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<F, S>,
+    C: Combinator<'c, F, S>,
 {
     type Output = Vec<C::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut rem = input;
         let mut res = Vec::with_capacity(self.n);
         for i in 0..self.n {
@@ -804,16 +804,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for SeparatedList0<F, S, CV, CP> {
         self.puncts.fmt(f, indent)
     }
 }
-impl<F, S, CV, CP> Combinator<F, S> for SeparatedList0<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedList0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Vec<CV::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // First parse a possible first value
         let (mut rem, mut res): (Span<F, S>, Vec<CV::Output>) = match self.values.parse(input.clone()) {
             Result::Ok(rem, res) => (rem, vec![res]),
@@ -865,16 +865,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for SeparatedList1<F, S, CV, CP> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_separated_list1(f, indent, self.values.expects(), self.puncts.expects()) }
 }
-impl<F, S, CV, CP> Combinator<F, S> for SeparatedList1<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedList1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Vec<CV::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // First parse a possible first value
         let (mut rem, mut res): (Span<F, S>, Vec<CV::Output>) = match self.values.parse(input) {
             Result::Ok(rem, res) => (rem, vec![res]),
@@ -930,16 +930,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for SeparatedListN<F, S, CV, CP> {
         expects_separated_list_n(f, indent, self.n, self.values.expects(), self.puncts.expects())
     }
 }
-impl<F, S, CV, CP> Combinator<F, S> for SeparatedListN<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedListN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Vec<CV::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Do nothing if n == 0
         if self.n == 0 {
             return Result::Ok(input, Vec::new());
@@ -1029,16 +1029,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for Punctuated0<F, S, CV, CP> {
     }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for Punctuated0<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for Punctuated0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Punctuated<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut res: Punctuated<CV::Output, CP::Output> = Punctuated::new();
 
         // First parse a possible first value
@@ -1098,16 +1098,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for Punctuated1<F, S, CV, CP> {
     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_punctuated1(f, indent, self.values.expects(), self.puncts.expects()) }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for Punctuated1<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for Punctuated1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Punctuated<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut res: Punctuated<CV::Output, CP::Output> = Punctuated::new();
 
         // First parse a possible first value
@@ -1171,16 +1171,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedN<F, S, CV, CP> {
     }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for PunctuatedN<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = Punctuated<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Do nothing if n == 0
         if self.n == 0 {
             return Result::Ok(input, Punctuated::new());
@@ -1275,16 +1275,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedTrailing0<F, S, CV, C
     }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for PunctuatedTrailing0<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedTrailing0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = PunctuatedTrailing<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut res: PunctuatedTrailing<CV::Output, CP::Output> = PunctuatedTrailing::new();
 
         // First parse a possible first value
@@ -1349,16 +1349,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedTrailing1<F, S, CV, C
     }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for PunctuatedTrailing1<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedTrailing1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = PunctuatedTrailing<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let mut res: PunctuatedTrailing<CV::Output, CP::Output> = PunctuatedTrailing::new();
 
         // First parse a possible first value
@@ -1425,16 +1425,16 @@ impl<F, S, CV: Expects, CP: Expects> Expects for PunctuatedTrailingN<F, S, CV, C
     }
 }
 #[cfg(feature = "punctuated")]
-impl<F, S, CV, CP> Combinator<F, S> for PunctuatedTrailingN<F, S, CV, CP>
+impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedTrailingN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
-    CV: Combinator<F, S>,
-    CP: Combinator<F, S>,
+    CV: Combinator<'c, F, S>,
+    CP: Combinator<'c, F, S>,
 {
     type Output = PunctuatedTrailing<CV::Output, CP::Output>;
 
-    fn parse(&mut self, input: Span<F, S>) -> Result<'_, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         // Do nothing if n == 0
         if self.n == 0 {
             return Result::Ok(input, PunctuatedTrailing::new());

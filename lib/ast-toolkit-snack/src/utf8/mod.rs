@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    26 Apr 2024, 10:49:42
+//    30 Apr 2024, 16:37:50
 //  Auto updated?
 //    Yes
 //
@@ -157,7 +157,7 @@ pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at 
 /// # Returns
 /// A combinator that implements the actual operation.
 #[inline]
-pub fn digit0<F, S>(input: Span<F, S>) -> Digit0<F, S>
+pub fn digit0<F, S>() -> Digit0<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -239,7 +239,7 @@ impl<F, S> Expects for Digit0<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_digit0(f) }
 }
-impl<F, S> Combinator<F, S> for Digit0<F, S>
+impl<'c, F, S> Combinator<'c, F, S> for Digit0<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -247,7 +247,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         While0 {
             predicate: |c: &str| -> bool {
                 c.len() == 1 && {
@@ -275,7 +275,7 @@ impl<'t, F, S> Expects for OneOf0<'t, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of0_utf8(f, self.charset) }
 }
-impl<'t, F, S> Combinator<F, S> for OneOf0<'t, F, S>
+impl<'t, F, S> Combinator<'t, F, S> for OneOf0<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -283,7 +283,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
         let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -302,7 +302,7 @@ impl<F, S, P> Expects for While0<F, S, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while0_utf8(f) }
 }
-impl<F, S, P> Combinator<F, S> for While0<F, S, P>
+impl<F, S, P> Combinator<'static, F, S> for While0<F, S, P>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -311,8 +311,8 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
-        let match_point: usize = input.while_utf8(SpanRange::Open, self.predicate);
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+        let match_point: usize = input.while_utf8(SpanRange::Open, &mut self.predicate);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
 }
@@ -328,7 +328,7 @@ impl<F, S> Expects for Whitespace0<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_whitespace0(f) }
 }
-impl<F, S> Combinator<F, S> for Whitespace0<F, S>
+impl<F, S> Combinator<'static, F, S> for Whitespace0<F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -336,7 +336,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         // Note: last '\r\n' is a unicode windows line end :)
         OneOf0 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() }.parse(input)
     }
