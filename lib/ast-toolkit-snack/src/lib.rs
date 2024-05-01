@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    30 Apr 2024, 17:27:32
+//    01 May 2024, 16:35:40
 //  Auto updated?
 //    Yes
 //
@@ -26,161 +26,14 @@ pub mod error;
 // pub mod sequence;
 // pub mod span;
 // pub mod utf8;
+pub mod tuple;
 
 // Imports
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Formatter, Result as FResult};
 
 use ast_toolkit_span::Span;
 use enum_debug::EnumDebug;
 use error::{Error, Failure};
-
-
-/***** HELPER MACROS *****/
-/// Implements [`Combinator`] for a particular size of tuple for us.
-macro_rules! tuple_combinator_impl {
-    (replace $name:ident) => { "{}" };
-
-    ($(($i:tt, $name:ident)),*) => {
-        struct Tuple
-
-        impl<'t $(, $name: Expects<'t>)*> Expects<'t> for ($($name,)*) {
-            type Formatter = TupleExpectsFormatter<'t $(, $name::Formatter)*>;
-
-
-        }
-
-        impl<'c, F, S, $($name: Combinator<'c, F, S>),*> Combinator<'c, F, S> for ($($name,)*) {
-            type Output = ($($name::Output,)*);
-
-            fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
-                #[allow(unused_mut)]
-                let mut rem: Span<F, S> = input;
-                let res: ($($name::Output,)*) = ($(
-                    match self.$i.parse(rem) {
-                        Result::Ok(partial, res) => {
-                            rem = partial;
-                            res
-                        },
-                        Result::Fail(f) => return Result::Fail(f),
-                        Result::Error(f) => return Result::Error(f),
-                    },
-                )*);
-                Result::Ok(rem, res)
-            }
-        }
-    };
-}
-
-/// Given a series, reverses it.
-macro_rules! rev {
-    (< $fi:ident >) => {
-        < $fi >
-    };
-    (< $fi:ident, $($i:ident),+ >) => {
-        < rev!($($i),+), $fi >
-    };
-}
-
-/// Given a tuple, produces an Expects-string formatter for it.
-macro_rules! tuple_combinator_expected_impl {
-    // It's the _only_, not the last
-    (start: $self:ident, $f:ident, $indent:ident => $i:tt) => {
-        $self.fmts.$i.fmt($f, $indent)?;
-    };
-    // It's more than one
-    (start: $self:ident, $f:ident, $indent:ident => $fi:tt $(, $i:tt)+) => {
-        $self.fmts.$fi.fmt($f, $indent)?;
-        tuple_combinator_expected_impl!($self, $f, $indent => $($i),+);
-    };
-
-    // Deal with the last one
-    ($self:ident, $f:ident, $indent:ident => $i:tt) => {
-        write!($f, ", ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
-    };
-    // Deal with the pre-last one
-    ($self:ident, $f:ident, $indent:ident => $i:tt $(, $rem:tt)+) => {
-        write!($f, " and then ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
-    };
-}
-
-/// Implements [`Combinator`] for various sizes of tuples for us.
-macro_rules! tuple_combinator_impls {
-    // Base case; empty tuple implementation (we don't do that here)
-    () => {};
-
-    (($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
-        // Build the smaller edition first
-        tuple_combinator_impls!($(($i, $name)),*);
-
-        // Define a Formatter for this edition
-        paste::paste! {
-            /// Formats the expects-string for a tuple of a particular size
-            pub struct [< Tuple $fi Formatter >]<$fname $(, $name)*> {
-                /// The formatters for all nested combinators.
-                fmts: ($fname, $($name,)*),
-            }
-            impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> Display for [< Tuple $fi Formatter >]<$fname $(, $name)*> {
-                #[inline]
-                fn fmt(&self, f: &mut Formatter) -> FResult {
-                    write!(f, "Expected ")?;
-                    <Self as ExpectsFormatter>::fmt(self, f, 0)
-                }
-            }
-            impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> ExpectsFormatter for [< Tuple $fi Formatter >]<$fname $(, $name)*> {
-                #[inline]
-                fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-                    tuple_combinator_expected_impl!(start: self, f, indent => $fi $(, $i)*);
-                    Ok(())
-                }
-            }
-
-            // Then implement Expects and Combinator for the tuple
-            impl<'t, $fname: Expects<'t> $(, $name: Expects<'t>)*> Expects<'t> for ($fname, $($name,)*) {
-                type Formatter = [< Tuple $fi Formatter >]<$fname::Formatter $(, $name::Formatter)*>;
-
-                #[inline]
-                fn expects(&self) -> Self::Formatter {
-                    [< Tuple $fi Formatter >] {
-                        fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
-                    }
-                }
-            }
-            impl<'t, F, S, $fname: Combinator<'t, F, S> $(, $name: Combinator<'t, F, S>)*> Combinator<'t, F, S> for ($fname, $($name,)*) {
-                type Output = ($fname::Output, $($name::Output,)*);
-
-                #[inline]
-                fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
-
-                }
-            }
-        }
-    };
-}
-
-// Default impls for tuples
-tuple_combinator_impls!(
-    (0, C1),
-    (1, C2),
-    (2, C3),
-    (3, C4),
-    (4, C5),
-    (5, C6),
-    (6, C7),
-    (7, C8),
-    (8, C9),
-    (9, C10),
-    (10, C11),
-    (11, C12),
-    (12, C13),
-    (13, C14),
-    (14, C15),
-    (15, C16)
-);
-
-
-
 
 
 /***** CONSTANTS *****/
