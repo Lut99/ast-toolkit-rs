@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    01 May 2024, 17:27:53
+//    01 May 2024, 17:47:36
 //  Auto updated?
 //    Yes
 //
@@ -65,24 +65,24 @@ macro_rules! count {
 macro_rules! tuple_branchable_expected_impl {
     // It's the _only_, not the last
     (start: $self:ident, $f:ident, $indent:ident => $i:tt) => {
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
     };
     // It's more than one
     (start: $self:ident, $f:ident, $indent:ident => $fi:tt $(, $i:tt)+) => {
-        $self.fmts.$fi.fmt($f, $indent)?;
+        $self.fmts.$fi.expects_fmt($f, $indent)?;
         tuple_branchable_expected_impl!($self, $f, $indent => $($i),+);
     };
 
     // Deal with the pre-last one
     ($self:ident, $f:ident, $indent:ident => $i:tt $(, $rem:tt)+) => {
         write!($f, ", ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
         tuple_branchable_expected_impl!($self, $f, $indent => $($rem),+);
     };
     // Deal with the last one
     ($self:ident, $f:ident, $indent:ident => $i:tt) => {
         write!($f, " or ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
     };
 }
 
@@ -92,6 +92,7 @@ macro_rules! tuple_branchable_impl {
     (impl => $li:tt : ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
         paste::paste! {
             /// Formats the expects-string for a tuple of a particular size
+            #[derive(Debug)]
             pub struct [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 /// The formatters for all nested combinators.
                 fmts: ($fname, $($name,)*),
@@ -100,12 +101,12 @@ macro_rules! tuple_branchable_impl {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult {
                     write!(f, "Expected ")?;
-                    <Self as ExpectsFormatter>::fmt(self, f, 0)
+                    self.expects_fmt(f, 0)
                 }
             }
             impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> ExpectsFormatter for [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 #[inline]
-                fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+                fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
                     write!(f, "either ")?;
                     tuple_branchable_expected_impl!(start: self, f, indent => $fi $(, $i)*);
                     Ok(())

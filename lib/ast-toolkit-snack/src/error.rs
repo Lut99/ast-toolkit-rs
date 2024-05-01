@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    01 May 2024, 16:36:12
+//    01 May 2024, 17:43:25
 //  Auto updated?
 //    Yes
 //
@@ -27,14 +27,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
 
-// use crate::branch::expects_alt;
-// use crate::bytes::{expects_one_of1_bytes, expects_tag_bytes};
-// use crate::combinator::expects_not;
-// use crate::multi::{expects_many1, expects_many_n, expects_separated_list1_fail, expects_separated_list_n_punct, expects_separated_list_n_value};
-// #[cfg(feature = "punctuated")]
-// use crate::multi::{expects_punctuated_trailing1_fail, expects_punctuated_trailing_n_punct, expects_punctuated_trailing_n_value};
-// use crate::utf8::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
-// use crate::{Expects, ExpectsExt, ExpectsFormatter};
+use crate::ExpectsFormatter;
 
 
 /***** ERRORS *****/
@@ -64,6 +57,15 @@ impl error::Error for TryFromFailureError {}
 
 
 
+/***** AUXILLARY *****/
+/// Type alias for [`Debug`] + [`ExpectsFormatter`].
+pub trait DebugExpectsFormatter: Debug + ExpectsFormatter {}
+impl<T: Debug + ExpectsFormatter> DebugExpectsFormatter for T {}
+
+
+
+
+
 /***** LIBRARY *****/
 /// Defines a common set of problems raised by snack combinators.
 ///
@@ -84,7 +86,7 @@ pub enum Common<'a, F, S> {
     /// Failed to match a combinator exactly N times.
     ManyN { n: usize, i: usize, fail: Box<Self> },
     /// Failed to _not_ apply a combinator.
-    Not { expects: (), span: Span<F, S> },
+    Not { expects: Box<dyn 'a + DebugExpectsFormatter>, span: Span<F, S> },
     /// Expected at least one of the following bytes.
     OneOf1Bytes { byteset: &'a [u8], span: Span<F, S> },
     /// Expected at least one of the following characters.

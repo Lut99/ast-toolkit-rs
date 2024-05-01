@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    30 Apr 2024, 16:35:47
+//    01 May 2024, 17:48:14
 //  Auto updated?
 //    Yes
 //
@@ -18,26 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spanning};
 
 use crate::error::{Common, Failure};
-use crate::{Combinator, Expects, ExpectsExt as _, ExpectsFormatter, Result};
-
-
-/***** EXPECTS FUNCTIONS *****/
-/// Defines what we expect from a [`Not`](crate::combinator::Not).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `indent`: Some indentation level to apply when writing new lines.
-/// - `what`: Something that was expected to _not_ occur.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_not(f: &mut Formatter, indent: usize, what: &ExpectsFormatter) -> FResult {
-    write!(f, "not ")?;
-    <ExpectsFormatter as Expects>::fmt(what, f, indent)
-}
-
-
-
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -92,6 +73,36 @@ where
 
 
 
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Not`] combinator.
+#[derive(Debug)]
+pub struct NotExpects<'t> {
+    /// The thing we _don't_ expect.
+    fmt: Box<dyn 't + ExpectsFormatter>,
+}
+impl<'t> ExpectsFormatter for NotExpects<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        write!(f, "not ")?;
+        self.fmt.expects_fmt(f, indent)
+    }
+}
+
+/// ExpectsFormatter for the [`Map`] combinator.
+#[derive(Debug)]
+pub struct MapExpects<'t> {
+    /// The thing we expect.
+    fmt: Box<dyn 't + ExpectsFormatter>,
+}
+impl<'t> ExpectsFormatter for MapExpects<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.fmt.expects_fmt(f, indent) }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The concrete type returned by [`not()`].
 pub struct Not<F, S, C> {
@@ -102,9 +113,11 @@ pub struct Not<F, S, C> {
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
 }
-impl<F, S, C: Expects> Expects for Not<F, S, C> {
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Not<F, S, C> {
+    type Formatter = NotExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { expects_not(f, indent, &self.comb.expects()) }
+    fn expects(&self) -> Self::Formatter { NotExpects { fmt: Box::new(self.comb.expects()) } }
 }
 impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
 where
@@ -118,7 +131,7 @@ where
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         match self.comb.parse(input.clone()) {
-            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { expects: self.comb.expects(), span: res.span() })),
+            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { expects: Box::new(self.comb.expects()), span: res.span() })),
             Result::Fail(_) => Result::Ok(input, ()),
             Result::Error(err) => Result::Error(err),
         }
@@ -138,9 +151,11 @@ pub struct Map<F, S, C, M> {
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
 }
-impl<F, S, C: Expects, M> Expects for Map<F, S, C, M> {
+impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for Map<F, S, C, M> {
+    type Formatter = MapExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.comb.fmt(f, indent) }
+    fn expects(&self) -> Self::Formatter { MapExpects { fmt: Box::new(self.comb.expects()) } }
 }
 impl<'c, F, S, R1, R2, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
 where

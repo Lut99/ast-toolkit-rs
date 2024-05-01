@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    01 May 2024, 17:36:08
+//    01 May 2024, 17:46:47
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,7 @@
 // Declare submodules
 pub mod branch;
 pub mod bytes;
-// pub mod combinator;
+pub mod combinator;
 pub mod error;
 // pub mod multi;
 // pub mod sequence;
@@ -65,7 +65,7 @@ pub trait Expects<'t> {
 /// A trait implemented by [`Expects::Formatter`]s.
 ///
 /// This trait actually produces expect-strings.
-pub trait ExpectsFormatter {
+pub trait ExpectsFormatter: Debug {
     /// Formats the thing that this Expects expected as input.
     ///
     /// The string written should be something along the lines of filling in `XXX` in:
@@ -79,7 +79,7 @@ pub trait ExpectsFormatter {
     ///
     /// # Errors
     /// This function should only error if it failed to write to the given `f`ormatter.
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
 }
 
 

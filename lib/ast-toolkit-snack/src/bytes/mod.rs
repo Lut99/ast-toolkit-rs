@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    01 May 2024, 17:35:53
+//    01 May 2024, 17:47:44
 //  Auto updated?
 //    Yes
 //
@@ -70,12 +70,13 @@ where
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf0`] combinator.
+#[derive(Debug)]
 pub struct OneOf0Expects<'b> {
     /// The set of bytes we expect one of.
     byteset: &'b [u8],
 }
 impl<'b> ExpectsFormatter for OneOf0Expects<'b> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "one of ")?;
         for i in 0..self.byteset.len() {
             if i == 0 {
@@ -94,10 +95,11 @@ impl<'b> ExpectsFormatter for OneOf0Expects<'b> {
 }
 
 /// ExpectsFormatter for the [`While0`] combinator.
+#[derive(Debug)]
 pub struct While0Expects;
 impl ExpectsFormatter for While0Expects {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific bytes") }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific bytes") }
 }
 
 

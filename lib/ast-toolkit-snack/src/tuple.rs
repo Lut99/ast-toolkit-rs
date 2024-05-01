@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2024, 15:42:04
 //  Last edited:
-//    01 May 2024, 17:13:00
+//    01 May 2024, 17:47:08
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,7 @@
 //!   Implements [`Combinator`] for tuples.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::Span;
 
@@ -24,24 +24,24 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 macro_rules! tuple_combinator_expected_impl {
     // It's the _only_, not the last
     (start: $self:ident, $f:ident, $indent:ident => $i:tt) => {
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
     };
     // It's more than one
     (start: $self:ident, $f:ident, $indent:ident => $fi:tt $(, $i:tt)+) => {
-        $self.fmts.$fi.fmt($f, $indent)?;
+        $self.fmts.$fi.expects_fmt($f, $indent)?;
         tuple_combinator_expected_impl!($self, $f, $indent => $($i),+);
     };
 
     // Deal with the pre-last one
     ($self:ident, $f:ident, $indent:ident => $i:tt $(, $rem:tt)+) => {
         write!($f, ", ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
         tuple_combinator_expected_impl!($self, $f, $indent => $($rem),+);
     };
     // Deal with the last one
     ($self:ident, $f:ident, $indent:ident => $i:tt) => {
         write!($f, " and then ")?;
-        $self.fmts.$i.fmt($f, $indent)?;
+        $self.fmts.$i.expects_fmt($f, $indent)?;
     };
 }
 
@@ -51,7 +51,8 @@ macro_rules! tuple_combinator_impl {
     (impl => $li:tt : ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
         paste::paste! {
             /// Formats the expects-string for a tuple of a particular size
-            pub struct [< Tuple $li Formatter >]<$fname $(, $name)*> {
+            #[derive(Debug)]
+            pub struct [< Tuple $li Formatter >]<$fname: Debug $(, $name: Debug)*> {
                 /// The formatters for all nested combinators.
                 fmts: ($fname, $($name,)*),
             }
@@ -59,12 +60,12 @@ macro_rules! tuple_combinator_impl {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult {
                     write!(f, "Expected ")?;
-                    <Self as ExpectsFormatter>::fmt(self, f, 0)
+                    self.expects_fmt(f, 0)
                 }
             }
             impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> ExpectsFormatter for [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 #[inline]
-                fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+                fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
                     tuple_combinator_expected_impl!(start: self, f, indent => $fi $(, $i)*);
                     Ok(())
                 }

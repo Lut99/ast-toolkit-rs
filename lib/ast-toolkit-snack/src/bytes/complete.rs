@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    01 May 2024, 17:35:48
+//    01 May 2024, 17:47:55
 //  Auto updated?
 //    Yes
 //
@@ -84,12 +84,13 @@ where
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`] combinator.
+#[derive(Debug)]
 pub struct OneOf1Expects<'b> {
     /// The set of bytes we expect one of.
     byteset: &'b [u8],
 }
 impl<'b> ExpectsFormatter for OneOf1Expects<'b> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
         for i in 0..self.byteset.len() {
             if i == 0 {
@@ -108,20 +109,22 @@ impl<'b> ExpectsFormatter for OneOf1Expects<'b> {
 }
 
 /// ExpectsFormatter for the [`Tag`] combinator.
+#[derive(Debug)]
 pub struct TagExpects<'t> {
     /// The tag of bytes we expect one of.
     tag: &'t [u8],
 }
 impl<'t> ExpectsFormatter for TagExpects<'t> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
 }
 
 /// ExpectsFormatter for the [`While1`] combinator.
+#[derive(Debug)]
 pub struct While1Expects;
 impl ExpectsFormatter for While1Expects {
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific byte") }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific byte") }
 }
 
 
