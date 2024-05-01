@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    30 Apr 2024, 16:29:49
+//    01 May 2024, 17:35:53
 //  Auto updated?
 //    Yes
 //
@@ -23,85 +23,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, SpanRange};
 
 use crate::span::{OneOfBytes, WhileBytes};
-use crate::{Combinator, Expects, Result};
-
-
-/***** EXPECTS FUNCTIONS *****/
-/// Defines what we expect from a bytes-based [`OneOf0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `bytes`: The set of bytes we're expecting.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of0_bytes(f: &mut Formatter, bytes: &[u8]) -> FResult {
-    write!(f, "some of ")?;
-    for i in 0..bytes.len() {
-        if i == 0 {
-            write!(f, "{:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        } else if i < bytes.len() - 1 {
-            write!(f, ", {:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        } else {
-            write!(f, " or {:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        }
-    }
-    Ok(())
-}
-
-/// Defines what we expect from a bytes-based [`OneOf1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `bytes`: The set of bytes we're expecting.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of1_bytes(f: &mut Formatter, bytes: &[u8]) -> FResult {
-    write!(f, "at least one of ")?;
-    for i in 0..bytes.len() {
-        if i == 0 {
-            write!(f, "{:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        } else if i < bytes.len() - 1 {
-            write!(f, ", {:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        } else {
-            write!(f, " or {:#04x?}", unsafe { bytes.get_unchecked(i) })?;
-        }
-    }
-    Ok(())
-}
-
-/// Defines what we expect from a [`Tag`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `tag`: The thing that we are looking for.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_tag_bytes(f: &mut Formatter, tag: &[u8]) -> FResult { write!(f, "{tag:#04X?}") }
-
-/// Defines what we expect from a [`While0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_while0_bytes(f: &mut Formatter) -> FResult { write!(f, "specific bytes") }
-
-/// Defines what we expect from a [`While1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_while1_bytes(f: &mut Formatter) -> FResult { write!(f, "at least one specific byte") }
-
-
-
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -146,6 +68,42 @@ where
 
 
 
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`OneOf0`] combinator.
+pub struct OneOf0Expects<'b> {
+    /// The set of bytes we expect one of.
+    byteset: &'b [u8],
+}
+impl<'b> ExpectsFormatter for OneOf0Expects<'b> {
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        write!(f, "one of ")?;
+        for i in 0..self.byteset.len() {
+            if i == 0 {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, "{:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            } else if i < self.byteset.len() - 1 {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, ", {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            } else {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, " or {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// ExpectsFormatter for the [`While0`] combinator.
+pub struct While0Expects;
+impl ExpectsFormatter for While0Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific bytes") }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The combinator returned by [`one_of0()`].
 pub struct OneOf0<'b, F, S> {
@@ -156,9 +114,11 @@ pub struct OneOf0<'b, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, F, S> Expects for OneOf0<'b, F, S> {
+impl<'b, F, S> Expects<'b> for OneOf0<'b, F, S> {
+    type Formatter = OneOf0Expects<'b>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of0_bytes(f, self.byteset) }
+    fn expects(&self) -> Self::Formatter { OneOf0Expects { byteset: self.byteset } }
 }
 impl<'b, F, S> Combinator<'b, F, S> for OneOf0<'b, F, S>
 where
@@ -183,11 +143,13 @@ pub struct While0<F, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S, P> Expects for While0<F, S, P> {
+impl<F, S, P> Expects<'static> for While0<F, S, P> {
+    type Formatter = While0Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while0_bytes(f) }
+    fn expects(&self) -> Self::Formatter { While0Expects }
 }
-impl<'c, F, S, P> Combinator<'c, F, S> for While0<F, S, P>
+impl<F, S, P> Combinator<'static, F, S> for While0<F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
@@ -196,7 +158,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         let match_point: usize = input.while_bytes(SpanRange::Open, &mut self.predicate);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    30 Apr 2024, 16:41:46
+//    01 May 2024, 17:27:53
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,14 @@
 //!   Implements branching combinators. Actually just [`alt()`].
 //
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning as _};
+use ast_toolkit_span::Span;
 use stackvec::StackVec;
 
 use crate::error::{Common, Failure};
-use crate::{Combinator, Expects, Result};
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** TESTS *****/
@@ -61,137 +61,132 @@ macro_rules! count {
     );
 }
 
-/// Implements [`Branchable`] for a tuple with given number of parameters.
-macro_rules! tuple_branchable_impl {
-    (last $self:ident, $input:ident, $fails:ident, $fi:tt, $($i:tt),+) => {
-        // First, do a non-last one
-        match $self.$fi.parse($input.clone()) {
-            Result::Ok(rem, res) => return Result::Ok(rem, res),
-            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => $fails.push(fail.try_into().unwrap()),
-            Result::Error(err) => return Result::Error(err),
-        }
-        // Do any others
-        tuple_branchable_impl!(last $self, $input, $fails, $($i),+);
+/// Given a tuple, produces an Expects-string formatter for it.
+macro_rules! tuple_branchable_expected_impl {
+    // It's the _only_, not the last
+    (start: $self:ident, $f:ident, $indent:ident => $i:tt) => {
+        $self.fmts.$i.fmt($f, $indent)?;
     };
-    (last $self:ident, $input:ident, $fails:ident, $fi:tt) => {
-        // The last one
-        match $self.$fi.parse($input.clone()) {
-            Result::Ok(rem, res) => return Result::Ok(rem, res),
-            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => $fails.push(fail.try_into().unwrap()),
-            Result::Error(err) => return Result::Error(err),
-        }
+    // It's more than one
+    (start: $self:ident, $f:ident, $indent:ident => $fi:tt $(, $i:tt)+) => {
+        $self.fmts.$fi.fmt($f, $indent)?;
+        tuple_branchable_expected_impl!($self, $f, $indent => $($i),+);
     };
 
-    (($fi:tt, $fname:ident)) => {
-        impl<'c, F: Clone, S: Clone, $fname: Combinator<'c, F, S>> Branchable<'c, F, S> for ($fname,) {
-            type Output = $fname::Output;
-
-            fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.0.fmt(f, indent) }
-
-            fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
-                match self.$fi.parse(input) {
-                    Result::Ok(rem, res) => Result::Ok(rem, res),
-                    Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
-                    Result::Fail(fail) => { let span = fail.span(); Result::Fail(Failure::Common(Common::Alt { branches: vec![ fail.try_into().unwrap() ], span })) },
-                    Result::Error(err) => Result::Error(err),
-                }
-            }
-        }
+    // Deal with the pre-last one
+    ($self:ident, $f:ident, $indent:ident => $i:tt $(, $rem:tt)+) => {
+        write!($f, ", ")?;
+        $self.fmts.$i.fmt($f, $indent)?;
+        tuple_branchable_expected_impl!($self, $f, $indent => $($rem),+);
     };
-    (($fi:tt, $fname:ident), $(($i:tt, $name:ident)),+) => {
-        ::paste::paste! {
-        impl<'c, F: Clone, S: Clone, R, $fname: Combinator<'c, F, S, Output = R> $(, $name: Combinator<'c, F, S, Output = R>)+> Branchable<'c, F, S> for ($fname, $($name),*) {
-            type Output = R;
-
-            #[inline]
-            fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-                struct ExpectsIter<'a, $fname $(, $name)+> { count: usize, data: (&'a $fname $(, &'a $name)+) }
-                impl<'a, $fname: Expects $(, $name: Expects)+> Iterator for ExpectsIter<'a, $fname $(, $name)+> {
-                    type Item = &'a dyn Expects;
-                    #[inline]
-                    fn next(&mut self) -> Option<Self::Item> {
-                        if self.count == $fi {
-                            self.count += 1;
-                            Some(self.data.$fi)
-                        }
-                        $(else if self.count == $i {
-                            self.count += 1;
-                            Some(self.data.$i)
-                        })+
-                        else {
-                            None
-                        }
-                    }
-                }
-
-                expects_alt(f, indent, ExpectsIter { count: 0, data: (&self.$fi $(, &self.$i)+) })
-            }
-
-            fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
-                // Some cheap store for collecting failures
-                let mut fails: StackVec<{ count!($fname $($name)+) }, Common<F, S>> = StackVec::new();
-
-                // Go over all
-                tuple_branchable_impl!(last self, input, fails, $fi, $($i),+);
-
-                // If we made it here, none of them early quit
-                Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: input.start_onwards() }))
-            }
-        }
-        }
+    // Deal with the last one
+    ($self:ident, $f:ident, $indent:ident => $i:tt) => {
+        write!($f, " or ")?;
+        $self.fmts.$i.fmt($f, $indent)?;
     };
 }
 
-// Default [`Branchable`] impls for tuples.
-tuple_branchable_impl!((0, C1));
-tuple_branchable_impl!((0, C1), (1, C2));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12));
-tuple_branchable_impl!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12), (12, C13));
-tuple_branchable_impl!(
-    (0, C1),
-    (1, C2),
-    (2, C3),
-    (3, C4),
-    (4, C5),
-    (5, C6),
-    (6, C7),
-    (7, C8),
-    (8, C9),
-    (9, C10),
-    (10, C11),
-    (11, C12),
-    (12, C13),
-    (13, C14)
-);
-tuple_branchable_impl!(
-    (0, C1),
-    (1, C2),
-    (2, C3),
-    (3, C4),
-    (4, C5),
-    (5, C6),
-    (6, C7),
-    (7, C8),
-    (8, C9),
-    (9, C10),
-    (10, C11),
-    (11, C12),
-    (12, C13),
-    (13, C14),
-    (14, C15)
-);
-tuple_branchable_impl!(
+/// Implements [`Combinator`] for a particular tuple for us.
+macro_rules! tuple_branchable_impl {
+    // Non-empty tuple implementation
+    (impl => $li:tt : ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
+        paste::paste! {
+            /// Formats the expects-string for a tuple of a particular size
+            pub struct [< Tuple $li Formatter >]<$fname $(, $name)*> {
+                /// The formatters for all nested combinators.
+                fmts: ($fname, $($name,)*),
+            }
+            impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> Display for [< Tuple $li Formatter >]<$fname $(, $name)*> {
+                #[inline]
+                fn fmt(&self, f: &mut Formatter) -> FResult {
+                    write!(f, "Expected ")?;
+                    <Self as ExpectsFormatter>::fmt(self, f, 0)
+                }
+            }
+            impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> ExpectsFormatter for [< Tuple $li Formatter >]<$fname $(, $name)*> {
+                #[inline]
+                fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+                    write!(f, "either ")?;
+                    tuple_branchable_expected_impl!(start: self, f, indent => $fi $(, $i)*);
+                    Ok(())
+                }
+            }
+
+            // Then implement Branchable for the tuple
+            paste::paste!(
+                impl<'t, F: Clone, S: Clone, O, $fname: Combinator<'t, F, S, Output = O> $(, $name: Combinator<'t, F, S, Output = O>)*> Branchable<'t, F, S> for ($fname, $($name,)*) {
+                    type Formatter = [< Tuple $li Formatter >]<$fname::Formatter $(, $name::Formatter)*>;
+                    type Output = O;
+
+                    #[inline]
+                    fn expects(&self) -> Self::Formatter {
+                        [< Tuple $li Formatter >] {
+                            fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
+                        }
+                    }
+
+                    #[inline]
+                    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
+                        let mut fails: StackVec<{ count!($fname $($name)*) }, Common<'t, F, S>> = StackVec::new();
+                        match self.$fi.parse(input.clone()) {
+                            Result::Ok(rem, res) => return Result::Ok(rem, res),
+                            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                            Result::Fail(fail) => fails.push(fail.try_into().unwrap()),
+                            Result::Error(err) => return Result::Error(err),
+                        }
+                        $(match self.$i.parse(input.clone()) {
+                            Result::Ok(rem, res) => return Result::Ok(rem, res),
+                            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+                            Result::Fail(fail) => fails.push(fail.try_into().unwrap()),
+                            Result::Error(err) => return Result::Error(err),
+                        })*
+                        Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: input }))
+                    }
+                }
+            );
+        }
+    };
+
+    // Done with reversing the arguments; call us forwardly
+    ($li:tt: reverse: $(($i:tt, $name:ident)),*) => {
+        tuple_branchable_impl!(impl => $li: $(($i, $name)),*);
+    };
+    // More to reverse
+    ($li:tt: ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))* reverse: $(($ri:tt, $rname:ident)),*) => {
+        tuple_branchable_impl!($li: $(($i, $name)),* reverse: ($fi, $fname) $(, ($ri, $rname))*);
+    };
+}
+
+/// Implements [`Combinator`] for various sizes of tuples for us.
+macro_rules! tuple_branchable_impls {
+    // Base case; empty tuple implementation (we don't do that here)
+    (impl:) => {};
+    // "Forward" run of all the arguments once reversed
+    (impl: ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
+        // Build the smaller edition first
+        tuple_branchable_impls!(impl: $(($i, $name)),*);
+
+        // Then implement it
+        tuple_branchable_impl!($fi: ($fi, $fname) $(, ($i, $name))* reverse:);
+    };
+
+    // More to reverse
+    (($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))* reverse: $(($ri:tt, $rname:ident)),*) => {
+        tuple_branchable_impls!($(($i, $name)),* reverse: ($fi, $fname) $(, ($ri, $rname))*);
+    };
+    // Done with reversing the arguments; call us forwardly
+    (reverse: $(($i:tt, $name:ident)),*) => {
+        tuple_branchable_impls!(impl: $(($i, $name)),*);
+    };
+
+    // Calling interface
+    ($(($i:tt, $name:ident)),*) => {
+        tuple_branchable_impls!($(($i, $name)),* reverse:);
+    }
+}
+
+// Default impls for tuples
+tuple_branchable_impls!(
     (0, C1),
     (1, C2),
     (2, C3),
@@ -214,52 +209,22 @@ tuple_branchable_impl!(
 
 
 
-/***** EXPECTS FUNCTIONS *****/
-/// Defines what we expect from an [`Alt`](crate::branch::Alt).
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `indent`: Some indentation level to apply when writing new lines.
-/// - `branches`: Some iterator yielding [`Expects`] for all branches.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_alt<'b>(f: &mut Formatter, indent: usize, branches: impl IntoIterator<Item = &'b dyn Expects>) -> FResult {
-    writeln!(f, "one of:")?;
-    for b in branches {
-        write!(f, "{} - ", (0..indent).map(|_| ' ').collect::<String>())?;
-        b.fmt(f, indent + 1)?;
-        writeln!(f)?;
-    }
-    writeln!(f)
-}
-
-
-
-
-
 /***** AUXILLARY *****/
 /// Abstracts over types that can be [`branch()`]ed over. Most notably, these are tuples.
-pub trait Branchable<'c, F, S> {
+pub trait Branchable<'t, F, S> {
+    /// The formatter for the branched combinators.
+    type Formatter: 't + ExpectsFormatter;
     /// The output of all the branched combinators.
     type Output;
 
 
-    /// Formats the thing that this Expects expected as input.
+    /// Returns an [`ExpectsFormatter`] that does the actual formatting.
     ///
-    /// The string written should be something along the lines of filling in `XXX` in:
-    /// ```plain
-    /// Expected XXX.
-    /// ```
+    /// This [`Formatter`] may implement [`Display`] to show a fully-fledged error string.
     ///
-    /// # Arguments
-    /// - `f`: Some [`Formatter`] to write to.
-    /// - `indent`: If this formatter writes newlines, they should be indented by this amount.
-    ///
-    /// # Errors
-    /// This function should only error if it failed to write to the given `f`ormatter.
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
-
+    /// # Returns
+    /// A [`Self::Formatter`](Expects::Formatter) that can be used to create the expects string.
+    fn expects(&self) -> Self::Formatter;
 
     /// Runs all combinators in this Branchable.
     ///
@@ -274,7 +239,7 @@ pub trait Branchable<'c, F, S> {
     ///
     /// # Errors
     /// This function returns [`Result:Error`] if _any_ of the internal combinators failed.
-    fn branch(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S>;
+    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S>;
 }
 
 
@@ -317,12 +282,14 @@ pub struct Alt<F, S, B> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<'c, F, S, B> Expects for Alt<F, S, B>
+impl<'t, F, S, B> Expects<'t> for Alt<F, S, B>
 where
-    B: Branchable<'c, F, S>,
+    B: Branchable<'t, F, S>,
 {
+    type Formatter = B::Formatter;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.branches.fmt(f, indent) }
+    fn expects(&self) -> Self::Formatter { self.branches.expects() }
 }
 impl<'c, F, S, B> Combinator<'c, F, S> for Alt<F, S, B>
 where

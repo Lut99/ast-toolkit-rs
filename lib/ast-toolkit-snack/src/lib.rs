@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    01 May 2024, 16:35:40
+//    01 May 2024, 17:36:08
 //  Auto updated?
 //    Yes
 //
@@ -18,13 +18,13 @@
 //
 
 // Declare submodules
-// pub mod branch;
-// pub mod bytes;
+pub mod branch;
+pub mod bytes;
 // pub mod combinator;
 pub mod error;
 // pub mod multi;
 // pub mod sequence;
-// pub mod span;
+pub mod span;
 // pub mod utf8;
 pub mod tuple;
 
@@ -38,6 +38,7 @@ use error::{Error, Failure};
 
 /***** CONSTANTS *****/
 /// Defines the indent size for every level in [`Expects`] formatting.
+#[allow(unused)]
 const EXPECTS_INDENT_SIZE: usize = 4;
 
 

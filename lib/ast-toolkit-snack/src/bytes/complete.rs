@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    30 Apr 2024, 16:29:22
+//    01 May 2024, 17:35:48
 //  Auto updated?
 //    Yes
 //
@@ -18,10 +18,9 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, SpanRange};
 
-use super::{expects_one_of1_bytes, expects_tag_bytes, expects_while1_bytes};
 use crate::error::{Common, Failure};
 use crate::span::{MatchBytes, OneOfBytes, WhileBytes};
-use crate::{Combinator, Expects, Result};
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -83,6 +82,52 @@ where
 
 
 
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`OneOf1`] combinator.
+pub struct OneOf1Expects<'b> {
+    /// The set of bytes we expect one of.
+    byteset: &'b [u8],
+}
+impl<'b> ExpectsFormatter for OneOf1Expects<'b> {
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        write!(f, "at least one of ")?;
+        for i in 0..self.byteset.len() {
+            if i == 0 {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, "{:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            } else if i < self.byteset.len() - 1 {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, ", {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            } else {
+                // SAFETY: Loops prevents us from going outside of byteset's length
+                write!(f, " or {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// ExpectsFormatter for the [`Tag`] combinator.
+pub struct TagExpects<'t> {
+    /// The tag of bytes we expect one of.
+    tag: &'t [u8],
+}
+impl<'t> ExpectsFormatter for TagExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
+}
+
+/// ExpectsFormatter for the [`While1`] combinator.
+pub struct While1Expects;
+impl ExpectsFormatter for While1Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific byte") }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The combinator returned by [`one_of1()`].
 pub struct OneOf1<'b, F, S> {
@@ -93,8 +138,11 @@ pub struct OneOf1<'b, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, F, S> Expects for OneOf1<'b, F, S> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of1_bytes(f, self.byteset) }
+impl<'b, F, S> Expects<'b> for OneOf1<'b, F, S> {
+    type Formatter = OneOf1Expects<'b>;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { OneOf1Expects { byteset: self.byteset } }
 }
 impl<'b, F, S> Combinator<'b, F, S> for OneOf1<'b, F, S>
 where
@@ -123,9 +171,11 @@ pub struct Tag<'t, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
-impl<'t, F, S> Expects for Tag<'t, F, S> {
+impl<'t, F, S> Expects<'t> for Tag<'t, F, S> {
+    type Formatter = TagExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_tag_bytes(f, self.tag) }
+    fn expects(&self) -> Self::Formatter { TagExpects { tag: self.tag } }
 }
 impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
 where
@@ -158,8 +208,11 @@ pub struct While1<F, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S, P> Expects for While1<F, S, P> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while1_bytes(f) }
+impl<F, S, P> Expects<'static> for While1<F, S, P> {
+    type Formatter = While1Expects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { While1Expects }
 }
 impl<'c, F, S, P> Combinator<'static, F, S> for While1<F, S, P>
 where
