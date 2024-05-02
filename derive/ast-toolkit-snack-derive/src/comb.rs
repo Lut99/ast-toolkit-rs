@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:37:18
 //  Last edited:
-//    02 May 2024, 17:05:40
+//    02 May 2024, 18:30:41
 //  Auto updated?
 //    Yes
 //
@@ -34,7 +34,7 @@ use syn::{Block, Error, Expr, ExprLit, ExprTuple, Ident, Lifetime, Lit, LitStr, 
 fn generate_exp_impl(exp: &RawExpects) -> TokenStream2 {
     match exp {
         RawExpects::Lit(lit) => quote! {
-            || -> String { #lit.into() }
+            || -> String { format!(#lit) }
         },
         RawExpects::Tuple(lit, args) => quote! {
             || -> String { format!(#lit, #(#args),*) }

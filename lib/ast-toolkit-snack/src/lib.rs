@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    02 May 2024, 11:38:54
+//    02 May 2024, 18:28:57
 //  Auto updated?
 //    Yes
 //
@@ -17,12 +17,17 @@
 //!   little bit of performance over a more human-friendly debug experience.
 //
 
+// Re-exports
+#[cfg(feature = "derive")]
+pub use ast_toolkit_snack_derive::comb;
+
 // Declare submodules
 pub mod branch;
 pub mod bytes;
 pub mod combinator;
 pub mod error;
 pub mod multi;
+pub mod procedural;
 pub mod sequence;
 pub mod span;
 pub mod tuple;
