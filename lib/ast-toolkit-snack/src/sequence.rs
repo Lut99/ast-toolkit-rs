@@ -1,79 +1,23 @@
-//  COMPLETE.rs
+//  SEQUENCE.rs
 //    by Lut99
 //
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    30 Apr 2024, 16:32:05
+//    02 May 2024, 14:40:45
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Defines 'complete' versions of the sequence combinators, which will
-//!   consider not enough input a hard failure.
+//!   Defines combinators that apply other combinators in a particular order.
 //
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
-
-
-/***** TESTS *****/
-#[cfg(test)]
-mod tests {
-    use super::pair;
-    use crate::error::{Common, Failure};
-    use crate::utf8::complete::tag;
-    use crate::{Combinator as _, Result};
-
-    type Span = ast_toolkit_span::Span<&'static str, &'static str>;
-
-
-    #[test]
-    fn test_pair() {
-        // Some success stories
-        let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, (res1, res2)) = pair(tag(&"Hello"), tag(&", world!")).parse(input).unwrap();
-        println!("\"{}\"", rem.value());
-        assert!(rem.is_empty());
-        assert_eq!(res1, input.slice(0..5));
-        assert_eq!(res2, input.slice(5..));
-
-        // Failure
-        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-    }
-}
-
-
-
-
-
-/***** EXPECTS FUNCTIONS *****/
-/// Defines what we expect from a [`Pair`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `indent`: Any indentation to apply should the nested expects write new lines.
-/// - `expects1`: Some nested [`ExpectsFormatter`] of the first combinator that is being applied.
-/// - `expects2`: Some nested [`ExpectsFormatter`] of the second combinator that is being applied.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_pair(f: &mut Formatter, indent: usize, expects1: ExpectsFormatter, expects2: ExpectsFormatter) -> FResult {
-    write!(f, "first ")?;
-    <ExpectsFormatter as Expects>::fmt(&expects1, f, indent)?;
-    write!(f, ", then ")?;
-    <ExpectsFormatter as Expects>::fmt(&expects2, f, indent)
-}
-
-
-
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -84,10 +28,31 @@ pub(crate) fn expects_pair(f: &mut Formatter, indent: usize, expects1: ExpectsFo
 /// - `second`: The second combinator to match.
 ///
 /// # Returns
-/// A tuple containing the outputs of both combinators.
+/// A combinator [`Tuple`] that will first apply the `first combinator, and then the `second`.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if either the `first` or the `second` combinator fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::pair;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123");
+/// let span2 = Span::new("<example>", "123");
+/// let span3 = Span::new("<example>", "HelloWorld");
+///
+/// let mut comb = pair(tag("Hello"), digit1());
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))
+/// );
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// ```
 #[inline]
 pub fn pair<'c, F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
 where
@@ -109,10 +74,31 @@ where
 /// - `combs`: The tuple of combinators to apply.
 ///
 /// # Returns
-/// A tuple containing the outputs of all combinators.
+/// A combinator [`Tuple`] that will first apply the given combinators in-order.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if any of the given `combs`inators fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::tuple;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123");
+/// let span2 = Span::new("<example>", "123");
+/// let span3 = Span::new("<example>", "HelloWorld");
+///
+/// let mut comb = tuple((tag("Hello"), digit1()));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))
+/// );
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// ```
 #[inline]
 pub fn tuple<'c, F, S, C>(combs: C) -> Tuple<F, S, C>
 where
@@ -130,10 +116,28 @@ where
 /// - `sep`: The second combinator to match and then who's result to discard.
 ///
 /// # Returns
-/// The output of the first combinator, but only if both match.
+/// A combinator [`Terminated`] that will first apply the `first` combinator, then the `sep` and discards its result.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if either `first` or `sep` fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::terminated;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123");
+/// let span2 = Span::new("<example>", "123");
+/// let span3 = Span::new("<example>", "HelloWorld");
+///
+/// let mut comb = terminated(tag("Hello"), digit1());
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(8..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// ```
 #[inline]
 pub fn terminated<'c, F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
 where
@@ -152,10 +156,28 @@ where
 /// - `second`: The second combinator to match.
 ///
 /// # Returns
-/// The output of the second combinator, but only if both match.
+/// A combinator [`Preceded`] that will first apply the `sep` combinator, discarding its result, and then the `second` combinator.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if either `sep` or `second` fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::preceded;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123");
+/// let span2 = Span::new("<example>", "123");
+/// let span3 = Span::new("<example>", "HelloWorld");
+///
+/// let mut comb = preceded(tag("Hello"), digit1());
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(8..), span1.slice(5..8)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// ```
 #[inline]
 pub fn preceded<'c, F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
 where
@@ -175,10 +197,39 @@ where
 /// - `third`: The third combinator to match.
 ///
 /// # Returns
-/// A tuple with the output of the `first` and `second` combinators, but only if all three match.
+/// A combinator [`SeparatedPair`] that will first apply the `first` combinator, then the `sep` combinator, discarding its result, and finally the `third` combinator.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if either `first`, `sep`, or `third` fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::separated_pair;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123Goodbye");
+/// let span2 = Span::new("<example>", "123Goodbye");
+/// let span3 = Span::new("<example>", "HelloWorldGoodbye");
+/// let span4 = Span::new("<example>", "Hello123Hello");
+///
+/// let mut comb = separated_pair(tag("Hello"), digit1(), tag("Goodbye"));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(15..), (span1.slice(..5), span1.slice(8..)))
+/// );
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::TagUtf8 { tag: "Hello", .. }))
+/// ));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span4),
+///     SResult::Fail(Failure::Common(Common::TagUtf8 { tag: "Goodbye", .. }))
+/// ));
+/// ```
 #[inline]
 pub fn separated_pair<'c, F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
 where
@@ -199,10 +250,36 @@ where
 /// - `sep3`: The third combinator to match and then discard the value of.
 ///
 /// # Returns
-/// The output of the `second` combinator, but only if all three match.
+/// A combinator [`Delimited`] that will first apply the `sep1` combinator without storing its result, then the `second` combinator, and finally the `sep3` combinator, discarding it result as well.
 ///
-/// # Errors
-/// This function will inherit errors of the input combinators, in-order.
+/// # Fails
+/// The returned combinator fails if either `sep1`, `second`, or `sep3` fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::delimited;
+/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello123Goodbye");
+/// let span2 = Span::new("<example>", "123Goodbye");
+/// let span3 = Span::new("<example>", "HelloWorldGoodbye");
+/// let span4 = Span::new("<example>", "Hello123Hello");
+///
+/// let mut comb = delimited(tag("Hello"), digit1(), tag("Goodbye"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(15..), span1.slice(5..8)));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::TagUtf8 { tag: "Hello", .. }))
+/// ));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span4),
+///     SResult::Fail(Failure::Common(Common::TagUtf8 { tag: "Goodbye", .. }))
+/// ));
+/// ```
 #[inline]
 pub fn delimited<'c, F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
 where
@@ -211,6 +288,63 @@ where
     C3: Combinator<'c, F, S>,
 {
     Delimited { sep1, second, sep3, _f: Default::default(), _s: Default::default() }
+}
+
+
+
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for two consequtive other formatters.
+#[derive(Debug)]
+pub struct PairExpects<'t> {
+    /// The first thing we expect.
+    first_fmt:  Box<dyn 't + ExpectsFormatter>,
+    /// The second thing we expect.
+    second_fmt: Box<dyn 't + ExpectsFormatter>,
+}
+impl<'t> Display for PairExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<'t> ExpectsFormatter for PairExpects<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.first_fmt.expects_fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.second_fmt.expects_fmt(f, indent)
+    }
+}
+
+/// ExpectsFormatter for three consequtive other formatters.
+#[derive(Debug)]
+pub struct TripletExpects<'t> {
+    /// The first thing we expect.
+    first_fmt:  Box<dyn 't + ExpectsFormatter>,
+    /// The second thing we expect.
+    second_fmt: Box<dyn 't + ExpectsFormatter>,
+    /// The third thing we expect.
+    third_fmt:  Box<dyn 't + ExpectsFormatter>,
+}
+impl<'t> Display for TripletExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<'t> ExpectsFormatter for TripletExpects<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.first_fmt.expects_fmt(f, indent)?;
+        write!(f, ", ")?;
+        self.second_fmt.expects_fmt(f, indent)?;
+        write!(f, ", then ")?;
+        self.third_fmt.expects_fmt(f, indent)
+    }
 }
 
 
@@ -227,9 +361,11 @@ pub struct Tuple<F, S, T> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:    PhantomData<S>,
 }
-impl<F, S, T: Expects> Expects for Tuple<F, S, T> {
+impl<'t, F, S, T: Expects<'t>> Expects<'t> for Tuple<F, S, T> {
+    type Formatter = T::Formatter;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.tuple.fmt(f, indent) }
+    fn expects(&self) -> Self::Formatter { self.tuple.expects() }
 }
 impl<'c, F, S, T: Combinator<'c, F, S>> Combinator<'c, F, S> for Tuple<F, S, T> {
     type Output = T::Output;
@@ -249,13 +385,11 @@ pub struct Terminated<F, S, C1, C2> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:    PhantomData<S>,
 }
-impl<F, S, C1: Expects, C2: Expects> Expects for Terminated<F, S, C1, C2> {
+impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>> Expects<'t> for Terminated<F, S, C1, C2> {
+    type Formatter = PairExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        self.first.fmt(f, indent)?;
-        write!(f, ", then ")?;
-        self.sep.fmt(f, indent)
-    }
+    fn expects(&self) -> Self::Formatter { PairExpects { first_fmt: Box::new(self.first.expects()), second_fmt: Box::new(self.sep.expects()) } }
 }
 impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Terminated<F, S, C1, C2> {
     type Output = C1::Output;
@@ -289,13 +423,11 @@ pub struct Preceded<F, S, C1, C2> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:     PhantomData<S>,
 }
-impl<F, S, C1: Expects, C2: Expects> Expects for Preceded<F, S, C1, C2> {
+impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>> Expects<'t> for Preceded<F, S, C1, C2> {
+    type Formatter = PairExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        self.sep.fmt(f, indent)?;
-        write!(f, ", then ")?;
-        self.second.fmt(f, indent)
-    }
+    fn expects(&self) -> Self::Formatter { PairExpects { first_fmt: Box::new(self.sep.expects()), second_fmt: Box::new(self.second.expects()) } }
 }
 impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Preceded<F, S, C1, C2> {
     type Output = C2::Output;
@@ -331,14 +463,16 @@ pub struct SeparatedPair<F, S, C1, C2, C3> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:    PhantomData<S>,
 }
-impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for SeparatedPair<F, S, C1, C2, C3> {
+impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>, C3: Expects<'t>> Expects<'t> for SeparatedPair<F, S, C1, C2, C3> {
+    type Formatter = TripletExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        self.first.fmt(f, indent)?;
-        write!(f, ", ")?;
-        self.sep.fmt(f, indent)?;
-        write!(f, ", then ")?;
-        self.third.fmt(f, indent)
+    fn expects(&self) -> Self::Formatter {
+        TripletExpects {
+            first_fmt:  Box::new(self.first.expects()),
+            second_fmt: Box::new(self.sep.expects()),
+            third_fmt:  Box::new(self.third.expects()),
+        }
     }
 }
 impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S>
@@ -384,14 +518,16 @@ pub struct Delimited<F, S, C1, C2, C3> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:     PhantomData<S>,
 }
-impl<F, S, C1: Expects, C2: Expects, C3: Expects> Expects for Delimited<F, S, C1, C2, C3> {
+impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>, C3: Expects<'t>> Expects<'t> for Delimited<F, S, C1, C2, C3> {
+    type Formatter = TripletExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        self.sep1.fmt(f, indent)?;
-        write!(f, ", ")?;
-        self.second.fmt(f, indent)?;
-        write!(f, ", then ")?;
-        self.sep3.fmt(f, indent)
+    fn expects(&self) -> Self::Formatter {
+        TripletExpects {
+            first_fmt:  Box::new(self.sep1.expects()),
+            second_fmt: Box::new(self.second.expects()),
+            third_fmt:  Box::new(self.sep3.expects()),
+        }
     }
 }
 impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S> for Delimited<F, S, C1, C2, C3> {

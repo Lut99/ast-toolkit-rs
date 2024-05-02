@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    01 May 2024, 17:47:36
+//    02 May 2024, 10:11:04
 //  Auto updated?
 //    Yes
 //
@@ -20,35 +20,6 @@ use stackvec::StackVec;
 
 use crate::error::{Common, Failure};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
-
-
-/***** TESTS *****/
-#[cfg(test)]
-mod tests {
-    use super::super::utf8::complete::tag;
-    use super::*;
-
-    type Span = ast_toolkit_span::Span<&'static str, &'static str>;
-
-    #[test]
-    fn test_alt() {
-        // Some success stories
-        let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = alt((tag(&"Hello"), tag(&"Goodbye"))).parse(input).unwrap();
-        assert_eq!(rem, input.slice(5..));
-        assert_eq!(res, input.slice(..5));
-        let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = alt((tag(&"Goodbye"), tag(&"Hello"))).parse(input).unwrap();
-        assert_eq!(rem, input.slice(5..));
-        assert_eq!(res, input.slice(..5));
-
-        // Failure
-        assert!(alt((tag(&"Goodbye"), tag(&"Extra goodbye"))).parse(input).is_fail());
-    }
-}
-
-
-
 
 
 /***** HELPER MACROS *****/
@@ -187,24 +158,7 @@ macro_rules! tuple_branchable_impls {
 }
 
 // Default impls for tuples
-tuple_branchable_impls!(
-    (0, C1),
-    (1, C2),
-    (2, C3),
-    (3, C4),
-    (4, C5),
-    (5, C6),
-    (6, C7),
-    (7, C8),
-    (8, C9),
-    (9, C10),
-    (10, C11),
-    (11, C12),
-    (12, C13),
-    (13, C14),
-    (14, C15),
-    (15, C16)
-);
+tuple_branchable_impls!((0, C1), (1, C2), (2, C3), (3, C4), (4, C5), (5, C6), (6, C7), (7, C8), (8, C9), (9, C10), (10, C11), (11, C12));
 
 
 
@@ -250,19 +204,34 @@ pub trait Branchable<'t, F, S> {
 /***** LIBRARY FUNCTIONS *****/
 /// Tries different possible combinators and returns the first one that succeeds.
 ///
-/// The combinators are tried in-order. They must all returns the same result (so use enums if you want to have options).
+/// The combinators are tried in-order. They must all return the same result (so use enums if you want to have options).
 ///
 /// # Arguments
-/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to size 16 implement this.
+/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to and including size 12 implement this.
 ///
 /// # Returns
 /// A combinator [`Alt`] that will run the given branches and try them one-by-one.
 ///
 /// # Fails
-/// This function may fail if _all_ combinators in `branches` fails. In that case, all of the failures are collected in a [`Failure::Branch`].
+/// The returned combinator may fail if _all_ combinators in `branches` fails.
 ///
-/// # Errors
-/// This function errors if _any_ of the branches errors. This is then returned as-is.
+/// # Examples
+/// ```rust
+/// use ast_toolkit_snack::branch::alt;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span3 = Span::new("<example>", "World!");
+///
+/// let mut comb = alt((tag("Hello"), tag("Goodbye")));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Alt { .. }))));
+/// ```
 pub fn alt<'c, F, S, B>(branches: B) -> Alt<F, S, B>
 where
     F: Clone,

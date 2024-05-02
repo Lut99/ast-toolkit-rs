@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    26 Apr 2024, 09:50:53
+//    02 May 2024, 14:58:25
 //  Auto updated?
 //    Yes
 //
@@ -47,6 +47,10 @@ impl<'b> MatchBytes for &'b [u8] {
         }
         i
     }
+}
+impl<'b, const LEN: usize> MatchBytes for &'b [u8; LEN] {
+    #[inline]
+    fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { self.as_slice().match_bytes(range, bytes) }
 }
 impl<'b> MatchBytes for Cow<'b, [u8]> {
     #[inline]
@@ -111,6 +115,10 @@ impl<'b> OneOfBytes for &'b [u8] {
         }
         i
     }
+}
+impl<'b, const LEN: usize> OneOfBytes for &'b [u8; LEN] {
+    #[inline]
+    fn one_of_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { self.as_slice().one_of_bytes(range, bytes) }
 }
 impl<'b> OneOfBytes for Cow<'b, [u8]> {
     #[inline]
@@ -192,52 +200,6 @@ impl<F, S: OneOfUtf8> OneOfUtf8 for Span<F, S> {
 
 
 /// Extends a [`Spannable`] with the power to have its prefix longest-match'ed based on a predicate over graphemes.
-pub trait WhileUtf8 {
-    /// Returns the position up to which a predicate over graphemes returns false.
-    ///
-    /// # Arguments
-    /// - `range`: The actual range of `self` to match.
-    /// - `predicate`: Some predicate (accepting graphemes, returning true or false) that will be used to decide if a grapheme matches the predicate.
-    ///
-    /// # Returns
-    /// A `usize` that indicates the first unmatched character. Some notes:
-    /// - If result is the length of `self`, the entire source was matched
-    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
-    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize;
-}
-
-// Default string impls for [`OneOfUtf8`]
-impl<'s> WhileUtf8 for &'s str {
-    fn while_utf8(&self, range: SpanRange, mut predicate: impl FnMut(&str) -> bool) -> usize {
-        // Match the prefixes
-        for (i, c) in range.apply_to_str(self).grapheme_indices(true) {
-            if !predicate(c) {
-                return i;
-            }
-        }
-        self.len()
-    }
-}
-impl<'s> WhileUtf8 for Cow<'s, str> {
-    #[inline]
-    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&&**self, range, predicate) }
-}
-impl WhileUtf8 for String {
-    #[inline]
-    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&self.as_str(), range, predicate) }
-}
-
-// The implementation for a [`Span`].
-impl<F, S: WhileUtf8> WhileUtf8 for Span<F, S> {
-    #[inline]
-    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize {
-        self.source_ref().while_utf8(self.range().span(&range), predicate)
-    }
-}
-
-
-
-/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed based on a predicate over graphemes.
 pub trait WhileBytes {
     /// Returns the position up to which a predicate over bytes returns false.
     ///
@@ -265,6 +227,10 @@ impl<'b> WhileBytes for &'b [u8] {
         }
         i
     }
+}
+impl<'b, const LEN: usize> WhileBytes for &'b [u8; LEN] {
+    #[inline]
+    fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize { self.as_slice().while_bytes(range, predicate) }
 }
 impl<'b> WhileBytes for Cow<'b, [u8]> {
     #[inline]
@@ -294,5 +260,53 @@ impl<F, S: WhileBytes> WhileBytes for Span<F, S> {
     #[inline]
     fn while_bytes(&self, range: SpanRange, predicate: impl FnMut(u8) -> bool) -> usize {
         self.source_ref().while_bytes(self.range().span(&range), predicate)
+    }
+}
+
+
+
+/// Extends a [`Spannable`] with the power to have its prefix longest-match'ed based on a predicate over graphemes.
+pub trait WhileUtf8 {
+    /// Returns the position up to which a predicate over graphemes returns false.
+    ///
+    /// # Arguments
+    /// - `range`: The actual range of `self` to match.
+    /// - `predicate`: Some predicate (accepting graphemes, returning true or false) that will be used to decide if a grapheme matches the predicate.
+    ///
+    /// # Returns
+    /// A `usize` that indicates the first unmatched character. Some notes:
+    /// - If result is the length of `self`, the entire source was matched
+    /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize;
+}
+
+// Default string impls for [`OneOfUtf8`]
+impl<'s> WhileUtf8 for &'s str {
+    fn while_utf8(&self, range: SpanRange, mut predicate: impl FnMut(&str) -> bool) -> usize {
+        // Match the prefixes
+        let mut i: usize = 0;
+        for c in range.apply_to_str(self).graphemes(true) {
+            if !predicate(c) {
+                return i;
+            }
+            i += c.len();
+        }
+        i
+    }
+}
+impl<'s> WhileUtf8 for Cow<'s, str> {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&&**self, range, predicate) }
+}
+impl WhileUtf8 for String {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize { <&str>::while_utf8(&self.as_str(), range, predicate) }
+}
+
+// The implementation for a [`Span`].
+impl<F, S: WhileUtf8> WhileUtf8 for Span<F, S> {
+    #[inline]
+    fn while_utf8(&self, range: SpanRange, predicate: impl FnMut(&str) -> bool) -> usize {
+        self.source_ref().while_utf8(self.range().span(&range), predicate)
     }
 }

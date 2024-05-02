@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    01 May 2024, 17:46:47
+//    02 May 2024, 11:38:54
 //  Auto updated?
 //    Yes
 //
@@ -22,14 +22,14 @@ pub mod branch;
 pub mod bytes;
 pub mod combinator;
 pub mod error;
-// pub mod multi;
-// pub mod sequence;
+pub mod multi;
+pub mod sequence;
 pub mod span;
-// pub mod utf8;
 pub mod tuple;
+pub mod utf8;
 
 // Imports
-use std::fmt::{Debug, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::Span;
 use enum_debug::EnumDebug;
@@ -65,7 +65,7 @@ pub trait Expects<'t> {
 /// A trait implemented by [`Expects::Formatter`]s.
 ///
 /// This trait actually produces expect-strings.
-pub trait ExpectsFormatter: Debug {
+pub trait ExpectsFormatter: Debug + Display {
     /// Formats the thing that this Expects expected as input.
     ///
     /// The string written should be something along the lines of filling in `XXX` in:

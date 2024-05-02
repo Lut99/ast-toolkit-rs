@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    01 May 2024, 17:47:55
+//    02 May 2024, 14:59:18
 //  Auto updated?
 //    Yes
 //
@@ -13,7 +13,7 @@
 //!   i.e., they consider not enough input a typical [`Failure`].
 //
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, SpanRange};
@@ -32,7 +32,30 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// - `byteset`: A byte array(-like) that defines the set of characters we are looking for.
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `byteset`.
+/// A combinator [`OneOf1`] that will match the prefix of input as long as those bytes are in `byteset`.
+///
+/// # Fails
+/// The returned combinator fails if it did not match at least 1 byte.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::bytes::complete::one_of1;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", b"abcdefg");
+/// let span2 = Span::new("<example>", b"cdefghi");
+/// let span3 = Span::new("<example>", b"hijklmn");
+///
+/// let mut comb = one_of1(b"abc");
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert!(matches!(
+///     comb.parse(span3),
+///     SResult::Fail(Failure::Common(Common::OneOf1Bytes { .. }))
+/// ));
+/// ```
 #[inline]
 pub fn one_of1<'b, F, S>(byteset: &'b [u8]) -> OneOf1<'b, F, S>
 where
@@ -50,7 +73,25 @@ where
 /// - `tag`: The tag to match for.
 ///
 /// # Returns
-/// A [`Combinator`] that matches the given `tag`.
+/// A combinator [`Tag`] that will match the prefix of input if it matches `tag`.
+///
+/// # Fails
+/// The returned combinator fails if the prefix of the input was not `tag`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::bytes::complete::tag;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", b"Hello, world!".as_slice());
+/// let span2 = Span::new("<example>", b"Goodbye, world!".as_slice());
+///
+/// let mut comb = tag(b"Hello");
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagBytes { .. }))));
+/// ```
 pub fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>
 where
     F: Clone,
@@ -67,7 +108,30 @@ where
 /// - `predicate`: A closure that returns true for matching bytes, and false for non-matching bytes. All bytes that are matched are returned up to the first for which `predicate` returns false (if any).
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `predicate`.
+/// A combinator [`While1`] that will match the prefix of input as long as those bytes match the given `predicate`.
+///
+/// # Fails
+/// The returned combinator fails it it did not match at least 1 byte.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::bytes::complete::while1;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", b"abcdefg");
+/// let span2 = Span::new("<example>", b"cdefghi");
+/// let span3 = Span::new("<example>", b"hijklmn");
+///
+/// let mut comb = while1(|b: u8| -> bool { b >= b'a' && b <= b'c' });
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert!(matches!(
+///     comb.parse(span3),
+///     SResult::Fail(Failure::Common(Common::While1Bytes { .. }))
+/// ));
+/// ```
 #[inline]
 pub fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
 where
@@ -88,6 +152,13 @@ where
 pub struct OneOf1Expects<'b> {
     /// The set of bytes we expect one of.
     byteset: &'b [u8],
+}
+impl<'b> Display for OneOf1Expects<'b> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
 }
 impl<'b> ExpectsFormatter for OneOf1Expects<'b> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
@@ -114,6 +185,13 @@ pub struct TagExpects<'t> {
     /// The tag of bytes we expect one of.
     tag: &'t [u8],
 }
+impl<'t> Display for TagExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
 impl<'t> ExpectsFormatter for TagExpects<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
@@ -122,6 +200,13 @@ impl<'t> ExpectsFormatter for TagExpects<'t> {
 /// ExpectsFormatter for the [`While1`] combinator.
 #[derive(Debug)]
 pub struct While1Expects;
+impl Display for While1Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
 impl ExpectsFormatter for While1Expects {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific byte") }
@@ -231,7 +316,7 @@ where
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {
-            Result::Fail(Failure::Common(Common::While1Utf8 { span: input.start_onwards() }))
+            Result::Fail(Failure::Common(Common::While1Bytes { span: input.start_onwards() }))
         }
     }
 }

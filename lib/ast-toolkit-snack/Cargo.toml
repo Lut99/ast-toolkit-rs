@@ -8,7 +8,7 @@ description = "Provides a parser-combinator framework heavily inspired by [nom](
 
 
 [dependencies]
-ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", optional = true }
+ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", features = ["trailing"], optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span" }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 paste = "1.0"

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    30 Apr 2024, 16:33:36
+//    02 May 2024, 15:00:01
 //  Auto updated?
 //    Yes
 //
@@ -13,50 +13,14 @@
 //!   consider not enough input an actualy failure.
 //
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpanRange};
+use ast_toolkit_span::{Span, SpanRange, Spanning as _};
 
-use super::{expects_digit1, expects_one_of1_utf8, expects_tag_utf8, expects_while1_utf8, expects_whitespace1};
 use crate::error::{Common, Failure};
 use crate::span::{MatchBytes, OneOfUtf8, WhileUtf8};
-use crate::{Combinator, Expects, Result};
-
-
-/***** TESTS *****/
-#[cfg(test)]
-mod tests {
-    use super::tag;
-    use crate::error::{Common, Failure};
-    use crate::{Combinator as _, Result};
-
-    type Span = ast_toolkit_span::Span<&'static str, &'static str>;
-
-
-    #[test]
-    fn test_tag() {
-        // Some success stories
-        let input: Span = Span::new("<test>", "Hello, world!");
-        let (rem, res) = tag(&"Hello").parse(input).unwrap();
-        assert_eq!(rem, input.slice(5..));
-        assert_eq!(res, input.slice(..5));
-        let (rem, res) = tag(&", ").parse(rem).unwrap();
-        assert_eq!(rem, input.slice(7..));
-        assert_eq!(res, input.slice(5..7));
-        let (rem, res) = tag(&"world!").parse(rem).unwrap();
-        assert_eq!(rem, input.slice(13..));
-        assert_eq!(res, input.slice(7..13));
-
-        // Failure
-        assert!(matches!(tag(&"Goodbye").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-        assert!(matches!(tag(&"Ho").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-        assert!(matches!(tag(&"hello, world!").parse(input), Result::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-    }
-}
-
-
-
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -65,7 +29,25 @@ mod tests {
 /// This version also accepts matching none of them. See [`digit1()`] to match at least 1.
 ///
 /// # Returns
-/// A combinator that implements the actual operation.
+/// A combinator [`Digit1`] that matches only digits 0-9.
+///
+/// # Fails
+/// The returned combinator fails if it did not match at least one digit.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::digit1;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "12345six");
+/// let span2 = Span::new("<example>", "one23456");
+///
+/// let mut comb = digit1();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// ```
 #[inline]
 pub fn digit1<F, S>() -> Digit1<F, S>
 where
@@ -83,9 +65,29 @@ where
 /// - `charset`: A byte array(-like) that defines the set of characters we are looking for.
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `charset`.
+/// A combinator [`OneOf1`] that will match the prefix of input as long as those characters are in `charset`.
+///
+/// # Fails
+/// The returned combinator fails if it did not match at least one character.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::one_of1;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "abcdefg");
+/// let span2 = Span::new("<example>", "cdefghi");
+/// let span3 = Span::new("<example>", "hijklmn");
+///
+/// let mut comb = one_of1(&["a", "b", "c"]);
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::OneOf1Utf8 { .. }))));
+/// ```
 #[inline]
-pub fn one_of1<'t, F, S, T>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
+pub fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -101,7 +103,25 @@ where
 /// - `tag`: The tag to match for.
 ///
 /// # Returns
-/// A [`Combinator`] that matches the given `tag`.
+/// A combinator [`Tag`] that will match the prefix of input if it matches `tag`.
+///
+/// # Fails
+/// The returned combinator fails if the prefix of the input was not `tag`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = tag("Hello");
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// ```
 pub fn tag<'t, F, S>(tag: &'t str) -> Tag<'t, F, S>
 where
     F: Clone,
@@ -118,7 +138,33 @@ where
 /// - `predicate`: A closure that returns true for matching characters, and false for non-matching characters. All characters that are matched are returned up to the first for which `predicate` returns false (if any).
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `predicate`.
+/// A combinator [`While1`] that will match the prefix of input as long as those characters match the given `predicate`.
+///
+/// # Fails
+/// The returned combinator fails if it did not match at least one character.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::while1;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "abcdefg");
+/// let span2 = Span::new("<example>", "cdefghi");
+/// let span3 = Span::new("<example>", "hijklmn");
+///
+/// let mut comb = while1(|c: &str| -> bool {
+///     if c.len() != 1 {
+///         return false;
+///     }
+///     let c: char = c.chars().next().unwrap();
+///     c >= 'a' && c <= 'c'
+/// });
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::While1Utf8 { .. }))));
+/// ```
 #[inline]
 pub fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
 where
@@ -140,7 +186,28 @@ where
 /// This version does NOT accept matching none of them. See [`whitespace0()`] for a version that does.
 ///
 /// # Returns
-/// A combinator that implements the actual operation.
+/// A combinator [`Whitespace1`] that matches only whitespace characters (see above).
+///
+/// # Fails
+/// The returned combinator fails if it did not match at least one whitespace.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::whitespace1;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "   \t\n  awesome");
+/// let span2 = Span::new("<example>", "cool \n dope");
+///
+/// let mut comb = whitespace1();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(7..), span1.slice(..7)));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Whitespace1 { .. }))
+/// ));
+/// ```
 #[inline]
 pub fn whitespace1<F, S>() -> Whitespace1<F, S>
 where
@@ -153,6 +220,107 @@ where
 
 
 
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Digit1`] combinator.
+#[derive(Debug)]
+pub struct Digit1Expects;
+impl Display for Digit1Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for Digit1Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one digit") }
+}
+
+/// ExpectsFormatter for the [`OneOf1`] combinator.
+#[derive(Debug)]
+pub struct OneOf1Expects<'c> {
+    /// The set of bytes we expect one of.
+    charset: &'c [&'c str],
+}
+impl<'c> Display for OneOf1Expects<'c> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<'c> ExpectsFormatter for OneOf1Expects<'c> {
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        write!(f, "at least one of ")?;
+        for i in 0..self.charset.len() {
+            if i == 0 {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, "{:?}", unsafe { self.charset.get_unchecked(i) })?;
+            } else if i < self.charset.len() - 1 {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, ", {:?}", unsafe { self.charset.get_unchecked(i) })?;
+            } else {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, " or {:?}", unsafe { self.charset.get_unchecked(i) })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// ExpectsFormatter for the [`Tag`] combinator.
+#[derive(Debug)]
+pub struct TagExpects<'t> {
+    /// The tag of characters we expect one of.
+    tag: &'t str,
+}
+impl<'t> Display for TagExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<'t> ExpectsFormatter for TagExpects<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:?}", self.tag) }
+}
+
+/// ExpectsFormatter for the [`While1`] combinator.
+#[derive(Debug)]
+pub struct While1Expects;
+impl Display for While1Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for While1Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific character") }
+}
+
+/// ExpectsFormatter for the [`Whitespace1`] combinator.
+#[derive(Debug)]
+pub struct Whitespace1Expects;
+impl Display for Whitespace1Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for Whitespace1Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one whitespace") }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// The combinator returned by [`digits1()`].
 pub struct Digit1<F, S> {
@@ -161,9 +329,11 @@ pub struct Digit1<F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S> Expects for Digit1<F, S> {
+impl<F, S> Expects<'static> for Digit1<F, S> {
+    type Formatter = Digit1Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_digit1(f) }
+    fn expects(&self) -> Self::Formatter { Digit1Expects }
 }
 impl<F, S> Combinator<'static, F, S> for Digit1<F, S>
 where
@@ -174,7 +344,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
-        While1 {
+        let mut comb = While1 {
             predicate: |c: &str| -> bool {
                 c.len() == 1 && {
                     let c: char = c.chars().next().unwrap();
@@ -183,24 +353,32 @@ where
             },
             _f: Default::default(),
             _s: Default::default(),
+        };
+        match comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => Result::Fail(Failure::Common(Common::Digit1 { span: fail.span() })),
+            Result::Error(err) => Result::Error(err),
         }
-        .parse(input)
     }
 }
 
 /// The combinator returned by [`one_of1()`].
-pub struct OneOf1<'t, F, S> {
+pub struct OneOf1<'c, F, S> {
     /// The set of characters to one of.
-    charset: &'t [&'t str],
+    charset: &'c [&'c str],
     /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
     _f:      PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Expects for OneOf1<'t, F, S> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of1_utf8(f, self.charset) }
+impl<'c, F, S> Expects<'c> for OneOf1<'c, F, S> {
+    type Formatter = OneOf1Expects<'c>;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { OneOf1Expects { charset: self.charset } }
 }
-impl<'t, F, S> Combinator<'t, F, S> for OneOf1<'t, F, S>
+impl<'c, F, S> Combinator<'c, F, S> for OneOf1<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -208,7 +386,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
         if match_point > 0 {
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
@@ -227,9 +405,11 @@ pub struct Tag<'t, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
-impl<'t, F, S> Expects for Tag<'t, F, S> {
+impl<'t, F, S> Expects<'t> for Tag<'t, F, S> {
+    type Formatter = TagExpects<'t>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_tag_utf8(f, self.tag) }
+    fn expects(&self) -> Self::Formatter { TagExpects { tag: self.tag } }
 }
 impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
 where
@@ -263,8 +443,11 @@ pub struct While1<F, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S, P> Expects for While1<F, S, P> {
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while1_utf8(f) }
+impl<F, S, P> Expects<'static> for While1<F, S, P> {
+    type Formatter = While1Expects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { While1Expects }
 }
 impl<F, S, P> Combinator<'static, F, S> for While1<F, S, P>
 where
@@ -292,9 +475,11 @@ pub struct Whitespace1<F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S> Expects for Whitespace1<F, S> {
+impl<F, S> Expects<'static> for Whitespace1<F, S> {
+    type Formatter = Whitespace1Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_whitespace1(f) }
+    fn expects(&self) -> Self::Formatter { Whitespace1Expects }
 }
 impl<F, S> Combinator<'static, F, S> for Whitespace1<F, S>
 where
@@ -305,7 +490,12 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
-        // Note: last '\r\n' is a unicode windows line end :)
-        OneOf1 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() }.parse(input)
+        let mut comb = OneOf1 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() };
+        match comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => Result::Fail(Failure::Common(Common::Whitespace1 { span: fail.span() })),
+            Result::Error(err) => Result::Error(err),
+        }
     }
 }

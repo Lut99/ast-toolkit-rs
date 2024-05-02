@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    30 Apr 2024, 16:37:50
+//    02 May 2024, 14:48:31
 //  Auto updated?
 //    Yes
 //
@@ -19,134 +19,14 @@
 pub mod complete;
 pub mod streaming;
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 // Imports
 use ast_toolkit_span::{Span, SpanRange};
 
 use crate::span::{OneOfBytes, OneOfUtf8, WhileUtf8};
-use crate::{Combinator, Expects, Result};
-
-
-/***** EXPECTS FUNCTIONS *****/
-/// Defines what we expect from a [`Digit0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.\
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_digit0(f: &mut Formatter) -> FResult { write!(f, "digits") }
-
-/// Defines what we expect from a [`Digit1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.\
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_digit1(f: &mut Formatter) -> FResult { write!(f, "at least one digit") }
-
-/// Defines what we expect from a UTF-8-based [`OneOf0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `chars`: The set of characters we're expecting.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of0_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
-    write!(f, "some of ")?;
-    for i in 0..chars.len() {
-        if i == 0 {
-            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
-        } else if i < chars.len() - 1 {
-            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
-        } else {
-            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
-        }
-    }
-    Ok(())
-}
-
-/// Defines what we expect from a UTF-8-based [`OneOf1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `chars`: The set of characters we're expecting.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-pub(crate) fn expects_one_of1_utf8(f: &mut Formatter, chars: &[&str]) -> FResult {
-    write!(f, "at least one of ")?;
-    for i in 0..chars.len() {
-        if i == 0 {
-            write!(f, "{:?}", unsafe { chars.get_unchecked(i) })?;
-        } else if i < chars.len() - 1 {
-            write!(f, ", {:?}", unsafe { chars.get_unchecked(i) })?;
-        } else {
-            write!(f, " or {:?}", unsafe { chars.get_unchecked(i) })?;
-        }
-    }
-    Ok(())
-}
-
-/// Defines what we expect from a [`Tag`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-/// - `tag`: The thing that we are looking for.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_tag_utf8(f: &mut Formatter, tag: &str) -> FResult { write!(f, "{tag:?}") }
-
-/// Defines what we expect from a [`While0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_while0_utf8(f: &mut Formatter) -> FResult { write!(f, "specific characters") }
-
-/// Defines what we expect from a [`While1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_while1_utf8(f: &mut Formatter) -> FResult { write!(f, "at least one specific character") }
-
-/// Defines what we expect from a [`Whitespace0`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_whitespace0(f: &mut Formatter) -> FResult { write!(f, "whitespace") }
-
-/// Defines what we expect from a [`Whitespace1`].
-///
-/// # Arguments
-/// - `f`: Some [`Formatter`] to write what we expect to.
-///
-/// # Errors
-/// This function errors if it failed to write to the given `f`ormatter.
-#[inline]
-pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at least one whitespace") }
-
-
-
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -155,7 +35,24 @@ pub(crate) fn expects_whitespace1(f: &mut Formatter) -> FResult { write!(f, "at 
 /// This version also accepts matching none of them. See [`digit1()`] to match at least 1.
 ///
 /// # Returns
-/// A combinator that implements the actual operation.
+/// A combinator [`Digit0`] that matches only digits 0-9.
+///
+/// # Fails
+/// The returned combinator does not fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::utf8::digit0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "12345six");
+/// let span2 = Span::new("<example>", "one23456");
+///
+/// let mut comb = digit0();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, Span::empty("<example>", "one23456")));
+/// ```
 #[inline]
 pub fn digit0<F, S>() -> Digit0<F, S>
 where
@@ -173,7 +70,26 @@ where
 /// - `charset`: An array(-like) of graphemes that defines the set of characters we are looking for.
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `charset`. Note that this closure doesn't ever fail, because matching none is OK.
+/// A combinator [`OneOf0`] that will match the prefix of input as long as those characters are in `charset`.
+///
+/// # Fails
+/// The returned combinator cannot fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::utf8::one_of0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "abcdefg");
+/// let span2 = Span::new("<example>", "cdefghi");
+/// let span3 = Span::new("<example>", "hijklmn");
+///
+/// let mut comb = one_of0(&["a", "b", "c"]);
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", "hijklmn")));
+/// ```
 #[inline]
 pub fn one_of0<'t, F, S>(charset: &'t [&'t str]) -> OneOf0<'t, F, S>
 where
@@ -191,7 +107,32 @@ where
 /// - `predicate`: A closure that returns true for matching characters, and false for non-matching characters. All characters that are matched are returned up to the first for which `predicate` returns false (if any).
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `predicate`.
+/// A combinator [`While0`] that will match the prefix of input as long as those characters match the given `predicate`.
+///
+/// # Fails
+/// The returned combinator cannot fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::utf8::while0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "abcdefg");
+/// let span2 = Span::new("<example>", "cdefghi");
+/// let span3 = Span::new("<example>", "hijklmn");
+///
+/// let mut comb = while0(|c: &str| -> bool {
+///     if c.len() != 1 {
+///         return false;
+///     }
+///     let c: char = c.chars().next().unwrap();
+///     c >= 'a' && c <= 'c'
+/// });
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", "hijklmn")));
+/// ```
 #[inline]
 pub fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
 where
@@ -213,7 +154,24 @@ where
 /// This version also accepts matching none of them. See [`complete::whitespace1()`] or [`streaming::whitespace1()`] to match at least 1.
 ///
 /// # Returns
-/// A combinator that implements the actual operation.
+/// A combinator [`Whitespace0`] that matches only whitespace characters (see above).
+///
+/// # Fails
+/// The returned combinator does not fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::utf8::whitespace0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "   \t\n  awesome");
+/// let span2 = Span::new("<example>", "cool \n dope");
+///
+/// let mut comb = whitespace0();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(7..), span1.slice(..7)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, Span::empty("<example>", "cool \n dope")));
+/// ```
 #[inline]
 pub fn whitespace0<F, S>() -> Whitespace0<F, S>
 where
@@ -221,6 +179,88 @@ where
     S: Clone + OneOfBytes,
 {
     Whitespace0 { _f: Default::default(), _s: Default::default() }
+}
+
+
+
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Digit0`] combinator.
+#[derive(Debug)]
+pub struct Digit0Expects;
+impl Display for Digit0Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for Digit0Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "digits") }
+}
+
+/// ExpectsFormatter for the [`OneOf0`] combinator.
+#[derive(Debug)]
+pub struct OneOf0Expects<'c> {
+    /// The set of bytes we expect one of.
+    charset: &'c [&'c str],
+}
+impl<'c> Display for OneOf0Expects<'c> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<'c> ExpectsFormatter for OneOf0Expects<'c> {
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        write!(f, "one of ")?;
+        for i in 0..self.charset.len() {
+            if i == 0 {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, "{:?}", unsafe { self.charset.get_unchecked(i) })?;
+            } else if i < self.charset.len() - 1 {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, ", {:?}", unsafe { self.charset.get_unchecked(i) })?;
+            } else {
+                // SAFETY: Loops prevents us from going outside of charset's length
+                write!(f, " or {:?}", unsafe { self.charset.get_unchecked(i) })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// ExpectsFormatter for the [`While0`] combinator.
+#[derive(Debug)]
+pub struct While0Expects;
+impl Display for While0Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for While0Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific characters") }
+}
+
+/// ExpectsFormatter for the [`Whitespace0`] combinator.
+#[derive(Debug)]
+pub struct Whitespace0Expects;
+impl Display for Whitespace0Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for Whitespace0Expects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "whitespace") }
 }
 
 
@@ -235,11 +275,13 @@ pub struct Digit0<F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S> Expects for Digit0<F, S> {
+impl<F, S> Expects<'static> for Digit0<F, S> {
+    type Formatter = Digit0Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_digit0(f) }
+    fn expects(&self) -> Self::Formatter { Digit0Expects }
 }
-impl<'c, F, S> Combinator<'c, F, S> for Digit0<F, S>
+impl<F, S> Combinator<'static, F, S> for Digit0<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
@@ -247,7 +289,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         While0 {
             predicate: |c: &str| -> bool {
                 c.len() == 1 && {
@@ -263,19 +305,21 @@ where
 }
 
 /// The combinator returned by [`one_of0()`].
-pub struct OneOf0<'t, F, S> {
+pub struct OneOf0<'c, F, S> {
     /// The set of characters to one of.
-    charset: &'t [&'t str],
+    charset: &'c [&'c str],
     /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
     _f:      PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Expects for OneOf0<'t, F, S> {
+impl<'c, F, S> Expects<'c> for OneOf0<'c, F, S> {
+    type Formatter = OneOf0Expects<'c>;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_one_of0_utf8(f, self.charset) }
+    fn expects(&self) -> Self::Formatter { OneOf0Expects { charset: self.charset } }
 }
-impl<'t, F, S> Combinator<'t, F, S> for OneOf0<'t, F, S>
+impl<'c, F, S> Combinator<'c, F, S> for OneOf0<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -283,7 +327,7 @@ where
     type Output = Span<F, S>;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -298,9 +342,11 @@ pub struct While0<F, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S, P> Expects for While0<F, S, P> {
+impl<F, S, P> Expects<'static> for While0<F, S, P> {
+    type Formatter = While0Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_while0_utf8(f) }
+    fn expects(&self) -> Self::Formatter { While0Expects }
 }
 impl<F, S, P> Combinator<'static, F, S> for While0<F, S, P>
 where
@@ -324,9 +370,11 @@ pub struct Whitespace0<F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S> Expects for Whitespace0<F, S> {
+impl<F, S> Expects<'static> for Whitespace0<F, S> {
+    type Formatter = Whitespace0Expects;
+
     #[inline]
-    fn fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { expects_whitespace0(f) }
+    fn expects(&self) -> Self::Formatter { Whitespace0Expects }
 }
 impl<F, S> Combinator<'static, F, S> for Whitespace0<F, S>
 where

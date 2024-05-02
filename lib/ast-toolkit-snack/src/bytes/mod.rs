@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    01 May 2024, 17:47:44
+//    02 May 2024, 10:42:30
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@
 pub mod complete;
 pub mod streaming;
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 // Imports
@@ -35,7 +35,26 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// - `byteset`: A byte array(-like) that defines the set of characters we are looking for.
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `byteset`. Note that this closure doesn't ever fail, because matching none is OK.
+/// A combinator [`OneOf0`] that will match the prefix of input as long as those bytes are in `byteset`.
+///
+/// # Fails
+/// The returned combinator cannot fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::bytes::one_of0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", b"abcdefg");
+/// let span2 = Span::new("<example>", b"cdefghi");
+/// let span3 = Span::new("<example>", b"hijklmn");
+///
+/// let mut comb = one_of0(b"abc");
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", b"hijklmn")));
+/// ```
 #[inline]
 pub fn one_of0<'b, F, S>(byteset: &'b [u8]) -> OneOf0<'b, F, S>
 where
@@ -53,7 +72,26 @@ where
 /// - `predicate`: A closure that returns true for matching bytes, and false for non-matching bytes. All bytes that are matched are returned up to the first for which `predicate` returns false (if any).
 ///
 /// # Returns
-/// A closure that will perform the actualy match for the given `predicate`.
+/// A combinator [`While0`] that will match the prefix of input as long as those bytes match the given `predicate`.
+///
+/// # Fails
+/// The returned combinator cannot fail.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::bytes::while0;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", b"abcdefg");
+/// let span2 = Span::new("<example>", b"cdefghi");
+/// let span3 = Span::new("<example>", b"hijklmn");
+///
+/// let mut comb = while0(|b: u8| -> bool { b >= b'a' && b <= b'c' });
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), span1.slice(..3)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(1..), span2.slice(..1)));
+/// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", b"hijklmn")));
+/// ```
 #[inline]
 pub fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
 where
@@ -74,6 +112,13 @@ where
 pub struct OneOf0Expects<'b> {
     /// The set of bytes we expect one of.
     byteset: &'b [u8],
+}
+impl<'b> Display for OneOf0Expects<'b> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
 }
 impl<'b> ExpectsFormatter for OneOf0Expects<'b> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
@@ -97,6 +142,13 @@ impl<'b> ExpectsFormatter for OneOf0Expects<'b> {
 /// ExpectsFormatter for the [`While0`] combinator.
 #[derive(Debug)]
 pub struct While0Expects;
+impl Display for While0Expects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
 impl ExpectsFormatter for While0Expects {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific bytes") }

@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    05 Apr 2024, 18:40:37
+//    02 May 2024, 12:04:55
 //  Auto updated?
 //    Yes
 //
@@ -328,6 +328,41 @@ impl<'b> Spannable for &'b [u8] {
                 eprintln!(
                     "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The &[u8]-implementation \
                      for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
+        index_range_bound!(self, range) == index_range_bound!(other, other_range)
+    }
+
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
+
+    #[inline]
+    fn byte_len(&self) -> usize { self.len() }
+}
+impl<'b, const LEN: usize> Spannable for &'b [u8; LEN] {
+    type Slice<'s> = &'s [u8] where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = std::ptr::eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The &[u8; \
+                     LEN]-implementation for Spannable assumes comparing them by pointer equality is sufficient."
                 );
             }
         }

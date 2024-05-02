@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    01 May 2024, 17:48:14
+//    02 May 2024, 10:56:53
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,7 @@
 //!   Some miscellaneous combinators that operate on other combinators.
 //
 
-use std::fmt::{Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
@@ -30,9 +30,26 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// - `comb`: The [`Combinator`] to negate.
 ///
 /// # Returns
-/// A new [`Combinator`] that will do the same as `comb` but reversed. Note that this combinator is the exact opposite of the given one!
+/// A combinator [`Not`] that will succeed (but match nothing) if the given `comb`inator fails.
 ///
-/// Also note that errors are left untouched.
+/// # Fails
+/// The returned combinator fails if the given `comb`inator succeeds.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::not;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = not(tag("Goodbye"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Not { .. }))));
+/// ```
 #[inline]
 pub fn not<'c, F, S, C>(comb: C) -> Not<F, S, C>
 where
@@ -53,13 +70,29 @@ where
 /// - `func`: Some closure that takes the `comb`'s result and maps it to something else - including some kind of map error.
 ///
 /// # Returns
-/// A new closure that runs `comb`, then maps with `func` if `comb` succeeds.
+/// A combinator [`Map`] that runs the given `comb`inator, and then maps the result using `func`.
 ///
 /// # Fails
-/// This combinator inherits the fail state of the given one.
+/// The returned combinator fails if the given `comb`inator fails.
 ///
-/// # Errors
-/// This combinator inherits the error state of the given one.
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::map;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Hello;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = map(tag("Hello"), |_parsed| Hello);
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), Hello));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// ```
 #[inline]
 pub fn map<'c, F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
 where
@@ -80,6 +113,13 @@ pub struct NotExpects<'t> {
     /// The thing we _don't_ expect.
     fmt: Box<dyn 't + ExpectsFormatter>,
 }
+impl<'t> Display for NotExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
 impl<'t> ExpectsFormatter for NotExpects<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
@@ -93,6 +133,13 @@ impl<'t> ExpectsFormatter for NotExpects<'t> {
 pub struct MapExpects<'t> {
     /// The thing we expect.
     fmt: Box<dyn 't + ExpectsFormatter>,
+}
+impl<'t> Display for MapExpects<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
 }
 impl<'t> ExpectsFormatter for MapExpects<'t> {
     #[inline]

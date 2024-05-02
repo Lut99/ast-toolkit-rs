@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    01 May 2024, 17:43:25
+//    02 May 2024, 11:10:05
 //  Auto updated?
 //    Yes
 //
@@ -57,15 +57,6 @@ impl error::Error for TryFromFailureError {}
 
 
 
-/***** AUXILLARY *****/
-/// Type alias for [`Debug`] + [`ExpectsFormatter`].
-pub trait DebugExpectsFormatter: Debug + ExpectsFormatter {}
-impl<T: Debug + ExpectsFormatter> DebugExpectsFormatter for T {}
-
-
-
-
-
 /***** LIBRARY *****/
 /// Defines a common set of problems raised by snack combinators.
 ///
@@ -86,7 +77,7 @@ pub enum Common<'a, F, S> {
     /// Failed to match a combinator exactly N times.
     ManyN { n: usize, i: usize, fail: Box<Self> },
     /// Failed to _not_ apply a combinator.
-    Not { expects: Box<dyn 'a + DebugExpectsFormatter>, span: Span<F, S> },
+    Not { expects: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
     /// Expected at least one of the following bytes.
     OneOf1Bytes { byteset: &'a [u8], span: Span<F, S> },
     /// Expected at least one of the following characters.
@@ -96,30 +87,32 @@ pub enum Common<'a, F, S> {
     Punctuated1 { fail: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
     #[cfg(feature = "punctuated")]
-    PunctuatedNPunct { n: usize, i: usize, values: (), puncts: Box<Self> },
+    PunctuatedNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
     #[cfg(feature = "punctuated")]
-    PunctuatedNValue { n: usize, i: usize, values: Box<Self>, puncts: () },
+    PunctuatedNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match a combinator at least once, separated by some other thing.
     #[cfg(feature = "punctuated")]
     PunctuatedTrailing1 { fail: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
     #[cfg(feature = "punctuated")]
-    PunctuatedTrailingNPunct { n: usize, i: usize, values: (), puncts: Box<Self> },
+    PunctuatedTrailingNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
     #[cfg(feature = "punctuated")]
-    PunctuatedTrailingNValue { n: usize, i: usize, values: Box<Self>, puncts: () },
+    PunctuatedTrailingNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match a combinator at least once, separated by some other thing.
     SeparatedList1 { fail: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
-    SeparatedListNPunct { n: usize, i: usize, values: (), puncts: Box<Self> },
+    SeparatedListNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
-    SeparatedListNValue { n: usize, i: usize, values: Box<Self>, puncts: () },
+    SeparatedListNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match something particular with byte version of the [`tag()`](crate::bytes::complete::tag())-combinator.
     TagBytes { tag: &'a [u8], span: Span<F, S> },
     /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
     TagUtf8 { tag: &'a str, span: Span<F, S> },
-    /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::value::utf8::complete::while1())-combinator.
+    /// Failed to match something matching a predicate with the byte-version of [`while1()`](crate::bytes::complete::while1())-combinator.
+    While1Bytes { span: Span<F, S> },
+    /// Failed to match something matching a predicate with the UTF-8-version of [`while1()`](crate::utf8::complete::while1())-combinator.
     While1Utf8 { span: Span<F, S> },
     /// Failed to match at least one whitespace.
     Whitespace1 { span: Span<F, S> },
@@ -188,6 +181,7 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
             Self::SeparatedListNValue { values, .. } => values.span(),
             Self::TagBytes { span, .. } => span.clone(),
             Self::TagUtf8 { span, .. } => span.clone(),
+            Self::While1Bytes { span } => span.clone(),
             Self::While1Utf8 { span } => span.clone(),
             Self::Whitespace1 { span } => span.clone(),
         }
