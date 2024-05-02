@@ -1,0 +1,76 @@
+//  TEST.rs
+//    by Lut99
+//
+//  Created:
+//    02 May 2024, 15:04:35
+//  Last edited:
+//    02 May 2024, 17:05:57
+//  Auto updated?
+//    Yes
+//
+//  Description:
+//!   Tests something.
+//
+
+use std::fmt::{Display, Formatter};
+
+use ast_toolkit_snack::{Combinator, ExpectsFormatter, Result as SResult};
+use ast_toolkit_span::Span;
+
+
+fn test<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
+    struct RetFmt {
+        fmt: String,
+    }
+    impl std::fmt::Debug for RetFmt {
+        #[inline]
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "Something") }
+    }
+    impl Display for RetFmt {
+        #[inline]
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Expected ")?;
+            self.expects_fmt(f, 0)
+        }
+    }
+    impl ExpectsFormatter for RetFmt {
+        #[inline]
+        fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> std::fmt::Result { write!(f, "{}", self.fmt) }
+    }
+    struct Ret<C, F> {
+        comb: C,
+        fmt:  F,
+    }
+    impl<'t, C, F: 't + Fn() -> String> ::ast_toolkit_snack::Expects<'t> for Ret<C, F> {
+        type Formatter = RetFmt;
+
+        #[inline]
+        fn expects(&self) -> Self::Formatter { RetFmt { fmt: (self.fmt)() } }
+    }
+    impl<'t, F, S, O, C: FnMut(Span<F, S>) -> SResult<'t, O, F, S>, F2: 't + Fn() -> String> Combinator<'t, F, S> for Ret<C, F2> {
+        type Output = O;
+
+        #[inline]
+        fn parse(&mut self, input: Span<F, S>) -> SResult<'t, Self::Output, F, S> { (self.comb)(input) }
+    }
+    Ret { comb: move |input: Span<F, S>| -> SResult<'static, (), F, S> { SResult::Ok(input, ()) }, fmt: || "A test".into() }
+}
+
+fn test_derived<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
+    ast_toolkit_snack_derive::comb! {
+        expects "Something";
+
+        combinator -> 'static, () {
+            SResult::Ok(input, ())
+        };
+    }
+}
+
+
+fn main() {
+    let mut test = test::<&'static str, &'static str>();
+    println!("{:?}", test.parse(Span::new("<example>", "Hiya!")));
+
+    let mut test = test_derived::<&'static str, &'static str>();
+    println!("{:?}", test.parse(Span::new("<example>", "Hiya!")));
+}

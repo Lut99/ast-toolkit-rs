@@ -38,6 +38,7 @@ members = [
     # Derive
     # "derive/ast-toolkit-diagnostic-derive",
     "derive/ast-toolkit-railroad-derive",
+    # "derive/ast-toolkit-snack-derive",
 
     # Temp
     "test",
