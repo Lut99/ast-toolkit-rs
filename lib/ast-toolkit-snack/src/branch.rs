@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    03 May 2024, 13:29:19
+//    03 May 2024, 14:39:52
 //  Auto updated?
 //    Yes
 //
@@ -86,9 +86,10 @@ macro_rules! tuple_branchable_impl {
 
             // Then implement Branchable for the tuple
             paste::paste!(
-                impl<'t, F: Clone, S: Clone, O, $fname: Combinator<'t, F, S, Output = O> $(, $name: Combinator<'t, F, S, Output = O>)*> Branchable<'t, F, S> for ($fname, $($name,)*) {
+                impl<'t, F: Clone, S: Clone, O, E, $fname: Combinator<'t, F, S, Output = O, Error = E> $(, $name: Combinator<'t, F, S, Output = O, Error = E>)*> Branchable<'t, F, S> for ($fname, $($name,)*) {
                     type Formatter = [< Tuple $li Formatter >]<$fname::Formatter $(, $name::Formatter)*>;
                     type Output = O;
+                    type Error = E;
 
                     #[inline]
                     fn expects(&self) -> Self::Formatter {
@@ -98,8 +99,8 @@ macro_rules! tuple_branchable_impl {
                     }
 
                     #[inline]
-                    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
-                        let mut fails: StackVec<{ count!($fname $($name)*) }, Common<'t, F, S>> = StackVec::new();
+                    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+                        let mut fails: StackVec<{ count!($fname $($name)*) }, Common<'t, F, S, Self::Error>> = StackVec::new();
                         match self.$fi.parse(input.clone()) {
                             Result::Ok(rem, res) => return Result::Ok(rem, res),
                             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
@@ -171,6 +172,8 @@ pub trait Branchable<'t, F, S> {
     type Formatter: 't + ExpectsFormatter;
     /// The output of all the branched combinators.
     type Output;
+    /// The custom error type of all the branched combinators.
+    type Error;
 
 
     /// Returns an [`ExpectsFormatter`] that does the actual formatting.
@@ -194,7 +197,7 @@ pub trait Branchable<'t, F, S> {
     ///
     /// # Errors
     /// This function returns [`Result:Error`] if _any_ of the internal combinators failed.
-    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S>;
+    fn branch(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error>;
 }
 
 
@@ -268,7 +271,8 @@ where
     B: Branchable<'c, F, S>,
 {
     type Output = B::Output;
+    type Error = B::Error;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> { self.branches.branch(input) }
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> { self.branches.branch(input) }
 }

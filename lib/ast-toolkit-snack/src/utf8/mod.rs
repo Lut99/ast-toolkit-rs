@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    03 May 2024, 13:33:24
+//    03 May 2024, 14:40:34
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@
 pub mod complete;
 pub mod streaming;
 
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
@@ -287,9 +288,10 @@ where
     S: Clone + WhileUtf8,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> {
         While0 {
             predicate: |c: &str| -> bool {
                 c.len() == 1 && {
@@ -325,9 +327,10 @@ where
     S: Clone + OneOfUtf8,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
         let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -355,9 +358,10 @@ where
     P: FnMut(&str) -> bool,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> {
         let match_point: usize = input.while_utf8(SpanRange::Open, &mut self.predicate);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -382,9 +386,10 @@ where
     S: Clone + OneOfUtf8,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> {
         // Note: last '\r\n' is a unicode windows line end :)
         OneOf0 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: PhantomData, _s: PhantomData }.parse(input)
     }

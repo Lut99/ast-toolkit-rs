@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    03 May 2024, 13:07:47
+//    03 May 2024, 14:35:49
 //  Auto updated?
 //    Yes
 //
@@ -35,6 +35,7 @@ pub mod tuple;
 pub mod utf8;
 
 // Imports
+use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::Span;
@@ -104,6 +105,8 @@ impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
 pub trait Combinator<'t, F, S>: Expects<'t> {
     /// The output type for this Combinator.
     type Output;
+    /// The custom error type for this Combinator, if applicable. Use [`Infallible`] if it isn't.
+    type Error;
 
     /// Runs the parser on the given input to produce something of output [`Self::Output`](Combinator::Output).
     ///
@@ -115,22 +118,22 @@ pub trait Combinator<'t, F, S>: Expects<'t> {
     /// - [`Result::Ok((rem, output))`]: We parsed an `output` of type `R`, with `rem` left unparsed.
     /// - [`Result::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
     /// - [`Result::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
-    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S>;
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error>;
 }
 
 
 
 /// Defines the shape of the output of [`Combinators`].
 #[derive(Debug, EnumDebug)]
-pub enum Result<'a, R, F, S> {
+pub enum Result<'a, R, F, S, E = Infallible> {
     /// An `output` of type `R` was parsed (1), with the remainder left unparsed (0).
     Ok(Span<F, S>, R),
     /// Failed to parse input with the given reason, but recoverably so.
-    Fail(Failure<'a, F, S>),
+    Fail(Failure<'a, F, S, E>),
     /// Failed to parse input with the given reason, but unrecoverably so.
-    Error(Error<'a, F, S>),
+    Error(Error<'a, F, S, E>),
 }
-impl<'a, R, F, S> Result<'a, R, F, S> {
+impl<'a, R, F, S, E> Result<'a, R, F, S, E> {
     /// Maps this result's [`Result::Fail`]-case.
     ///
     /// # Arguments
@@ -139,7 +142,7 @@ impl<'a, R, F, S> Result<'a, R, F, S> {
     /// # Returns
     /// The given `fail`ure if `self` is a [`Result::Fail`]. Else, `self` is returned as-is.
     #[inline]
-    pub fn map_fail(self, map_fn: impl FnOnce(Failure<F, S>) -> Failure<F, S>) -> Self {
+    pub fn map_fail(self, map_fn: impl FnOnce(Failure<F, S, E>) -> Failure<F, S, E>) -> Self {
         match self {
             Self::Ok(rem, res) => Self::Ok(rem, res),
             Self::Fail(fail) => Self::Fail(map_fn(fail)),

@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2024, 15:42:04
 //  Last edited:
-//    03 May 2024, 10:50:39
+//    03 May 2024, 16:10:01
 //  Auto updated?
 //    Yes
 //
@@ -83,11 +83,12 @@ macro_rules! tuple_combinator_impl {
                 }
             }
             paste::paste!(
-                impl<'t, F, S, $fname: Combinator<'t, F, S> $(, $name: Combinator<'t, F, S>)*> Combinator<'t, F, S> for ($fname, $($name,)*) {
+                impl<'t, F, S, E, $fname: Combinator<'t, F, S, Error = E> $(, $name: Combinator<'t, F, S, Error = E>)*> Combinator<'t, F, S> for ($fname, $($name,)*) {
                     type Output = ($fname::Output, $($name::Output,)*);
+                    type Error = E;
 
                     #[inline]
-                    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S> {
+                    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
                         let (rem, [<res $fi>]): (Span<F, S>, $fname::Output) = match self.$fi.parse(input) {
                             Result::Ok(rem, res) => (rem, res),
                             Result::Fail(fail) => return Result::Fail(fail),

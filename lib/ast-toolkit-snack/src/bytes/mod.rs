@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    03 May 2024, 13:32:13
+//    03 May 2024, 14:40:29
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,7 @@
 pub mod complete;
 pub mod streaming;
 
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
@@ -180,9 +181,10 @@ where
     S: Clone + OneOfBytes,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'b, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'b, Self::Output, F, S, Self::Error> {
         let match_point: usize = input.one_of_bytes(SpanRange::Open, self.byteset);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }
@@ -210,9 +212,10 @@ where
     P: FnMut(u8) -> bool,
 {
     type Output = Span<F, S>;
+    type Error = Infallible;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> {
         let match_point: usize = input.while_bytes(SpanRange::Open, &mut self.predicate);
         Result::Ok(input.slice(match_point..), input.slice(..match_point))
     }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:04:35
 //  Last edited:
-//    02 May 2024, 17:05:57
+//    03 May 2024, 15:11:13
 //  Auto updated?
 //    Yes
 //
@@ -12,13 +12,14 @@
 //!   Tests something.
 //
 
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 
 use ast_toolkit_snack::{Combinator, ExpectsFormatter, Result as SResult};
 use ast_toolkit_span::Span;
 
 
-fn test<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
+fn test<F, S>() -> impl Combinator<'static, F, S, Output = (), Error = Infallible> {
     struct RetFmt {
         fmt: String,
     }
@@ -49,6 +50,7 @@ fn test<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
     }
     impl<'t, F, S, O, C: FnMut(Span<F, S>) -> SResult<'t, O, F, S>, F2: 't + Fn() -> String> Combinator<'t, F, S> for Ret<C, F2> {
         type Output = O;
+        type Error = Infallible;
 
         #[inline]
         fn parse(&mut self, input: Span<F, S>) -> SResult<'t, Self::Output, F, S> { (self.comb)(input) }
@@ -56,11 +58,11 @@ fn test<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
     Ret { comb: move |input: Span<F, S>| -> SResult<'static, (), F, S> { SResult::Ok(input, ()) }, fmt: || "A test".into() }
 }
 
-fn test_derived<F, S>() -> impl Combinator<'static, F, S, Output = ()> {
+fn test_derived<F, S>() -> impl Combinator<'static, F, S, Output = (), Error = Infallible> {
     ast_toolkit_snack_derive::comb! {
         expects "Something";
 
-        combinator -> 'static, () {
+        combinator -> 'static, (), !Infallible {
             SResult::Ok(input, ())
         };
     }

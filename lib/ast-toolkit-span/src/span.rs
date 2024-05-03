@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    02 May 2024, 12:04:55
+//    03 May 2024, 14:33:42
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,7 @@
 //
 
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
 
@@ -564,6 +565,16 @@ pub trait Spanning<F, S> {
     /// # Returns
     /// A new [`Span`] that represents the spanned area.
     fn span(&self) -> Span<F, S>;
+}
+
+// Default impls
+impl<F, S> Spanning<F, S> for Infallible {
+    /// Non-sensible implementation of [`Spanning`] for [`Infallible`].
+    ///
+    /// # Panics
+    /// This function _always_ panics. It is not meant to be used by itself, but rather to be given as a sensible default when something [`Spanning`] is not used.
+    #[inline]
+    fn span(&self) -> Span<F, S> { unimplemented!() }
 }
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    03 May 2024, 11:56:18
+//    03 May 2024, 16:22:37
 //  Auto updated?
 //    Yes
 //
@@ -21,8 +21,10 @@
 //!   [`Common`].
 //
 
+use std::convert::Infallible;
 use std::error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
@@ -33,7 +35,28 @@ use crate::multi::Many1Expects;
 use crate::utf8::complete::{
     Digit1Expects, OneOf1Expects as OneOf1Utf8Expects, TagExpects as TagUtf8Expects, While1Expects as While1Utf8Expects, Whitespace1Expects,
 };
-use crate::ExpectsFormatter;
+use crate::{Combinator, Expects, ExpectsFormatter, Result};
+
+
+/***** HELPER MACROS *****/
+/// Makes it easier to propagate enum variants.
+macro_rules! propagate {
+    (match $self:ident {
+        $($source:ident::$variants:ident { $($fields:ident),* $(,)? } => $target:ident,)*
+        !special {
+            $($ssource:ident::$svariants:ident { $($sfields:ident),* $(,)? $(..)? } => { $($scode:tt)* },)*
+        }
+        $(,)?
+    }) => {
+        match $self {
+            $($source::$variants { $($fields,)* } => $target::$variants { $($fields,)* },)*
+            $($ssource::$svariants { $($sfields,)* .. } => { $($scode)* },)*
+        }
+    };
+}
+
+
+
 
 
 /***** ERRORS *****/
@@ -63,6 +86,260 @@ impl error::Error for TryFromFailureError {}
 
 
 
+/***** LIBRARY COMBINATORS *****/
+/// A combinator that always emits a custom error of the given type.
+///
+/// This combinator returns recoverable errors, i.e., [`branch::alt()`](crate::branch::alt) will still try other branches.
+///
+/// # Arguments
+/// - `err`: The custom error to return.
+///
+/// # Returns
+/// A combinator [`Fail`] that emits the given `err` as a [`Result::Fail`].
+///
+/// # Fails
+/// This combinator _always_ fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{fail, Common, Failure};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span = Span::new("<example>", "Hello, world!");
+///
+/// let mut comb = fail("Hello there!");
+/// assert!(matches!(
+///     comb.parse(span),
+///     SResult::Fail(Failure::Common(Common::Custom { err: "Hello there!" }))
+/// ));
+/// ```
+pub const fn fail<F, S, E>(err: E) -> Fail<F, S, E>
+where
+    E: Clone,
+{
+    Fail { err, _f: PhantomData, _s: PhantomData }
+}
+
+/// A combinator that always emits a custom error of the given type.
+///
+/// This combinator returns non-recoverable errors, i.e., [`branch::alt()`](crate::branch::alt) will _not_ try other branches.
+///
+/// # Arguments
+/// - `err`: The custom error to return.
+///
+/// # Returns
+/// A combinator [`Err`] that emits the given `err` as a [`Result::Error`].
+///
+/// # Fails
+/// This combinator _always_ fails, but as an an [`Result::Error`].
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{err, Common, Error};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span = Span::new("<example>", "Hello, world!");
+///
+/// let mut comb = err("Hello there!");
+/// assert!(matches!(
+///     comb.parse(span),
+///     SResult::Error(Error::Common(Common::Custom { err: "Hello there!" }))
+/// ));
+/// ```
+pub const fn err<F, S, E>(err: E) -> Err<F, S, E>
+where
+    E: Clone,
+{
+    Err { err, _f: PhantomData, _s: PhantomData }
+}
+
+
+
+/// A very powerful combinator that transforms a recoverable [`Failure`] into a non-recoverable [`Error`].
+///
+/// This can be used to provide more useful error messages, as it "commits" the parser to this particular branch. Consider the two examples below as illustration.
+///
+/// # Arguments
+/// - `comb`: Some other [`Combinator`] who's failures to transform into errors.
+///
+/// # Returns
+/// A combinator [`Cut`] that parses the same as `comb`, but returns [`Result::Error`]s instead of [`Result::Failure`]s.
+///
+/// # Fails
+/// The returned combinator only fails if `comb` returned [`Failure::NotEnough`]. Otherwise, the failures are returned as [`Error`]s.
+///
+/// # Examples
+/// The following example illustrates the default behaviour of branching:
+/// ```rust
+/// use ast_toolkit_snack::branch::alt;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::sequence::pair;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// // Build a complex combinator
+/// let mut comb = alt((
+///     pair(tag("Hello, world"), tag("!")),
+///     pair(tag("Goodbye, world"), tag("!")),
+///     pair(tag("Cheerio, world"), tag("!")),
+///     pair(tag("Fancy meeting you here, world"), tag("!")),
+///     pair(tag("Top o' t' morning to ya, world"), tag("!")),
+/// ));
+///
+/// // We forget the exclaimation mark... easy mistake
+/// let span = Span::new("<example>", "Hello, world");
+///
+/// // Parsing now reports that it expected either one of the "X world!"s
+/// assert!(matches!(comb.parse(span), SResult::Fail(Failure::Common(Common::Alt { .. }))));
+/// ```
+///
+/// However, we can improve upon the error message by cutting:
+/// ```rust
+/// use ast_toolkit_snack::branch::alt;
+/// use ast_toolkit_snack::sequence::pair;
+/// use ast_toolkit_snack::error::{cut, Common, Error};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// // Build a complex combinator
+/// let mut comb = alt((
+///     // We essentially match on something unique per branch, and use that to commit to that branch
+///     pair(tag("H"), cut(pair(tag("ello, world"), tag("!")))),
+///     pair(tag("G"), cut(pair(tag("oodbye, world"), tag("!")))),
+///     pair(tag("C"), cut(pair(tag("heerio, world"), tag("!")))),
+///     pair(tag("F"), cut(pair(tag("ancy meeting you here, world"), tag("!")))),
+///     pair(tag("T"), cut(pair(tag("op o' t' morning to ya, world"), tag("!")))),
+/// ));
+///
+/// // We forget the exclaimation mark again... how embarrassing!
+/// let span = Span::new("<example>", "Hello, world");
+///
+/// // Parsing now reports a much more useful error
+/// assert!(matches!(comb.parse(span), SResult::Error(Error::Common(Common::TagUtf8 { tag: "!", .. }))));
+/// ```
+#[inline]
+pub const fn cut<'t, F, S, C>(comb: C) -> Cut<F, S, C>
+where
+    C: Combinator<'t, F, S>,
+{
+    Cut { comb, _f: PhantomData, _s: PhantomData }
+}
+
+
+
+
+
+/***** FORMATTERS *****/
+/// Formats that nothing is expected whatsoever.
+#[derive(Debug)]
+pub struct NothingExpects;
+impl Display for NothingExpects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for NothingExpects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "nothing") }
+}
+
+
+
+
+
+/***** LIBRARY COMBINATORS *****/
+/// Combinator returned by [`fail()`].
+pub struct Fail<F, S, E> {
+    /// The error to return as failure.
+    err: E,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:  PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:  PhantomData<S>,
+}
+impl<'e, F, S, E: 'e> Expects<'e> for Fail<F, S, E> {
+    type Formatter = NothingExpects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { NothingExpects }
+}
+impl<'e, F, S, E: 'e + Clone> Combinator<'e, F, S> for Fail<F, S, E> {
+    type Output = ();
+    type Error = E;
+
+    #[inline]
+    fn parse(&mut self, _input: Span<F, S>) -> Result<'e, Self::Output, F, S, Self::Error> {
+        Result::Fail(Failure::Common(Common::Custom { err: self.err.clone() }))
+    }
+}
+
+/// Combinator returned by [`err()`].
+pub struct Err<F, S, E> {
+    /// The error to return as error.
+    err: E,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:  PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:  PhantomData<S>,
+}
+impl<'e, F, S, E: 'e> Expects<'e> for Err<F, S, E> {
+    type Formatter = NothingExpects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { NothingExpects }
+}
+impl<'e, F, S, E: 'e + Clone> Combinator<'e, F, S> for Err<F, S, E> {
+    type Output = ();
+    type Error = E;
+
+    #[inline]
+    fn parse(&mut self, _input: Span<F, S>) -> Result<'e, Self::Output, F, S, Self::Error> {
+        Result::Error(Error::Common(Common::Custom { err: self.err.clone() }))
+    }
+}
+
+
+
+/// Combinator returned by [`cut()`].
+pub struct Cut<F, S, C> {
+    /// The combinator we're cutting.
+    comb: C,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:   PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Cut<F, S, C> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'t, F, S, C: Combinator<'t, F, S>> Combinator<'t, F, S> for Cut<F, S, C> {
+    type Output = C::Output;
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => Result::Error(fail.try_into().unwrap()),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// Defines a common set of problems raised by snack combinators.
 ///
@@ -71,11 +348,13 @@ impl error::Error for TryFromFailureError {}
 /// enums also define a small set that cannot do this change (i.e., that cannot
 /// be made unrecoverable or that isn't recoverable in the first place).
 #[derive(Debug, EnumDebug)]
-pub enum Common<'a, F, S> {
+pub enum Common<'a, F, S, E = Infallible> {
     /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
     Alt { branches: Vec<Self>, fmt: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
+    /// Some non-library combinator failed.
+    Custom { err: E },
     /// Failed to match at least one digit.
     Digit1 { span: Span<F, S> },
     /// Failed to match a combinator at least once.
@@ -117,12 +396,108 @@ pub enum Common<'a, F, S> {
     /// Failed to match at least one whitespace.
     Whitespace1 { span: Span<F, S> },
 }
+impl<'a, F, S, E> Common<'a, F, S, E> {
+    /// "Transmutes" this Common from one custom error type to another.
+    ///
+    /// This is only possible if this is _not_ [`Common::Custom`], because the point is that we don't really care about the type. If you _do_ care about it, see [`Common::map_custom()`] instead.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Returns
+    /// A new Common that is the same variant, but with another custom error type.
+    ///
+    /// # Panics
+    /// This function panics if we're [`Common::Custom`].
+    #[inline]
+    #[track_caller]
+    pub fn transmute<E2>(self) -> Common<'a, F, S, E2> {
+        propagate! {
+            match self {
+                Self::Digit1 { span } => Common,
+                Self::Not { nested_fmt, span } => Common,
+                Self::OneOf1Bytes { byteset, span } => Common,
+                Self::OneOf1Utf8 { charset, span } => Common,
+                Self::TagBytes { tag, span } => Common,
+                Self::TagUtf8 { tag, span } => Common,
+                Self::While1Bytes { span } => Common,
+                Self::While1Utf8 { span } => Common,
+                Self::Whitespace1 { span } => Common,
 
-impl<'a, F, S> Display for Common<'a, F, S> {
+                !special {
+                    Self::Alt { branches, fmt, span } => {
+                        Common::Alt {
+                            branches: branches.into_iter().map(|c| c.transmute()).collect(),
+                            fmt,
+                            span,
+                        }
+                    },
+                    Self::Custom { .. } => { panic!("Cannot transmute Common::Custom"); },
+                    Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).transmute()), nested_fmt } },
+                    Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).transmute()), nested_fmt } },
+                    Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).transmute()), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
+                },
+            }
+        }
+    }
+
+    /// Maps the custom type of this Common.
+    ///
+    /// This applies the given closure if we are [`Common::Custom`], but else passes values as-is.
+    ///
+    /// You can use [`Common::transmute()`] if you're certain that [`Common::Custom`] never occurs.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Arguments
+    /// - `map`: The mapping closure that translates from one custom error type to another.
+    ///
+    /// # Returns
+    /// A new Common that is the same variant, but with another custom error type.
+    #[inline]
+    #[track_caller]
+    pub fn map_custom<E2>(self, mut map: impl FnMut(E) -> E2) -> Common<'a, F, S, E2> {
+        propagate! {
+            match self {
+                Self::Digit1 { span } => Common,
+                Self::Not { nested_fmt, span } => Common,
+                Self::OneOf1Bytes { byteset, span } => Common,
+                Self::OneOf1Utf8 { charset, span } => Common,
+                Self::TagBytes { tag, span } => Common,
+                Self::TagUtf8 { tag, span } => Common,
+                Self::While1Bytes { span } => Common,
+                Self::While1Utf8 { span } => Common,
+                Self::Whitespace1 { span } => Common,
+
+                !special {
+                    Self::Alt { branches, fmt, span } => {
+                        Common::Alt {
+                            branches: branches.into_iter().map(|c| c.transmute()).collect(),
+                            fmt,
+                            span,
+                        }
+                    },
+                    Self::Custom { err } => { Common::Custom { err: map(err) } },
+                    Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).transmute()), nested_fmt } },
+                    Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).transmute()), nested_fmt } },
+                    Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).transmute()), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
+                },
+            }
+        }
+    }
+}
+
+impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
             Self::Alt { fmt, .. } => write!(f, "{fmt}"),
+            Self::Custom { err } => write!(f, "{err}"),
             Self::Digit1 { .. } => write!(f, "{}", Digit1Expects),
             Self::Many1 { nested_fmt, .. } => write!(f, "{}", Many1Expects { fmt: nested_fmt }),
             Self::ManyN { i, n, nested_fmt, .. } => {
@@ -161,10 +536,11 @@ impl<'a, F, S> Display for Common<'a, F, S> {
         }
     }
 }
-impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
+impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Common<'a, F, S, E> {
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
+            Self::Custom { err } => err.span(),
             Self::Digit1 { span } => span.clone(),
             Self::Many1 { fail, .. } => fail.span(),
             Self::ManyN { fail, .. } => fail.span(),
@@ -187,17 +563,62 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
 
 /// Defines a problems emitted by snack combinators that are recoverable.
 #[derive(Debug, EnumDebug)]
-pub enum Failure<'a, F, S> {
+pub enum Failure<'a, F, S, E = Infallible> {
     /// There wasn't enough input data and the combinator was a streaming combinator.
     ///
     /// The `needed` is an optional hint provided by the combinator to guess how many more bytes would be needed.
     NotEnough { needed: Option<usize>, span: Span<F, S> },
 
     /// It's a type of failure that can be made a non-recoverable [`Error`].
-    Common(Common<'a, F, S>),
+    Common(Common<'a, F, S, E>),
+}
+impl<'a, F, S, E> Failure<'a, F, S, E> {
+    /// "Transmutes" this Failure from one custom error type to another.
+    ///
+    /// This is only possible if this is _not_ [`Failure::Common(Common::Custom)`](Custom::Common), because the point is that we don't really care about the type. If you _do_ care about it, see [`Failure::map_custom()`] instead.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Returns
+    /// A new Failure that is the same variant, but with another custom error type.
+    ///
+    /// # Panics
+    /// This function panics if we're [`Failure::Common(Common::Custom)`](Custom::Common).
+    #[inline]
+    #[track_caller]
+    pub fn transmute<E2>(self) -> Failure<'a, F, S, E2> {
+        match self {
+            Self::NotEnough { needed, span } => Failure::NotEnough { needed, span },
+            Self::Common(c) => Failure::Common(c.transmute()),
+        }
+    }
+
+    /// Maps the custom type of this Failure.
+    ///
+    /// This applies the given closure if we are [`Failure::Common(Common::Custom)`](Common::Custom), but else passes values as-is.
+    ///
+    /// You can use [`Failure::transmute()`] if you're certain that [`Common::Custom`] never occurs.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Arguments
+    /// - `map`: The mapping closure that translates from one custom error type to another.
+    ///
+    /// # Returns
+    /// A new Failure that is the same variant, but with another custom error type.
+    #[inline]
+    #[track_caller]
+    pub fn map_custom<E2>(self, map: impl FnMut(E) -> E2) -> Failure<'a, F, S, E2> {
+        match self {
+            Self::NotEnough { needed, span } => Failure::NotEnough { needed, span },
+            Self::Common(c) => Failure::Common(c.map_custom(map)),
+        }
+    }
 }
 
-impl<'a, F, S> Display for Failure<'a, F, S> {
+impl<'a, F, S, E: Display> Display for Failure<'a, F, S, E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -209,11 +630,11 @@ impl<'a, F, S> Display for Failure<'a, F, S> {
                 }
             },
 
-            Self::Common(p) => <Common<'a, F, S> as Display>::fmt(p, f),
+            Self::Common(p) => <Common<'a, F, S, E> as Display>::fmt(p, f),
         }
     }
 }
-impl<'a, F: Clone, S: Clone> Spanning<F, S> for Failure<'a, F, S> {
+impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Failure<'a, F, S, E> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -224,15 +645,15 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Failure<'a, F, S> {
     }
 }
 
-impl<'a, F, S> From<Common<'a, F, S>> for Failure<'a, F, S> {
+impl<'a, F, S, E> From<Common<'a, F, S, E>> for Failure<'a, F, S, E> {
     #[inline]
-    fn from(value: Common<'a, F, S>) -> Self { Self::Common(value) }
+    fn from(value: Common<'a, F, S, E>) -> Self { Self::Common(value) }
 }
-impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Common<'a, F, S> {
+impl<'a, F, S, E> TryFrom<Failure<'a, F, S, E>> for Common<'a, F, S, E> {
     type Error = TryFromCommonError;
 
     #[inline]
-    fn try_from(value: Failure<'a, F, S>) -> Result<Self, Self::Error> {
+    fn try_from(value: Failure<'a, F, S, E>) -> std::result::Result<Self, Self::Error> {
         match value {
             Failure::Common(c) => Ok(c),
             Failure::NotEnough { .. } => Err(TryFromCommonError(value.variant().to_string(), "a Failure")),
@@ -244,18 +665,63 @@ impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Common<'a, F, S> {
 
 /// Defines a problems emitted by snack combinators that are non-recoverable.
 #[derive(Debug, EnumDebug)]
-pub enum Error<'a, F, S> {
+pub enum Error<'a, F, S, E = Infallible> {
     /// There is a specific context in which the parsing failed.
     ///
     /// This is usually used through the [`context()`]-combinator, and allows
     /// one to hint to the user that something larger was being parsed (e.g., expressions).
-    Context { context: &'static str, span: Span<F, S>, err: Box<Self> },
+    Context { context: &'static str, span: Span<F, S> },
 
     /// It's a type of error that can come from recoverable [`Failure`]s.
-    Common(Common<'a, F, S>),
+    Common(Common<'a, F, S, E>),
+}
+impl<'a, F, S, E> Error<'a, F, S, E> {
+    /// "Transmutes" this Error from one custom error type to another.
+    ///
+    /// This is only possible if this is _not_ [`Error::Common(Common::Custom)`](Custom::Common), because the point is that we don't really care about the type. If you _do_ care about it, see [`Error::map_custom()`] instead.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Returns
+    /// A new Error that is the same variant, but with another custom error type.
+    ///
+    /// # Panics
+    /// This function panics if we're [`Error::Common(Common::Custom)`](Custom::Common).
+    #[inline]
+    #[track_caller]
+    pub fn transmute<E2>(self) -> Error<'a, F, S, E2> {
+        match self {
+            Self::Context { context, span } => Error::Context { context, span },
+            Self::Common(c) => Error::Common(c.transmute()),
+        }
+    }
+
+    /// Maps the custom type of this Error.
+    ///
+    /// This applies the given closure if we are [`Error::Common(Common::Custom)`](Common::Custom), but else passes values as-is.
+    ///
+    /// You can use [`Error::transmute()`] if you're certain that [`Common::Custom`] never occurs.
+    ///
+    /// # Generics
+    /// - `E2`: The new custom error type to transmute to.
+    ///
+    /// # Arguments
+    /// - `map`: The mapping closure that translates from one custom error type to another.
+    ///
+    /// # Returns
+    /// A new Error that is the same variant, but with another custom error type.
+    #[inline]
+    #[track_caller]
+    pub fn map_custom<E2>(self, map: impl FnMut(E) -> E2) -> Error<'a, F, S, E2> {
+        match self {
+            Self::Context { context, span } => Error::Context { context, span },
+            Self::Common(c) => Error::Common(c.map_custom(map)),
+        }
+    }
 }
 
-impl<'a, F, S> Display for Error<'a, F, S> {
+impl<'a, F, S, E: Display> Display for Error<'a, F, S, E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -263,11 +729,11 @@ impl<'a, F, S> Display for Error<'a, F, S> {
                 write!(f, "{context}")
             },
 
-            Self::Common(p) => <Common<'a, F, S> as Display>::fmt(p, f),
+            Self::Common(p) => <Common<'a, F, S, E> as Display>::fmt(p, f),
         }
     }
 }
-impl<'a, F: Clone, S: Clone> Spanning<F, S> for Error<'a, F, S> {
+impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Error<'a, F, S, E> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -278,26 +744,26 @@ impl<'a, F: Clone, S: Clone> Spanning<F, S> for Error<'a, F, S> {
     }
 }
 
-impl<'a, F, S> From<Common<'a, F, S>> for Error<'a, F, S> {
+impl<'a, F, S, E> From<Common<'a, F, S, E>> for Error<'a, F, S, E> {
     #[inline]
-    fn from(value: Common<'a, F, S>) -> Self { Self::Common(value) }
+    fn from(value: Common<'a, F, S, E>) -> Self { Self::Common(value) }
 }
-impl<'a, F, S> TryFrom<Error<'a, F, S>> for Common<'a, F, S> {
+impl<'a, F, S, E> TryFrom<Error<'a, F, S, E>> for Common<'a, F, S, E> {
     type Error = TryFromCommonError;
 
     #[inline]
-    fn try_from(value: Error<'a, F, S>) -> Result<Self, Self::Error> {
+    fn try_from(value: Error<'a, F, S, E>) -> std::result::Result<Self, Self::Error> {
         match value {
             Error::Common(c) => Ok(c),
             Error::Context { .. } => Err(TryFromCommonError(value.variant().to_string(), "an Error")),
         }
     }
 }
-impl<'a, F, S> TryFrom<Failure<'a, F, S>> for Error<'a, F, S> {
+impl<'a, F, S, E> TryFrom<Failure<'a, F, S, E>> for Error<'a, F, S, E> {
     type Error = TryFromFailureError;
 
     #[inline]
-    fn try_from(value: Failure<'a, F, S>) -> Result<Self, Self::Error> {
+    fn try_from(value: Failure<'a, F, S, E>) -> std::result::Result<Self, Self::Error> {
         match value {
             Failure::Common(p) => Ok(Self::Common(p)),
             other => Err(TryFromFailureError(other.variant().to_string())),

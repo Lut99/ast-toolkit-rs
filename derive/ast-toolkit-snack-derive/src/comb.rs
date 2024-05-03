@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:37:18
 //  Last edited:
-//    03 May 2024, 13:23:55
+//    03 May 2024, 15:16:48
 //  Auto updated?
 //    Yes
 //
@@ -18,9 +18,10 @@ use proc_macro2::{LineColumn, Span, TokenStream as TokenStream2};
 use proc_macro_error::{Diagnostic, Level};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
-use syn::token::{Move, Underscore};
-use syn::{Block, Error, Expr, ExprLit, ExprTuple, Ident, Lifetime, Lit, LitStr, Token, Type, TypeInfer};
+use syn::token::{Move, PathSep, Underscore};
+use syn::{Block, Error, Expr, ExprLit, ExprTuple, Ident, Lifetime, Lit, LitStr, Path, PathArguments, PathSegment, Token, Type, TypeInfer, TypePath};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -176,32 +177,45 @@ struct RawCombinator {
     lifetime: Lifetime,
     /// The _optional_ output specifier, or else `_`.
     output:   Type,
+    /// The _optional_ custom error specifier, or else `::std::convert::Infallible`.
+    error:    Type,
     /// The body of the closure.
     body:     Block,
 }
 impl Parse for RawCombinator {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse the optional return annotation
-        let (lifetime, output): (Option<Lifetime>, Option<Type>) = if input.parse::<Token![->]>().is_ok() {
-            // Parse a lifetime, optionally
-            if let Ok(lifetime) = input.parse::<Lifetime>() {
-                // See if there's also a type
-                if input.parse::<Token![,]>().is_ok() {
-                    if let Ok(ty) = input.parse::<Type>() {
-                        (Some(lifetime), Some(ty))
-                    } else {
-                        return Err(input.error("Expected a returned type after a returned lifetime"));
-                    }
-                } else {
-                    (Some(lifetime), None)
-                }
-            } else if let Ok(ty) = input.parse::<Type>() {
-                (None, Some(ty))
-            } else {
-                return Err(input.error("Expected either a returned lifetime or a returned type"));
+        let (lifetime, output, error): (Option<Lifetime>, Option<Type>, Option<Type>) = if input.parse::<Token![->]>().is_ok() {
+            #[inline]
+            fn parse_lifetime(input: ParseStream) -> Option<Lifetime> { input.parse::<Lifetime>().ok() }
+            #[inline]
+            fn parse_output(input: ParseStream) -> Option<Type> { input.parse::<Type>().ok() }
+            #[inline]
+            fn parse_error(input: ParseStream) -> Result<Option<Type>, Error> {
+                if input.parse::<Token![!]>().is_ok() { Ok(Some(input.parse::<Type>()?)) } else { Ok(None) }
             }
+
+            // We expect a specific order
+            let lifetime: Option<Lifetime> = parse_lifetime(input);
+            let output: Option<Type> = if lifetime.is_some() {
+                // Parse the previous comma first
+                input.parse::<Token![,]>()?;
+                parse_output(input)
+            } else {
+                parse_output(input)
+            };
+            let error: Option<Type> = if lifetime.is_some() || output.is_some() {
+                // Parse the previous comma first
+                input.parse::<Token![,]>()?;
+                parse_error(input)?
+            } else {
+                parse_error(input)?
+            };
+
+            // OK, gottem
+            (lifetime, output, error)
         } else {
-            (None, None)
+            (None, None, None)
         };
 
         // Parse the codeblock
@@ -217,6 +231,19 @@ impl Parse for RawCombinator {
         Ok(Self {
             lifetime: lifetime.unwrap_or_else(|| Lifetime::new("'static", Span::call_site())),
             output: output.unwrap_or_else(|| Type::Infer(TypeInfer { underscore_token: Underscore { spans: [Span::call_site()] } })),
+            error: error.unwrap_or_else(|| {
+                // Build the path first, then return the type
+                let mut segments: Punctuated<PathSegment, PathSep> = Punctuated::new();
+                segments.push_value(PathSegment { ident: Ident::new("std", Span::call_site()), arguments: PathArguments::None });
+                segments.push_punct(PathSep { spans: [Span::call_site(), Span::call_site()] });
+                segments.push_value(PathSegment { ident: Ident::new("convert", Span::call_site()), arguments: PathArguments::None });
+                segments.push_punct(PathSep { spans: [Span::call_site(), Span::call_site()] });
+                segments.push_value(PathSegment { ident: Ident::new("Infallible", Span::call_site()), arguments: PathArguments::None });
+                Type::Path(TypePath {
+                    qself: None,
+                    path:  Path { leading_colon: Some(PathSep { spans: [Span::call_site(), Span::call_site()] }), segments },
+                })
+            }),
             body,
         })
     }
@@ -261,6 +288,7 @@ pub fn call(input: TokenStream2) -> Result<TokenStream2, Diagnostic> {
 
     // Construct the main combinator type
     let comb_ret_lifetime: &Lifetime = &input.comb.lifetime;
+    let comb_ret_error: &Type = &input.comb.error;
     let res: TokenStream2 = quote! {
         /// Formats the expected string for this closure.
         #[derive(::std::fmt::Debug)]
@@ -282,13 +310,13 @@ pub fn call(input: TokenStream2) -> Result<TokenStream2, Diagnostic> {
         }
 
         /// One-time combinator for the closure we're wrapping.
-        struct #cmb_name<E, C> {
+        struct #cmb_name<X, C> {
             /// Some closure producing the expects-string.
-            exp: E,
+            exp: X,
             /// The closure that we wrap.
             comb: C,
         }
-        impl<E: ::std::ops::Fn() -> ::std::string::String, C> ::ast_toolkit_snack::Expects<'static> for #cmb_name<E, C> {
+        impl<X: ::std::ops::Fn() -> ::std::string::String, C> ::ast_toolkit_snack::Expects<'static> for #cmb_name<X, C> {
             type Formatter = #fmt_name;
 
             #[inline]
@@ -296,11 +324,12 @@ pub fn call(input: TokenStream2) -> Result<TokenStream2, Diagnostic> {
                 #fmt_name { exp_str: (self.exp)() }
             }
         }
-        impl<F, S, R, E: ::std::ops::Fn() -> ::std::string::String, C: ::std::ops::FnMut(::ast_toolkit_span::Span<F, S>) -> ::ast_toolkit_snack::Result<#comb_ret_lifetime, R, F, S>> ::ast_toolkit_snack::Combinator<#comb_ret_lifetime, F, S> for #cmb_name<E, C> {
+        impl<F, S, R, X: ::std::ops::Fn() -> ::std::string::String, C: ::std::ops::FnMut(::ast_toolkit_span::Span<F, S>) -> ::ast_toolkit_snack::Result<#comb_ret_lifetime, R, F, S>> ::ast_toolkit_snack::Combinator<#comb_ret_lifetime, F, S> for #cmb_name<X, C> {
             type Output = R;
+            type Error = #comb_ret_error;
 
             #[inline]
-            fn parse(&mut self, input: ::ast_toolkit_span::Span<F, S>) -> ::ast_toolkit_snack::Result<#comb_ret_lifetime, R, F, S> {
+            fn parse(&mut self, input: ::ast_toolkit_span::Span<F, S>) -> ::ast_toolkit_snack::Result<#comb_ret_lifetime, R, F, S, Self::Error> {
                 (self.comb)(input)
             }
         }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 18:25:42
 //  Last edited:
-//    03 May 2024, 13:25:37
+//    03 May 2024, 15:19:15
 //  Auto updated?
 //    Yes
 //
@@ -80,7 +80,7 @@
 ///
 /// In particular, the given code is compiled to a closure of the form:
 /// ```ignore
-/// |input: ::ast_toolkit_span::Span<F, S>| -> ::ast_toolkit_snack::Result<'static, R, F, S> {
+/// |input: ::ast_toolkit_span::Span<F, S>| -> ::ast_toolkit_snack::Result<'static, R, F, S, std::convert::Infallible> {
 ///     
 /// }
 /// ```
@@ -118,19 +118,33 @@
 ///     }
 /// }
 /// ```
-/// or specify them both, where the lifetime is always first, separated by comma (e.g., `combinator -> 'a, bool { ... };`).
+///
+/// In case your type returns a custom error, then you also have to specify the error type by giving `!<TYPE>`:
+/// ```ignore
+/// fn returns_error<F, S>() -> impl ast_toolkit_snack::Combinator<'static, F, S, Output = bool, Error = String> {
+///     comb! {
+///         combinator -> !String {
+///             ast_toolkit_snack::Result::Failure(Failure::Common(Common::Custom("Howdy".into())))
+///         };
+///     }
+/// }
+/// ```
+///
+/// You can also specify any combination of them as a comma-separated list. Note that the order is fixed in that case (i.e., first an optional lifetime, then an optional output type and finally an optional error type).
 ///
 ///
 /// # Examples
 /// For example, on could implement a combinator that parses `Hello, world!`:
 /// ```
+/// use std::convert::Infallible;
+///
 /// use ast_toolkit_snack::span::MatchBytes;
 /// use ast_toolkit_snack::utf8::complete as utf8;
 /// use ast_toolkit_snack::{comb, Combinator};
 /// use ast_toolkit_span::Span;
 ///
 /// fn hello_world<F: Clone, S: Clone + MatchBytes>()
-/// -> impl Combinator<'static, F, S, Output = Span<F, S>> {
+/// -> impl Combinator<'static, F, S, Output = Span<F, S>, Error = Infallible> {
 ///     comb! {
 ///         expects "hello world";
 ///

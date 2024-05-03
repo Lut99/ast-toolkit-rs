@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    03 May 2024, 13:35:30
+//    03 May 2024, 14:48:24
 //  Auto updated?
 //    Yes
 //
@@ -54,10 +54,10 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn pair<'c, F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
+pub const fn pair<'c, F, S, E, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
 where
-    C1: Combinator<'c, F, S>,
-    C2: Combinator<'c, F, S>,
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
 {
     Tuple { tuple: (first, second), _f: PhantomData, _s: PhantomData }
 }
@@ -139,10 +139,10 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn terminated<'c, F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
+pub const fn terminated<'c, F, S, E, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
 where
-    C1: Combinator<'c, F, S>,
-    C2: Combinator<'c, F, S>,
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
 {
     Terminated { first, sep, _f: PhantomData, _s: PhantomData }
 }
@@ -179,10 +179,10 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn preceded<'c, F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
+pub const fn preceded<'c, F, S, E, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
 where
-    C1: Combinator<'c, F, S>,
-    C2: Combinator<'c, F, S>,
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
 {
     Preceded { sep, second, _f: PhantomData, _s: PhantomData }
 }
@@ -231,11 +231,11 @@ where
 /// ));
 /// ```
 #[inline]
-pub const fn separated_pair<'c, F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
+pub const fn separated_pair<'c, F, S, E, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
 where
-    C1: Combinator<'c, F, S>,
-    C2: Combinator<'c, F, S>,
-    C3: Combinator<'c, F, S>,
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+    C3: Combinator<'c, F, S, Error = E>,
 {
     SeparatedPair { first, sep, third, _f: PhantomData, _s: PhantomData }
 }
@@ -281,11 +281,11 @@ where
 /// ));
 /// ```
 #[inline]
-pub const fn delimited<'c, F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
+pub const fn delimited<'c, F, S, E, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
 where
-    C1: Combinator<'c, F, S>,
-    C2: Combinator<'c, F, S>,
-    C3: Combinator<'c, F, S>,
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+    C3: Combinator<'c, F, S, Error = E>,
 {
     Delimited { sep1, second, sep3, _f: PhantomData, _s: PhantomData }
 }
@@ -369,9 +369,10 @@ impl<'t, F, S, T: Expects<'t>> Expects<'t> for Tuple<F, S, T> {
 }
 impl<'c, F, S, T: Combinator<'c, F, S>> Combinator<'c, F, S> for Tuple<F, S, T> {
     type Output = T::Output;
+    type Error = T::Error;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> { self.tuple.parse(input) }
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> { self.tuple.parse(input) }
 }
 
 /// Combinator returned by [`terminated()`].
@@ -391,11 +392,16 @@ impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>> Expects<'t> for Terminated<F, S
     #[inline]
     fn expects(&self) -> Self::Formatter { PairExpects { first_fmt: Box::new(self.first.expects()), second_fmt: Box::new(self.sep.expects()) } }
 }
-impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Terminated<F, S, C1, C2> {
+impl<'c, F, S, E, C1, C2> Combinator<'c, F, S> for Terminated<F, S, C1, C2>
+where
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+{
     type Output = C1::Output;
+    type Error = E;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
         // Parse the first first
         let (rem, res): (Span<F, S>, C1::Output) = match self.first.parse(input) {
             Result::Ok(rem, res) => (rem, res),
@@ -429,11 +435,16 @@ impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>> Expects<'t> for Preceded<F, S, 
     #[inline]
     fn expects(&self) -> Self::Formatter { PairExpects { first_fmt: Box::new(self.sep.expects()), second_fmt: Box::new(self.second.expects()) } }
 }
-impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>> Combinator<'c, F, S> for Preceded<F, S, C1, C2> {
+impl<'c, F, S, E, C1, C2> Combinator<'c, F, S> for Preceded<F, S, C1, C2>
+where
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+{
     type Output = C2::Output;
+    type Error = E;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
         // Parse the first first
         let rem: Span<F, S> = match self.sep.parse(input) {
             Result::Ok(rem, _) => rem,
@@ -475,13 +486,17 @@ impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>, C3: Expects<'t>> Expects<'t> fo
         }
     }
 }
-impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S>
-    for SeparatedPair<F, S, C1, C2, C3>
+impl<'c, F, S, E, C1, C2, C3> Combinator<'c, F, S> for SeparatedPair<F, S, C1, C2, C3>
+where
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+    C3: Combinator<'c, F, S, Error = E>,
 {
     type Output = (C1::Output, C3::Output);
+    type Error = E;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
         // Parse the first first
         let (rem, res1): (Span<F, S>, C1::Output) = match self.first.parse(input) {
             Result::Ok(rem, res) => (rem, res),
@@ -530,11 +545,17 @@ impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>, C3: Expects<'t>> Expects<'t> fo
         }
     }
 }
-impl<'c, F, S, C1: Combinator<'c, F, S>, C2: Combinator<'c, F, S>, C3: Combinator<'c, F, S>> Combinator<'c, F, S> for Delimited<F, S, C1, C2, C3> {
+impl<'c, F, S, E, C1, C2, C3> Combinator<'c, F, S> for Delimited<F, S, C1, C2, C3>
+where
+    C1: Combinator<'c, F, S, Error = E>,
+    C2: Combinator<'c, F, S, Error = E>,
+    C3: Combinator<'c, F, S, Error = E>,
+{
     type Output = C2::Output;
+    type Error = E;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
         // Parse the first first, discarding the result
         let rem: Span<F, S> = match self.sep1.parse(input) {
             Result::Ok(rem, _) => rem,
