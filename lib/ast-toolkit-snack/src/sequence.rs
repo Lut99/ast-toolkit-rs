@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    03 May 2024, 14:48:24
+//    03 May 2024, 17:09:16
 //  Auto updated?
 //    Yes
 //
@@ -18,6 +18,30 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utf8::complete::tag;
+
+    #[test]
+    fn multiple_lifetimes() {
+        // We have two tags, one with infinite lifetime and one with less
+        let shorter = String::from("shorter");
+        let tag1 = tag("STATIC");
+        let tag2 = tag(shorter.as_str());
+
+        // Get a pair of things
+        let mut comb = terminated(tag1, tag2);
+        let span = Span::new("<example>", "STATICshorter");
+        assert_eq!(comb.parse(span).unwrap(), (span.slice(13..), span.slice(..6)));
+    }
+}
+
+
+
 
 
 /***** LIBRARY FUNCTIONS *****/
