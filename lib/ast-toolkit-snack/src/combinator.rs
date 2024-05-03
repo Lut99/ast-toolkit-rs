@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    03 May 2024, 13:29:42
+//    03 May 2024, 14:21:37
 //  Auto updated?
 //    Yes
 //
@@ -22,6 +22,33 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
+/// Implements a no-op combinator that doesn't consume anything.
+///
+/// This is useful in case you're working with more general combinators that you don't want to use all features of. A common case is parsing parenthesis with nothing in between them.
+///
+/// # Returns
+/// A combinator [`Nop`] that does not consume anything but always just returns `()`.
+///
+/// # Fails
+/// The returned combinator never fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::nop;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = nop();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, ()));
+/// ```
+#[inline]
+pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData } }
+
 /// Implements the reverse of a combinator.
 ///
 /// Specifically, will return `Result::Ok(())` if the combinator [`Result::Fail`]s, or a [`Result::Fail`] if it [`Result::Ok`]'s.
@@ -107,6 +134,21 @@ where
 
 
 /***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Nop`] combinator.
+#[derive(Debug)]
+pub struct NopExpects;
+impl Display for NopExpects {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl ExpectsFormatter for NopExpects {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "nothing") }
+}
+
 /// ExpectsFormatter for the [`Not`] combinator.
 #[derive(Debug)]
 pub struct NotExpects<E> {
@@ -151,6 +193,28 @@ impl<E: ExpectsFormatter> ExpectsFormatter for MapExpects<E> {
 
 
 /***** LIBRARY *****/
+/// The combinator returned by [`nop()`].
+pub struct Nop<F, S> {
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f: PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s: PhantomData<S>,
+}
+impl<F, S> Expects<'static> for Nop<F, S> {
+    type Formatter = NopExpects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { NopExpects }
+}
+impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
+    type Output = ();
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> { Result::Ok(input, ()) }
+}
+
+
+
 /// The concrete type returned by [`not()`].
 pub struct Not<F, S, C> {
     /// The combinator to negate.
