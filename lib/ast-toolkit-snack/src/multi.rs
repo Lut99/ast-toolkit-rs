@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:46:57
 //  Last edited:
-//    02 May 2024, 11:38:40
+//    03 May 2024, 11:53:22
 //  Auto updated?
 //    Yes
 //
@@ -696,18 +696,18 @@ where
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Many0`] combinator.
 #[derive(Debug)]
-pub struct Many0Expects<'t> {
+pub struct Many0Expects<E> {
     /// The thing we expect multiple times.
-    fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) fmt: E,
 }
-impl<'t> Display for Many0Expects<'t> {
+impl<E: ExpectsFormatter> Display for Many0Expects<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for Many0Expects<'t> {
+impl<E: ExpectsFormatter> ExpectsFormatter for Many0Expects<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "multiple repetitions of ")?;
@@ -717,18 +717,18 @@ impl<'t> ExpectsFormatter for Many0Expects<'t> {
 
 /// ExpectsFormatter for the [`Many1`] combinator.
 #[derive(Debug)]
-pub struct Many1Expects<'t> {
+pub struct Many1Expects<E> {
     /// The thing we expect multiple times.
-    fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) fmt: E,
 }
-impl<'t> Display for Many1Expects<'t> {
+impl<E: ExpectsFormatter> Display for Many1Expects<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for Many1Expects<'t> {
+impl<E: ExpectsFormatter> ExpectsFormatter for Many1Expects<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "at least one repetition of ")?;
@@ -738,20 +738,20 @@ impl<'t> ExpectsFormatter for Many1Expects<'t> {
 
 /// ExpectsFormatter for the [`ManyN`] combinator.
 #[derive(Debug)]
-pub struct ManyNExpects<'t> {
+pub struct ManyNExpects<E> {
     /// The thing we expect multiple times.
-    fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) fmt: E,
     /// How many times we expect the thing.
-    n:   usize,
+    pub(crate) n:   usize,
 }
-impl<'t> Display for ManyNExpects<'t> {
+impl<E: ExpectsFormatter> Display for ManyNExpects<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for ManyNExpects<'t> {
+impl<E: ExpectsFormatter> ExpectsFormatter for ManyNExpects<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "exactly {} repetitions of ", self.n)?;
@@ -761,22 +761,22 @@ impl<'t> ExpectsFormatter for ManyNExpects<'t> {
 
 
 
-/// ExpectsFormatter for the [`SeparatedList0`] combinator.
+/// ExpectsFormatter for the [`SeparatedList0`] and [`Punctuated0`] combinators.
 #[derive(Debug)]
-pub struct SeparatedList0Expects<'t> {
+pub struct PunctuatedList0Expects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) punct_fmt: P,
 }
-impl<'t> Display for SeparatedList0Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedList0Expects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for SeparatedList0Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedList0Expects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "multiple repetitions of ")?;
@@ -786,22 +786,22 @@ impl<'t> ExpectsFormatter for SeparatedList0Expects<'t> {
     }
 }
 
-/// ExpectsFormatter for the [`SeparatedList1`] combinator.
+/// ExpectsFormatter for the [`SeparatedList1`] and [`Punctuated1`] combinators.
 #[derive(Debug)]
-pub struct SeparatedList1Expects<'t> {
+pub struct PunctuatedList1Expects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) punct_fmt: P,
 }
-impl<'t> Display for SeparatedList1Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedList1Expects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for SeparatedList1Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedList1Expects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "at least one repetition of ")?;
@@ -811,112 +811,24 @@ impl<'t> ExpectsFormatter for SeparatedList1Expects<'t> {
     }
 }
 
-/// ExpectsFormatter for the [`SeparatedListN`] combinator.
+/// ExpectsFormatter for the [`SeparatedList1`] and [`PunctuatedN`] combinators.
 #[derive(Debug)]
-pub struct SeparatedListNExpects<'t> {
+pub struct PunctuatedListNExpects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    punct_fmt: P,
     /// How many times we expect the value thing.
     n: usize,
 }
-impl<'t> Display for SeparatedListNExpects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedListNExpects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for SeparatedListNExpects<'t> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "exactly {} repetitions of ", self.n)?;
-        self.value_fmt.expects_fmt(f, indent)?;
-        write!(f, ", separated by ")?;
-        self.punct_fmt.expects_fmt(f, indent)
-    }
-}
-
-
-
-/// ExpectsFormatter for the [`Punctuated0`] combinator.
-#[cfg(feature = "punctuated")]
-#[derive(Debug)]
-pub struct Punctuated0Expects<'t> {
-    /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
-    /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
-}
-#[cfg(feature = "punctuated")]
-impl<'t> Display for Punctuated0Expects<'t> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-#[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for Punctuated0Expects<'t> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "multiple repetitions of ")?;
-        self.value_fmt.expects_fmt(f, indent)?;
-        write!(f, ", separated by ")?;
-        self.punct_fmt.expects_fmt(f, indent)
-    }
-}
-
-/// ExpectsFormatter for the [`Punctuated1`] combinator.
-#[cfg(feature = "punctuated")]
-#[derive(Debug)]
-pub struct Punctuated1Expects<'t> {
-    /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
-    /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
-}
-#[cfg(feature = "punctuated")]
-impl<'t> Display for Punctuated1Expects<'t> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-#[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for Punctuated1Expects<'t> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "at least one repetition of ")?;
-        self.value_fmt.expects_fmt(f, indent)?;
-        write!(f, ", separated by ")?;
-        self.punct_fmt.expects_fmt(f, indent)
-    }
-}
-
-/// ExpectsFormatter for the [`PunctuatedN`] combinator.
-#[cfg(feature = "punctuated")]
-#[derive(Debug)]
-pub struct PunctuatedNExpects<'t> {
-    /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
-    /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
-    /// How many times we expect the value thing.
-    n: usize,
-}
-#[cfg(feature = "punctuated")]
-impl<'t> Display for PunctuatedNExpects<'t> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-#[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for PunctuatedNExpects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedListNExpects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "exactly {} repetitions of ", self.n)?;
@@ -931,14 +843,14 @@ impl<'t> ExpectsFormatter for PunctuatedNExpects<'t> {
 /// ExpectsFormatter for the [`PunctuatedTrailing0`] combinator.
 #[cfg(feature = "punctuated")]
 #[derive(Debug)]
-pub struct PunctuatedTrailing0Expects<'t> {
+pub struct PunctuatedTrailing0Expects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    punct_fmt: P,
 }
 #[cfg(feature = "punctuated")]
-impl<'t> Display for PunctuatedTrailing0Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedTrailing0Expects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
@@ -946,7 +858,7 @@ impl<'t> Display for PunctuatedTrailing0Expects<'t> {
     }
 }
 #[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for PunctuatedTrailing0Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedTrailing0Expects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "multiple repetitions of ")?;
@@ -960,14 +872,14 @@ impl<'t> ExpectsFormatter for PunctuatedTrailing0Expects<'t> {
 /// ExpectsFormatter for the [`PunctuatedTrailing1`] combinator.
 #[cfg(feature = "punctuated")]
 #[derive(Debug)]
-pub struct PunctuatedTrailing1Expects<'t> {
+pub struct PunctuatedTrailing1Expects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    punct_fmt: P,
 }
 #[cfg(feature = "punctuated")]
-impl<'t> Display for PunctuatedTrailing1Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedTrailing1Expects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
@@ -975,7 +887,7 @@ impl<'t> Display for PunctuatedTrailing1Expects<'t> {
     }
 }
 #[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for PunctuatedTrailing1Expects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedTrailing1Expects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "at least one repetition of ")?;
@@ -989,16 +901,16 @@ impl<'t> ExpectsFormatter for PunctuatedTrailing1Expects<'t> {
 /// ExpectsFormatter for the [`PunctuatedTrailingN`] combinator.
 #[cfg(feature = "punctuated")]
 #[derive(Debug)]
-pub struct PunctuatedTrailingNExpects<'t> {
+pub struct PunctuatedTrailingNExpects<V, P> {
     /// The thing we expect multiple times.
-    value_fmt: Box<dyn 't + ExpectsFormatter>,
+    value_fmt: V,
     /// The thing separating the values.
-    punct_fmt: Box<dyn 't + ExpectsFormatter>,
+    punct_fmt: P,
     /// How many times we expect the value thing.
     n: usize,
 }
 #[cfg(feature = "punctuated")]
-impl<'t> Display for PunctuatedTrailingNExpects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> Display for PunctuatedTrailingNExpects<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
@@ -1006,7 +918,7 @@ impl<'t> Display for PunctuatedTrailingNExpects<'t> {
     }
 }
 #[cfg(feature = "punctuated")]
-impl<'t> ExpectsFormatter for PunctuatedTrailingNExpects<'t> {
+impl<V: ExpectsFormatter, P: ExpectsFormatter> ExpectsFormatter for PunctuatedTrailingNExpects<V, P> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "exactly {} repetitions of ", self.n)?;
@@ -1032,10 +944,10 @@ pub struct Many0<F, S, C> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>> Expects<'t> for Many0<F, S, C> {
-    type Formatter = Many0Expects<'t>;
+    type Formatter = Many0Expects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { Many0Expects { fmt: Box::new(self.comb.expects()) } }
+    fn expects(&self) -> Self::Formatter { Many0Expects { fmt: self.comb.expects() } }
 }
 impl<'t, F, S, C> Combinator<'t, F, S> for Many0<F, S, C>
 where
@@ -1072,10 +984,10 @@ pub struct Many1<F, S, C> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>> Expects<'t> for Many1<F, S, C> {
-    type Formatter = Many1Expects<'t>;
+    type Formatter = Many1Expects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { Many1Expects { fmt: Box::new(self.comb.expects()) } }
+    fn expects(&self) -> Self::Formatter { Many1Expects { fmt: self.comb.expects() } }
 }
 impl<'t, F, S, C> Combinator<'t, F, S> for Many1<F, S, C>
 where
@@ -1090,7 +1002,12 @@ where
         let (mut rem, mut res): (Span<F, S>, Vec<C::Output>) = match self.comb.parse(input) {
             Result::Ok(rem, res) => (rem, vec![res]),
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::Many1 { fail: Box::new(fail.try_into().unwrap()) })),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::Many1 {
+                    fail: Box::new(fail.try_into().unwrap()),
+                    nested_fmt: Box::new(self.expects()),
+                }));
+            },
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1121,10 +1038,10 @@ pub struct ManyN<F, S, C> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>> Expects<'t> for ManyN<F, S, C> {
-    type Formatter = ManyNExpects<'t>;
+    type Formatter = ManyNExpects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { ManyNExpects { fmt: Box::new(self.comb.expects()), n: self.n } }
+    fn expects(&self) -> Self::Formatter { ManyNExpects { fmt: self.comb.expects(), n: self.n } }
 }
 impl<'t, F, S, C> Combinator<'t, F, S> for ManyN<F, S, C>
 where
@@ -1145,7 +1062,12 @@ where
                 },
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::ManyN { n: self.n, i, fail: Box::new(fail.try_into().unwrap()) }));
+                    return Result::Fail(Failure::Common(Common::ManyN {
+                        n: self.n,
+                        i,
+                        fail: Box::new(fail.try_into().unwrap()),
+                        nested_fmt: Box::new(self.expects()),
+                    }));
                 },
                 Result::Error(err) => return Result::Error(err),
             }
@@ -1170,12 +1092,10 @@ pub struct SeparatedList0<F, S, CV, CP> {
     _s:     PhantomData<S>,
 }
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for SeparatedList0<F, S, CV, CP> {
-    type Formatter = SeparatedList0Expects<'c>;
+    type Formatter = PunctuatedList0Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        SeparatedList0Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedList0Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedList0<F, S, CV, CP>
 where
@@ -1235,12 +1155,10 @@ pub struct SeparatedList1<F, S, CV, CP> {
     _s:     PhantomData<S>,
 }
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for SeparatedList1<F, S, CV, CP> {
-    type Formatter = SeparatedList1Expects<'c>;
+    type Formatter = PunctuatedList1Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        SeparatedList1Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedList1Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedList1<F, S, CV, CP>
 where
@@ -1256,7 +1174,13 @@ where
         let (mut rem, mut res): (Span<F, S>, Vec<CV::Output>) = match self.values.parse(input) {
             Result::Ok(rem, res) => (rem, vec![res]),
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::SeparatedList1 { fail: Box::new(fail.try_into().unwrap()) })),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::PunctuatedList1 {
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt:  Box::new(self.values.expects()),
+                    punct_fmt:  Box::new(self.puncts.expects()),
+                }));
+            },
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1302,12 +1226,10 @@ pub struct SeparatedListN<F, S, CV, CP> {
     _s:     PhantomData<S>,
 }
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for SeparatedListN<F, S, CV, CP> {
-    type Formatter = SeparatedListNExpects<'c>;
+    type Formatter = PunctuatedListNExpects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        SeparatedListNExpects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()), n: self.n }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedListNExpects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects(), n: self.n } }
 }
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for SeparatedListN<F, S, CV, CP>
 where
@@ -1329,11 +1251,12 @@ where
             Result::Ok(rem, res) => (rem, vec![res]),
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
             Result::Fail(fail) => {
-                return Result::Fail(Failure::Common(Common::SeparatedListNValue {
-                    n:      self.n,
-                    i:      0,
-                    values: Box::new(fail.try_into().unwrap()),
-                    puncts: Box::new(self.puncts.expects()),
+                return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
+                    n: self.n,
+                    i: 0,
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt: Box::new(self.values.expects()),
+                    punct_fmt: Box::new(self.puncts.expects()),
                 }));
             },
             Result::Error(err) => return Result::Error(err),
@@ -1347,11 +1270,12 @@ where
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 // If we fail, that's the end of the list
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::SeparatedListNPunct {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNPunct {
                         n: self.n,
-                        i,
-                        values: Box::new(self.values.expects()),
-                        puncts: Box::new(fail.try_into().unwrap()),
+                        i: 0,
+                        punct_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),
@@ -1365,11 +1289,12 @@ where
                 },
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::SeparatedListNValue {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
                         n: self.n,
                         i,
-                        values: Box::new(fail.try_into().unwrap()),
-                        puncts: Box::new(self.puncts.expects()),
+                        value_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),
@@ -1399,12 +1324,10 @@ pub struct Punctuated0<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for Punctuated0<F, S, CV, CP> {
-    type Formatter = Punctuated0Expects<'c>;
+    type Formatter = PunctuatedList0Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        Punctuated0Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedList0Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for Punctuated0<F, S, CV, CP>
@@ -1472,12 +1395,10 @@ pub struct Punctuated1<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for Punctuated1<F, S, CV, CP> {
-    type Formatter = Punctuated1Expects<'c>;
+    type Formatter = PunctuatedList1Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        Punctuated1Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedList1Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for Punctuated1<F, S, CV, CP>
@@ -1499,7 +1420,13 @@ where
                 new_rem
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::Punctuated1 { fail: Box::new(fail.try_into().unwrap()) })),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::PunctuatedList1 {
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt:  Box::new(self.values.expects()),
+                    punct_fmt:  Box::new(self.puncts.expects()),
+                }));
+            },
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1547,12 +1474,10 @@ pub struct PunctuatedN<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for PunctuatedN<F, S, CV, CP> {
-    type Formatter = PunctuatedNExpects<'c>;
+    type Formatter = PunctuatedListNExpects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        PunctuatedNExpects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()), n: self.n }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedListNExpects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects(), n: self.n } }
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedN<F, S, CV, CP>
@@ -1579,11 +1504,12 @@ where
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
             Result::Fail(fail) => {
-                return Result::Fail(Failure::Common(Common::PunctuatedNValue {
-                    n:      self.n,
-                    i:      0,
-                    values: Box::new(fail.try_into().unwrap()),
-                    puncts: Box::new(self.puncts.expects()),
+                return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
+                    n: self.n,
+                    i: 0,
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt: Box::new(self.values.expects()),
+                    punct_fmt: Box::new(self.puncts.expects()),
                 }));
             },
             Result::Error(err) => return Result::Error(err),
@@ -1597,11 +1523,12 @@ where
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 // If we fail, that's the end of the list
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::PunctuatedNPunct {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNPunct {
                         n: self.n,
                         i,
-                        values: Box::new(self.values.expects()),
-                        puncts: Box::new(fail.try_into().unwrap()),
+                        punct_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),
@@ -1615,11 +1542,12 @@ where
                 },
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::PunctuatedNValue {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
                         n: self.n,
                         i,
-                        values: Box::new(fail.try_into().unwrap()),
-                        puncts: Box::new(self.puncts.expects()),
+                        value_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),
@@ -1649,12 +1577,10 @@ pub struct PunctuatedTrailing0<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for PunctuatedTrailing0<F, S, CV, CP> {
-    type Formatter = PunctuatedTrailing0Expects<'c>;
+    type Formatter = PunctuatedTrailing0Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        PunctuatedTrailing0Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedTrailing0Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedTrailing0<F, S, CV, CP>
@@ -1722,12 +1648,10 @@ pub struct PunctuatedTrailing1<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for PunctuatedTrailing1<F, S, CV, CP> {
-    type Formatter = PunctuatedTrailing1Expects<'c>;
+    type Formatter = PunctuatedTrailing1Expects<CV::Formatter, CP::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter {
-        PunctuatedTrailing1Expects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()) }
-    }
+    fn expects(&self) -> Self::Formatter { PunctuatedTrailing1Expects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects() } }
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV, CP> Combinator<'c, F, S> for PunctuatedTrailing1<F, S, CV, CP>
@@ -1749,7 +1673,13 @@ where
                 new_rem
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(fail) => return Result::Fail(Failure::Common(Common::PunctuatedTrailing1 { fail: Box::new(fail.try_into().unwrap()) })),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::PunctuatedList1 {
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt:  Box::new(self.values.expects()),
+                    punct_fmt:  Box::new(self.puncts.expects()),
+                }));
+            },
             Result::Error(err) => return Result::Error(err),
         };
 
@@ -1797,11 +1727,11 @@ pub struct PunctuatedTrailingN<F, S, CV, CP> {
 }
 #[cfg(feature = "punctuated")]
 impl<'c, F, S, CV: Expects<'c>, CP: Expects<'c>> Expects<'c> for PunctuatedTrailingN<F, S, CV, CP> {
-    type Formatter = PunctuatedTrailingNExpects<'c>;
+    type Formatter = PunctuatedTrailingNExpects<CV::Formatter, CP::Formatter>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter {
-        PunctuatedTrailingNExpects { value_fmt: Box::new(self.values.expects()), punct_fmt: Box::new(self.puncts.expects()), n: self.n }
+        PunctuatedTrailingNExpects { value_fmt: self.values.expects(), punct_fmt: self.puncts.expects(), n: self.n }
     }
 }
 #[cfg(feature = "punctuated")]
@@ -1829,11 +1759,12 @@ where
             },
             Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
             Result::Fail(fail) => {
-                return Result::Fail(Failure::Common(Common::PunctuatedTrailingNValue {
-                    n:      self.n,
-                    i:      0,
-                    values: Box::new(fail.try_into().unwrap()),
-                    puncts: Box::new(self.puncts.expects()),
+                return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
+                    n: self.n,
+                    i: 0,
+                    value_fail: Box::new(fail.try_into().unwrap()),
+                    value_fmt: Box::new(self.values.expects()),
+                    punct_fmt: Box::new(self.puncts.expects()),
                 }));
             },
             Result::Error(err) => return Result::Error(err),
@@ -1850,11 +1781,12 @@ where
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 // If we fail, that's the end of the list
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::PunctuatedTrailingNPunct {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNPunct {
                         n: self.n,
                         i,
-                        values: Box::new(self.values.expects()),
-                        puncts: Box::new(fail.try_into().unwrap()),
+                        punct_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),
@@ -1868,11 +1800,12 @@ where
                 },
                 Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
                 Result::Fail(fail) => {
-                    return Result::Fail(Failure::Common(Common::PunctuatedTrailingNValue {
+                    return Result::Fail(Failure::Common(Common::PunctuatedListNValue {
                         n: self.n,
                         i,
-                        values: Box::new(fail.try_into().unwrap()),
-                        puncts: Box::new(self.puncts.expects()),
+                        value_fail: Box::new(fail.try_into().unwrap()),
+                        value_fmt: Box::new(self.values.expects()),
+                        punct_fmt: Box::new(self.puncts.expects()),
                     }));
                 },
                 Result::Error(err) => return Result::Error(err),

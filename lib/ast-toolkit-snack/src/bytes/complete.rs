@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    02 May 2024, 14:59:18
+//    03 May 2024, 11:47:35
 //  Auto updated?
 //    Yes
 //
@@ -151,7 +151,7 @@ where
 #[derive(Debug)]
 pub struct OneOf1Expects<'b> {
     /// The set of bytes we expect one of.
-    byteset: &'b [u8],
+    pub(crate) byteset: &'b [u8],
 }
 impl<'b> Display for OneOf1Expects<'b> {
     #[inline]
@@ -183,7 +183,7 @@ impl<'b> ExpectsFormatter for OneOf1Expects<'b> {
 #[derive(Debug)]
 pub struct TagExpects<'t> {
     /// The tag of bytes we expect one of.
-    tag: &'t [u8],
+    pub(crate) tag: &'t [u8],
 }
 impl<'t> Display for TagExpects<'t> {
     #[inline]

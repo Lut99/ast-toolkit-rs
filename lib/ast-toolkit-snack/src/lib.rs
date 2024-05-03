@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    02 May 2024, 18:28:57
+//    03 May 2024, 10:34:51
 //  Auto updated?
 //    Yes
 //
@@ -85,6 +85,16 @@ pub trait ExpectsFormatter: Debug + Display {
     /// # Errors
     /// This function should only error if it failed to write to the given `f`ormatter.
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
+}
+
+// Default impls for pointer-like types
+impl<'a, T: ?Sized + ExpectsFormatter> ExpectsFormatter for &'a T {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
+}
+impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
 }
 
 

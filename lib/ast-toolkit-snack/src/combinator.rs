@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    02 May 2024, 10:56:53
+//    03 May 2024, 10:50:46
 //  Auto updated?
 //    Yes
 //
@@ -109,18 +109,18 @@ where
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Not`] combinator.
 #[derive(Debug)]
-pub struct NotExpects<'t> {
+pub struct NotExpects<E> {
     /// The thing we _don't_ expect.
-    fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) fmt: E,
 }
-impl<'t> Display for NotExpects<'t> {
+impl<E: ExpectsFormatter> Display for NotExpects<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for NotExpects<'t> {
+impl<E: ExpectsFormatter> ExpectsFormatter for NotExpects<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "not ")?;
@@ -130,18 +130,18 @@ impl<'t> ExpectsFormatter for NotExpects<'t> {
 
 /// ExpectsFormatter for the [`Map`] combinator.
 #[derive(Debug)]
-pub struct MapExpects<'t> {
+pub struct MapExpects<E> {
     /// The thing we expect.
-    fmt: Box<dyn 't + ExpectsFormatter>,
+    pub(crate) fmt: E,
 }
-impl<'t> Display for MapExpects<'t> {
+impl<E: ExpectsFormatter> Display for MapExpects<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for MapExpects<'t> {
+impl<E: ExpectsFormatter> ExpectsFormatter for MapExpects<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.fmt.expects_fmt(f, indent) }
 }
@@ -161,10 +161,10 @@ pub struct Not<F, S, C> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>> Expects<'t> for Not<F, S, C> {
-    type Formatter = NotExpects<'t>;
+    type Formatter = NotExpects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { NotExpects { fmt: Box::new(self.comb.expects()) } }
+    fn expects(&self) -> Self::Formatter { NotExpects { fmt: self.comb.expects() } }
 }
 impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
 where
@@ -178,7 +178,7 @@ where
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S> {
         match self.comb.parse(input.clone()) {
-            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { expects: Box::new(self.comb.expects()), span: res.span() })),
+            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span: res.span() })),
             Result::Fail(_) => Result::Ok(input, ()),
             Result::Error(err) => Result::Error(err),
         }
@@ -199,10 +199,10 @@ pub struct Map<F, S, C, M> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for Map<F, S, C, M> {
-    type Formatter = MapExpects<'t>;
+    type Formatter = MapExpects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { MapExpects { fmt: Box::new(self.comb.expects()) } }
+    fn expects(&self) -> Self::Formatter { MapExpects { fmt: self.comb.expects() } }
 }
 impl<'c, F, S, R1, R2, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
 where

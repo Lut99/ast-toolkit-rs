@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    02 May 2024, 15:00:01
+//    03 May 2024, 11:54:07
 //  Auto updated?
 //    Yes
 //
@@ -241,7 +241,7 @@ impl ExpectsFormatter for Digit1Expects {
 #[derive(Debug)]
 pub struct OneOf1Expects<'c> {
     /// The set of bytes we expect one of.
-    charset: &'c [&'c str],
+    pub(crate) charset: &'c [&'c str],
 }
 impl<'c> Display for OneOf1Expects<'c> {
     #[inline]
@@ -273,7 +273,7 @@ impl<'c> ExpectsFormatter for OneOf1Expects<'c> {
 #[derive(Debug)]
 pub struct TagExpects<'t> {
     /// The tag of characters we expect one of.
-    tag: &'t str,
+    pub(crate) tag: &'t str,
 }
 impl<'t> Display for TagExpects<'t> {
     #[inline]

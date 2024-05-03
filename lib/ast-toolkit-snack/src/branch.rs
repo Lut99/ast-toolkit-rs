@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    02 May 2024, 10:11:04
+//    03 May 2024, 10:50:29
 //  Auto updated?
 //    Yes
 //
@@ -63,10 +63,10 @@ macro_rules! tuple_branchable_impl {
     (impl => $li:tt : ($fi:tt, $fname:ident) $(, ($i:tt, $name:ident))*) => {
         paste::paste! {
             /// Formats the expects-string for a tuple of a particular size
-            #[derive(Debug)]
+            #[derive(Clone, Debug)]
             pub struct [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 /// The formatters for all nested combinators.
-                fmts: ($fname, $($name,)*),
+                pub(crate) fmts: ($fname, $($name,)*),
             }
             impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> Display for [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 #[inline]
@@ -112,7 +112,7 @@ macro_rules! tuple_branchable_impl {
                             Result::Fail(fail) => fails.push(fail.try_into().unwrap()),
                             Result::Error(err) => return Result::Error(err),
                         })*
-                        Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), span: input }))
+                        Result::Fail(Failure::Common(Common::Alt { branches: fails.into(), fmt: Box::new(<Self as Branchable<'t, F, S>>::expects(self)), span: input }))
                     }
                 }
             );

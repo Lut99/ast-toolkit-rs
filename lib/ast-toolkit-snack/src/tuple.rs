@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2024, 15:42:04
 //  Last edited:
-//    02 May 2024, 09:48:02
+//    03 May 2024, 10:50:39
 //  Auto updated?
 //    Yes
 //
@@ -54,7 +54,7 @@ macro_rules! tuple_combinator_impl {
             #[derive(Debug)]
             pub struct [< Tuple $li Formatter >]<$fname: Debug $(, $name: Debug)*> {
                 /// The formatters for all nested combinators.
-                fmts: ($fname, $($name,)*),
+                pub(crate) fmts: ($fname, $($name,)*),
             }
             impl<$fname: ExpectsFormatter $(, $name: ExpectsFormatter)*> Display for [< Tuple $li Formatter >]<$fname $(, $name)*> {
                 #[inline]

@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    02 May 2024, 11:10:05
+//    03 May 2024, 11:56:18
 //  Auto updated?
 //    Yes
 //
@@ -27,6 +27,12 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
 
+use crate::bytes::complete::{OneOf1Expects as OneOf1BytesExpects, TagExpects as TagBytesExpects, While1Expects as While1BytesExpects};
+use crate::combinator::NotExpects;
+use crate::multi::Many1Expects;
+use crate::utf8::complete::{
+    Digit1Expects, OneOf1Expects as OneOf1Utf8Expects, TagExpects as TagUtf8Expects, While1Expects as While1Utf8Expects, Whitespace1Expects,
+};
 use crate::ExpectsFormatter;
 
 
@@ -69,43 +75,37 @@ pub enum Common<'a, F, S> {
     /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
-    Alt { branches: Vec<Self>, span: Span<F, S> },
+    Alt { branches: Vec<Self>, fmt: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
     /// Failed to match at least one digit.
     Digit1 { span: Span<F, S> },
     /// Failed to match a combinator at least once.
-    Many1 { fail: Box<Self> },
+    Many1 { fail: Box<Self>, nested_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match a combinator exactly N times.
-    ManyN { n: usize, i: usize, fail: Box<Self> },
+    ManyN { n: usize, i: usize, fail: Box<Self>, nested_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to _not_ apply a combinator.
-    Not { expects: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
+    Not { nested_fmt: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
     /// Expected at least one of the following bytes.
     OneOf1Bytes { byteset: &'a [u8], span: Span<F, S> },
     /// Expected at least one of the following characters.
     OneOf1Utf8 { charset: &'a [&'a str], span: Span<F, S> },
-    /// Failed to match a combinator at least once, separated by some other thing.
-    #[cfg(feature = "punctuated")]
-    Punctuated1 { fail: Box<Self> },
+    /// Failed to parse at least one value in a punctuated list of sorts.
+    PunctuatedList1 { value_fail: Box<Self>, value_fmt: Box<dyn 'a + ExpectsFormatter>, punct_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
-    #[cfg(feature = "punctuated")]
-    PunctuatedNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
+    PunctuatedListNPunct {
+        n: usize,
+        i: usize,
+        punct_fail: Box<Self>,
+        value_fmt: Box<dyn 'a + ExpectsFormatter>,
+        punct_fmt: Box<dyn 'a + ExpectsFormatter>,
+    },
     /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
-    #[cfg(feature = "punctuated")]
-    PunctuatedNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
-    /// Failed to match a combinator at least once, separated by some other thing.
-    #[cfg(feature = "punctuated")]
-    PunctuatedTrailing1 { fail: Box<Self> },
-    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
-    #[cfg(feature = "punctuated")]
-    PunctuatedTrailingNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
-    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
-    #[cfg(feature = "punctuated")]
-    PunctuatedTrailingNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
-    /// Failed to match a combinator at least once, separated by some other thing.
-    SeparatedList1 { fail: Box<Self> },
-    /// Failed to match a combinator exactly N times, separated by some other thing, where the punctuation was what we failed to parse.
-    SeparatedListNPunct { n: usize, i: usize, values: Box<dyn 'a + ExpectsFormatter>, puncts: Box<Self> },
-    /// Failed to match a combinator exactly N times, separated by some other thing, where the value was what we failed to parse.
-    SeparatedListNValue { n: usize, i: usize, values: Box<Self>, puncts: Box<dyn 'a + ExpectsFormatter> },
+    PunctuatedListNValue {
+        n: usize,
+        i: usize,
+        value_fail: Box<Self>,
+        value_fmt: Box<dyn 'a + ExpectsFormatter>,
+        punct_fmt: Box<dyn 'a + ExpectsFormatter>,
+    },
     /// Failed to match something particular with byte version of the [`tag()`](crate::bytes::complete::tag())-combinator.
     TagBytes { tag: &'a [u8], span: Span<F, S> },
     /// Failed to match something particular with UTF-8 version of the [`tag()`](crate::utf8::complete::tag())-combinator.
@@ -118,67 +118,62 @@ pub enum Common<'a, F, S> {
     Whitespace1 { span: Span<F, S> },
 }
 
-// impl<'a, F, S> Expects for Common<'a, F, S> {
-//     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-//         match self {
-//             Self::Alt { branches, .. } => expects_alt(f, indent, branches.iter().map(|b| -> &dyn Expects { b })),
-//             Self::Digit1 { .. } => expects_digit1(f),
-//             Self::Many1 { fail } => expects_many1(f, indent, fail.expects()),
-//             Self::ManyN { n, i: _, fail } => expects_many_n(f, indent, *n, fail.expects()),
-//             Self::Not { expects, .. } => expects_not(f, indent, expects),
-//             Self::OneOf1Bytes { byteset, .. } => expects_one_of1_bytes(f, byteset),
-//             Self::OneOf1Utf8 { charset, .. } => expects_one_of1_utf8(f, charset),
-//             #[cfg(feature = "punctuated")]
-//             Self::Punctuated1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
-//             #[cfg(feature = "punctuated")]
-//             Self::PunctuatedNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
-//             #[cfg(feature = "punctuated")]
-//             Self::PunctuatedNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
-//             #[cfg(feature = "punctuated")]
-//             Self::PunctuatedTrailing1 { fail } => expects_punctuated_trailing1_fail(f, indent, fail.expects()),
-//             #[cfg(feature = "punctuated")]
-//             Self::PunctuatedTrailingNPunct { n, i: _, values, puncts } => {
-//                 expects_punctuated_trailing_n_punct(f, indent, *n, *values, puncts.expects())
-//             },
-//             #[cfg(feature = "punctuated")]
-//             Self::PunctuatedTrailingNValue { n, i: _, values, puncts } => {
-//                 expects_punctuated_trailing_n_value(f, indent, *n, values.expects(), *puncts)
-//             },
-//             Self::SeparatedList1 { fail } => expects_separated_list1_fail(f, indent, fail.expects()),
-//             Self::SeparatedListNPunct { n, i: _, values, puncts } => expects_separated_list_n_punct(f, indent, *n, *values, puncts.expects()),
-//             Self::SeparatedListNValue { n, i: _, values, puncts } => expects_separated_list_n_value(f, indent, *n, values.expects(), *puncts),
-//             Self::TagBytes { tag, .. } => expects_tag_bytes(f, tag),
-//             Self::TagUtf8 { tag, .. } => expects_tag_utf8(f, tag),
-//             Self::While1Utf8 { .. } => expects_while1_utf8(f),
-//             Self::Whitespace1 { .. } => expects_whitespace1(f),
-//         }
-//     }
-// }
+impl<'a, F, S> Display for Common<'a, F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Alt { fmt, .. } => write!(f, "{fmt}"),
+            Self::Digit1 { .. } => write!(f, "{}", Digit1Expects),
+            Self::Many1 { nested_fmt, .. } => write!(f, "{}", Many1Expects { fmt: nested_fmt }),
+            Self::ManyN { i, n, nested_fmt, .. } => {
+                write!(f, "Expected at least {} more repetitions of ", *n - *i)?;
+                nested_fmt.expects_fmt(f, 0)
+            },
+            Self::Not { nested_fmt, .. } => write!(f, "{}", NotExpects { fmt: nested_fmt }),
+            Self::OneOf1Bytes { byteset, .. } => write!(f, "{}", OneOf1BytesExpects { byteset }),
+            Self::OneOf1Utf8 { charset, .. } => write!(f, "{}", OneOf1Utf8Expects { charset }),
+            Self::PunctuatedList1 { value_fmt, punct_fmt, .. } => {
+                write!(f, "Expected ")?;
+                value_fmt.expects_fmt(f, 0)?;
+                write!(f, " as first entry in ")?;
+                punct_fmt.expects_fmt(f, 0)?;
+                write!(f, "-separated list")
+            },
+            Self::PunctuatedListNPunct { n, value_fmt, punct_fmt, .. } => {
+                write!(f, "Expected ")?;
+                value_fmt.expects_fmt(f, 0)?;
+                write!(f, " to separate elements in ")?;
+                punct_fmt.expects_fmt(f, 0)?;
+                write!(f, "-list of {n} elements")
+            },
+            Self::PunctuatedListNValue { n, i, value_fmt, punct_fmt, .. } => {
+                write!(f, "Expected ")?;
+                value_fmt.expects_fmt(f, 0)?;
+                write!(f, " as entry {} in ", i + 1)?;
+                punct_fmt.expects_fmt(f, 0)?;
+                write!(f, "-separated list of {n} elements")
+            },
+            Self::TagBytes { tag, .. } => write!(f, "{}", TagBytesExpects { tag }),
+            Self::TagUtf8 { tag, .. } => write!(f, "{}", TagUtf8Expects { tag }),
+            Self::While1Bytes { .. } => write!(f, "{}", While1BytesExpects),
+            Self::While1Utf8 { .. } => write!(f, "{}", While1Utf8Expects),
+            Self::Whitespace1 { .. } => write!(f, "{}", Whitespace1Expects),
+        }
+    }
+}
 impl<'a, F: Clone, S: Clone> Spanning<F, S> for Common<'a, F, S> {
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
             Self::Digit1 { span } => span.clone(),
-            Self::Many1 { fail } => fail.span(),
+            Self::Many1 { fail, .. } => fail.span(),
             Self::ManyN { fail, .. } => fail.span(),
             Self::Not { span, .. } => span.clone(),
             Self::OneOf1Bytes { span, .. } => span.clone(),
             Self::OneOf1Utf8 { span, .. } => span.clone(),
-            #[cfg(feature = "punctuated")]
-            Self::Punctuated1 { fail } => fail.span(),
-            #[cfg(feature = "punctuated")]
-            Self::PunctuatedNPunct { puncts, .. } => puncts.span(),
-            #[cfg(feature = "punctuated")]
-            Self::PunctuatedNValue { values, .. } => values.span(),
-            #[cfg(feature = "punctuated")]
-            Self::PunctuatedTrailing1 { fail } => fail.span(),
-            #[cfg(feature = "punctuated")]
-            Self::PunctuatedTrailingNPunct { puncts, .. } => puncts.span(),
-            #[cfg(feature = "punctuated")]
-            Self::PunctuatedTrailingNValue { values, .. } => values.span(),
-            Self::SeparatedList1 { fail } => fail.span(),
-            Self::SeparatedListNPunct { puncts, .. } => puncts.span(),
-            Self::SeparatedListNValue { values, .. } => values.span(),
+            Self::PunctuatedList1 { value_fail, .. } => value_fail.span(),
+            Self::PunctuatedListNPunct { punct_fail, .. } => punct_fail.span(),
+            Self::PunctuatedListNValue { value_fail, .. } => value_fail.span(),
             Self::TagBytes { span, .. } => span.clone(),
             Self::TagUtf8 { span, .. } => span.clone(),
             Self::While1Bytes { span } => span.clone(),
@@ -202,22 +197,22 @@ pub enum Failure<'a, F, S> {
     Common(Common<'a, F, S>),
 }
 
-// impl<'a, F, S> Expects for Failure<'a, F, S> {
-//     #[inline]
-//     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-//         match self {
-//             Self::NotEnough { needed, .. } => {
-//                 if let Some(needed) = needed {
-//                     write!(f, "{needed} more input bytes")
-//                 } else {
-//                     write!(f, "more input")
-//                 }
-//             },
+impl<'a, F, S> Display for Failure<'a, F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        match self {
+            Self::NotEnough { needed, .. } => {
+                if let Some(needed) = needed {
+                    write!(f, "{needed} more input bytes")
+                } else {
+                    write!(f, "more input")
+                }
+            },
 
-//             Self::Common(p) => <Common<F, S> as Expects>::fmt(p, f, indent),
-//         }
-//     }
-// }
+            Self::Common(p) => <Common<'a, F, S> as Display>::fmt(p, f),
+        }
+    }
+}
 impl<'a, F: Clone, S: Clone> Spanning<F, S> for Failure<'a, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
@@ -260,18 +255,18 @@ pub enum Error<'a, F, S> {
     Common(Common<'a, F, S>),
 }
 
-// impl<'a, F, S> Expects for Error<'a, F, S> {
-//     #[inline]
-//     fn fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-//         match self {
-//             Self::Context { context, .. } => {
-//                 write!(f, "{context}")
-//             },
+impl<'a, F, S> Display for Error<'a, F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        match self {
+            Self::Context { context, .. } => {
+                write!(f, "{context}")
+            },
 
-//             Self::Common(p) => <Common<F, S> as Expects>::fmt(p, f, indent),
-//         }
-//     }
-// }
+            Self::Common(p) => <Common<'a, F, S> as Display>::fmt(p, f),
+        }
+    }
+}
 impl<'a, F: Clone, S: Clone> Spanning<F, S> for Error<'a, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
