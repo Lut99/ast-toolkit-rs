@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:46:57
 //  Last edited:
-//    03 May 2024, 11:53:22
+//    03 May 2024, 11:59:00
 //  Auto updated?
 //    Yes
 //
@@ -262,7 +262,7 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(5..), vec![span3.slice(..5)]));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::SeparatedList1 { .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedList1 { .. }))
 /// ));
 /// ```
 #[inline]
@@ -313,15 +313,15 @@ where
 /// );
 /// assert!(matches!(
 ///     comb.parse(span2),
-///     SResult::Fail(Failure::Common(Common::SeparatedListNValue { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     SResult::Fail(Failure::Common(Common::SeparatedListNPunct { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNPunct { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::SeparatedListNValue { i: 0, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 0, .. }))
 /// ));
 /// ```
 #[inline]
@@ -436,7 +436,7 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(5..), punct![v => span3.slice(..5)]));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::Punctuated1 { .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedList1 { .. }))
 /// ));
 /// ```
 #[cfg(feature = "punctuated")]
@@ -489,15 +489,15 @@ where
 /// );
 /// assert!(matches!(
 ///     comb.parse(span2),
-///     SResult::Fail(Failure::Common(Common::PunctuatedNValue { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     SResult::Fail(Failure::Common(Common::PunctuatedNPunct { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNPunct { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::PunctuatedNValue { i: 0, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 0, .. }))
 /// ));
 /// ```
 #[cfg(feature = "punctuated")]
@@ -613,7 +613,7 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(5..), punct_trail![v => span3.slice(..5)]));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::PunctuatedTrailing1 { .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedList1 { .. }))
 /// ));
 /// ```
 #[cfg(feature = "punctuated")]
@@ -666,15 +666,15 @@ where
 /// );
 /// assert!(matches!(
 ///     comb.parse(span2),
-///     SResult::Fail(Failure::Common(Common::PunctuatedTrailingNValue { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     SResult::Fail(Failure::Common(Common::PunctuatedTrailingNPunct { i: 1, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNPunct { i: 1, .. }))
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::PunctuatedTrailingNValue { i: 0, .. }))
+///     SResult::Fail(Failure::Common(Common::PunctuatedListNValue { i: 0, .. }))
 /// ));
 /// ```
 #[cfg(feature = "punctuated")]
@@ -1272,7 +1272,7 @@ where
                 Result::Fail(fail) => {
                     return Result::Fail(Failure::Common(Common::PunctuatedListNPunct {
                         n: self.n,
-                        i: 0,
+                        i,
                         punct_fail: Box::new(fail.try_into().unwrap()),
                         value_fmt: Box::new(self.values.expects()),
                         punct_fmt: Box::new(self.puncts.expects()),
