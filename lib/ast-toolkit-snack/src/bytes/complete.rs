@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    03 May 2024, 11:47:35
+//    03 May 2024, 13:32:46
 //  Auto updated?
 //    Yes
 //
@@ -57,12 +57,12 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// ));
 /// ```
 #[inline]
-pub fn one_of1<'b, F, S>(byteset: &'b [u8]) -> OneOf1<'b, F, S>
+pub const fn one_of1<'b, F, S>(byteset: &'b [u8]) -> OneOf1<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
 {
-    OneOf1 { byteset, _f: Default::default(), _s: Default::default() }
+    OneOf1 { byteset, _f: PhantomData, _s: PhantomData }
 }
 
 /// Matches a specific "tag", i.e., a sequence of bytes.
@@ -92,12 +92,12 @@ where
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagBytes { .. }))));
 /// ```
-pub fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>
+pub const fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
 {
-    Tag { tag, _f: PhantomData::default(), _s: PhantomData::default() }
+    Tag { tag, _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many bytes from the start of a span as possible, as long as those bytes match a given predicate.
@@ -133,13 +133,13 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
+pub const fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    While1 { predicate, _f: Default::default(), _s: Default::default() }
+    While1 { predicate, _f: PhantomData, _s: PhantomData }
 }
 
 

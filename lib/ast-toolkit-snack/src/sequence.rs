@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    02 May 2024, 14:40:45
+//    03 May 2024, 13:35:30
 //  Auto updated?
 //    Yes
 //
@@ -54,12 +54,12 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub fn pair<'c, F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
+pub const fn pair<'c, F, S, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
 where
     C1: Combinator<'c, F, S>,
     C2: Combinator<'c, F, S>,
 {
-    Tuple { tuple: (first, second), _f: Default::default(), _s: Default::default() }
+    Tuple { tuple: (first, second), _f: PhantomData, _s: PhantomData }
 }
 
 /// Applies a tuple of combinators, in-order.
@@ -100,11 +100,11 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub fn tuple<'c, F, S, C>(combs: C) -> Tuple<F, S, C>
+pub const fn tuple<'c, F, S, C>(combs: C) -> Tuple<F, S, C>
 where
     C: Combinator<'c, F, S>,
 {
-    Tuple { tuple: combs, _f: Default::default(), _s: Default::default() }
+    Tuple { tuple: combs, _f: PhantomData, _s: PhantomData }
 }
 
 /// Applies the first combinator, then applies the second and discards the result.
@@ -139,12 +139,12 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub fn terminated<'c, F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
+pub const fn terminated<'c, F, S, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
 where
     C1: Combinator<'c, F, S>,
     C2: Combinator<'c, F, S>,
 {
-    Terminated { first, sep, _f: Default::default(), _s: Default::default() }
+    Terminated { first, sep, _f: PhantomData, _s: PhantomData }
 }
 
 /// Applies the first combinator and discards the result, then applies the second.
@@ -179,12 +179,12 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub fn preceded<'c, F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
+pub const fn preceded<'c, F, S, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
 where
     C1: Combinator<'c, F, S>,
     C2: Combinator<'c, F, S>,
 {
-    Preceded { sep, second, _f: Default::default(), _s: Default::default() }
+    Preceded { sep, second, _f: PhantomData, _s: PhantomData }
 }
 
 /// Parses two values separated by some combinator who's value we don't care about.
@@ -231,13 +231,13 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn separated_pair<'c, F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
+pub const fn separated_pair<'c, F, S, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
 where
     C1: Combinator<'c, F, S>,
     C2: Combinator<'c, F, S>,
     C3: Combinator<'c, F, S>,
 {
-    SeparatedPair { first, sep, third, _f: Default::default(), _s: Default::default() }
+    SeparatedPair { first, sep, third, _f: PhantomData, _s: PhantomData }
 }
 
 /// Parses one value surrounded by a preceding and a terminating combinator we don't care about.
@@ -281,13 +281,13 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn delimited<'c, F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
+pub const fn delimited<'c, F, S, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
 where
     C1: Combinator<'c, F, S>,
     C2: Combinator<'c, F, S>,
     C3: Combinator<'c, F, S>,
 {
-    Delimited { sep1, second, sep3, _f: Default::default(), _s: Default::default() }
+    Delimited { sep1, second, sep3, _f: PhantomData, _s: PhantomData }
 }
 
 

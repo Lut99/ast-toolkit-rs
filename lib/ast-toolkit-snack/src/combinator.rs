@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    03 May 2024, 10:50:46
+//    03 May 2024, 13:29:42
 //  Auto updated?
 //    Yes
 //
@@ -51,14 +51,14 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Not { .. }))));
 /// ```
 #[inline]
-pub fn not<'c, F, S, C>(comb: C) -> Not<F, S, C>
+pub const fn not<'c, F, S, C>(comb: C) -> Not<F, S, C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<'c, F, S>,
     C::Output: Spanning<F, S>,
 {
-    Not { comb, _f: Default::default(), _s: Default::default() }
+    Not { comb, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -94,12 +94,12 @@ where
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
 /// ```
 #[inline]
-pub fn map<'c, F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
+pub const fn map<'c, F, S, R1, R2, C, M>(comb: C, func: M) -> Map<F, S, C, M>
 where
     C: Combinator<'c, F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
-    Map { comb, func, _f: Default::default(), _s: Default::default() }
+    Map { comb, func, _f: PhantomData, _s: PhantomData }
 }
 
 

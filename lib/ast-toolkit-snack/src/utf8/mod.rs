@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    02 May 2024, 14:48:31
+//    03 May 2024, 13:33:24
 //  Auto updated?
 //    Yes
 //
@@ -54,12 +54,12 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert_eq!(comb.parse(span2).unwrap(), (span2, Span::empty("<example>", "one23456")));
 /// ```
 #[inline]
-pub fn digit0<F, S>() -> Digit0<F, S>
+pub const fn digit0<F, S>() -> Digit0<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    Digit0 { _f: Default::default(), _s: Default::default() }
+    Digit0 { _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many characters from the start of a span as possible, as long as those characters are in the set of to-be-searched-for characters.
@@ -91,12 +91,12 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", "hijklmn")));
 /// ```
 #[inline]
-pub fn one_of0<'t, F, S>(charset: &'t [&'t str]) -> OneOf0<'t, F, S>
+pub const fn one_of0<'t, F, S>(charset: &'t [&'t str]) -> OneOf0<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
-    OneOf0 { charset, _f: Default::default(), _s: Default::default() }
+    OneOf0 { charset, _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many characters from the start of a span as possible, as long as those characters match a given predicate.
@@ -134,13 +134,13 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", "hijklmn")));
 /// ```
 #[inline]
-pub fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
+pub const fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
 where
     F: Clone,
     S: Clone + WhileUtf8,
     P: FnMut(&str) -> bool,
 {
-    While0 { predicate, _f: Default::default(), _s: Default::default() }
+    While0 { predicate, _f: PhantomData, _s: PhantomData }
 }
 
 /// Matches as many whitespace characters as possible.
@@ -173,12 +173,12 @@ where
 /// assert_eq!(comb.parse(span2).unwrap(), (span2, Span::empty("<example>", "cool \n dope")));
 /// ```
 #[inline]
-pub fn whitespace0<F, S>() -> Whitespace0<F, S>
+pub const fn whitespace0<F, S>() -> Whitespace0<F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
 {
-    Whitespace0 { _f: Default::default(), _s: Default::default() }
+    Whitespace0 { _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -297,8 +297,8 @@ where
                     c >= '0' && c <= '9'
                 }
             },
-            _f: Default::default(),
-            _s: Default::default(),
+            _f: PhantomData,
+            _s: PhantomData,
         }
         .parse(input)
     }
@@ -386,6 +386,6 @@ where
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
         // Note: last '\r\n' is a unicode windows line end :)
-        OneOf0 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() }.parse(input)
+        OneOf0 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: PhantomData, _s: PhantomData }.parse(input)
     }
 }

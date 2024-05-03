@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    02 May 2024, 10:42:30
+//    03 May 2024, 13:32:13
 //  Auto updated?
 //    Yes
 //
@@ -56,12 +56,12 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", b"hijklmn")));
 /// ```
 #[inline]
-pub fn one_of0<'b, F, S>(byteset: &'b [u8]) -> OneOf0<'b, F, S>
+pub const fn one_of0<'b, F, S>(byteset: &'b [u8]) -> OneOf0<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
 {
-    OneOf0 { byteset, _f: Default::default(), _s: Default::default() }
+    OneOf0 { byteset, _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many bytes from the start of a span as possible, as long as those bytes match a given predicate.
@@ -93,13 +93,13 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", b"hijklmn")));
 /// ```
 #[inline]
-pub fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
+pub const fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    While0 { predicate, _f: Default::default(), _s: Default::default() }
+    While0 { predicate, _f: PhantomData, _s: PhantomData }
 }
 
 

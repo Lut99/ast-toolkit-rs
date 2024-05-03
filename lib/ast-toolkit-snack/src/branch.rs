@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    03 May 2024, 10:50:29
+//    03 May 2024, 13:29:19
 //  Auto updated?
 //    Yes
 //
@@ -232,13 +232,13 @@ pub trait Branchable<'t, F, S> {
 /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Alt { .. }))));
 /// ```
-pub fn alt<'c, F, S, B>(branches: B) -> Alt<F, S, B>
+pub const fn alt<'c, F, S, B>(branches: B) -> Alt<F, S, B>
 where
     F: Clone,
     S: Clone,
     B: Branchable<'c, F, S>,
 {
-    Alt { branches, _f: Default::default(), _s: Default::default() }
+    Alt { branches, _f: PhantomData, _s: PhantomData }
 }
 
 

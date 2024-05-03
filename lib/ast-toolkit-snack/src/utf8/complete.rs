@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    03 May 2024, 11:54:07
+//    03 May 2024, 13:33:58
 //  Auto updated?
 //    Yes
 //
@@ -49,12 +49,12 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub fn digit1<F, S>() -> Digit1<F, S>
+pub const fn digit1<F, S>() -> Digit1<F, S>
 where
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    Digit1 { _f: Default::default(), _s: Default::default() }
+    Digit1 { _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many characters from the start of a span as possible, as long as those characters are in the set of to-be-searched-for characters.
@@ -87,12 +87,12 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::OneOf1Utf8 { .. }))));
 /// ```
 #[inline]
-pub fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
+pub const fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
-    OneOf1 { charset, _f: Default::default(), _s: Default::default() }
+    OneOf1 { charset, _f: PhantomData, _s: PhantomData }
 }
 
 /// Matches a specific "tag", i.e., a sequence of UTF-8 characters.
@@ -122,12 +122,12 @@ where
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
 /// ```
-pub fn tag<'t, F, S>(tag: &'t str) -> Tag<'t, F, S>
+pub const fn tag<'t, F, S>(tag: &'t str) -> Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
 {
-    Tag { tag, _f: PhantomData::default(), _s: PhantomData::default() }
+    Tag { tag, _f: PhantomData, _s: PhantomData }
 }
 
 /// Will attempt to match as many characters from the start of a span as possible, as long as those characters match a given predicate.
@@ -166,13 +166,13 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::While1Utf8 { .. }))));
 /// ```
 #[inline]
-pub fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
+pub const fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
 where
     F: Clone,
     S: Clone + WhileUtf8,
     P: FnMut(&str) -> bool,
 {
-    While1 { predicate, _f: Default::default(), _s: Default::default() }
+    While1 { predicate, _f: PhantomData, _s: PhantomData }
 }
 
 /// Matches as many whitespace characters as possible.
@@ -209,12 +209,12 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn whitespace1<F, S>() -> Whitespace1<F, S>
+pub const fn whitespace1<F, S>() -> Whitespace1<F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
-    Whitespace1 { _f: Default::default(), _s: Default::default() }
+    Whitespace1 { _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -351,8 +351,8 @@ where
                     c >= '0' && c <= '9'
                 }
             },
-            _f: Default::default(),
-            _s: Default::default(),
+            _f: PhantomData,
+            _s: PhantomData,
         };
         match comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, res),
@@ -490,7 +490,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S> {
-        let mut comb = OneOf1 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: Default::default(), _s: Default::default() };
+        let mut comb = OneOf1 { charset: &[" ", "\t", "\n", "\r", "\r\n"], _f: PhantomData, _s: PhantomData };
         match comb.parse(input) {
             Result::Ok(rem, res) => Result::Ok(rem, res),
             Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),

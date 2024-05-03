@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:46:57
 //  Last edited:
-//    03 May 2024, 11:59:00
+//    03 May 2024, 13:31:10
 //  Auto updated?
 //    Yes
 //
@@ -62,13 +62,13 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, vec![]));
 /// ```
 #[inline]
-pub fn many0<'c, F, S, C>(comb: C) -> Many0<F, S, C>
+pub const fn many0<'c, F, S, C>(comb: C) -> Many0<F, S, C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<'c, F, S>,
 {
-    Many0 { comb, _f: Default::default(), _s: Default::default() }
+    Many0 { comb, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to apply the given combinator as many times as possible, but at least once.
@@ -105,13 +105,13 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Many1 { .. }))));
 /// ```
 #[inline]
-pub fn many1<'c, F, S, C>(comb: C) -> Many1<F, S, C>
+pub const fn many1<'c, F, S, C>(comb: C) -> Many1<F, S, C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<'c, F, S>,
 {
-    Many1 { comb, _f: Default::default(), _s: Default::default() }
+    Many1 { comb, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to apply the given combinator exactly `N` times.
@@ -155,13 +155,13 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn many_n<'c, F, S, C>(n: usize, comb: C) -> ManyN<F, S, C>
+pub const fn many_n<'c, F, S, C>(n: usize, comb: C) -> ManyN<F, S, C>
 where
     F: Clone,
     S: Clone,
     C: Combinator<'c, F, S>,
 {
-    ManyN { comb, n, _f: Default::default(), _s: Default::default() }
+    ManyN { comb, n, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -209,14 +209,14 @@ where
 /// assert_eq!(comb.parse(span4).unwrap(), (span4, vec![]));
 /// ```
 #[inline]
-pub fn separated_list0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList0<F, S, CV, CP>
+pub const fn separated_list0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    SeparatedList0 { values, puncts, _f: Default::default(), _s: Default::default() }
+    SeparatedList0 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to parse a list of things separated by other things, discarding the parsed other things as we go.
@@ -266,14 +266,14 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn separated_list1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList1<F, S, CV, CP>
+pub const fn separated_list1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> SeparatedList1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    SeparatedList1 { values, puncts, _f: Default::default(), _s: Default::default() }
+    SeparatedList1 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to apply the given combinator exactly `N` times, parsing separators in between.
@@ -325,14 +325,14 @@ where
 /// ));
 /// ```
 #[inline]
-pub fn separated_list_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> SeparatedListN<F, S, CV, CP>
+pub const fn separated_list_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> SeparatedListN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    SeparatedListN { values, puncts, n, _f: PhantomData::default(), _s: PhantomData::default() }
+    SeparatedListN { values, puncts, n, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -382,14 +382,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated0<F, S, CV, CP>
+pub const fn punctuated0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    Punctuated0 { values, puncts, _f: Default::default(), _s: Default::default() }
+    Punctuated0 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to parse a list of things separated by other things, keeping the parsed other things as we go.
@@ -441,14 +441,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated1<F, S, CV, CP>
+pub const fn punctuated1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> Punctuated1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    Punctuated1 { values, puncts, _f: Default::default(), _s: Default::default() }
+    Punctuated1 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to apply the given combinator exactly `N` times, parsing separators in between.
@@ -502,14 +502,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedN<F, S, CV, CP>
+pub const fn punctuated_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    PunctuatedN { values, puncts, n, _f: Default::default(), _s: Default::default() }
+    PunctuatedN { values, puncts, n, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -559,14 +559,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing0<F, S, CV, CP>
+pub const fn punctuated_trailing0<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing0<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    PunctuatedTrailing0 { values, puncts, _f: Default::default(), _s: Default::default() }
+    PunctuatedTrailing0 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to parse a list of things separated by other things, keeping the parsed other things as we go.
@@ -618,14 +618,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing1<F, S, CV, CP>
+pub const fn punctuated_trailing1<'c, F, S, CV, CP>(values: CV, puncts: CP) -> PunctuatedTrailing1<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    PunctuatedTrailing1 { values, puncts, _f: Default::default(), _s: Default::default() }
+    PunctuatedTrailing1 { values, puncts, _f: PhantomData, _s: PhantomData }
 }
 
 /// Attempts to apply the given combinator exactly `N` times, parsing separators in between.
@@ -679,14 +679,14 @@ where
 /// ```
 #[cfg(feature = "punctuated")]
 #[inline]
-pub fn punctuated_trailing_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedTrailingN<F, S, CV, CP>
+pub const fn punctuated_trailing_n<'c, F, S, CV, CP>(n: usize, values: CV, puncts: CP) -> PunctuatedTrailingN<F, S, CV, CP>
 where
     F: Clone,
     S: Clone,
     CV: Combinator<'c, F, S>,
     CP: Combinator<'c, F, S>,
 {
-    PunctuatedTrailingN { values, puncts, n, _f: Default::default(), _s: Default::default() }
+    PunctuatedTrailingN { values, puncts, n, _f: PhantomData, _s: PhantomData }
 }
 
 
