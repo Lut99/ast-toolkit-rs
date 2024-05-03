@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:37:18
 //  Last edited:
-//    02 May 2024, 18:30:41
+//    03 May 2024, 13:23:55
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use proc_macro_error::{Diagnostic, Level};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned as _;
-use syn::token::Underscore;
+use syn::token::{Move, Underscore};
 use syn::{Block, Error, Expr, ExprLit, ExprTuple, Ident, Lifetime, Lit, LitStr, Token, Type, TypeInfer};
 
 
@@ -39,8 +39,8 @@ fn generate_exp_impl(exp: &RawExpects) -> TokenStream2 {
         RawExpects::Tuple(lit, args) => quote! {
             || -> String { format!(#lit, #(#args),*) }
         },
-        RawExpects::Closure(closure) => quote! {
-            || -> String #closure
+        RawExpects::Closure(mv, closure) => quote! {
+            #(#mv)? || -> String #closure
         },
     }
 }
@@ -82,7 +82,7 @@ impl Parse for RawInput {
         while !input.is_empty() {
             // Match either of the keywords
             let ident: Ident = input.parse()?;
-            if ident == "expects" {
+            if ident == "expects" || ident == "expected" {
                 if let Ok(rexp) = input.parse::<RawExpects>() {
                     if exp.is_some() {
                         return Err(Error::new(ident.span(), "Only one 'expects' can be given"));
@@ -106,11 +106,11 @@ impl Parse for RawInput {
         // Ensure they are both given
         let exp: RawExpects = match exp {
             Some(exp) => exp,
-            None => return Err(input.error("Did not specify 'expects ...;'")),
+            None => return Err(input.error("Did not specify 'expects'")),
         };
         let comb: RawCombinator = match comb {
             Some(comb) => comb,
-            None => return Err(input.error("Did not specify 'combinator ...;'")),
+            None => return Err(input.error("Did not specify 'combinator'")),
         };
 
         // Done
@@ -125,7 +125,7 @@ enum RawExpects {
     /// It's a tuple format string.
     Tuple(LitStr, Vec<Expr>),
     /// It's a full-blown closure.
-    Closure(Block),
+    Closure(Option<Move>, Block),
 }
 impl Parse for RawExpects {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -149,8 +149,15 @@ impl Parse for RawExpects {
 
             // Return it
             RawExpects::Tuple(lit, exprs)
+        } else if let Ok(mv) = input.parse::<Move>() {
+            // Also parse the block
+            let closure: Block = match input.parse::<Block>() {
+                Ok(block) => block,
+                Err(_) => return Err(input.error("Expected code block after 'move'")),
+            };
+            RawExpects::Closure(Some(mv), closure)
         } else if let Ok(closure) = input.parse::<Block>() {
-            RawExpects::Closure(closure)
+            RawExpects::Closure(None, closure)
         } else {
             return Err(input.error("Expected either a string literal, tuple with formatter input or a closure block"));
         };
@@ -208,7 +215,7 @@ impl Parse for RawCombinator {
 
         // OK, done!
         Ok(Self {
-            lifetime: lifetime.unwrap_or_else(|| Lifetime::new("static", Span::call_site())),
+            lifetime: lifetime.unwrap_or_else(|| Lifetime::new("'static", Span::call_site())),
             output: output.unwrap_or_else(|| Type::Infer(TypeInfer { underscore_token: Underscore { spans: [Span::call_site()] } })),
             body,
         })
