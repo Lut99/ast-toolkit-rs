@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    06 May 2024, 16:23:52
+//    06 May 2024, 16:38:05
 //  Auto updated?
 //    Yes
 //
@@ -17,14 +17,16 @@
 //
 
 // Declare modules
-pub mod eq;
-pub mod hash;
+mod display;
+mod eq;
+mod hash;
 pub mod range;
 mod span;
-pub mod spannable;
+mod spannable;
 
 // Flatten them all in this namespace
-pub use eq::SpannableEq;
-pub use hash::SpannableHash;
+pub use display::*;
+pub use eq::*;
+pub use hash::*;
 pub use span::*;
-pub use spannable::Spannable;
+pub use spannable::*;
