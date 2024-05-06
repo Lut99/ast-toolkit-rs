@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    06 May 2024, 16:32:53
+//    06 May 2024, 16:46:11
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,7 @@
 //
 
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
 
@@ -20,6 +21,7 @@ use crate::eq::SpannableEq;
 use crate::hash::SpannableHash;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
+use crate::SpannableDisplay;
 
 
 /***** AUXILLARY *****/
@@ -253,6 +255,10 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
     }
 }
 
+impl<F, S: SpannableDisplay> Display for Span<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.source.slice_fmt(self.range, f) }
+}
 impl<F, S: SpannableEq> Eq for Span<F, S> {}
 impl<F, S: SpannableHash> Hash for Span<F, S> {
     #[inline]
