@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2024, 15:42:04
 //  Last edited:
-//    03 May 2024, 16:10:01
+//    06 May 2024, 11:14:30
 //  Auto updated?
 //    Yes
 //
@@ -72,17 +72,17 @@ macro_rules! tuple_combinator_impl {
             }
 
             // Then implement Expects and Combinator for the tuple
-            impl<'t, $fname: Expects<'t> $(, $name: Expects<'t>)*> Expects<'t> for ($fname, $($name,)*) {
-                type Formatter = [< Tuple $li Formatter >]<$fname::Formatter $(, $name::Formatter)*>;
+            paste::paste!(
+                impl<'t, $fname: Expects<'t> $(, $name: Expects<'t>)*> Expects<'t> for ($fname, $($name,)*) {
+                    type Formatter = [< Tuple $li Formatter >]<$fname::Formatter $(, $name::Formatter)*>;
 
-                #[inline]
-                fn expects(&self) -> Self::Formatter {
-                    [< Tuple $li Formatter >] {
-                        fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
+                    #[inline]
+                    fn expects(&self) -> Self::Formatter {
+                        [< Tuple $li Formatter >] {
+                            fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
+                        }
                     }
                 }
-            }
-            paste::paste!(
                 impl<'t, F, S, E, $fname: Combinator<'t, F, S, Error = E> $(, $name: Combinator<'t, F, S, Error = E>)*> Combinator<'t, F, S> for ($fname, $($name,)*) {
                     type Output = ($fname::Output, $($name::Output,)*);
                     type Error = E;

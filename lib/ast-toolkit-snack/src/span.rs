@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    02 May 2024, 14:58:25
+//    06 May 2024, 16:33:54
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,8 @@
 
 use std::borrow::Cow;
 
-use ast_toolkit_span::{Span, SpanRange};
+use ast_toolkit_span::range::SpanRange;
+use ast_toolkit_span::Span;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 

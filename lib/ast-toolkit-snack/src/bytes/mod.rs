@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    03 May 2024, 14:40:29
+//    06 May 2024, 16:33:24
 //  Auto updated?
 //    Yes
 //
@@ -16,12 +16,13 @@
 pub mod complete;
 pub mod streaming;
 
+// Imports
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-// Imports
-use ast_toolkit_span::{Span, SpanRange};
+use ast_toolkit_span::range::SpanRange;
+use ast_toolkit_span::Span;
 
 use crate::span::{OneOfBytes, WhileBytes};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};

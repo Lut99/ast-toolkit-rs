@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    03 May 2024, 14:40:36
+//    06 May 2024, 16:33:43
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,8 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpanRange, Spanning as _};
+use ast_toolkit_span::range::SpanRange;
+use ast_toolkit_span::{Span, Spanning as _};
 
 use crate::error::{Common, Failure};
 use crate::span::{MatchBytes, OneOfUtf8, WhileUtf8};

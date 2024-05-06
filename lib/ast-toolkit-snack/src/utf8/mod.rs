@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    03 May 2024, 14:40:34
+//    06 May 2024, 16:33:38
 //  Auto updated?
 //    Yes
 //
@@ -24,7 +24,8 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 // Imports
-use ast_toolkit_span::{Span, SpanRange};
+use ast_toolkit_span::range::SpanRange;
+use ast_toolkit_span::Span;
 
 use crate::span::{OneOfBytes, OneOfUtf8, WhileUtf8};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};

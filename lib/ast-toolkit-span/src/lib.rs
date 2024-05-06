@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    05 Apr 2024, 18:10:27
+//    06 May 2024, 16:23:52
 //  Auto updated?
 //    Yes
 //
@@ -17,15 +17,14 @@
 //
 
 // Declare modules
-// mod formatter;
-// mod formatting;
+pub mod eq;
+pub mod hash;
+pub mod range;
 mod span;
-#[cfg(test)]
-mod tests;
-// mod style;
+pub mod spannable;
 
 // Flatten them all in this namespace
-// pub use formatter::*;
-// pub use formatting::*;
+pub use eq::SpannableEq;
+pub use hash::SpannableHash;
 pub use span::*;
-// pub use style::*;
+pub use spannable::Spannable;
