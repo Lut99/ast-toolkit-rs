@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    07 May 2024, 09:43:53
+//    07 May 2024, 17:56:21
 //  Auto updated?
 //    Yes
 //
@@ -425,8 +425,13 @@ where
     type Error = Infallible;
 
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        // Assert the input can match at least the required number of bytes
+        let mut tag: &'t [u8] = self.tag.as_bytes();
+        if input.len() < tag.len() {
+            tag = &tag[..input.len()];
+        }
+
         // See if we can parse the input
-        let tag: &'t [u8] = self.tag.as_bytes();
         let match_point: usize = input.match_bytes(SpanRange::Open, tag);
         if match_point >= tag.len() {
             // Matched the entire tag

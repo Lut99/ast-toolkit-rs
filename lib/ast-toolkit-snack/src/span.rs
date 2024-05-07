@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    06 May 2024, 16:33:54
+//    07 May 2024, 17:32:14
 //  Auto updated?
 //    Yes
 //
@@ -33,10 +33,17 @@ pub trait MatchBytes {
     /// - If result is the length of `self`, the entire source was matched (but `bytes` may be longer!)
     /// - If result is 0, then none of `self` could be matched (i.e., first characters are wrong ...or `self` is empty!)
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize;
+
+    /// Returns the number of bytes in this array.
+    ///
+    /// # Returns
+    /// A `usize` with the number of bytes of length.
+    fn len(&self) -> usize;
 }
 
 // Default binary impls for [`MatchBytes`]
 impl<'b> MatchBytes for &'b [u8] {
+    #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize {
         // Match the prefixes
         let mut i: usize = 0;
@@ -48,18 +55,30 @@ impl<'b> MatchBytes for &'b [u8] {
         }
         i
     }
+
+    #[inline]
+    fn len(&self) -> usize { <[u8]>::len(self) }
 }
 impl<'b, const LEN: usize> MatchBytes for &'b [u8; LEN] {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { self.as_slice().match_bytes(range, bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { <[u8]>::len(self.as_slice()) }
 }
 impl<'b> MatchBytes for Cow<'b, [u8]> {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&&**self, range, bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { <[u8]>::len(self.as_ref()) }
 }
 impl MatchBytes for Vec<u8> {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&[u8]>::match_bytes(&self.as_slice(), range, bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { <Vec<u8>>::len(self) }
 }
 
 // Default string impls for [`MatchBytes`]
@@ -68,20 +87,32 @@ impl<'s> MatchBytes for &'s str {
         // Do a byte-wise comparison
         self.as_bytes().match_bytes(range, bytes)
     }
+
+    #[inline]
+    fn len(&self) -> usize { <str>::len(self) }
 }
 impl<'s> MatchBytes for Cow<'s, str> {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&&**self, range, bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { <str>::len(self.as_ref()) }
 }
 impl MatchBytes for String {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { <&str>::match_bytes(&self.as_str(), range, bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { <String>::len(self) }
 }
 
 // The implementation for a [`Span`].
 impl<F, S: MatchBytes> MatchBytes for Span<F, S> {
     #[inline]
     fn match_bytes(&self, range: SpanRange, bytes: &[u8]) -> usize { self.source_ref().match_bytes(self.range().span(&range), bytes) }
+
+    #[inline]
+    fn len(&self) -> usize { self.source_ref().len() }
 }
 
 
