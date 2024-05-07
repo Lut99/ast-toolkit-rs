@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    03 May 2024, 16:37:59
+//    07 May 2024, 09:54:14
 //  Auto updated?
 //    Yes
 //
@@ -79,17 +79,52 @@ pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData }
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Not { .. }))));
 /// ```
 #[inline]
-pub const fn not<'c, F, S, C>(comb: C) -> Not<F, S, C>
+pub const fn not<'t, F, S, C>(comb: C) -> Not<F, S, C>
 where
     F: Clone,
     S: Clone,
-    C: Combinator<'c, F, S>,
+    C: Combinator<'t, F, S>,
     C::Output: Spanning<F, S>,
 {
     Not { comb, _f: PhantomData, _s: PhantomData }
 }
 
-
+/// Makes parsing a combinator optional.
+///
+/// In other words, aside from just parsing whatever it is, it is also OK if that combinator fails. [`None`] is returned if that's the case.
+///
+/// # Arguments
+/// - `comb`: The [`Combinator`] to make optional.
+///
+/// # Returns
+/// A combinator [`Opt`] that will succeed pretty much regardless of whether `comb` succeeds.
+///
+/// # Fails
+/// The returned combinator only fails if `comb` is streaming and throws [`Failure::NotEnough`].
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::opt;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = opt(tag("Hello"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), Some(span1.slice(..5))));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, None));
+/// ```
+#[inline]
+pub const fn opt<'t, F, S, C>(comb: C) -> Opt<F, S, C>
+where
+    F: Clone,
+    S: Clone,
+    C: Combinator<'t, F, S>,
+{
+    Opt { comb, _f: PhantomData, _s: PhantomData }
+}
 
 /// Maps the result of a combinator to something else.
 ///
@@ -237,6 +272,27 @@ impl<E: ExpectsFormatter> ExpectsFormatter for NotExpects<E> {
     }
 }
 
+/// ExpectsFormatter for the [`Opt`] combinator.
+#[derive(Debug)]
+pub struct OptExpects<E> {
+    /// The thing we maybe expect.
+    pub(crate) fmt: E,
+}
+impl<E: ExpectsFormatter> Display for OptExpects<E> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<E: ExpectsFormatter> ExpectsFormatter for OptExpects<E> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        write!(f, "optionally ")?;
+        self.fmt.expects_fmt(f, indent)
+    }
+}
+
 /// ExpectsFormatter for the [`Map`] combinator.
 #[derive(Debug)]
 pub struct MapExpects<E> {
@@ -313,6 +369,43 @@ where
         match self.comb.parse(input.clone()) {
             Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span: res.span() })),
             Result::Fail(_) => Result::Ok(input, ()),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+
+
+/// The concrete combinator returned by [`opt()`].
+pub struct Opt<F, S, C> {
+    /// The combinator to maybe apply.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Opt<F, S, C> {
+    type Formatter = OptExpects<C::Formatter>;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { OptExpects { fmt: self.comb.expects() } }
+}
+impl<'t, F, S, C> Combinator<'t, F, S> for Opt<F, S, C>
+where
+    F: Clone,
+    S: Clone,
+    C: Combinator<'t, F, S>,
+{
+    type Output = Option<C::Output>;
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input.clone()) {
+            Result::Ok(rem, res) => Result::Ok(rem, Some(res)),
+            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(_) => Result::Ok(input, None),
             Result::Error(err) => Result::Error(err),
         }
     }
