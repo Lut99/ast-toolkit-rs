@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    03 May 2024, 16:22:37
+//    07 May 2024, 10:24:32
 //  Auto updated?
 //    Yes
 //
@@ -32,6 +32,7 @@ use enum_debug::EnumDebug;
 use crate::bytes::complete::{OneOf1Expects as OneOf1BytesExpects, TagExpects as TagBytesExpects, While1Expects as While1BytesExpects};
 use crate::combinator::NotExpects;
 use crate::multi::Many1Expects;
+use crate::sequence::DelimExpects;
 use crate::utf8::complete::{
     Digit1Expects, OneOf1Expects as OneOf1Utf8Expects, TagExpects as TagUtf8Expects, While1Expects as While1Utf8Expects, Whitespace1Expects,
 };
@@ -355,6 +356,17 @@ pub enum Common<'a, F, S, E = Infallible> {
     Alt { branches: Vec<Self>, fmt: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
     /// Some non-library combinator failed.
     Custom { err: E },
+    /// Failed to match the delimited part of a [`delim()`](crate::sequence::delim()).
+    Delim {
+        fail:      Box<Self>,
+        open_fmt:  Box<dyn 'a + ExpectsFormatter>,
+        comb_fmt:  Box<dyn 'a + ExpectsFormatter>,
+        close_fmt: Box<dyn 'a + ExpectsFormatter>,
+    },
+    /// Failed to match the closing delimiter of a [`delim()`](crate::sequence::delim()).
+    DelimClose { fail: Box<Self>, close_fmt: Box<dyn 'a + ExpectsFormatter> },
+    /// Failed to match the opening delimiter of a [`delim()`](crate::sequence::delim()).
+    DelimOpen { fail: Box<Self>, open_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match at least one digit.
     Digit1 { span: Span<F, S> },
     /// Failed to match a combinator at least once.
@@ -433,6 +445,9 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
                         }
                     },
                     Self::Custom { .. } => { panic!("Cannot transmute Common::Custom"); },
+                    Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => { Common::Delim { fail: Box::new((*fail).transmute()), open_fmt, comb_fmt, close_fmt } },
+                    Self::DelimClose { fail, close_fmt } => { Common::DelimClose { fail: Box::new((*fail).transmute()), close_fmt } },
+                    Self::DelimOpen { fail, open_fmt } => { Common::DelimOpen { fail: Box::new((*fail).transmute()), open_fmt } },
                     Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).transmute()), nested_fmt } },
                     Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).transmute()), nested_fmt } },
                     Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
@@ -459,7 +474,7 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
     /// A new Common that is the same variant, but with another custom error type.
     #[inline]
     #[track_caller]
-    pub fn map_custom<E2>(self, mut map: impl FnMut(E) -> E2) -> Common<'a, F, S, E2> {
+    pub fn map_custom<E2>(self, map: &mut impl FnMut(E) -> E2) -> Common<'a, F, S, E2> {
         propagate! {
             match self {
                 Self::Digit1 { span } => Common,
@@ -475,17 +490,20 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
                 !special {
                     Self::Alt { branches, fmt, span } => {
                         Common::Alt {
-                            branches: branches.into_iter().map(|c| c.transmute()).collect(),
+                            branches: branches.into_iter().map(|c| c.map_custom(map)).collect(),
                             fmt,
                             span,
                         }
                     },
                     Self::Custom { err } => { Common::Custom { err: map(err) } },
-                    Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).transmute()), nested_fmt } },
-                    Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).transmute()), nested_fmt } },
-                    Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
-                    Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).transmute()), value_fmt, punct_fmt } },
-                    Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).transmute()), value_fmt, punct_fmt } },
+                    Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => { Common::Delim { fail: Box::new((*fail).map_custom(map)), open_fmt, comb_fmt, close_fmt } },
+                    Self::DelimClose { fail, close_fmt } => { Common::DelimClose { fail: Box::new((*fail).map_custom(map)), close_fmt } },
+                    Self::DelimOpen { fail, open_fmt } => { Common::DelimOpen { fail: Box::new((*fail).map_custom(map)), open_fmt } },
+                    Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).map_custom(map)), nested_fmt } },
+                    Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).map_custom(map)), nested_fmt } },
+                    Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).map_custom(map)), value_fmt, punct_fmt } },
+                    Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt } },
                 },
             }
         }
@@ -498,6 +516,15 @@ impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
         match self {
             Self::Alt { fmt, .. } => write!(f, "{fmt}"),
             Self::Custom { err } => write!(f, "{err}"),
+            Self::DelimClose { close_fmt, .. } => {
+                write!(f, "Expected closing ")?;
+                close_fmt.expects_fmt(f, 0)
+            },
+            Self::Delim { open_fmt, comb_fmt, close_fmt, .. } => write!(f, "{}", DelimExpects { open_fmt, comb_fmt, close_fmt }),
+            Self::DelimOpen { open_fmt, .. } => {
+                write!(f, "Expected opening ")?;
+                open_fmt.expects_fmt(f, 0)
+            },
             Self::Digit1 { .. } => write!(f, "{}", Digit1Expects),
             Self::Many1 { nested_fmt, .. } => write!(f, "{}", Many1Expects { fmt: nested_fmt }),
             Self::ManyN { i, n, nested_fmt, .. } => {
@@ -541,6 +568,9 @@ impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Common<'a, F,
         match self {
             Self::Alt { span, .. } => span.clone(),
             Self::Custom { err } => err.span(),
+            Self::DelimClose { fail, .. } => fail.span(),
+            Self::Delim { fail, .. } => fail.span(),
+            Self::DelimOpen { fail, .. } => fail.span(),
             Self::Digit1 { span } => span.clone(),
             Self::Many1 { fail, .. } => fail.span(),
             Self::ManyN { fail, .. } => fail.span(),
@@ -610,10 +640,10 @@ impl<'a, F, S, E> Failure<'a, F, S, E> {
     /// A new Failure that is the same variant, but with another custom error type.
     #[inline]
     #[track_caller]
-    pub fn map_custom<E2>(self, map: impl FnMut(E) -> E2) -> Failure<'a, F, S, E2> {
+    pub fn map_custom<E2>(self, mut map: impl FnMut(E) -> E2) -> Failure<'a, F, S, E2> {
         match self {
             Self::NotEnough { needed, span } => Failure::NotEnough { needed, span },
-            Self::Common(c) => Failure::Common(c.map_custom(map)),
+            Self::Common(c) => Failure::Common(c.map_custom(&mut map)),
         }
     }
 }
@@ -713,10 +743,10 @@ impl<'a, F, S, E> Error<'a, F, S, E> {
     /// A new Error that is the same variant, but with another custom error type.
     #[inline]
     #[track_caller]
-    pub fn map_custom<E2>(self, map: impl FnMut(E) -> E2) -> Error<'a, F, S, E2> {
+    pub fn map_custom<E2>(self, mut map: impl FnMut(E) -> E2) -> Error<'a, F, S, E2> {
         match self {
             Self::Context { context, span } => Error::Context { context, span },
-            Self::Common(c) => Error::Common(c.map_custom(map)),
+            Self::Common(c) => Error::Common(c.map_custom(&mut map)),
         }
     }
 }

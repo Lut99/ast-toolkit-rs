@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    07 May 2024, 09:55:25
+//    07 May 2024, 10:23:19
 //  Auto updated?
 //    Yes
 //
@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
+use crate::error::{Common, Error, Failure};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
@@ -92,10 +93,10 @@ mod tests {
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn pair<'t1, 't2, F, S, E, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
+pub const fn pair<'t, F, S, E, C1, C2>(first: C1, second: C2) -> Tuple<F, S, (C1, C2)>
 where
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
 {
     Tuple { tuple: (first, second), _f: PhantomData, _s: PhantomData }
 }
@@ -145,6 +146,8 @@ where
     Tuple { tuple: combs, _f: PhantomData, _s: PhantomData }
 }
 
+
+
 /// Applies the first combinator, then applies the second and discards the result.
 ///
 /// This is useful to parse trailing comma's, for example, where you don't care about the second but do need to parse it to enforce syntax.
@@ -177,10 +180,10 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn terminated<'t1, 't2, F, S, E, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
+pub const fn terminated<'t, F, S, E, C1, C2>(first: C1, sep: C2) -> Terminated<F, S, C1, C2>
 where
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
 {
     Terminated { first, sep, _f: PhantomData, _s: PhantomData }
 }
@@ -217,10 +220,10 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
 /// ```
 #[inline]
-pub const fn preceded<'t1, 't2, F, S, E, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
+pub const fn preceded<'t, F, S, E, C1, C2>(sep: C1, second: C2) -> Preceded<F, S, C1, C2>
 where
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
 {
     Preceded { sep, second, _f: PhantomData, _s: PhantomData }
 }
@@ -269,11 +272,11 @@ where
 /// ));
 /// ```
 #[inline]
-pub const fn separated_pair<'t1, 't2, 't3, F, S, E, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
+pub const fn separated_pair<'t, F, S, E, C1, C2, C3>(first: C1, sep: C2, third: C3) -> SeparatedPair<F, S, C1, C2, C3>
 where
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
-    C3: Combinator<'t3, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
+    C3: Combinator<'t, F, S, Error = E>,
 {
     SeparatedPair { first, sep, third, _f: PhantomData, _s: PhantomData }
 }
@@ -319,13 +322,63 @@ where
 /// ));
 /// ```
 #[inline]
-pub const fn delimited<'t1, 't2, 't3, F, S, E, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
+pub const fn delimited<'t, F, S, E, C1, C2, C3>(sep1: C1, second: C2, sep3: C3) -> Delimited<F, S, C1, C2, C3>
 where
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
-    C3: Combinator<'t3, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
+    C3: Combinator<'t, F, S, Error = E>,
 {
     Delimited { sep1, second, sep3, _f: PhantomData, _s: PhantomData }
+}
+
+
+
+/// Parses a value wrapped in something like parenthesis.
+///
+/// Unlike [`delimited()`], returns the parsed tokens. Also contains some special error handling that emits [`Error`]s if the closing delimited was not found.
+///
+/// # Arguments
+/// - `open`: A [`Combinator`] that parses the opening combinator.
+/// - `comb`: A [`Combinator`] that parses the part in between the delimiters.
+/// - `close`: A [`Combinator`] that parses the closing combinator.
+///
+/// # Returns
+/// A combinator [`Delim`] that will parse the `open`, `comb` and `close`, respectively, and returns all results.
+///
+/// # Fails
+/// The returned combinator fails if any of the given one fails.
+/// In addition, `close` failures are returned as [`Result::Error`], as it considers that a full syntax error.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{Common, Error, Failure};
+/// use ast_toolkit_snack::sequence::delim;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "(Hello)");
+/// let span2 = Span::new("<example>", "(Goodbye)");
+/// let span3 = Span::new("<example>", "Hello)");
+/// let span4 = Span::new("<example>", "(Hello");
+///
+/// let mut comb = delim(tag("("), tag("Hello"), tag(")"));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(7..), (span1.slice(..1), span1.slice(1..6), span1.slice(6..7)))
+/// );
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Delim { .. }))));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::DelimOpen { .. }))));
+/// assert!(matches!(comb.parse(span4), SResult::Error(Error::Common(Common::DelimClose { .. }))));
+/// ```
+#[inline]
+pub const fn delim<'t, F, S, E, C1, C2, C3>(open: C1, comb: C2, close: C3) -> Delim<F, S, C1, C2, C3>
+where
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
+    C3: Combinator<'t, F, S, Error = E>,
+{
+    Delim { open, comb, close, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -409,6 +462,34 @@ impl<'t> ExpectsFormatter for TripletExpects<'t> {
     }
 }
 
+/// ExpectsFormatter for the [`Delim`] combinator.
+#[derive(Debug)]
+pub struct DelimExpects<E1, E2, E3> {
+    /// ExpectsFormatter for the opening delimiter.
+    pub(crate) open_fmt:  E1,
+    /// ExpectsFormatter for the thing in between the delimiters.
+    pub(crate) comb_fmt:  E2,
+    /// ExpectsFormatter for the closing delimiter.
+    pub(crate) close_fmt: E3,
+}
+impl<E1: ExpectsFormatter, E2: ExpectsFormatter, E3: ExpectsFormatter> Display for DelimExpects<E1, E2, E3> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<E1: ExpectsFormatter, E2: ExpectsFormatter, E3: ExpectsFormatter> ExpectsFormatter for DelimExpects<E1, E2, E3> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        self.comb_fmt.expects_fmt(f, indent)?;
+        write!(f, " delimited by ")?;
+        self.open_fmt.expects_fmt(f, indent)?;
+        write!(f, " and ")?;
+        self.close_fmt.expects_fmt(f, indent)
+    }
+}
+
 
 
 
@@ -436,6 +517,8 @@ impl<'t, F, S, T: Combinator<'t, F, S>> Combinator<'t, F, S> for Tuple<F, S, T> 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> { self.tuple.parse(input) }
 }
+
+
 
 /// Combinator returned by [`terminated()`].
 pub struct Terminated<F, S, C1, C2> {
@@ -637,6 +720,88 @@ where
             Result::Ok(rem, _) => Result::Ok(rem, res),
             Result::Fail(fail) => Result::Fail(fail),
             Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+
+
+/// Combinator returned by [`delim()`].
+pub struct Delim<F, S, C1, C2, C3> {
+    /// Combinator for opening delimiter.
+    open:  C1,
+    /// Combinator for the part in between the delimiters.
+    comb:  C2,
+    /// Combinator for closing delimiter.
+    close: C3,
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
+    _f:    PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
+    _s:    PhantomData<S>,
+}
+impl<'t, F, S, C1, C2, C3> Expects<'t> for Delim<F, S, C1, C2, C3>
+where
+    C1: Expects<'t>,
+    C2: Expects<'t>,
+    C3: Expects<'t>,
+{
+    type Formatter = DelimExpects<C1::Formatter, C2::Formatter, C3::Formatter>;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter {
+        DelimExpects { open_fmt: self.open.expects(), comb_fmt: self.comb.expects(), close_fmt: self.close.expects() }
+    }
+}
+impl<'t, F, S, E, C1, C2, C3> Combinator<'t, F, S> for Delim<F, S, C1, C2, C3>
+where
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
+    C3: Combinator<'t, F, S, Error = E>,
+{
+    type Output = (C1::Output, C2::Output, C3::Output);
+    type Error = E;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        // Parse the opening delimiter first
+        let (rem, open): (Span<F, S>, C1::Output) = match self.open.parse(input) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::DelimOpen {
+                    fail:     Box::new(fail.try_into().unwrap()),
+                    open_fmt: Box::new(self.open.expects()),
+                }));
+            },
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Next, attempt to parse the middle part
+        let (rem, res): (Span<F, S>, C2::Output) = match self.comb.parse(rem) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => {
+                return Result::Fail(Failure::Common(Common::Delim {
+                    fail:      Box::new(fail.try_into().unwrap()),
+                    comb_fmt:  Box::new(self.comb.expects()),
+                    close_fmt: Box::new(self.close.expects()),
+                    open_fmt:  Box::new(self.open.expects()),
+                }));
+            },
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Finally, parse the final part
+        match self.close.parse(rem) {
+            Result::Ok(rem, close) => Result::Ok(rem, (open, res, close)),
+            Result::Fail(Failure::NotEnough { needed, span }) => return Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(fail) => {
+                return Result::Error(Error::Common(Common::DelimClose {
+                    fail:      Box::new(fail.try_into().unwrap()),
+                    close_fmt: Box::new(self.close.expects()),
+                }));
+            },
+            Result::Error(err) => return Result::Error(err),
         }
     }
 }
