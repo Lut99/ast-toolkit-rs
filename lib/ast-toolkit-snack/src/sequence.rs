@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    07 May 2024, 08:20:13
+//    07 May 2024, 09:55:25
 //  Auto updated?
 //    Yes
 //
@@ -49,7 +49,7 @@ mod tests {
         let mut comb2 = pre_tags(&t);
         let mut comb3 = pre_tags_rev(&t);
         assert_eq!(comb1.parse(span1).unwrap(), (span1.slice(13..), (span1.slice(..6), span1.slice(6..13))));
-        assert_eq!(comb2.parse(span1).unwrap(), (span1.slice(13..), span1.slice(..6)));
+        assert_eq!(comb2.parse(span1).unwrap(), (span1.slice(13..), span1.slice(6..13)));
         assert_eq!(comb3.parse(span2).unwrap(), (span2.slice(13..), span2.slice(7..13)));
     }
 }
