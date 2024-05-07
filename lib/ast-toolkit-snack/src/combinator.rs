@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    07 May 2024, 11:22:32
+//    07 May 2024, 11:40:23
 //  Auto updated?
 //    Yes
 //
@@ -172,7 +172,7 @@ where
 /// - `func`: Some closure that takes potential custom errors emitted by `comb` and maps it to something else.
 ///
 /// # Returns
-/// A combinator [`Map`] that runs the given `comb`inator, and then maps the result using `func`.
+/// A combinator [`MapErr`] that runs the given `comb`inator, and then maps the result using `func`.
 ///
 /// # Fails
 /// The returned combinator fails if the given `comb`inator fails.
@@ -229,6 +229,75 @@ where
     M: FnMut(E1) -> E2,
 {
     MapErr { comb, func, _f: PhantomData, _s: PhantomData }
+}
+
+/// Maps the custom error in a result of a combinator to something else, without actually mapping it.
+///
+/// When working with combinators, it is often the case that you need to merge the custom errors of combinators that will never throw it. Then you can use this combinator to essentially "transmute" the never-used error type to whatever you like.
+///
+/// # Arguments
+/// - `comb`: Some [`Combinator`] to run.
+///
+/// # Returns
+/// A combinator [`Transmute`] that runs the given `comb`inator, translating the errors behind the screen.
+///
+/// Note that, by design, the returned combinator panics if `comb` _does_ throw a [`Common::Custom`] somehow.
+///
+/// # Fails
+/// The returned combinator fails if the given `comb`inator fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::transmute;
+/// use ast_toolkit_snack::error::{fail, Common, Error, Failure};
+/// use ast_toolkit_snack::sequence::pair;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::MatchBytes;
+///
+/// struct HelloWorldError;
+///
+/// // Pretend this is has `Expects` and `Combinator` impls
+/// fn hello_world<F: Clone, S: Clone + MatchBytes>(input: Span<F, S>) -> SResult<'static, (), F, S, &'static str> {
+///     match tag("Hello, world").parse(input) {
+///         SResult::Ok(rem, _) => SResult::Ok(rem, ()),
+///         SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+///         SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
+///     }
+/// }
+/// # struct HelloWorld;
+/// # impl ast_toolkit_snack::Expects<'static> for HelloWorld {
+/// #     type Formatter = ast_toolkit_snack::utf8::Digit0Expects;
+/// #     fn expects(&self) -> Self::Formatter { ast_toolkit_snack::utf8::Digit0Expects }
+/// # }
+/// # impl ast_toolkit_snack::Combinator<'static, &'static str, &'static str> for HelloWorld {
+/// #     type Output = ();
+/// #     type Error = &'static str;
+/// #     fn parse(&mut self, input: Span<&'static str, &'static str>) -> SResult<'static, Self::Output, &'static str, &'static str, Self::Error> {
+/// #         match tag("Hello, world").parse(input) {
+/// #             SResult::Ok(rem, _) => SResult::Ok(rem, ()),
+/// #             SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+/// #             SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
+/// #         }
+/// #     }
+/// # }
+/// # let hello_world = HelloWorld;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = pair(hello_world, transmute(tag("!")));
+///
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), ((), span1.slice(12..13))));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom("that's not hello world!")))));
+/// ```
+#[inline]
+pub const fn transmute<'t, F, S, C, E2>(comb: C) -> Transmute<F, S, C, E2>
+where
+    C: Combinator<'t, F, S>,
+{
+    Transmute { comb, _f: PhantomData, _s: PhantomData, _e: PhantomData }
 }
 
 
@@ -291,24 +360,6 @@ impl<E: ExpectsFormatter> ExpectsFormatter for OptExpects<E> {
         write!(f, "optionally ")?;
         self.fmt.expects_fmt(f, indent)
     }
-}
-
-/// ExpectsFormatter for the [`Map`] combinator.
-#[derive(Debug)]
-pub struct MapExpects<E> {
-    /// The thing we expect.
-    pub(crate) fmt: E,
-}
-impl<E: ExpectsFormatter> Display for MapExpects<E> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl<E: ExpectsFormatter> ExpectsFormatter for MapExpects<E> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { self.fmt.expects_fmt(f, indent) }
 }
 
 
@@ -425,10 +476,10 @@ pub struct Map<F, S, C, M> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for Map<F, S, C, M> {
-    type Formatter = MapExpects<C::Formatter>;
+    type Formatter = C::Formatter;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { MapExpects { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
 }
 impl<'c, F, S, R1, R2, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
 where
@@ -460,10 +511,10 @@ pub struct MapErr<F, S, C, M> {
     _s:   PhantomData<S>,
 }
 impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for MapErr<F, S, C, M> {
-    type Formatter = MapExpects<C::Formatter>;
+    type Formatter = C::Formatter;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { MapExpects { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
 }
 impl<'c, F, S, E1, E2, C, M> Combinator<'c, F, S> for MapErr<F, S, C, M>
 where
@@ -479,6 +530,40 @@ where
             Result::Ok(rem, res) => Result::Ok(rem, res),
             Result::Fail(fail) => Result::Fail(fail.map_custom(&mut self.func)),
             Result::Error(err) => Result::Error(err.map_custom(&mut self.func)),
+        }
+    }
+}
+
+/// The concrete type returned by [`transmute()`].
+pub struct Transmute<F, S, C, E2> {
+    /// The combinator who's custom error to change.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+    /// The type of the custom error to magically cast to.
+    _e:   PhantomData<E2>,
+}
+impl<'t, F, S, C: Expects<'t>, E2> Expects<'t> for Transmute<F, S, C, E2> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'c, F, S, C, E2> Combinator<'c, F, S> for Transmute<F, S, C, E2>
+where
+    C: Combinator<'c, F, S>,
+{
+    type Output = C::Output;
+    type Error = E2;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail.transmute()),
+            Result::Error(err) => Result::Error(err.transmute()),
         }
     }
 }
