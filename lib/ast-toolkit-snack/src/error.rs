@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    07 May 2024, 10:50:05
+//    07 May 2024, 11:23:01
 //  Auto updated?
 //    Yes
 //
@@ -112,7 +112,7 @@ impl error::Error for TryFromFailureError {}
 /// let mut comb = fail("Hello there!");
 /// assert!(matches!(
 ///     comb.parse(span),
-///     SResult::Fail(Failure::Common(Common::Custom { err: "Hello there!" }))
+///     SResult::Fail(Failure::Common(Common::Custom("Hello there!")))
 /// ));
 /// ```
 pub const fn fail<F, S, E>(err: E) -> Fail<F, S, E>
@@ -146,7 +146,7 @@ where
 /// let mut comb = err("Hello there!");
 /// assert!(matches!(
 ///     comb.parse(span),
-///     SResult::Error(Error::Common(Common::Custom { err: "Hello there!" }))
+///     SResult::Error(Error::Common(Common::Custom("Hello there!")))
 /// ));
 /// ```
 pub const fn err<F, S, E>(err: E) -> Err<F, S, E>

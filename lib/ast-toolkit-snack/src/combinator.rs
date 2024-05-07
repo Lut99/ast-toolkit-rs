@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    07 May 2024, 09:54:14
+//    07 May 2024, 11:22:32
 //  Auto updated?
 //    Yes
 //
@@ -192,8 +192,8 @@ where
 /// fn hello_world<F: Clone, S: Clone + MatchBytes>(input: Span<F, S>) -> SResult<'static, (), F, S, &'static str> {
 ///     match tag("Hello, world!").parse(input) {
 ///         SResult::Ok(rem, _) => SResult::Ok(rem, ()),
-///         SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom { err: "that's not hello world!" })),
-///         SResult::Error(_) => SResult::Error(Error::Common(Common::Custom { err: "that's not hello world!" })),
+///         SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+///         SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
 ///     }
 /// }
 /// # struct HelloWorld;
@@ -207,8 +207,8 @@ where
 /// #     fn parse(&mut self, input: Span<&'static str, &'static str>) -> SResult<'static, Self::Output, &'static str, &'static str, Self::Error> {
 /// #         match tag("Hello, world!").parse(input) {
 /// #             SResult::Ok(rem, _) => SResult::Ok(rem, ()),
-/// #             SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom { err: "that's not hello world!" })),
-/// #             SResult::Error(_) => SResult::Error(Error::Common(Common::Custom { err: "that's not hello world!" })),
+/// #             SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+/// #             SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
 /// #         }
 /// #     }
 /// # }
@@ -220,7 +220,7 @@ where
 /// let mut comb = map_err(hello_world, |_| HelloWorldError);
 ///
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), ()));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom { err: HelloWorldError }))));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom(HelloWorldError)))));
 /// ```
 #[inline]
 pub const fn map_err<'c, F, S, R, E1, E2, C, M>(comb: C, func: M) -> MapErr<F, S, C, M>
@@ -430,13 +430,13 @@ impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for Map<F, S, C, M> {
     #[inline]
     fn expects(&self) -> Self::Formatter { MapExpects { fmt: self.comb.expects() } }
 }
-impl<'c, F, S, R1, R2, E, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
+impl<'c, F, S, R1, R2, C, M> Combinator<'c, F, S> for Map<F, S, C, M>
 where
-    C: Combinator<'c, F, S, Output = R1, Error = E>,
+    C: Combinator<'c, F, S, Output = R1>,
     M: FnMut(R1) -> R2,
 {
     type Output = R2;
-    type Error = E;
+    type Error = C::Error;
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
@@ -465,12 +465,12 @@ impl<'t, F, S, C: Expects<'t>, M> Expects<'t> for MapErr<F, S, C, M> {
     #[inline]
     fn expects(&self) -> Self::Formatter { MapExpects { fmt: self.comb.expects() } }
 }
-impl<'c, F, S, R, E1, E2, C, M> Combinator<'c, F, S> for MapErr<F, S, C, M>
+impl<'c, F, S, E1, E2, C, M> Combinator<'c, F, S> for MapErr<F, S, C, M>
 where
-    C: Combinator<'c, F, S, Output = R, Error = E1>,
+    C: Combinator<'c, F, S, Error = E1>,
     M: FnMut(E1) -> E2,
 {
-    type Output = R;
+    type Output = C::Output;
     type Error = E2;
 
     #[inline]
