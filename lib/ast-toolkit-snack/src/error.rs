@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    07 May 2024, 10:24:32
+//    07 May 2024, 10:50:05
 //  Auto updated?
 //    Yes
 //
@@ -276,7 +276,7 @@ impl<'e, F, S, E: 'e + Clone> Combinator<'e, F, S> for Fail<F, S, E> {
 
     #[inline]
     fn parse(&mut self, _input: Span<F, S>) -> Result<'e, Self::Output, F, S, Self::Error> {
-        Result::Fail(Failure::Common(Common::Custom { err: self.err.clone() }))
+        Result::Fail(Failure::Common(Common::Custom(self.err.clone())))
     }
 }
 
@@ -301,7 +301,7 @@ impl<'e, F, S, E: 'e + Clone> Combinator<'e, F, S> for Err<F, S, E> {
 
     #[inline]
     fn parse(&mut self, _input: Span<F, S>) -> Result<'e, Self::Output, F, S, Self::Error> {
-        Result::Error(Error::Common(Common::Custom { err: self.err.clone() }))
+        Result::Error(Error::Common(Common::Custom(self.err.clone())))
     }
 }
 
@@ -355,7 +355,7 @@ pub enum Common<'a, F, S, E = Infallible> {
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
     Alt { branches: Vec<Self>, fmt: Box<dyn 'a + ExpectsFormatter>, span: Span<F, S> },
     /// Some non-library combinator failed.
-    Custom { err: E },
+    Custom(E),
     /// Failed to match the delimited part of a [`delim()`](crate::sequence::delim()).
     Delim {
         fail:      Box<Self>,
@@ -475,37 +475,34 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
     #[inline]
     #[track_caller]
     pub fn map_custom<E2>(self, map: &mut impl FnMut(E) -> E2) -> Common<'a, F, S, E2> {
-        propagate! {
-            match self {
-                Self::Digit1 { span } => Common,
-                Self::Not { nested_fmt, span } => Common,
-                Self::OneOf1Bytes { byteset, span } => Common,
-                Self::OneOf1Utf8 { charset, span } => Common,
-                Self::TagBytes { tag, span } => Common,
-                Self::TagUtf8 { tag, span } => Common,
-                Self::While1Bytes { span } => Common,
-                Self::While1Utf8 { span } => Common,
-                Self::Whitespace1 { span } => Common,
-
-                !special {
-                    Self::Alt { branches, fmt, span } => {
-                        Common::Alt {
-                            branches: branches.into_iter().map(|c| c.map_custom(map)).collect(),
-                            fmt,
-                            span,
-                        }
-                    },
-                    Self::Custom { err } => { Common::Custom { err: map(err) } },
-                    Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => { Common::Delim { fail: Box::new((*fail).map_custom(map)), open_fmt, comb_fmt, close_fmt } },
-                    Self::DelimClose { fail, close_fmt } => { Common::DelimClose { fail: Box::new((*fail).map_custom(map)), close_fmt } },
-                    Self::DelimOpen { fail, open_fmt } => { Common::DelimOpen { fail: Box::new((*fail).map_custom(map)), open_fmt } },
-                    Self::Many1 { fail, nested_fmt } => { Common::Many1 { fail: Box::new((*fail).map_custom(map)), nested_fmt } },
-                    Self::ManyN { n, i, fail, nested_fmt } => { Common::ManyN { n, i, fail: Box::new((*fail).map_custom(map)), nested_fmt } },
-                    Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => { Common::PunctuatedList1 { value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt } },
-                    Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).map_custom(map)), value_fmt, punct_fmt } },
-                    Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => { Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt } },
-                },
-            }
+        match self {
+            Self::Alt { branches, fmt, span } => Common::Alt { branches: branches.into_iter().map(|c| c.map_custom(map)).collect(), fmt, span },
+            Self::Custom(err) => Common::Custom(map(err)),
+            Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => {
+                Common::Delim { fail: Box::new((*fail).map_custom(map)), open_fmt, comb_fmt, close_fmt }
+            },
+            Self::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new((*fail).map_custom(map)), close_fmt },
+            Self::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new((*fail).map_custom(map)), open_fmt },
+            Self::Digit1 { span } => Common::Digit1 { span },
+            Self::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new((*fail).map_custom(map)), nested_fmt },
+            Self::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new((*fail).map_custom(map)), nested_fmt },
+            Self::Not { nested_fmt, span } => Common::Not { nested_fmt, span },
+            Self::OneOf1Bytes { byteset, span } => Common::OneOf1Bytes { byteset, span },
+            Self::OneOf1Utf8 { charset, span } => Common::OneOf1Utf8 { charset, span },
+            Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedList1 { value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt }
+            },
+            Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedListNPunct { n, i, punct_fail: Box::new((*punct_fail).map_custom(map)), value_fmt, punct_fmt }
+            },
+            Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedListNValue { n, i, value_fail: Box::new((*value_fail).map_custom(map)), value_fmt, punct_fmt }
+            },
+            Self::TagBytes { tag, span } => Common::TagBytes { tag, span },
+            Self::TagUtf8 { tag, span } => Common::TagUtf8 { tag, span },
+            Self::While1Bytes { span } => Common::While1Bytes { span },
+            Self::While1Utf8 { span } => Common::While1Utf8 { span },
+            Self::Whitespace1 { span } => Common::Whitespace1 { span },
         }
     }
 }
@@ -515,7 +512,7 @@ impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
             Self::Alt { fmt, .. } => write!(f, "{fmt}"),
-            Self::Custom { err } => write!(f, "{err}"),
+            Self::Custom(err) => write!(f, "{err}"),
             Self::DelimClose { close_fmt, .. } => {
                 write!(f, "Expected closing ")?;
                 close_fmt.expects_fmt(f, 0)
@@ -567,7 +564,7 @@ impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Common<'a, F,
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Alt { span, .. } => span.clone(),
-            Self::Custom { err } => err.span(),
+            Self::Custom(err) => err.span(),
             Self::DelimClose { fail, .. } => fail.span(),
             Self::Delim { fail, .. } => fail.span(),
             Self::DelimOpen { fail, .. } => fail.span(),
