@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 11:40:17
 //  Last edited:
-//    03 May 2024, 14:39:52
+//    07 May 2024, 09:46:09
 //  Auto updated?
 //    Yes
 //
@@ -264,15 +264,15 @@ where
     #[inline]
     fn expects(&self) -> Self::Formatter { self.branches.expects() }
 }
-impl<'c, F, S, B> Combinator<'c, F, S> for Alt<F, S, B>
+impl<'t, F, S, B> Combinator<'t, F, S> for Alt<F, S, B>
 where
     F: Clone,
     S: Clone,
-    B: Branchable<'c, F, S>,
+    B: Branchable<'t, F, S>,
 {
     type Output = B::Output;
     type Error = B::Error;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> { self.branches.branch(input) }
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> { self.branches.branch(input) }
 }

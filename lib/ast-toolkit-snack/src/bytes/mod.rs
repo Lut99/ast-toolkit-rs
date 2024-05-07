@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:49
 //  Last edited:
-//    06 May 2024, 16:33:24
+//    07 May 2024, 09:45:11
 //  Auto updated?
 //    Yes
 //
@@ -170,13 +170,13 @@ pub struct OneOf0<'b, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, F, S> Expects<'b> for OneOf0<'b, F, S> {
+impl<'e, 'b: 'e, F, S> Expects<'e> for OneOf0<'b, F, S> {
     type Formatter = OneOf0Expects<'b>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { OneOf0Expects { byteset: self.byteset } }
 }
-impl<'b, F, S> Combinator<'b, F, S> for OneOf0<'b, F, S>
+impl<'e, 'b: 'e, F, S> Combinator<'e, F, S> for OneOf0<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,

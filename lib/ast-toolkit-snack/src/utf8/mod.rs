@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    06 May 2024, 16:33:38
+//    07 May 2024, 09:44:31
 //  Auto updated?
 //    Yes
 //
@@ -93,7 +93,7 @@ where
 /// assert_eq!(comb.parse(span3).unwrap(), (span3, Span::empty("<example>", "hijklmn")));
 /// ```
 #[inline]
-pub const fn one_of0<'t, F, S>(charset: &'t [&'t str]) -> OneOf0<'t, F, S>
+pub const fn one_of0<'c, F, S>(charset: &'c [&'c str]) -> OneOf0<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -316,13 +316,13 @@ pub struct OneOf0<'c, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'c, F, S> Expects<'c> for OneOf0<'c, F, S> {
+impl<'e, 'c: 'e, F, S> Expects<'e> for OneOf0<'c, F, S> {
     type Formatter = OneOf0Expects<'c>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { OneOf0Expects { charset: self.charset } }
 }
-impl<'c, F, S> Combinator<'c, F, S> for OneOf0<'c, F, S>
+impl<'e, 'c: 'e, F, S> Combinator<'e, F, S> for OneOf0<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,

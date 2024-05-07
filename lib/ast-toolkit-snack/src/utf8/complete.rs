@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    07 May 2024, 08:32:13
+//    07 May 2024, 09:43:53
 //  Auto updated?
 //    Yes
 //
@@ -89,7 +89,7 @@ where
 /// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::OneOf1Utf8 { .. }))));
 /// ```
 #[inline]
-pub const fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
+pub const fn one_of1<'c, F, S>(charset: &'c [&'c str]) -> OneOf1<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -375,13 +375,13 @@ pub struct OneOf1<'c, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'c, F, S> Expects<'c> for OneOf1<'c, F, S> {
+impl<'e, 'c: 'e, F, S> Expects<'e> for OneOf1<'c, F, S> {
     type Formatter = OneOf1Expects<'c>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { OneOf1Expects { charset: self.charset } }
 }
-impl<'c, F, S> Combinator<'c, F, S> for OneOf1<'c, F, S>
+impl<'e, 'c: 'e, F, S> Combinator<'e, F, S> for OneOf1<'c, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
@@ -409,6 +409,7 @@ pub struct Tag<'t, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
+// Lifetime pattern from: https://users.rust-lang.org/t/unconstrained-lifetime-parameter-while-propagating-trait-lifetimes/110968
 impl<'e, 't: 'e, F, S> Expects<'e> for Tag<'t, F, S> {
     type Formatter = TagExpects<'t>;
 

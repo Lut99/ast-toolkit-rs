@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    06 May 2024, 16:33:33
+//    07 May 2024, 09:44:58
 //  Auto updated?
 //    Yes
 //
@@ -228,13 +228,13 @@ pub struct OneOf1<'b, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, F, S> Expects<'b> for OneOf1<'b, F, S> {
+impl<'e, 'b: 'e, F, S> Expects<'e> for OneOf1<'b, F, S> {
     type Formatter = OneOf1Expects<'b>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { OneOf1Expects { byteset: self.byteset } }
 }
-impl<'b, F, S> Combinator<'b, F, S> for OneOf1<'b, F, S>
+impl<'e, 'b: 'e, F, S> Combinator<'e, F, S> for OneOf1<'b, F, S>
 where
     F: Clone,
     S: Clone + OneOfBytes,
@@ -262,13 +262,13 @@ pub struct Tag<'t, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
-impl<'t, F, S> Expects<'t> for Tag<'t, F, S> {
+impl<'e, 't: 'e, F, S> Expects<'e> for Tag<'t, F, S> {
     type Formatter = TagExpects<'t>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { TagExpects { tag: self.tag } }
 }
-impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
+impl<'e, 't: 'e, F, S> Combinator<'e, F, S> for Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
