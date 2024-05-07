@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    06 May 2024, 11:55:05
+//    07 May 2024, 08:20:13
 //  Auto updated?
 //    Yes
 //
@@ -29,15 +29,15 @@ mod tests {
 
     #[test]
     fn multiple_lifetimes() {
-        // fn two_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Tuple<F, S, (Tag<'static, F, S>, Tag<'t, F, S>)> {
-        //     tuple((tag("STATIC"), tag(t)))
-        // }
-        // fn pre_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'static, F, S>, Tag<'t, F, S>> {
-        //     preceded(tag("STATIC"), tag(t))
-        // }
-        // fn pre_tags_rev<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'t, F, S>, Tag<'static, F, S>> {
-        //     preceded(tag(t), tag("STATIC"))
-        // }
+        fn two_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Tuple<F, S, (Tag<'static, F, S>, Tag<'t, F, S>)> {
+            tuple((tag("STATIC"), tag(t)))
+        }
+        fn pre_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'static, F, S>, Tag<'t, F, S>> {
+            preceded(tag("STATIC"), tag(t))
+        }
+        fn pre_tags_rev<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'t, F, S>, Tag<'static, F, S>> {
+            preceded(tag(t), tag("STATIC"))
+        }
 
         // Define various type of input
         let span1 = Span::new("<example>", "STATICshorter");
@@ -45,12 +45,12 @@ mod tests {
         let t: String = String::from("shorter");
 
         // Run the two combinators
-        // let mut comb1 = two_tags(&t);
-        // let mut comb2 = pre_tags(&t);
-        // let mut comb3 = pre_tags_rev(&t);
-        // assert_eq!(comb1.parse(span1).unwrap(), (span1.slice(13..), (span1.slice(..6), span1.slice(6..13))));
-        // assert_eq!(comb2.parse(span1).unwrap(), (span1.slice(13..), span1.slice(..6)));
-        // assert_eq!(comb3.parse(span2).unwrap(), (span2.slice(13..), span2.slice(7..13)));
+        let mut comb1 = two_tags(&t);
+        let mut comb2 = pre_tags(&t);
+        let mut comb3 = pre_tags_rev(&t);
+        assert_eq!(comb1.parse(span1).unwrap(), (span1.slice(13..), (span1.slice(..6), span1.slice(6..13))));
+        assert_eq!(comb2.parse(span1).unwrap(), (span1.slice(13..), span1.slice(..6)));
+        assert_eq!(comb3.parse(span2).unwrap(), (span2.slice(13..), span2.slice(7..13)));
     }
 }
 
@@ -491,24 +491,22 @@ pub struct Preceded<F, S, C1, C2> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:     PhantomData<S>,
 }
-impl<'t1, 't2: 't1, F, S, C1: Expects<'t1>, C2: Expects<'t2>> Expects<'t1> for Preceded<F, S, C1, C2> {
+impl<'t, F, S, C1: Expects<'t>, C2: Expects<'t>> Expects<'t> for Preceded<F, S, C1, C2> {
     type Formatter = PairExpectsBeta<C1::Formatter, C2::Formatter>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { PairExpectsBeta { first_fmt: self.sep.expects(), second_fmt: self.second.expects() } }
 }
-impl<'t1, 't2, F, S, E, C1, C2> Combinator<'t1, F, S> for Preceded<F, S, C1, C2>
+impl<'t, F, S, E, C1, C2> Combinator<'t, F, S> for Preceded<F, S, C1, C2>
 where
-    't2: 't1,
-    C1: Combinator<'t1, F, S, Error = E>,
-    C2: Combinator<'t2, F, S, Error = E>,
+    C1: Combinator<'t, F, S, Error = E>,
+    C2: Combinator<'t, F, S, Error = E>,
 {
-    // type Output = C2::Output;
-    type Output = ();
+    type Output = C2::Output;
     type Error = E;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'t1, Self::Output, F, S, Self::Error> {
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
         // Parse the first first
         let rem: Span<F, S> = match self.sep.parse(input) {
             Result::Ok(rem, _) => rem,
@@ -517,12 +515,11 @@ where
         };
 
         // Parse the second
-        // match self.second.parse(rem) {
-        //     Result::Ok(rem, res) => Result::Ok(rem, res),
-        //     Result::Fail(fail) => Result::Fail(fail),
-        //     Result::Error(err) => Result::Error(err),
-        // }
-        Result::Ok(rem, ())
+        match self.second.parse(rem) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
     }
 }
 

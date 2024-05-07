@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:40:42
 //  Last edited:
-//    06 May 2024, 16:33:43
+//    07 May 2024, 08:32:13
 //  Auto updated?
 //    Yes
 //
@@ -409,13 +409,13 @@ pub struct Tag<'t, F, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
-impl<'t, F, S> Expects<'t> for Tag<'t, F, S> {
+impl<'e, 't: 'e, F, S> Expects<'e> for Tag<'t, F, S> {
     type Formatter = TagExpects<'t>;
 
     #[inline]
     fn expects(&self) -> Self::Formatter { TagExpects { tag: self.tag } }
 }
-impl<'t, F, S> Combinator<'t, F, S> for Tag<'t, F, S>
+impl<'e, 't: 'e, F, S> Combinator<'e, F, S> for Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
