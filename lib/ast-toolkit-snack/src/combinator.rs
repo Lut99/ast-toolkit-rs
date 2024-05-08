@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    07 May 2024, 11:40:23
+//    08 May 2024, 11:23:24
 //  Auto updated?
 //    Yes
 //
@@ -16,114 +16,45 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::error::{Common, Failure};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
 /***** LIBRARY FUNCTIONS *****/
-/// Implements a no-op combinator that doesn't consume anything.
-///
-/// This is useful in case you're working with more general combinators that you don't want to use all features of. A common case is parsing parenthesis with nothing in between them.
-///
-/// # Returns
-/// A combinator [`Nop`] that does not consume anything but always just returns `()`.
-///
-/// # Fails
-/// The returned combinator never fails.
-///
-/// # Example
-/// ```rust
-/// use ast_toolkit_snack::combinator::nop;
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
-///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
-///
-/// let mut comb = nop();
-/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
-/// assert_eq!(comb.parse(span2).unwrap(), (span2, ()));
-/// ```
-#[inline]
-pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData } }
-
-/// Implements the reverse of a combinator.
-///
-/// Specifically, will return `Result::Ok(())` if the combinator [`Result::Fail`]s, or a [`Result::Fail`] if it [`Result::Ok`]'s.
+/// Matches the full input text.
 ///
 /// # Arguments
-/// - `comb`: The [`Combinator`] to negate.
+/// - `comb`: Some combinator to apply to the input text in order to match it.
 ///
 /// # Returns
-/// A combinator [`Not`] that will succeed (but match nothing) if the given `comb`inator fails.
+/// A combinator [`All`] that will apply `comb`, and then fail if there is input left.
 ///
 /// # Fails
-/// The returned combinator fails if the given `comb`inator succeeds.
+/// The returned combinator fails if `comb` fails, or if `comb` did not consume all input.
 ///
-/// # Example
+/// # Exampel
 /// ```rust
-/// use ast_toolkit_snack::combinator::not;
+/// use ast_toolkit_snack::combinator::all;
 /// use ast_toolkit_snack::error::{Common, Failure};
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("<example>", "Hello");
+/// let span2 = Span::new("<example>", "Hello, world!");
 ///
-/// let mut comb = not(tag("Goodbye"));
-/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Not { .. }))));
+/// let mut comb = all(tag("Hello"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::All { .. }))));
 /// ```
 #[inline]
-pub const fn not<'t, F, S, C>(comb: C) -> Not<F, S, C>
+pub const fn all<'t, F, S, C>(comb: C) -> All<F, S, C>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
-    C::Output: Spanning<F, S>,
-{
-    Not { comb, _f: PhantomData, _s: PhantomData }
-}
-
-/// Makes parsing a combinator optional.
-///
-/// In other words, aside from just parsing whatever it is, it is also OK if that combinator fails. [`None`] is returned if that's the case.
-///
-/// # Arguments
-/// - `comb`: The [`Combinator`] to make optional.
-///
-/// # Returns
-/// A combinator [`Opt`] that will succeed pretty much regardless of whether `comb` succeeds.
-///
-/// # Fails
-/// The returned combinator only fails if `comb` is streaming and throws [`Failure::NotEnough`].
-///
-/// # Example
-/// ```rust
-/// use ast_toolkit_snack::combinator::opt;
-/// use ast_toolkit_snack::utf8::complete::tag;
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_span::Span;
-///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
-///
-/// let mut comb = opt(tag("Hello"));
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), Some(span1.slice(..5))));
-/// assert_eq!(comb.parse(span2).unwrap(), (span2, None));
-/// ```
-#[inline]
-pub const fn opt<'t, F, S, C>(comb: C) -> Opt<F, S, C>
-where
-    F: Clone,
-    S: Clone,
     C: Combinator<'t, F, S>,
 {
-    Opt { comb, _f: PhantomData, _s: PhantomData }
+    All { comb, _f: PhantomData, _s: PhantomData }
 }
 
 /// Maps the result of a combinator to something else.
@@ -231,73 +162,107 @@ where
     MapErr { comb, func, _f: PhantomData, _s: PhantomData }
 }
 
-/// Maps the custom error in a result of a combinator to something else, without actually mapping it.
+/// Implements a no-op combinator that doesn't consume anything.
 ///
-/// When working with combinators, it is often the case that you need to merge the custom errors of combinators that will never throw it. Then you can use this combinator to essentially "transmute" the never-used error type to whatever you like.
-///
-/// # Arguments
-/// - `comb`: Some [`Combinator`] to run.
+/// This is useful in case you're working with more general combinators that you don't want to use all features of. A common case is parsing parenthesis with nothing in between them.
 ///
 /// # Returns
-/// A combinator [`Transmute`] that runs the given `comb`inator, translating the errors behind the screen.
-///
-/// Note that, by design, the returned combinator panics if `comb` _does_ throw a [`Common::Custom`] somehow.
+/// A combinator [`Nop`] that does not consume anything but always just returns `()`.
 ///
 /// # Fails
-/// The returned combinator fails if the given `comb`inator fails.
+/// The returned combinator never fails.
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::combinator::transmute;
-/// use ast_toolkit_snack::error::{fail, Common, Error, Failure};
-/// use ast_toolkit_snack::sequence::pair;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::combinator::nop;
+/// use ast_toolkit_snack::error::{Common, Failure};
 /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_snack::span::MatchBytes;
-///
-/// struct HelloWorldError;
-///
-/// // Pretend this is has `Expects` and `Combinator` impls
-/// fn hello_world<F: Clone, S: Clone + MatchBytes>(input: Span<F, S>) -> SResult<'static, (), F, S, &'static str> {
-///     match tag("Hello, world").parse(input) {
-///         SResult::Ok(rem, _) => SResult::Ok(rem, ()),
-///         SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
-///         SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
-///     }
-/// }
-/// # struct HelloWorld;
-/// # impl ast_toolkit_snack::Expects<'static> for HelloWorld {
-/// #     type Formatter = ast_toolkit_snack::utf8::Digit0Expects;
-/// #     fn expects(&self) -> Self::Formatter { ast_toolkit_snack::utf8::Digit0Expects }
-/// # }
-/// # impl ast_toolkit_snack::Combinator<'static, &'static str, &'static str> for HelloWorld {
-/// #     type Output = ();
-/// #     type Error = &'static str;
-/// #     fn parse(&mut self, input: Span<&'static str, &'static str>) -> SResult<'static, Self::Output, &'static str, &'static str, Self::Error> {
-/// #         match tag("Hello, world").parse(input) {
-/// #             SResult::Ok(rem, _) => SResult::Ok(rem, ()),
-/// #             SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
-/// #             SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
-/// #         }
-/// #     }
-/// # }
-/// # let hello_world = HelloWorld;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
 /// let span2 = Span::new("<example>", "Goodbye, world!");
 ///
-/// let mut comb = pair(hello_world, transmute(tag("!")));
-///
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), ((), span1.slice(12..13))));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom("that's not hello world!")))));
+/// let mut comb = nop();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, ()));
 /// ```
 #[inline]
-pub const fn transmute<'t, F, S, C, E2>(comb: C) -> Transmute<F, S, C, E2>
+pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData } }
+
+/// Implements the reverse of a combinator.
+///
+/// Specifically, will return `Result::Ok(())` if the combinator [`Result::Fail`]s, or a [`Result::Fail`] if it [`Result::Ok`]'s.
+///
+/// # Arguments
+/// - `comb`: The [`Combinator`] to negate.
+///
+/// # Returns
+/// A combinator [`Not`] that will succeed (but match nothing) if the given `comb`inator fails.
+///
+/// # Fails
+/// The returned combinator fails if the given `comb`inator succeeds.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::not;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = not(tag("Goodbye"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1, ()));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Not { .. }))));
+/// ```
+#[inline]
+pub const fn not<'t, F, S, C>(comb: C) -> Not<F, S, C>
 where
+    F: Clone,
+    S: Clone,
+    C: Combinator<'t, F, S>,
+    C::Output: Spanning<F, S>,
+{
+    Not { comb, _f: PhantomData, _s: PhantomData }
+}
+
+/// Makes parsing a combinator optional.
+///
+/// In other words, aside from just parsing whatever it is, it is also OK if that combinator fails. [`None`] is returned if that's the case.
+///
+/// # Arguments
+/// - `comb`: The [`Combinator`] to make optional.
+///
+/// # Returns
+/// A combinator [`Opt`] that will succeed pretty much regardless of whether `comb` succeeds.
+///
+/// # Fails
+/// The returned combinator only fails if `comb` is streaming and throws [`Failure::NotEnough`].
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::opt;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = opt(tag("Hello"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), Some(span1.slice(..5))));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2, None));
+/// ```
+#[inline]
+pub const fn opt<'t, F, S, C>(comb: C) -> Opt<F, S, C>
+where
+    F: Clone,
+    S: Clone,
     C: Combinator<'t, F, S>,
 {
-    Transmute { comb, _f: PhantomData, _s: PhantomData, _e: PhantomData }
+    Opt { comb, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -367,102 +332,42 @@ impl<E: ExpectsFormatter> ExpectsFormatter for OptExpects<E> {
 
 
 /***** LIBRARY *****/
-/// The combinator returned by [`nop()`].
-pub struct Nop<F, S> {
-    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
-    _f: PhantomData<F>,
-    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
-    _s: PhantomData<S>,
-}
-impl<F, S> Expects<'static> for Nop<F, S> {
-    type Formatter = NopExpects;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { NopExpects }
-}
-impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
-    type Output = ();
-    type Error = Infallible;
-
-    #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> { Result::Ok(input, ()) }
-}
-
-
-
-/// The concrete type returned by [`not()`].
-pub struct Not<F, S, C> {
-    /// The combinator to negate.
+/// The concrete type returned by [`all()`].
+pub struct All<F, S, C> {
+    /// The combinator that is supposed to consume all input.
     comb: C,
     /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
     _f:   PhantomData<F>,
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C: Expects<'t>> Expects<'t> for Not<F, S, C> {
-    type Formatter = NotExpects<C::Formatter>;
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for All<F, S, C> {
+    type Formatter = C::Formatter;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { NotExpects { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
 }
-impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
+impl<'t, F, S, C> Combinator<'t, F, S> for All<F, S, C>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'c, F, S>,
-    C::Output: Spanning<F, S>,
-{
-    type Output = ();
-    type Error = C::Error;
-
-    #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
-        match self.comb.parse(input.clone()) {
-            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span: res.span() })),
-            Result::Fail(_) => Result::Ok(input, ()),
-            Result::Error(err) => Result::Error(err),
-        }
-    }
-}
-
-
-
-/// The concrete combinator returned by [`opt()`].
-pub struct Opt<F, S, C> {
-    /// The combinator to maybe apply.
-    comb: C,
-    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
-    _f:   PhantomData<F>,
-    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
-    _s:   PhantomData<S>,
-}
-impl<'t, F, S, C: Expects<'t>> Expects<'t> for Opt<F, S, C> {
-    type Formatter = OptExpects<C::Formatter>;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { OptExpects { fmt: self.comb.expects() } }
-}
-impl<'t, F, S, C> Combinator<'t, F, S> for Opt<F, S, C>
-where
-    F: Clone,
-    S: Clone,
+    S: Spannable,
     C: Combinator<'t, F, S>,
 {
-    type Output = Option<C::Output>;
+    type Output = C::Output;
     type Error = C::Error;
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
-        match self.comb.parse(input.clone()) {
-            Result::Ok(rem, res) => Result::Ok(rem, Some(res)),
-            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
-            Result::Fail(_) => Result::Ok(input, None),
-            Result::Error(err) => Result::Error(err),
-        }
+        // First, parse the combinator as usual
+        let (rem, res): (Span<F, S>, C::Output) = match self.comb.parse(input) {
+            Result::Ok(rem, res) => (rem, res),
+            Result::Fail(fail) => return Result::Fail(fail),
+            Result::Error(err) => return Result::Error(err),
+        };
+
+        // Then assert that nothing is remaining
+        if rem.is_empty() { Result::Ok(rem, res) } else { Result::Fail(Failure::Common(Common::All { span: rem })) }
     }
 }
-
-
 
 /// The concrete type returned by [`map()`].
 pub struct Map<F, S, C, M> {
@@ -534,36 +439,93 @@ where
     }
 }
 
-/// The concrete type returned by [`transmute()`].
-pub struct Transmute<F, S, C, E2> {
-    /// The combinator who's custom error to change.
+/// The combinator returned by [`nop()`].
+pub struct Nop<F, S> {
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f: PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s: PhantomData<S>,
+}
+impl<F, S> Expects<'static> for Nop<F, S> {
+    type Formatter = NopExpects;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { NopExpects }
+}
+impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
+    type Output = ();
+    type Error = Infallible;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'static, Self::Output, F, S, Self::Error> { Result::Ok(input, ()) }
+}
+
+/// The concrete type returned by [`not()`].
+pub struct Not<F, S, C> {
+    /// The combinator to negate.
     comb: C,
     /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
     _f:   PhantomData<F>,
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
-    /// The type of the custom error to magically cast to.
-    _e:   PhantomData<E2>,
 }
-impl<'t, F, S, C: Expects<'t>, E2> Expects<'t> for Transmute<F, S, C, E2> {
-    type Formatter = C::Formatter;
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Not<F, S, C> {
+    type Formatter = NotExpects<C::Formatter>;
 
     #[inline]
-    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+    fn expects(&self) -> Self::Formatter { NotExpects { fmt: self.comb.expects() } }
 }
-impl<'c, F, S, C, E2> Combinator<'c, F, S> for Transmute<F, S, C, E2>
+impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
 where
+    F: Clone,
+    S: Clone,
     C: Combinator<'c, F, S>,
+    C::Output: Spanning<F, S>,
 {
-    type Output = C::Output;
-    type Error = E2;
+    type Output = ();
+    type Error = C::Error;
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
-        match self.comb.parse(input) {
-            Result::Ok(rem, res) => Result::Ok(rem, res),
-            Result::Fail(fail) => Result::Fail(fail.transmute()),
-            Result::Error(err) => Result::Error(err.transmute()),
+        match self.comb.parse(input.clone()) {
+            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span: res.span() })),
+            Result::Fail(_) => Result::Ok(input, ()),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// The concrete combinator returned by [`opt()`].
+pub struct Opt<F, S, C> {
+    /// The combinator to maybe apply.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Opt<F, S, C> {
+    type Formatter = OptExpects<C::Formatter>;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { OptExpects { fmt: self.comb.expects() } }
+}
+impl<'t, F, S, C> Combinator<'t, F, S> for Opt<F, S, C>
+where
+    F: Clone,
+    S: Clone,
+    C: Combinator<'t, F, S>,
+{
+    type Output = Option<C::Output>;
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input.clone()) {
+            Result::Ok(rem, res) => Result::Ok(rem, Some(res)),
+            Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
+            Result::Fail(_) => Result::Ok(input, None),
+            Result::Error(err) => Result::Error(err),
         }
     }
 }

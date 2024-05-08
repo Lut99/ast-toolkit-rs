@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    07 May 2024, 11:23:01
+//    08 May 2024, 11:23:57
 //  Auto updated?
 //    Yes
 //
@@ -230,6 +230,74 @@ where
     Cut { comb, _f: PhantomData, _s: PhantomData }
 }
 
+/// Maps the custom error in a result of a combinator to something else, without actually mapping it.
+///
+/// When working with combinators, it is often the case that you need to merge the custom errors of combinators that will never throw it. Then you can use this combinator to essentially "transmute" the never-used error type to whatever you like.
+///
+/// # Arguments
+/// - `comb`: Some [`Combinator`] to run.
+///
+/// # Returns
+/// A combinator [`Transmute`] that runs the given `comb`inator, translating the errors behind the screen.
+///
+/// Note that, by design, the returned combinator panics if `comb` _does_ throw a [`Common::Custom`] somehow.
+///
+/// # Fails
+/// The returned combinator fails if the given `comb`inator fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::error::{fail, transmute, Common, Error, Failure};
+/// use ast_toolkit_snack::sequence::pair;
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::MatchBytes;
+///
+/// struct HelloWorldError;
+///
+/// // Pretend this is has `Expects` and `Combinator` impls
+/// fn hello_world<F: Clone, S: Clone + MatchBytes>(input: Span<F, S>) -> SResult<'static, (), F, S, &'static str> {
+///     match tag("Hello, world").parse(input) {
+///         SResult::Ok(rem, _) => SResult::Ok(rem, ()),
+///         SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+///         SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
+///     }
+/// }
+/// # struct HelloWorld;
+/// # impl ast_toolkit_snack::Expects<'static> for HelloWorld {
+/// #     type Formatter = ast_toolkit_snack::utf8::Digit0Expects;
+/// #     fn expects(&self) -> Self::Formatter { ast_toolkit_snack::utf8::Digit0Expects }
+/// # }
+/// # impl ast_toolkit_snack::Combinator<'static, &'static str, &'static str> for HelloWorld {
+/// #     type Output = ();
+/// #     type Error = &'static str;
+/// #     fn parse(&mut self, input: Span<&'static str, &'static str>) -> SResult<'static, Self::Output, &'static str, &'static str, Self::Error> {
+/// #         match tag("Hello, world").parse(input) {
+/// #             SResult::Ok(rem, _) => SResult::Ok(rem, ()),
+/// #             SResult::Fail(_) => SResult::Fail(Failure::Common(Common::Custom("that's not hello world!"))),
+/// #             SResult::Error(_) => SResult::Error(Error::Common(Common::Custom("that's not hello world!"))),
+/// #         }
+/// #     }
+/// # }
+/// # let hello_world = HelloWorld;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = pair(hello_world, transmute(tag("!")));
+///
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), ((), span1.slice(12..13))));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom("that's not hello world!")))));
+/// ```
+#[inline]
+pub const fn transmute<'t, F, S, C, E2>(comb: C) -> Transmute<F, S, C, E2>
+where
+    C: Combinator<'t, F, S>,
+{
+    Transmute { comb, _f: PhantomData, _s: PhantomData, _e: PhantomData }
+}
+
 
 
 
@@ -337,6 +405,40 @@ impl<'t, F, S, C: Combinator<'t, F, S>> Combinator<'t, F, S> for Cut<F, S, C> {
     }
 }
 
+/// The concrete type returned by [`transmute()`].
+pub struct Transmute<F, S, C, E2> {
+    /// The combinator who's custom error to change.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+    /// The type of the custom error to magically cast to.
+    _e:   PhantomData<E2>,
+}
+impl<'t, F, S, C: Expects<'t>, E2> Expects<'t> for Transmute<F, S, C, E2> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'c, F, S, C, E2> Combinator<'c, F, S> for Transmute<F, S, C, E2>
+where
+    C: Combinator<'c, F, S>,
+{
+    type Output = C::Output;
+    type Error = E2;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, res) => Result::Ok(rem, res),
+            Result::Fail(fail) => Result::Fail(fail.transmute()),
+            Result::Error(err) => Result::Error(err.transmute()),
+        }
+    }
+}
+
 
 
 
@@ -350,6 +452,8 @@ impl<'t, F, S, C: Combinator<'t, F, S>> Combinator<'t, F, S> for Cut<F, S, C> {
 /// be made unrecoverable or that isn't recoverable in the first place).
 #[derive(Debug, EnumDebug)]
 pub enum Common<'a, F, S, E = Infallible> {
+    /// Not all input was parsed where we expected it.
+    All { span: Span<F, S> },
     /// All possible branches in an [`alt()`](crate::branch::alt())-combinator have failed.
     ///
     /// Note that, if there is only one possible branch, Alt acts more like a pass-through in terms of expecting.
@@ -426,6 +530,7 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
     pub fn transmute<E2>(self) -> Common<'a, F, S, E2> {
         propagate! {
             match self {
+                Self::All { span } => Common,
                 Self::Digit1 { span } => Common,
                 Self::Not { nested_fmt, span } => Common,
                 Self::OneOf1Bytes { byteset, span } => Common,
@@ -476,6 +581,7 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
     #[track_caller]
     pub fn map_custom<E2>(self, map: &mut impl FnMut(E) -> E2) -> Common<'a, F, S, E2> {
         match self {
+            Self::All { span } => Common::All { span },
             Self::Alt { branches, fmt, span } => Common::Alt { branches: branches.into_iter().map(|c| c.map_custom(map)).collect(), fmt, span },
             Self::Custom(err) => Common::Custom(map(err)),
             Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => {
@@ -511,6 +617,7 @@ impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
+            Self::All { .. } => write!(f, "Unexpected additional input"),
             Self::Alt { fmt, .. } => write!(f, "{fmt}"),
             Self::Custom(err) => write!(f, "{err}"),
             Self::DelimClose { close_fmt, .. } => {
@@ -563,6 +670,7 @@ impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
 impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Common<'a, F, S, E> {
     fn span(&self) -> Span<F, S> {
         match self {
+            Self::All { span } => span.clone(),
             Self::Alt { span, .. } => span.clone(),
             Self::Custom(err) => err.span(),
             Self::DelimClose { fail, .. } => fail.span(),
