@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    07 May 2024, 10:23:19
+//    08 May 2024, 10:46:33
 //  Auto updated?
 //    Yes
 //
@@ -26,18 +26,19 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 mod tests {
     use super::*;
     use crate::span::MatchBytes;
-    use crate::utf8::complete::{tag, Tag};
+    use crate::utf8::complete::{self as utf8c, Tag};
+    use crate::{error, multi, sequence as seq, utf8};
 
     #[test]
     fn multiple_lifetimes() {
         fn two_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Tuple<F, S, (Tag<'static, F, S>, Tag<'t, F, S>)> {
-            tuple((tag("STATIC"), tag(t)))
+            tuple((utf8c::tag("STATIC"), utf8c::tag(t)))
         }
         fn pre_tags<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'static, F, S>, Tag<'t, F, S>> {
-            preceded(tag("STATIC"), tag(t))
+            preceded(utf8c::tag("STATIC"), utf8c::tag(t))
         }
         fn pre_tags_rev<'t, F: Clone, S: Clone + MatchBytes>(t: &'t str) -> Preceded<F, S, Tag<'t, F, S>, Tag<'static, F, S>> {
-            preceded(tag(t), tag("STATIC"))
+            preceded(utf8c::tag(t), utf8c::tag("STATIC"))
         }
 
         // Define various type of input
@@ -52,6 +53,26 @@ mod tests {
         assert_eq!(comb1.parse(span1).unwrap(), (span1.slice(13..), (span1.slice(..6), span1.slice(6..13))));
         assert_eq!(comb2.parse(span1).unwrap(), (span1.slice(13..), span1.slice(6..13)));
         assert_eq!(comb3.parse(span2).unwrap(), (span2.slice(13..), span2.slice(7..13)));
+    }
+
+    #[cfg(feature = "punctuated")]
+    #[test]
+    /// Test that catches some bug in [`OneOfUtf8`](crate::span::OneOfUtf8).
+    fn punctuated() {
+        // Define the combinator
+        let mut comb = seq::separated_pair(
+            utf8c::tag(":-"),
+            utf8::whitespace0(),
+            error::cut(multi::punctuated1(seq::terminated(utf8c::tag("foo"), utf8::complete::whitespace1()), utf8c::tag(","))),
+        );
+
+        // Parse the thing
+        let span1 = Span::new("<example>", ":- foo");
+        assert!(if let Result::Error(Error::Common(Common::PunctuatedList1 { value_fail, .. })) = comb.parse(span1) {
+            matches!(*value_fail, Common::Whitespace1 { .. })
+        } else {
+            false
+        });
     }
 }
 

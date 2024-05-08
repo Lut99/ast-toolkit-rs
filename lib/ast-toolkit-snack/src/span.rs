@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    07 May 2024, 17:32:14
+//    08 May 2024, 10:41:42
 //  Auto updated?
 //    Yes
 //
@@ -206,12 +206,14 @@ pub trait OneOfUtf8 {
 impl<'s> OneOfUtf8 for &'s str {
     fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize {
         // Match the prefixes
-        for (i, c) in range.apply_to_str(self).grapheme_indices(true) {
+        let mut i: usize = 0;
+        for c in range.apply_to_str(self).graphemes(true) {
             if !chars.contains(&c) {
                 return i;
             }
+            i += c.len();
         }
-        self.len()
+        i
     }
 }
 impl<'s> OneOfUtf8 for Cow<'s, str> {

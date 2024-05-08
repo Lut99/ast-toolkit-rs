@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:43:32
 //  Last edited:
-//    07 May 2024, 17:57:05
+//    08 May 2024, 10:24:15
 //  Auto updated?
 //    Yes
 //
@@ -277,22 +277,16 @@ where
     type Error = Infallible;
 
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
-        // Assert the input can match at least the required number of bytes
-        let mut tag: &'t [u8] = self.tag;
-        if input.len() < tag.len() {
-            tag = &tag[..input.len()];
-        }
-
         // See if we can parse the input
-        let match_point: usize = input.match_bytes(SpanRange::Open, tag);
-        if match_point >= tag.len() {
+        let match_point: usize = input.match_bytes(SpanRange::Open, self.tag);
+        if match_point >= self.tag.len() {
             // Matched the entire tag
             #[cfg(debug_assertions)]
-            assert!(match_point == tag.len());
+            assert!(match_point == self.tag.len());
             Result::Ok(input.slice(match_point..), input.slice(..match_point))
         } else {
             // Didn't match the entire tag
-            Result::Fail(Failure::Common(Common::TagBytes { tag, span: input.start_onwards() }))
+            Result::Fail(Failure::Common(Common::TagBytes { tag: self.tag, span: input.start_onwards() }))
         }
     }
 }
