@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    08 May 2024, 11:23:57
+//    08 May 2024, 11:53:38
 //  Auto updated?
 //    Yes
 //
@@ -769,6 +769,7 @@ impl<'a, F, S, E: Display> Display for Failure<'a, F, S, E> {
         }
     }
 }
+impl<'a, F: Debug + Display, S: Debug + Display, E: error::Error> error::Error for Failure<'a, F, S, E> {}
 impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Failure<'a, F, S, E> {
     #[inline]
     fn span(&self) -> Span<F, S> {
@@ -868,6 +869,7 @@ impl<'a, F, S, E: Display> Display for Error<'a, F, S, E> {
         }
     }
 }
+impl<'a, F: Debug + Display, S: Debug + Display, E: error::Error> error::Error for Error<'a, F, S, E> {}
 impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Error<'a, F, S, E> {
     #[inline]
     fn span(&self) -> Span<F, S> {
