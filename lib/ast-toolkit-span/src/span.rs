@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    17 May 2024, 17:00:16
+//    17 May 2024, 17:50:41
 //  Auto updated?
 //    Yes
 //
@@ -143,6 +143,23 @@ impl<F, S> Span<F, S> {
     /// A [`SpanRange`] describing the spanned area.
     #[inline]
     pub fn range(&self) -> SpanRange { self.range }
+
+    /// Casts the underlying `from`- and `source`-strings in this Span to some owned counterparts.
+    ///
+    /// The owned versions are wrapped in reference-counted pointers in order to allow sharing the `from`- and `source`-strings between Spans.
+    ///
+    /// This is therefore only really useful when converting errors into ones that do not depend on the final AST anymore.
+    ///
+    /// # Generics
+    /// - `FO`: The chosen owned counterpart to `F`.
+    /// - `SO`: The chosen owned counterpart to `S`.
+    ///
+    /// # Returns
+    /// A span with a clone of the original `from`- and `source`-texts.
+    #[inline]
+    pub fn into_owned<FO: From<F>, SO: From<S>>(self) -> Span<Rc<FO>, Rc<SO>> {
+        Span { from: Rc::new(self.from.into()), source: Rc::new(self.source.into()), range: self.range }
+    }
 }
 impl<F, S: Spannable> Span<F, S> {
     /// Extends this Span to also cover the other Span.
@@ -282,20 +299,6 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
         } else {
             None
         }
-    }
-}
-impl<F: ToOwned, S: ToOwned> Span<F, S> {
-    /// Casts the underlying `from`- and `source`-strings in this Span to their owned counterparts.
-    ///
-    /// The owned versions are wrapped in reference-counted pointers in order to allow sharing the `from`- and `source`-strings between Spans.
-    ///
-    /// This is therefore only really useful when converting errors into ones that do not depend on the final AST anymore.
-    ///
-    /// # Returns
-    /// A span with a clone of the original `from`- and `source`-texts.
-    #[inline]
-    pub fn to_owned(&self) -> Span<Rc<F::Owned>, Rc<S::Owned>> {
-        Span { from: Rc::new(self.from.to_owned()), source: Rc::new(self.source.to_owned()), range: self.range }
     }
 }
 
