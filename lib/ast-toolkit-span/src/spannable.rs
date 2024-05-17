@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:19:49
 //  Last edited:
-//    06 May 2024, 16:25:09
+//    17 May 2024, 15:40:33
 //  Auto updated?
 //    Yes
 //
@@ -139,14 +139,14 @@ impl<'b> Spannable for Cow<'b, [u8]> {
     fn byte_len(&self) -> usize { self.len() }
 }
 impl Spannable for Vec<u8> {
-    type Slice<'s> = Vec<u8> where Self: 's;
+    type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { self == other }
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range).to_vec() }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -212,14 +212,14 @@ impl<'s> Spannable for Cow<'s, str> {
     fn byte_len(&self) -> usize { self.len() }
 }
 impl Spannable for String {
-    type Slice<'s2> = String where Self: 's2;
+    type Slice<'s2> = &'s2 str where Self: 's2;
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { self == other }
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range).to_string() }
+    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
