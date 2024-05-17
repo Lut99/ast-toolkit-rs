@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    08 May 2024, 11:53:38
+//    17 May 2024, 17:13:18
 //  Auto updated?
 //    Yes
 //
@@ -25,6 +25,7 @@ use std::convert::Infallible;
 use std::error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
@@ -82,6 +83,62 @@ impl Display for TryFromFailureError {
     }
 }
 impl error::Error for TryFromFailureError {}
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/// Replaces the `from`- and `source`-texts in the given [`Common`]-tree with reference-counted pointers instead of references.
+///
+/// # Arguments
+/// - `common`: The [`Common`]-tree that needs relacin'.
+/// - `from`: The from-string [`Rc`] to copy.
+/// - `source`: The source-string [`Rc`] to copy.
+///
+/// # Returns
+/// An equivalent [`Common`] with copies of the given [`Rc`] instead of the original ones.
+#[inline]
+fn replace_with_rc<'a, F: ToOwned, S: ToOwned, E>(
+    common: Common<'a, F, S, E>,
+    from: &Rc<F::Owned>,
+    source: &Rc<S::Owned>,
+) -> Common<'a, Rc<F::Owned>, Rc<S::Owned>, E> {
+    match common {
+        Common::All { span } => Common::All { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::Alt { branches, fmt, span } => Common::Alt {
+            branches: branches.into_iter().map(|c| replace_with_rc(c, from, source)).collect(),
+            fmt,
+            span: Span::ranged(from.clone(), source.clone(), span.range()),
+        },
+        Common::Custom(err) => Common::Custom(err),
+        Common::Delim { fail, open_fmt, comb_fmt, close_fmt } => {
+            Common::Delim { fail: Box::new(replace_with_rc(*fail, from, source)), open_fmt, comb_fmt, close_fmt }
+        },
+        Common::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new(replace_with_rc(*fail, from, source)), close_fmt },
+        Common::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new(replace_with_rc(*fail, from, source)), open_fmt },
+        Common::Digit1 { span } => Common::Digit1 { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new(replace_with_rc(*fail, from, source)), nested_fmt },
+        Common::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new(replace_with_rc(*fail, from, source)), nested_fmt },
+        Common::Not { nested_fmt, span } => Common::Not { nested_fmt, span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::OneOf1Bytes { byteset, span } => Common::OneOf1Bytes { byteset, span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::OneOf1Utf8 { charset, span } => Common::OneOf1Utf8 { charset, span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => {
+            Common::PunctuatedList1 { value_fail: Box::new(value_fail.into_owned()), value_fmt, punct_fmt }
+        },
+        Common::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => {
+            Common::PunctuatedListNPunct { n, i, punct_fail: Box::new(punct_fail.into_owned()), value_fmt, punct_fmt }
+        },
+        Common::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => {
+            Common::PunctuatedListNValue { n, i, value_fail: Box::new(value_fail.into_owned()), value_fmt, punct_fmt }
+        },
+        Common::TagBytes { tag, span } => Common::TagBytes { tag, span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::TagUtf8 { tag, span } => Common::TagUtf8 { tag, span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::While1Bytes { span } => Common::While1Bytes { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::While1Utf8 { span } => Common::While1Utf8 { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        Common::Whitespace1 { span } => Common::Whitespace1 { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+    }
+}
 
 
 
@@ -612,6 +669,54 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
         }
     }
 }
+impl<'a, F: ToOwned, S: ToOwned, E> Common<'a, F, S, E> {
+    /// Casts the [`Span`]s in this Common into their owned counterparts.
+    ///
+    /// This performs some wizardry to clone the `from`- and `source`-strings only once, and then share them among the [`Span`]s using reference-counted pointers.
+    ///
+    /// See [`Common::to_owned_arc()`] to get [`Arc`]-shared strings instead of [`Rc`]-shared ones.
+    ///
+    /// # Returns
+    /// An equivalent Common that owns the underlying source text among itself.
+    #[inline]
+    pub fn into_owned(self) -> Common<'a, Rc<F::Owned>, Rc<S::Owned>, E> {
+        match self {
+            Self::All { span } => Common::All { span: span.to_owned() },
+            Self::Alt { branches, fmt, span } => {
+                let (from, source): (Rc<F::Owned>, Rc<S::Owned>) = (Rc::new(span.from_ref().to_owned()), Rc::new(span.source_ref().to_owned()));
+                Common::Alt {
+                    branches: branches.into_iter().map(|c| replace_with_rc(c, &from, &source)).collect(),
+                    fmt,
+                    span: Span::ranged(from, source, span.range()),
+                }
+            },
+            Self::Custom(err) => Common::Custom(err),
+            Self::Delim { fail, open_fmt, comb_fmt, close_fmt } => Common::Delim { fail: Box::new(fail.into_owned()), open_fmt, comb_fmt, close_fmt },
+            Self::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new(fail.into_owned()), close_fmt },
+            Self::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new(fail.into_owned()), open_fmt },
+            Self::Digit1 { span } => Common::Digit1 { span: span.to_owned() },
+            Self::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new(fail.into_owned()), nested_fmt },
+            Self::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new(fail.into_owned()), nested_fmt },
+            Self::Not { nested_fmt, span } => Common::Not { nested_fmt, span: span.to_owned() },
+            Self::OneOf1Bytes { byteset, span } => Common::OneOf1Bytes { byteset, span: span.to_owned() },
+            Self::OneOf1Utf8 { charset, span } => Common::OneOf1Utf8 { charset, span: span.to_owned() },
+            Self::PunctuatedList1 { value_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedList1 { value_fail: Box::new(value_fail.into_owned()), value_fmt, punct_fmt }
+            },
+            Self::PunctuatedListNPunct { n, i, punct_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedListNPunct { n, i, punct_fail: Box::new(punct_fail.into_owned()), value_fmt, punct_fmt }
+            },
+            Self::PunctuatedListNValue { n, i, value_fail, value_fmt, punct_fmt } => {
+                Common::PunctuatedListNValue { n, i, value_fail: Box::new(value_fail.into_owned()), value_fmt, punct_fmt }
+            },
+            Self::TagBytes { tag, span } => Common::TagBytes { tag, span: span.to_owned() },
+            Self::TagUtf8 { tag, span } => Common::TagUtf8 { tag, span: span.to_owned() },
+            Self::While1Bytes { span } => Common::While1Bytes { span: span.to_owned() },
+            Self::While1Utf8 { span } => Common::While1Utf8 { span: span.to_owned() },
+            Self::Whitespace1 { span } => Common::Whitespace1 { span: span.to_owned() },
+        }
+    }
+}
 
 impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
     #[inline]
@@ -752,6 +857,23 @@ impl<'a, F, S, E> Failure<'a, F, S, E> {
         }
     }
 }
+impl<'a, F: ToOwned, S: ToOwned, E> Failure<'a, F, S, E> {
+    /// Casts the [`Span`]s in this Failure into their owned counterparts.
+    ///
+    /// This performs some wizardry to clone the `from`- and `source`-strings only once, and then share them among the [`Span`]s using reference-counted pointers.
+    ///
+    /// See [`Failure::to_owned_arc()`] to get [`Arc`]-shared strings instead of [`Rc`]-shared ones.
+    ///
+    /// # Returns
+    /// An equivalent Failure that owns the underlying source text among itself.
+    #[inline]
+    pub fn into_owned(self) -> Failure<'a, Rc<F::Owned>, Rc<S::Owned>, E> {
+        match self {
+            Self::NotEnough { needed, span } => Failure::NotEnough { needed, span: span.to_owned() },
+            Self::Common(c) => Failure::Common(c.into_owned()),
+        }
+    }
+}
 
 impl<'a, F, S, E: Display> Display for Failure<'a, F, S, E> {
     #[inline]
@@ -853,6 +975,23 @@ impl<'a, F, S, E> Error<'a, F, S, E> {
         match self {
             Self::Context { context, span } => Error::Context { context, span },
             Self::Common(c) => Error::Common(c.map_custom(&mut map)),
+        }
+    }
+}
+impl<'a, F: ToOwned, S: ToOwned, E> Error<'a, F, S, E> {
+    /// Casts the [`Span`]s in this Error into their owned counterparts.
+    ///
+    /// This performs some wizardry to clone the `from`- and `source`-strings only once, and then share them among the [`Span`]s using reference-counted pointers.
+    ///
+    /// See [`Error::to_owned_arc()`] to get [`Arc`]-shared strings instead of [`Rc`]-shared ones.
+    ///
+    /// # Returns
+    /// An equivalent Error that owns the underlying source text among itself.
+    #[inline]
+    pub fn into_owned(self) -> Error<'a, Rc<F::Owned>, Rc<S::Owned>, E> {
+        match self {
+            Self::Context { context, span } => Error::Context { context, span: span.to_owned() },
+            Self::Common(c) => Error::Common(c.into_owned()),
         }
     }
 }

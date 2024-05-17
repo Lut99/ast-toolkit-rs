@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:21:34
 //  Last edited:
-//    06 May 2024, 16:32:13
+//    17 May 2024, 16:26:25
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,8 @@
 
 use std::borrow::Cow;
 use std::hash::{Hash as _, Hasher};
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::range::{index_range_bound, SpanRange};
 use crate::spannable::Spannable;
@@ -56,6 +58,14 @@ impl SpannableHash for Vec<u8> {
     #[track_caller]
     fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_slice(), range, state) }
 }
+impl SpannableHash for Rc<[u8]> {
+    #[inline]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+}
+impl SpannableHash for Arc<[u8]> {
+    #[inline]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+}
 
 // Default string impls for [`Spannable`]
 impl<'s> SpannableHash for &'s str {
@@ -72,4 +82,12 @@ impl SpannableHash for String {
     #[inline]
     #[track_caller]
     fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_str(), range, state) }
+}
+impl SpannableHash for Rc<str> {
+    #[inline]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+}
+impl SpannableHash for Arc<str> {
+    #[inline]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:37:03
 //  Last edited:
-//    06 May 2024, 16:43:21
+//    17 May 2024, 16:29:23
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,8 @@
 
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FResult};
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::range::{index_range_bound, SpanRange};
 use crate::spannable::Spannable;
@@ -67,6 +69,14 @@ impl SpannableDisplay for Vec<u8> {
     #[track_caller]
     fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_slice(), range, f) }
 }
+impl SpannableDisplay for Rc<[u8]> {
+    #[inline]
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+}
+impl SpannableDisplay for Arc<[u8]> {
+    #[inline]
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+}
 
 // Default string impls for [`Spannable`]
 impl<'s> SpannableDisplay for &'s str {
@@ -83,4 +93,12 @@ impl SpannableDisplay for String {
     #[inline]
     #[track_caller]
     fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_str(), range, f) }
+}
+impl SpannableDisplay for Rc<str> {
+    #[inline]
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+}
+impl SpannableDisplay for Arc<str> {
+    #[inline]
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }

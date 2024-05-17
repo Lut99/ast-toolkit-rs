@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:23:07
 //  Last edited:
-//    06 May 2024, 16:31:43
+//    17 May 2024, 16:27:58
 //  Auto updated?
 //    Yes
 //
@@ -15,6 +15,8 @@
 //
 
 use std::borrow::Cow;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::range::{index_range_bound, SpanRange};
 use crate::Spannable;
@@ -66,6 +68,18 @@ impl SpannableEq for Vec<u8> {
         <&[u8] as SpannableEq>::slice_eq(&self.as_slice(), range, &other.as_slice(), other_range)
     }
 }
+impl SpannableEq for Rc<[u8]> {
+    #[inline]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
+        <&[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+    }
+}
+impl SpannableEq for Arc<[u8]> {
+    #[inline]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
+        <&[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+    }
+}
 
 // Default string impls for [`Spannable`]
 impl<'s> SpannableEq for &'s str {
@@ -87,5 +101,17 @@ impl SpannableEq for String {
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         <&str as SpannableEq>::slice_eq(&self.as_str(), range, &other.as_str(), other_range)
+    }
+}
+impl SpannableEq for Rc<str> {
+    #[inline]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
+        <&str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+    }
+}
+impl SpannableEq for Arc<str> {
+    #[inline]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
+        <&str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }

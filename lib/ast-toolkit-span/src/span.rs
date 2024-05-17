@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    17 May 2024, 15:41:58
+//    17 May 2024, 17:00:16
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
+use std::rc::Rc;
 
 use crate::eq::SpannableEq;
 use crate::hash::SpannableHash;
@@ -82,12 +83,41 @@ impl<F, S> Span<F, S> {
     /// Constructor for the `Span` that initializes it to Span the entire given range.
     ///
     /// # Arguments
+    /// - `from`: Something describing the input (e.g., filename).
     /// - `source`: The input source (text) to wrap.
     ///
     /// # Returns
     /// A new `Span` that spans the entire given `source`.
     #[inline]
     pub fn new(from: F, source: S) -> Self { Self { from, source, range: SpanRange::Open } }
+
+    /// Constructor for the `Span` that initializes it with a custom range.
+    ///
+    /// # Arguments
+    /// - `from`: Something describing the input (e.g., filename).
+    /// - `source`: The input source (text) to wrap.
+    /// - `range`: Something akin to a [`SpanRange`] that describes the range to write.
+    ///
+    /// # Returns
+    /// A new `Span` that spans the given `range` of `source`.
+    #[inline]
+    pub fn ranged(from: F, source: S, range: impl RangeBounds<usize>) -> Self {
+        // Examine the bounds to find new start & stop
+        let range: SpanRange = match (range.start_bound(), range.end_bound()) {
+            (Bound::Included(s), Bound::Included(e)) => SpanRange::Closed(*s, *e + 1),
+            (Bound::Included(s), Bound::Excluded(e)) => SpanRange::Closed(*s, *e),
+            (Bound::Included(s), Bound::Unbounded) => SpanRange::ClosedOpen(*s),
+            (Bound::Excluded(s), Bound::Included(e)) => SpanRange::Closed(*s + 1, *e + 1),
+            (Bound::Excluded(s), Bound::Excluded(e)) => SpanRange::Closed(*s + 1, *e),
+            (Bound::Excluded(s), Bound::Unbounded) => SpanRange::ClosedOpen(*s + 1),
+            (Bound::Unbounded, Bound::Included(e)) => SpanRange::OpenClosed(*e + 1),
+            (Bound::Unbounded, Bound::Excluded(e)) => SpanRange::OpenClosed(*e),
+            (Bound::Unbounded, Bound::Unbounded) => SpanRange::Open,
+        };
+
+        // OK, build self
+        Self { from, source, range }
+    }
 
     /// Provides access to the internal `from`-string.
     ///
@@ -257,14 +287,16 @@ impl<F: Clone, S: Clone + Spannable> Span<F, S> {
 impl<F: ToOwned, S: ToOwned> Span<F, S> {
     /// Casts the underlying `from`- and `source`-strings in this Span to their owned counterparts.
     ///
-    /// Note that it is extremely likely the owned counterparts (e.g., [`String`]) are _not_ cheaply copyable, and will ruin the performance of your parser. That said, this version will still allow you to parse your spans as normal.
+    /// The owned versions are wrapped in reference-counted pointers in order to allow sharing the `from`- and `source`-strings between Spans.
     ///
     /// This is therefore only really useful when converting errors into ones that do not depend on the final AST anymore.
     ///
     /// # Returns
     /// A span with a clone of the original `from`- and `source`-texts.
     #[inline]
-    pub fn to_owned(&self) -> Span<F::Owned, S::Owned> { Span { from: self.from.to_owned(), source: self.source.to_owned(), range: self.range } }
+    pub fn to_owned(&self) -> Span<Rc<F::Owned>, Rc<S::Owned>> {
+        Span { from: Rc::new(self.from.to_owned()), source: Rc::new(self.source.to_owned()), range: self.range }
+    }
 }
 
 impl<F, S: SpannableDisplay> Display for Span<F, S> {

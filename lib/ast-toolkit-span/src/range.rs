@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:17:54
 //  Last edited:
-//    06 May 2024, 16:18:43
+//    17 May 2024, 17:04:09
 //  Auto updated?
 //    Yes
 //
@@ -27,6 +27,8 @@ macro_rules! index_range_bound {
         }
     }};
 }
+use std::ops::{Bound, RangeBounds};
+
 pub(crate) use index_range_bound;
 
 
@@ -251,4 +253,27 @@ impl SpanRange {
     /// A new slice of type `str` that is the sliced counterpart.
     #[inline]
     pub fn apply_to_str<'s>(&self, string: &'s str) -> &'s str { index_range_bound!(string, *self) }
+}
+impl RangeBounds<usize> for SpanRange {
+    #[inline]
+    fn start_bound(&self) -> Bound<&usize> {
+        match self {
+            Self::Closed(s, _) => Bound::Included(s),
+            Self::ClosedOpen(s) => Bound::Included(s),
+            Self::OpenClosed(_) => Bound::Unbounded,
+            Self::Open => Bound::Unbounded,
+            Self::Empty => Bound::Excluded(&0),
+        }
+    }
+
+    #[inline]
+    fn end_bound(&self) -> std::ops::Bound<&usize> {
+        match self {
+            Self::Closed(_, e) => Bound::Excluded(e),
+            Self::ClosedOpen(_) => Bound::Unbounded,
+            Self::OpenClosed(e) => Bound::Excluded(e),
+            Self::Open => Bound::Unbounded,
+            Self::Empty => Bound::Excluded(&0),
+        }
+    }
 }

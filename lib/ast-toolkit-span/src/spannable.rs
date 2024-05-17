@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:19:49
 //  Last edited:
-//    17 May 2024, 15:40:33
+//    17 May 2024, 15:49:46
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,8 @@
 //
 
 use std::borrow::Cow;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::range::{index_range_bound, SpanRange};
 
@@ -151,6 +153,54 @@ impl Spannable for Vec<u8> {
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
 }
+impl Spannable for Rc<[u8]> {
+    type Slice<'s> = &'s [u8] where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = Rc::ptr_eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
+                     Rc<[u8]>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
+
+    #[inline]
+    fn byte_len(&self) -> usize { self.len() }
+}
+impl Spannable for Arc<[u8]> {
+    type Slice<'s> = &'s [u8] where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = Arc::ptr_eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
+                     Arc<[u8]>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
+
+    #[inline]
+    fn byte_len(&self) -> usize { self.len() }
+}
 
 // Default string impls for [`Spannable`]
 impl<'s> Spannable for &'s str {
@@ -220,6 +270,54 @@ impl Spannable for String {
     #[inline]
     #[track_caller]
     fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+
+    #[inline]
+    fn byte_len(&self) -> usize { self.len() }
+}
+impl Spannable for Rc<str> {
+    type Slice<'s> = &'s str where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = Rc::ptr_eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
+                     Rc<str>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
+
+    #[inline]
+    fn byte_len(&self) -> usize { self.len() }
+}
+impl Spannable for Arc<str> {
+    type Slice<'s> = &'s str where Self: 's;
+
+    #[inline]
+    fn is_same(&self, other: &Self) -> bool {
+        let ptr_eq: bool = Arc::ptr_eq(self, other);
+        #[cfg(debug_assertions)]
+        {
+            if !ptr_eq && self == other {
+                eprintln!(
+                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
+                     Arc<str>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
+                );
+            }
+        }
+        ptr_eq
+    }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
