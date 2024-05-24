@@ -1,0 +1,229 @@
+//  DIAGNOSTIC.rs
+//    by Lut99
+//
+//  Created:
+//    24 May 2024, 17:22:17
+//  Last edited:
+//    24 May 2024, 18:21:13
+//  Auto updated?
+//    Yes
+//
+//  Description:
+//!   Implements the main [`Diagnostic`]-interface itself.
+//
+
+use std::fmt::Display;
+
+use ast_toolkit_span::Span;
+
+use crate::annotations::{Annotation, AnnotationHighlight};
+use crate::style::{Plain, Style};
+use crate::IntoDiagnostic;
+
+
+/***** AUXILLARY *****/
+/// The severity levels supported by the [`Diagnostic`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Level {
+    /// Fatal errors.
+    Error,
+    /// Non-fatal warnings.
+    Warning,
+}
+
+
+
+
+
+/***** LIBRARY *****/
+/// Provides an interface for building complex diagnostic messages.
+///
+/// Most notably, the Diagnostic allows for typical compiler-style error messages on several
+/// sevirity levels (errors and warnings).
+#[derive(Debug)]
+pub struct Diagnostic<F, S> {
+    // Unique to the toplevel
+    /// The severity of the error.
+    pub level: Level,
+    /// Some error code that users might recognize elsewhere.
+    pub code:  Option<String>,
+    /// The style to apply while rendering.
+    pub style: Box<dyn Style>,
+
+    // Annotation
+    /// The span referred to by the main message.
+    pub main:   AnnotationHighlight<F, S>,
+    /// Any other annotations.
+    pub annots: Vec<Annotation<F, S>>,
+}
+
+// Constructors
+impl<F, S> Diagnostic<F, S> {
+    /// Generic constructor for a Diagnostic that takes both a severity level and a message.
+    ///
+    /// # Arguments
+    /// - `level`: The severity [`Level`] of the main message.
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    ///
+    /// # Returns
+    /// A new Diagnostic with the given severity `level` and message.
+    #[inline]
+    pub fn new(level: Level, msg: impl Into<String>, span: Span<F, S>) -> Self {
+        Self { level, code: None, style: Box::new(Plain), main: AnnotationHighlight { msg: msg.into(), span }, annots: vec![] }
+    }
+
+    /// Constructor for a Diagnostic that will create it as an error message.
+    ///
+    /// # Arguments
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    ///
+    /// # Returns
+    /// A new Diagnostic with [`Level::Error`] severity and the given message.
+    #[inline]
+    pub fn error(msg: impl Into<String>, span: Span<F, S>) -> Self { Self::new(Level::Error, msg, span) }
+
+    /// Constructor for a Diagnostic that will create it as a warning message.
+    ///
+    /// # Arguments
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    ///
+    /// # Returns
+    /// A new Diagnostic with [`Level::Warning`] severity and the given message.
+    #[inline]
+    pub fn warn(msg: impl Into<String>, span: Span<F, S>) -> Self { Self::new(Level::Warning, msg, span) }
+
+
+
+    /// Generic constructor for a Diagnostic that takes both a severity level and a style.
+    ///
+    /// # Arguments
+    /// - `level`: The severity [`Level`] of the main message.
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    /// - `style`: Some [`Style`] that determines the colour palette for this Diagnostic's renderings.
+    ///
+    /// # Returns
+    /// A new Diagnostic with the given severity `level`, message and initialized `style`.
+    #[inline]
+    pub fn with_style(level: Level, msg: impl Into<String>, span: Span<F, S>, style: impl 'static + Style) -> Self {
+        Self { level, code: None, style: Box::new(style), main: AnnotationHighlight { msg: msg.into(), span }, annots: vec![] }
+    }
+
+    /// Constructor for a Diagnostic that will create it as an error message and with a given style.
+    ///
+    /// # Arguments
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    /// - `style`: Some [`Style`] that determines the colour palette for this Diagnostic's renderings.
+    ///
+    /// # Returns
+    /// A new Diagnostic with [`Level::Error`] severity, the given message and initialized `style`.
+    #[inline]
+    pub fn error_with_style(msg: impl Into<String>, span: Span<F, S>, style: impl 'static + Style) -> Self {
+        Self::with_style(Level::Error, msg, span, style)
+    }
+
+    /// Constructor for a Diagnostic that will create it as a warning message and with a given style.
+    ///
+    /// # Arguments
+    /// - `msg`: The main message to display on top of the snippet.
+    /// - `span`: Some [`Span`] that is the source text to display.
+    /// - `style`: Some [`Style`] that determines the colour palette for this Diagnostic's renderings.
+    ///
+    /// # Returns
+    /// A new Diagnostic with [`Level::Warning`] severity, the given message and initialized `style`.
+    #[inline]
+    pub fn warn_with_style(msg: impl Into<String>, span: Span<F, S>, style: impl 'static + Style) -> Self {
+        Self::with_style(Level::Warning, msg, span, style)
+    }
+}
+
+// Factory methods
+impl<F, S> Diagnostic<F, S> {
+    /// Changes the severity level of this Diagnostic.
+    ///
+    /// The severity level determines whether this Diagnostic emits a [warning](Level::Warning) or an [error](Level::Error).
+    ///
+    /// # Arguments
+    /// - `level`: The new [`Level`] to assign to this Diagnostic.
+    ///
+    /// # Returns
+    /// Self with the given `level`.
+    #[inline]
+    pub fn level(mut self, level: Level) -> Self {
+        self.level = level;
+        self
+    }
+
+    /// Sets a _code_ for this Diagnostic.
+    ///
+    /// A code is used to give the user something shorthand to refer to this specific warning or error.
+    ///
+    /// This may be useful if the user can disable it with that specific code, for example.
+    ///
+    /// # Arguments
+    /// - `code`: Something that can be rendered as the new code. Give [`None`] to remove any previously assigned one.
+    ///
+    /// # Returns
+    /// Self with the given `code`.
+    #[inline]
+    pub fn code(mut self, code: Option<impl Display>) -> Self {
+        self.code = code.map(|c| c.to_string());
+        self
+    }
+
+    /// Changes the assigned style of this Diagnostic.
+    ///
+    /// This is used to change the colours used when rendering the Diagnostic.
+    ///
+    /// # Arguments
+    /// - `style`: Some [`Style`] that determines the colour pattern of renderings of this Diagnostic.
+    ///
+    /// # Returns
+    /// Self with the given `style`.
+    #[inline]
+    pub fn style(mut self, style: impl 'static + Style) -> Self {
+        self.style = Box::new(style);
+        self
+    }
+
+
+
+    /// Changes the main message of the Diagnostic.
+    ///
+    /// This is the message that is displayed at the top of the source text snippet(s).
+    ///
+    /// # Arguments
+    /// - `msg`: The message to display at the top of the diagnostic.
+    ///
+    /// # Returns
+    /// Self with the given main message.
+    #[inline]
+    pub fn message(mut self, msg: impl Display) -> Self {
+        self.main.msg = msg.to_string();
+        self
+    }
+
+    /// Changes the main message span of the Diagnostic.
+    ///
+    /// This is the part of the source text that is highlighted as the warning or error in question.
+    ///
+    /// # Arguments
+    /// - `span`: The [`Span`]ned source text to highlight.
+    ///
+    /// # Returns
+    /// Self with the given main `span`.
+    pub fn span(&mut self, span: Span<F, S>) -> &mut Self {
+        self.main.span = span;
+        self
+    }
+}
+
+// From
+impl<F, S> IntoDiagnostic<F, S> for Diagnostic<F, S> {
+    #[inline]
+    fn into_diagnostic(self) -> Diagnostic<F, S> { self }
+}
