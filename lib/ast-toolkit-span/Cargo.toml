@@ -9,6 +9,7 @@ description = "Provides a Span that is akin to a slice but with more context. Us
 
 [dependencies]
 console = "0.15"
+unicode-segmentation = "1.11"
 
 
 [dev-dependencies]

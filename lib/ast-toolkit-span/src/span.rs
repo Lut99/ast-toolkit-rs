@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    17 May 2024, 17:50:41
+//    27 May 2024, 14:22:38
 //  Auto updated?
 //    Yes
 //
@@ -20,9 +20,10 @@ use std::rc::Rc;
 
 use crate::eq::SpannableEq;
 use crate::hash::SpannableHash;
+use crate::lines::SpannableLines;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
-use crate::SpannableDisplay;
+use crate::{SpannableDisplay, SpannableLocate};
 
 
 /***** AUXILLARY *****/
@@ -68,6 +69,7 @@ pub struct Span<F, S> {
     range:  SpanRange,
 }
 
+// Constructors
 impl<F, S> Span<F, S> {
     /// Constructor for the `Span` that initializes it from a source text, but spanning nothing.
     ///
@@ -118,49 +120,9 @@ impl<F, S> Span<F, S> {
         // OK, build self
         Self { from, source, range }
     }
-
-    /// Provides access to the internal `from`-string.
-    ///
-    /// If `F` implements [`Copy`], you might prefer [`Span::from()`] instead to avoid the lifetime to `self`.
-    ///
-    /// # Returns
-    /// A reference to the internal `from`-string.
-    #[inline]
-    pub fn from_ref(&self) -> &F { &self.from }
-
-    /// Provides access to the internal `source`-string.
-    ///
-    /// If `S` implements [`Copy`], you might prefer [`Span::source()`] instead to avoid the lifetime to `self`.
-    ///
-    /// # Returns
-    /// A reference to the internal `source`-string.
-    #[inline]
-    pub fn source_ref(&self) -> &S { &self.source }
-
-    /// Returns the inner range over the source text.
-    ///
-    /// # Returns
-    /// A [`SpanRange`] describing the spanned area.
-    #[inline]
-    pub fn range(&self) -> SpanRange { self.range }
-
-    /// Casts the underlying `from`- and `source`-strings in this Span to some owned counterparts.
-    ///
-    /// The owned versions are wrapped in reference-counted pointers in order to allow sharing the `from`- and `source`-strings between Spans.
-    ///
-    /// This is therefore only really useful when converting errors into ones that do not depend on the final AST anymore.
-    ///
-    /// # Generics
-    /// - `FO`: The chosen owned counterpart to `F`.
-    /// - `SO`: The chosen owned counterpart to `S`.
-    ///
-    /// # Returns
-    /// A span with a clone of the original `from`- and `source`-texts.
-    #[inline]
-    pub fn into_owned<FO: From<F>, SO: From<S>>(self) -> Span<Rc<FO>, Rc<SO>> {
-        Span { from: Rc::new(self.from.into()), source: Rc::new(self.source.into()), range: self.range }
-    }
 }
+
+// Joining
 impl<F, S: Spannable> Span<F, S> {
     /// Extends this Span to also cover the other Span.
     ///
@@ -180,7 +142,29 @@ impl<F, S: Spannable> Span<F, S> {
         self.range.join_mut(&other.range);
         true
     }
+}
+impl<F: Clone, S: Clone + Spannable> Span<F, S> {
+    /// Combines this span with another Span to span both areas.
+    ///
+    /// Specifically, given a span `s1..e1` and `s2..e2`, produces a new span `s1..e2`.
+    ///
+    /// # Arguments
+    /// - `other`: The other [`Span`] to join with.
+    ///
+    /// # Returns
+    /// A new [`Span`] that is the combination of both spans, unless the Spans span different sources (then [`None`] is returned).
+    #[inline]
+    pub fn join(&self, other: &Self) -> Option<Self> {
+        if self.source.is_same(&other.source) {
+            Some(Self { from: self.from.clone(), source: self.source.clone(), range: self.range.join(&other.range) })
+        } else {
+            None
+        }
+    }
+}
 
+// Spanning
+impl<F, S: Spannable> Span<F, S> {
     /// Provides access to the internal `source`-string, but only the spanned area.
     ///
     /// # Returns
@@ -208,26 +192,6 @@ impl<F, S: Spannable> Span<F, S> {
             SpanRange::Empty => true,
         }
     }
-}
-impl<F: Copy, S> Span<F, S> {
-    /// Provides access to the internal `from`-string.
-    ///
-    /// If `F` does not implement [`Copy`], you might prefer [`Span::from_ref()`] instead.
-    ///
-    /// # Returns
-    /// The internal `from`-string.
-    #[inline]
-    pub fn from(&self) -> F { self.from }
-}
-impl<F, S: Copy> Span<F, S> {
-    /// Provides access to the internal `input`-string.
-    ///
-    /// If `S` does not implement [`Copy`], you might prefer [`Span::source_ref()`] instead.
-    ///
-    /// # Returns
-    /// The internal `input`-string.
-    #[inline]
-    pub fn source(&self) -> S { self.source }
 }
 impl<F: Clone, S: Clone> Span<F, S> {
     /// Returns a new [`Span`] that represents a sub-span of this one.
@@ -282,26 +246,114 @@ impl<F: Clone, S: Clone> Span<F, S> {
         Self { from: self.from.clone(), source: self.source.clone(), range }
     }
 }
-impl<F: Clone, S: Clone + Spannable> Span<F, S> {
-    /// Combines this span with another Span to span both areas.
+impl<F, S: SpannableLocate> Span<F, S> {
+    /// Finds the column/line pair of the given position in the underlying source text.
     ///
-    /// Specifically, given a span `s1..e1` and `s2..e2`, produces a new span `s1..e2`.
+    /// The position is in _logical coordinates_, i.e., whatever are logical chunks for the spanned
+    /// object instead of bytes. For example, for strings, this would be graphemes.
+    ///
+    /// This function assumes that the start of the underlying source text is (0, 0). I.e., it
+    /// ignores the range.
     ///
     /// # Arguments
-    /// - `other`: The other [`Span`] to join with.
+    /// - `idx`: Some offset in the spanned object's logical space (e.g., graphemes).
     ///
     /// # Returns
-    /// A new [`Span`] that is the combination of both spans, unless the Spans span different sources (then [`None`] is returned).
+    /// A pair of column and line numbers, respectively. Both are zero-indexed.
+    ///
+    /// If the given `idx` is out-of-bounds, then [`None`] is returned.
     #[inline]
-    pub fn join(&self, other: &Self) -> Option<Self> {
-        if self.source.is_same(&other.source) {
-            Some(Self { from: self.from.clone(), source: self.source.clone(), range: self.range.join(&other.range) })
-        } else {
-            None
+    pub fn coords_of(&self, idx: usize) -> Option<(usize, usize)> { self.source.coords_of(idx) }
+
+
+
+    /// Returns the line/column pair of the start of this span.
+    ///
+    /// # Returns
+    /// A pair of [`usize`]s encoding the zero-indexed line number and column number for the start of this span, respectively. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn start(&self) -> Option<(usize, usize)> {
+        match self.range {
+            SpanRange::Closed(s, _) => Some(
+                self.source
+                    .coords_of(s)
+                    .unwrap_or_else(|| panic!("Internal start bound {} is out-of-bounds for source string of length {}", s, self.source.byte_len())),
+            ),
+            SpanRange::ClosedOpen(s) => Some(
+                self.source
+                    .coords_of(s)
+                    .unwrap_or_else(|| panic!("Internal start bound {} is out-of-bounds for source string of length {}", s, self.source.byte_len())),
+            ),
+            SpanRange::OpenClosed(_) => self.source.coords_of(0),
+            SpanRange::Open => self.source.coords_of(0),
+            SpanRange::Empty => None,
         }
     }
+
+    /// Returns the line number of the start of this span.
+    ///
+    /// # Returns
+    /// A [`usize`]s encoding the zero-indexed line number for the start of this span. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn line(&self) -> Option<usize> { self.start().map(|(l, _)| l) }
+
+    /// Returns the column number of the start of this span.
+    ///
+    /// # Returns
+    /// A [`usize`]s encoding the zero-indexed column number for the start of this span. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn col(&self) -> Option<usize> { self.start().map(|(_, c)| c) }
+
+
+
+    /// Returns the line/column pair of the end of this span.
+    ///
+    /// # Returns
+    /// A pair of [`usize`]s encoding the zero-indexed line number and column number for the end of this span, respectively. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn end(&self) -> Option<(usize, usize)> {
+        match self.range {
+            SpanRange::Closed(_, e) => Some(
+                self.source
+                    .coords_of(e)
+                    .unwrap_or_else(|| panic!("Internal end bound {} is out-of-bounds for source string of length {}", e, self.source.byte_len())),
+            ),
+            SpanRange::ClosedOpen(_) => self.source.coords_of(self.source.byte_len() - 1),
+            SpanRange::OpenClosed(e) => Some(
+                self.source
+                    .coords_of(e)
+                    .unwrap_or_else(|| panic!("Internal end bound {} is out-of-bounds for source string of length {}", e, self.source.byte_len())),
+            ),
+            SpanRange::Open => self.source.coords_of(self.source.byte_len() - 1),
+            SpanRange::Empty => None,
+        }
+    }
+
+    /// Returns the line number of the end of this span.
+    ///
+    /// # Returns
+    /// A [`usize`]s encoding the zero-indexed line number for the end of this span. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn end_line(&self) -> Option<usize> { self.end().map(|(l, _)| l) }
+
+    /// Returns the column number of the end of this span.
+    ///
+    /// # Returns
+    /// A [`usize`]s encoding the zero-indexed column number for the end of this span. Returns [`None`] if the span is empty.
+    #[inline]
+    pub fn end_col(&self) -> Option<usize> { self.end().map(|(_, c)| c) }
+}
+impl<F, S: SpannableLines> Span<F, S> {
+    /// Returns a slice of the source text matching the internal range, but then the full lines of
+    /// the highlighted text.
+    ///
+    /// # Returns
+    /// An [`S::Slice`] that captures the highlighted area plus the start- and ends of its lines.
+    #[inline]
+    pub fn spanned_lines<'s>(&'s self) -> S::Lines<'s> { self.source.slice_lines(self.range) }
 }
 
+// Inherited spanning
 impl<F, S: SpannableDisplay> Display for Span<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.source.slice_fmt(self.range, f) }
@@ -315,8 +367,75 @@ impl<F, S: SpannableEq> PartialEq for Span<F, S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
 }
-
 impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.clone() }
+}
+
+// Accessors
+impl<F, S> Span<F, S> {
+    /// Provides access to the internal `from`-string.
+    ///
+    /// If `F` implements [`Copy`], you might prefer [`Span::from()`] instead to avoid the lifetime to `self`.
+    ///
+    /// # Returns
+    /// A reference to the internal `from`-string.
+    #[inline]
+    pub fn from_ref(&self) -> &F { &self.from }
+
+    /// Provides access to the internal `source`-string.
+    ///
+    /// If `S` implements [`Copy`], you might prefer [`Span::source()`] instead to avoid the lifetime to `self`.
+    ///
+    /// # Returns
+    /// A reference to the internal `source`-string.
+    #[inline]
+    pub fn source_ref(&self) -> &S { &self.source }
+
+    /// Returns the inner range over the source text.
+    ///
+    /// # Returns
+    /// A [`SpanRange`] describing the spanned area.
+    #[inline]
+    pub fn range(&self) -> SpanRange { self.range }
+}
+impl<F: Copy, S> Span<F, S> {
+    /// Provides access to the internal `from`-string.
+    ///
+    /// If `F` does not implement [`Copy`], you might prefer [`Span::from_ref()`] instead.
+    ///
+    /// # Returns
+    /// The internal `from`-string.
+    #[inline]
+    pub fn from(&self) -> F { self.from }
+}
+impl<F, S: Copy> Span<F, S> {
+    /// Provides access to the internal `input`-string.
+    ///
+    /// If `S` does not implement [`Copy`], you might prefer [`Span::source_ref()`] instead.
+    ///
+    /// # Returns
+    /// The internal `input`-string.
+    #[inline]
+    pub fn source(&self) -> S { self.source }
+}
+
+// Transformers
+impl<F, S> Span<F, S> {
+    /// Casts the underlying `from`- and `source`-strings in this Span to some owned counterparts.
+    ///
+    /// The owned versions are wrapped in reference-counted pointers in order to allow sharing the `from`- and `source`-strings between Spans.
+    ///
+    /// This is therefore only really useful when converting errors into ones that do not depend on the final AST anymore.
+    ///
+    /// # Generics
+    /// - `FO`: The chosen owned counterpart to `F`.
+    /// - `SO`: The chosen owned counterpart to `S`.
+    ///
+    /// # Returns
+    /// A span with a clone of the original `from`- and `source`-texts.
+    #[inline]
+    pub fn into_owned<FO: From<F>, SO: From<S>>(self) -> Span<Rc<FO>, Rc<SO>> {
+        Span { from: Rc::new(self.from.into()), source: Rc::new(self.source.into()), range: self.range }
+    }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:19:49
 //  Last edited:
-//    17 May 2024, 15:49:46
+//    27 May 2024, 13:24:09
 //  Auto updated?
 //    Yes
 //
@@ -58,7 +58,7 @@ pub trait Spannable {
 }
 
 // Default binary impls for [`Spannable`]
-impl<'b> Spannable for &'b [u8] {
+impl Spannable for [u8] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
@@ -83,7 +83,7 @@ impl<'b> Spannable for &'b [u8] {
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
 }
-impl<'b, const LEN: usize> Spannable for &'b [u8; LEN] {
+impl<const LEN: usize> Spannable for [u8; LEN] {
     type Slice<'s> = &'s [u8] where Self: 's;
 
     #[inline]
@@ -103,7 +103,7 @@ impl<'b, const LEN: usize> Spannable for &'b [u8; LEN] {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -203,8 +203,8 @@ impl Spannable for Arc<[u8]> {
 }
 
 // Default string impls for [`Spannable`]
-impl<'s> Spannable for &'s str {
-    type Slice<'s2> = &'s2 str where Self: 's2;
+impl Spannable for str {
+    type Slice<'s> = &'s str where Self: 's;
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool {
@@ -223,7 +223,7 @@ impl<'s> Spannable for &'s str {
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -262,14 +262,14 @@ impl<'s> Spannable for Cow<'s, str> {
     fn byte_len(&self) -> usize { self.len() }
 }
 impl Spannable for String {
-    type Slice<'s2> = &'s2 str where Self: 's2;
+    type Slice<'s> = &'s str where Self: 's;
 
     #[inline]
     fn is_same(&self, other: &Self) -> bool { self == other }
 
     #[inline]
     #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
@@ -321,4 +321,21 @@ impl Spannable for Arc<str> {
 
     #[inline]
     fn byte_len(&self) -> usize { self.len() }
+}
+
+// Default pointer-like impls
+impl<'t, T: ?Sized + Spannable> Spannable for &'t T {
+    type Slice<'s> = T::Slice<'s> where Self: 's;
+
+    #[inline]
+    #[track_caller]
+    fn is_same(&self, other: &Self) -> bool { T::is_same(self, other) }
+
+    #[inline]
+    #[track_caller]
+    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { T::slice(self, range) }
+
+    #[inline]
+    #[track_caller]
+    fn byte_len(&self) -> usize { T::byte_len(self) }
 }

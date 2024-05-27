@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:21:34
 //  Last edited:
-//    17 May 2024, 16:26:25
+//    27 May 2024, 13:24:12
 //  Auto updated?
 //    Yes
 //
@@ -38,37 +38,37 @@ pub trait SpannableHash: Spannable {
 }
 
 // Default binary impls for [`Spannable`]
-impl<'b> SpannableHash for &'b [u8] {
+impl SpannableHash for [u8] {
     #[inline]
     #[track_caller]
     fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
 }
-impl<'b, const LEN: usize> SpannableHash for &'b [u8; LEN] {
+impl<const LEN: usize> SpannableHash for [u8; LEN] {
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_slice(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <[u8] as SpannableHash>::slice_hash(&self.as_slice(), range, state) }
 }
 impl<'b> SpannableHash for Cow<'b, [u8]> {
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }
 impl SpannableHash for Vec<u8> {
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_slice(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <[u8] as SpannableHash>::slice_hash(&self.as_slice(), range, state) }
 }
 impl SpannableHash for Rc<[u8]> {
     #[inline]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }
 impl SpannableHash for Arc<[u8]> {
     #[inline]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <[u8] as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }
 
 // Default string impls for [`Spannable`]
-impl<'s> SpannableHash for &'s str {
+impl SpannableHash for str {
     #[inline]
     #[track_caller]
     fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { index_range_bound!(self, range).hash(state) }
@@ -76,18 +76,25 @@ impl<'s> SpannableHash for &'s str {
 impl<'s> SpannableHash for Cow<'s, str> {
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }
 impl SpannableHash for String {
     #[inline]
     #[track_caller]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_str(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <str as SpannableHash>::slice_hash(&self.as_str(), range, state) }
 }
 impl SpannableHash for Rc<str> {
     #[inline]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
 }
 impl SpannableHash for Arc<str> {
     #[inline]
-    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <&str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { <str as SpannableHash>::slice_hash(&self.as_ref(), range, state) }
+}
+
+// Default pointer-like impls
+impl<'t, T: ?Sized + SpannableHash> SpannableHash for &'t T {
+    #[inline]
+    #[track_caller]
+    fn slice_hash<H: Hasher>(&self, range: SpanRange, state: &mut H) { T::slice_hash(self, range, state) }
 }

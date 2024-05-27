@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    06 May 2024, 16:38:05
+//    27 May 2024, 14:23:23
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,8 @@
 mod display;
 mod eq;
 mod hash;
+mod lines;
+mod locate;
 pub mod range;
 mod span;
 mod spannable;
@@ -28,5 +30,7 @@ mod spannable;
 pub use display::*;
 pub use eq::*;
 pub use hash::*;
+pub use lines::*;
+pub use locate::*;
 pub use span::*;
 pub use spannable::*;

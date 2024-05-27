@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:23:07
 //  Last edited:
-//    17 May 2024, 16:27:58
+//    27 May 2024, 13:24:16
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,23 @@ use std::sync::Arc;
 
 use crate::range::{index_range_bound, SpanRange};
 use crate::Spannable;
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use crate::span::Span;
+
+    #[test]
+    fn test_spannable_eq() {
+        let span1 = Span::new("<example>", "Hello, world!");
+        let span2 = span1.clone();
+        assert_eq!(span1, span2);
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -40,49 +57,49 @@ pub trait SpannableEq: Spannable {
 }
 
 // Default binary impls for [`Spannable`]
-impl<'b> SpannableEq for &'b [u8] {
+impl SpannableEq for [u8] {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
         index_range_bound!(self, range) == index_range_bound!(other, other_range)
     }
 }
-impl<'b, const LEN: usize> SpannableEq for &'b [u8; LEN] {
+impl<const LEN: usize> SpannableEq for [u8; LEN] {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&[u8] as SpannableEq>::slice_eq(&self.as_slice(), range, &other.as_slice(), other_range)
+        <[u8] as SpannableEq>::slice_eq(&self.as_slice(), range, &other.as_slice(), other_range)
     }
 }
 impl<'b> SpannableEq for Cow<'b, [u8]> {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }
 impl SpannableEq for Vec<u8> {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&[u8] as SpannableEq>::slice_eq(&self.as_slice(), range, &other.as_slice(), other_range)
+        <[u8] as SpannableEq>::slice_eq(&self.as_slice(), range, &other.as_slice(), other_range)
     }
 }
 impl SpannableEq for Rc<[u8]> {
     #[inline]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }
 impl SpannableEq for Arc<[u8]> {
     #[inline]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <[u8] as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }
 
 // Default string impls for [`Spannable`]
-impl<'s> SpannableEq for &'s str {
+impl SpannableEq for str {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
@@ -93,25 +110,32 @@ impl<'s> SpannableEq for Cow<'s, str> {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }
 impl SpannableEq for String {
     #[inline]
     #[track_caller]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&str as SpannableEq>::slice_eq(&self.as_str(), range, &other.as_str(), other_range)
+        <str as SpannableEq>::slice_eq(&self.as_str(), range, &other.as_str(), other_range)
     }
 }
 impl SpannableEq for Rc<str> {
     #[inline]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
 }
 impl SpannableEq for Arc<str> {
     #[inline]
     fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool {
-        <&str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
+        <str as SpannableEq>::slice_eq(&self.as_ref(), range, &other.as_ref(), other_range)
     }
+}
+
+// Default pointer-like impls
+impl<'t, T: ?Sized + SpannableEq> SpannableEq for &'t T {
+    #[inline]
+    #[track_caller]
+    fn slice_eq(&self, range: SpanRange, other: &Self, other_range: SpanRange) -> bool { T::slice_eq(self, range, other, other_range) }
 }

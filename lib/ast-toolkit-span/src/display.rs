@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:37:03
 //  Last edited:
-//    17 May 2024, 16:29:23
+//    27 May 2024, 13:24:20
 //  Auto updated?
 //    Yes
 //
@@ -41,7 +41,7 @@ pub trait SpannableDisplay: Spannable {
 }
 
 // Default binary impls for [`SpannableDisplay`]
-impl<'b> SpannableDisplay for &'b [u8] {
+impl SpannableDisplay for [u8] {
     #[inline]
     #[track_caller]
     fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult {
@@ -54,32 +54,32 @@ impl<'b> SpannableDisplay for &'b [u8] {
         Ok(())
     }
 }
-impl<'b, const LEN: usize> SpannableDisplay for &'b [u8; LEN] {
+impl<const LEN: usize> SpannableDisplay for [u8; LEN] {
     #[inline]
     #[track_caller]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_slice(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <[u8] as SpannableDisplay>::slice_fmt(&self.as_slice(), range, f) }
 }
 impl<'b> SpannableDisplay for Cow<'b, [u8]> {
     #[inline]
     #[track_caller]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }
 impl SpannableDisplay for Vec<u8> {
     #[inline]
     #[track_caller]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_slice(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <[u8] as SpannableDisplay>::slice_fmt(&self.as_slice(), range, f) }
 }
 impl SpannableDisplay for Rc<[u8]> {
     #[inline]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }
 impl SpannableDisplay for Arc<[u8]> {
     #[inline]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <[u8] as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }
 
 // Default string impls for [`Spannable`]
-impl<'s> SpannableDisplay for &'s str {
+impl SpannableDisplay for str {
     #[inline]
     #[track_caller]
     fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <str as Display>::fmt(index_range_bound!(self, range), f) }
@@ -87,18 +87,25 @@ impl<'s> SpannableDisplay for &'s str {
 impl<'s> SpannableDisplay for Cow<'s, str> {
     #[inline]
     #[track_caller]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }
 impl SpannableDisplay for String {
     #[inline]
     #[track_caller]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_str(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <str as SpannableDisplay>::slice_fmt(&self.as_str(), range, f) }
 }
 impl SpannableDisplay for Rc<str> {
     #[inline]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
 }
 impl SpannableDisplay for Arc<str> {
     #[inline]
-    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <&str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { <str as SpannableDisplay>::slice_fmt(&self.as_ref(), range, f) }
+}
+
+// Default pointer-like impls
+impl<'t, T: ?Sized + SpannableDisplay> SpannableDisplay for &'t T {
+    #[inline]
+    #[track_caller]
+    fn slice_fmt(&self, range: SpanRange, f: &mut Formatter<'_>) -> FResult { T::slice_fmt(self, range, f) }
 }

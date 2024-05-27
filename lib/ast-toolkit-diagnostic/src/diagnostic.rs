@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:22:17
 //  Last edited:
-//    27 May 2024, 10:43:02
+//    27 May 2024, 10:48:49
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_span::Span;
 
 use crate::annotations::{Annotation, AnnotationHighlight, IntoAnnotation};
 use crate::style::{Plain, Style};
-use crate::IntoDiagnostic;
 
 
 /***** AUXILLARY *****/
@@ -29,6 +28,21 @@ pub enum Level {
     Error,
     /// Non-fatal warnings.
     Warning,
+}
+
+
+
+/// Trait that allows things (e.g., typical [`Error`](std::error::Error)s) to be translated into [`Diagnostic`]s.
+///
+/// # Generics
+/// - `F`: The "from"-string type of any [`Span`](ast_toolkit_span::Span) passed to the resulting diagnostic.
+/// - `S`: The "source"-string type of any [`Span`](ast_toolkit_span::Span) passed to the resulting diagnostic.
+pub trait IntoDiagnostic<F, S> {
+    /// Returns a [`Diagnostic`] out of `self`.
+    ///
+    /// # Returns
+    /// A [`Diagnostic`] made out of `self`.
+    fn into_diagnostic(self) -> Diagnostic<F, S>;
 }
 
 

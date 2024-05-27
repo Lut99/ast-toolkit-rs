@@ -4,13 +4,15 @@
 //  Created:
 //    06 May 2024, 16:17:54
 //  Last edited:
-//    17 May 2024, 17:04:09
+//    27 May 2024, 11:57:37
 //  Auto updated?
 //    Yes
 //
 //  Description:
 //!   Implements a low-level range abstraction for Spans.
 //
+
+use std::ops::{Bound, RangeBounds};
 
 
 /***** HELPER MACROS *****/
@@ -27,9 +29,43 @@ macro_rules! index_range_bound {
         }
     }};
 }
-use std::ops::{Bound, RangeBounds};
-
 pub(crate) use index_range_bound;
+
+/// Converts from a [`SpanRange`] to two indices.
+macro_rules! resolve_range {
+    ($range:expr, $len:expr) => {{
+        let len: usize = $len;
+        match $range {
+            SpanRange::Closed(s, e) => {
+                if s >= len || e > len {
+                    panic!("Internal SpanRange::Closed({s}, {e}) is out-of-bounds for source string of {len} bytes");
+                }
+                if s < e { Some((s, e)) } else { None }
+            },
+            SpanRange::ClosedOpen(s) => {
+                if len > 0 && s >= len {
+                    panic!("Internal SpanRange::ClosedOpen({s}) is out-of-bounds for source string of {len} bytes");
+                }
+                if s < len { Some((s, len)) } else { None }
+            },
+            SpanRange::OpenClosed(e) => {
+                if len > 0 && e > len {
+                    panic!("Internal SpanRange::OpenClosed({e}) is out-of-bounds for source string of {len} bytes");
+                }
+                if e > 0 { Some((0, e)) } else { None }
+            },
+            SpanRange::Open => {
+                if len > 0 {
+                    Some((0, len))
+                } else {
+                    None
+                }
+            },
+            SpanRange::Empty => None,
+        }
+    }};
+}
+pub(crate) use resolve_range;
 
 
 
