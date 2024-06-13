@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    27 May 2024, 14:22:38
+//    13 Jun 2024, 14:58:09
 //  Auto updated?
 //    Yes
 //
@@ -17,6 +17,9 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
 use std::rc::Rc;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::eq::SpannableEq;
 use crate::hash::SpannableHash;
@@ -60,6 +63,7 @@ impl<F, S> Spanning<F, S> for Infallible {
 /// todo!() 
 /// ````
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Span<F, S> {
     /// Something describing the input (e.g., filename).
     from:   F,

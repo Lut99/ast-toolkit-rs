@@ -4,7 +4,7 @@
 //  Created:
 //    06 May 2024, 16:17:54
 //  Last edited:
-//    27 May 2024, 11:57:37
+//    13 Jun 2024, 15:46:48
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,9 @@
 //
 
 use std::ops::{Bound, RangeBounds};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 
 /***** HELPER MACROS *****/
@@ -76,6 +79,7 @@ pub(crate) use resolve_range;
 ///
 /// This range can either be open- or closed on either end. 'Open' means 'everything on that side', i.e., if the left is Open, it refers to the start of the source; and if the right is Open, it refers to the end.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize), serde(rename_all = "snake_case"))]
 pub enum SpanRange {
     /// Closed on both ends.
     ///
