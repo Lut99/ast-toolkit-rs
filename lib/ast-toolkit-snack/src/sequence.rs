@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:35:22
 //  Last edited:
-//    08 May 2024, 10:46:33
+//    01 Jul 2024, 13:36:04
 //  Auto updated?
 //    Yes
 //
@@ -27,6 +27,7 @@ mod tests {
     use super::*;
     use crate::span::MatchBytes;
     use crate::utf8::complete::{self as utf8c, Tag};
+    #[cfg(feature = "punctuated")]
     use crate::{error, multi, sequence as seq, utf8};
 
     #[test]

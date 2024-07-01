@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    08 May 2024, 10:41:42
+//    01 Jul 2024, 11:56:20
 //  Auto updated?
 //    Yes
 //
@@ -113,6 +113,47 @@ impl<F, S: MatchBytes> MatchBytes for Span<F, S> {
 
     #[inline]
     fn len(&self) -> usize { self.source_ref().len() }
+}
+
+
+
+/// Extends a [`Spannable`] with the power to iterate over characters.
+pub trait NextChar {
+    /// Returns the next character as parsed from the underlying spannable.
+    ///
+    /// # Arguments
+    /// - `range`: The actual range of `self` to match.
+    ///
+    /// # Returns
+    /// A [`&str`] that represents the parsed character, or [`None`] if there is no such character left.
+    ///
+    /// # Panics
+    /// This function may panic if we are not at the UTF-8 character boundary.
+    fn next_char(&self, range: SpanRange) -> Option<&str>;
+}
+
+// Default string impls for [`NextChar`]
+impl<'s> NextChar for &'s str {
+    #[inline]
+    #[track_caller]
+    fn next_char(&self, range: SpanRange) -> Option<&str> { range.apply_to_str(self).graphemes(true).next() }
+}
+impl<'s> NextChar for Cow<'s, str> {
+    #[inline]
+    #[track_caller]
+    fn next_char(&self, range: SpanRange) -> Option<&str> { range.apply_to_str(self).graphemes(true).next() }
+}
+impl NextChar for String {
+    #[inline]
+    #[track_caller]
+    fn next_char(&self, range: SpanRange) -> Option<&str> { range.apply_to_str(self).graphemes(true).next() }
+}
+
+// The implementation for a [`Span`].
+impl<F, S: NextChar> NextChar for Span<F, S> {
+    #[inline]
+    #[track_caller]
+    fn next_char(&self, range: SpanRange) -> Option<&str> { self.source_ref().next_char(self.range().span(&range)) }
 }
 
 
@@ -229,6 +270,40 @@ impl OneOfUtf8 for String {
 impl<F, S: OneOfUtf8> OneOfUtf8 for Span<F, S> {
     #[inline]
     fn one_of_utf8(&self, range: SpanRange, chars: &[&str]) -> usize { self.source_ref().one_of_utf8(self.range().span(&range), chars) }
+}
+
+
+
+/// Extends a [`Spannable`] with the power to be turned into a [`String`].
+pub trait ToStr {
+    /// Returns the spanned value as a [`Cow<str>`].
+    ///
+    /// # Arguments
+    /// - `range`: The actual range of `self` to match.
+    ///
+    /// # Returns
+    /// A [`Cow<str>`] that represents the inner value.
+    fn to_str(&self, range: SpanRange) -> Cow<str>;
+}
+
+// Default string impls for [`OneOfUtf8`]
+impl<'s> ToStr for &'s str {
+    #[inline]
+    fn to_str(&self, range: SpanRange) -> Cow<str> { Cow::Borrowed(range.apply_to_str(self)) }
+}
+impl<'s> ToStr for Cow<'s, str> {
+    #[inline]
+    fn to_str(&self, range: SpanRange) -> Cow<str> { Cow::Borrowed(range.apply_to_str(self)) }
+}
+impl ToStr for String {
+    #[inline]
+    fn to_str(&self, range: SpanRange) -> Cow<str> { Cow::Borrowed(range.apply_to_str(self)) }
+}
+
+// The implementation for a [`Span`].
+impl<F, S: ToStr> ToStr for Span<F, S> {
+    #[inline]
+    fn to_str(&self, range: SpanRange) -> Cow<str> { self.source_ref().to_str(self.range().span(&range)) }
 }
 
 

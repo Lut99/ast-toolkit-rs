@@ -22,7 +22,10 @@ ast-toolkit-snack-derive = { path = "../../derive/ast-toolkit-snack-derive", opt
 
 
 [features]
-default = []
+default = ["extra"]
+
+extra = ["c"]
+c = []
 
 derive = ["dep:ast-toolkit-snack-derive"]
 punctuated = ["dep:ast-toolkit-punctuated"]

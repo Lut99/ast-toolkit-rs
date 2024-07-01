@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    03 May 2024, 14:35:49
+//    28 Jun 2024, 15:23:53
 //  Auto updated?
 //    Yes
 //
@@ -24,6 +24,8 @@ pub use ast_toolkit_snack_derive::comb;
 // Declare submodules
 pub mod branch;
 pub mod bytes;
+#[cfg(feature = "c")]
+pub mod c;
 pub mod combinator;
 pub mod error;
 pub mod multi;

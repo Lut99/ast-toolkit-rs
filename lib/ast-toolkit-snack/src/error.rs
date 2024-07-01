@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    17 May 2024, 17:54:21
+//    01 Jul 2024, 13:24:25
 //  Auto updated?
 //    Yes
 //
@@ -31,6 +31,7 @@ use ast_toolkit_span::{Span, Spanning};
 use enum_debug::EnumDebug;
 
 use crate::bytes::complete::{OneOf1Expects as OneOf1BytesExpects, TagExpects as TagBytesExpects, While1Expects as While1BytesExpects};
+use crate::c::complete::EscapedExpects;
 use crate::combinator::NotExpects;
 use crate::multi::Many1Expects;
 use crate::sequence::DelimExpects;
@@ -44,14 +45,14 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// Makes it easier to propagate enum variants.
 macro_rules! propagate {
     (match $self:ident {
-        $($source:ident::$variants:ident { $($fields:ident),* $(,)? } => $target:ident,)*
+        $($(#[$($inner:meta)+])* $source:ident::$variants:ident { $($fields:ident),* $(,)? } => $target:ident,)*
         !special {
             $($ssource:ident::$svariants:ident { $($sfields:ident),* $(,)? $(..)? } => { $($scode:tt)* },)*
         }
         $(,)?
     }) => {
         match $self {
-            $($source::$variants { $($fields,)* } => $target::$variants { $($fields,)* },)*
+            $($(#[$($inner)+])* $source::$variants { $($fields,)* } => $target::$variants { $($fields,)* },)*
             $($ssource::$svariants { $($sfields,)* .. } => { $($scode)* },)*
         }
     };
@@ -118,6 +119,22 @@ fn replace_with_rc<'a, F, S, FO: From<F>, SO: From<S>, E>(
         Common::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new(replace_with_rc(*fail, from, source)), close_fmt },
         Common::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new(replace_with_rc(*fail, from, source)), open_fmt },
         Common::Digit1 { span } => Common::Digit1 { span: Span::ranged(from.clone(), source.clone(), span.range()) },
+        #[cfg(feature = "c")]
+        Common::EscapedClose { delim, escaper, span } => {
+            Common::EscapedClose { delim, escaper, span: Span::ranged(from.clone(), source.clone(), span.range()) }
+        },
+        #[cfg(feature = "c")]
+        Common::EscapedIllegalEscapee { err, span } => {
+            Common::EscapedIllegalEscapee { err, span: Span::ranged(from.clone(), source.clone(), span.range()) }
+        },
+        #[cfg(feature = "c")]
+        Common::EscapedOpen { delim, escaper, span } => {
+            Common::EscapedOpen { delim, escaper, span: Span::ranged(from.clone(), source.clone(), span.range()) }
+        },
+        #[cfg(feature = "c")]
+        Common::EscapedOrphanEscaper { escaper, span } => {
+            Common::EscapedOrphanEscaper { escaper, span: Span::ranged(from.clone(), source.clone(), span.range()) }
+        },
         Common::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new(replace_with_rc(*fail, from, source)), nested_fmt },
         Common::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new(replace_with_rc(*fail, from, source)), nested_fmt },
         Common::Not { nested_fmt, span } => Common::Not { nested_fmt, span: Span::ranged(from.clone(), source.clone(), span.range()) },
@@ -530,6 +547,18 @@ pub enum Common<'a, F, S, E = Infallible> {
     DelimOpen { fail: Box<Self>, open_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match at least one digit.
     Digit1 { span: Span<F, S> },
+    /// Failed to parse the closing delimiter/escaper in an escaped string.
+    #[cfg(feature = "c")]
+    EscapedClose { delim: &'a str, escaper: &'a str, span: Span<F, S> },
+    /// The closure said no to a particular escapee.
+    #[cfg(feature = "c")]
+    EscapedIllegalEscapee { err: Box<dyn 'a + std::error::Error>, span: Span<F, S> },
+    /// Failed to parse the opening delimiter in an escaped string.
+    #[cfg(feature = "c")]
+    EscapedOpen { delim: &'a str, escaper: &'a str, span: Span<F, S> },
+    /// We found an escaper without a subsequent character.
+    #[cfg(feature = "c")]
+    EscapedOrphanEscaper { escaper: &'a str, span: Span<F, S> },
     /// Failed to match a combinator at least once.
     Many1 { fail: Box<Self>, nested_fmt: Box<dyn 'a + ExpectsFormatter> },
     /// Failed to match a combinator exactly N times.
@@ -589,6 +618,14 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
             match self {
                 Self::All { span } => Common,
                 Self::Digit1 { span } => Common,
+                #[cfg(feature = "c")]
+                Self::EscapedClose { delim, escaper, span } => Common,
+                #[cfg(feature = "c")]
+                Self::EscapedIllegalEscapee { err, span } => Common,
+                #[cfg(feature = "c")]
+                Self::EscapedOpen { delim, escaper, span } => Common,
+                #[cfg(feature = "c")]
+                Self::EscapedOrphanEscaper { escaper, span } => Common,
                 Self::Not { nested_fmt, span } => Common,
                 Self::OneOf1Bytes { byteset, span } => Common,
                 Self::OneOf1Utf8 { charset, span } => Common,
@@ -647,6 +684,14 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
             Self::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new((*fail).map_custom(map)), close_fmt },
             Self::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new((*fail).map_custom(map)), open_fmt },
             Self::Digit1 { span } => Common::Digit1 { span },
+            #[cfg(feature = "c")]
+            Self::EscapedClose { delim, escaper, span } => Common::EscapedClose { delim, escaper, span },
+            #[cfg(feature = "c")]
+            Self::EscapedIllegalEscapee { err, span } => Common::EscapedIllegalEscapee { err, span },
+            #[cfg(feature = "c")]
+            Self::EscapedOpen { delim, escaper, span } => Common::EscapedOpen { delim, escaper, span },
+            #[cfg(feature = "c")]
+            Self::EscapedOrphanEscaper { escaper, span } => Common::EscapedOrphanEscaper { escaper, span },
             Self::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new((*fail).map_custom(map)), nested_fmt },
             Self::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new((*fail).map_custom(map)), nested_fmt },
             Self::Not { nested_fmt, span } => Common::Not { nested_fmt, span },
@@ -690,6 +735,14 @@ impl<'a, F, S, E> Common<'a, F, S, E> {
             Self::DelimClose { fail, close_fmt } => Common::DelimClose { fail: Box::new(fail.into_owned()), close_fmt },
             Self::DelimOpen { fail, open_fmt } => Common::DelimOpen { fail: Box::new(fail.into_owned()), open_fmt },
             Self::Digit1 { span } => Common::Digit1 { span: span.into_owned() },
+            #[cfg(feature = "c")]
+            Self::EscapedClose { delim, escaper, span } => Common::EscapedClose { delim, escaper, span: span.into_owned() },
+            #[cfg(feature = "c")]
+            Self::EscapedIllegalEscapee { err, span } => Common::EscapedIllegalEscapee { err, span: span.into_owned() },
+            #[cfg(feature = "c")]
+            Self::EscapedOpen { delim, escaper, span } => Common::EscapedOpen { delim, escaper, span: span.into_owned() },
+            #[cfg(feature = "c")]
+            Self::EscapedOrphanEscaper { escaper, span } => Common::EscapedOrphanEscaper { escaper, span: span.into_owned() },
             Self::Many1 { fail, nested_fmt } => Common::Many1 { fail: Box::new(fail.into_owned()), nested_fmt },
             Self::ManyN { n, i, fail, nested_fmt } => Common::ManyN { n, i, fail: Box::new(fail.into_owned()), nested_fmt },
             Self::Not { nested_fmt, span } => Common::Not { nested_fmt, span: span.into_owned() },
@@ -730,6 +783,14 @@ impl<'a, F, S, E: Display> Display for Common<'a, F, S, E> {
                 open_fmt.expects_fmt(f, 0)
             },
             Self::Digit1 { .. } => write!(f, "{}", Digit1Expects),
+            #[cfg(feature = "c")]
+            Self::EscapedClose { delim, escaper, .. } => write!(f, "Expected either escaper ({escaper:?}) or closing delimiter ({delim:?})"),
+            #[cfg(feature = "c")]
+            Self::EscapedIllegalEscapee { err, .. } => write!(f, "{err}"),
+            #[cfg(feature = "c")]
+            Self::EscapedOpen { delim, escaper, .. } => write!(f, "{}", EscapedExpects { delim, escaper }),
+            #[cfg(feature = "c")]
+            Self::EscapedOrphanEscaper { escaper, .. } => write!(f, "Expected a character to escape after escaper {escaper:?}"),
             Self::Many1 { nested_fmt, .. } => write!(f, "{}", Many1Expects { fmt: nested_fmt }),
             Self::ManyN { i, n, nested_fmt, .. } => {
                 write!(f, "Expected at least {} more repetitions of ", *n - *i)?;
@@ -777,6 +838,14 @@ impl<'a, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for Common<'a, F,
             Self::Delim { fail, .. } => fail.span(),
             Self::DelimOpen { fail, .. } => fail.span(),
             Self::Digit1 { span } => span.clone(),
+            #[cfg(feature = "c")]
+            Self::EscapedClose { span, .. } => span.clone(),
+            #[cfg(feature = "c")]
+            Self::EscapedIllegalEscapee { span, .. } => span.clone(),
+            #[cfg(feature = "c")]
+            Self::EscapedOpen { span, .. } => span.clone(),
+            #[cfg(feature = "c")]
+            Self::EscapedOrphanEscaper { span, .. } => span.clone(),
             Self::Many1 { fail, .. } => fail.span(),
             Self::ManyN { fail, .. } => fail.span(),
             Self::Not { span, .. } => span.clone(),

@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:04:35
 //  Last edited:
-//    03 May 2024, 15:11:13
+//    01 Jul 2024, 13:35:36
 //  Auto updated?
 //    Yes
 //
@@ -58,6 +58,7 @@ fn test<F, S>() -> impl Combinator<'static, F, S, Output = (), Error = Infallibl
     Ret { comb: move |input: Span<F, S>| -> SResult<'static, (), F, S> { SResult::Ok(input, ()) }, fmt: || "A test".into() }
 }
 
+#[cfg(feature = "derive")]
 fn test_derived<F, S>() -> impl Combinator<'static, F, S, Output = (), Error = Infallible> {
     ast_toolkit_snack_derive::comb! {
         expects "Something";
@@ -73,6 +74,8 @@ fn main() {
     let mut test = test::<&'static str, &'static str>();
     println!("{:?}", test.parse(Span::new("<example>", "Hiya!")));
 
+    #[cfg(feature = "derive")]
     let mut test = test_derived::<&'static str, &'static str>();
+    #[cfg(feature = "derive")]
     println!("{:?}", test.parse(Span::new("<example>", "Hiya!")));
 }
