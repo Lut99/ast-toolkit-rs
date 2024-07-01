@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    13 Jun 2024, 16:11:16
+//    01 Jul 2024, 16:03:53
 //  Auto updated?
 //    Yes
 //
@@ -17,6 +17,7 @@
 //
 
 // Declare modules
+mod as_str;
 mod display;
 mod eq;
 mod hash;
@@ -27,6 +28,7 @@ mod span;
 mod spannable;
 
 // Flatten them all in this namespace
+pub use as_str::*;
 pub use display::*;
 pub use eq::*;
 pub use hash::*;
