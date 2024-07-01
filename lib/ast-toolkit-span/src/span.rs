@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    01 Jul 2024, 10:57:03
+//    01 Jul 2024, 16:06:48
 //  Auto updated?
 //    Yes
 //
@@ -21,12 +21,14 @@ use std::rc::Rc;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::as_str::{SpannableAsStr, SpannableTryAsStr};
+use crate::display::SpannableDisplay;
 use crate::eq::SpannableEq;
 use crate::hash::SpannableHash;
 use crate::lines::SpannableLines;
+use crate::locate::SpannableLocate;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
-use crate::{SpannableDisplay, SpannableLocate};
 
 
 /***** AUXILLARY *****/
@@ -358,6 +360,14 @@ impl<F, S: SpannableLines> Span<F, S> {
 }
 
 // Inherited spanning
+impl<F, S: SpannableAsStr> Span<F, S> {
+    #[inline]
+    pub fn as_str(&self) -> &str { self.source.as_str(self.range) }
+}
+impl<F, S: SpannableTryAsStr> Span<F, S> {
+    #[inline]
+    pub fn try_as_str(&self) -> Result<&str, S::Error> { self.source.try_as_str(self.range) }
+}
 impl<F, S: SpannableDisplay> Display for Span<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.source.slice_fmt(self.range, f) }
