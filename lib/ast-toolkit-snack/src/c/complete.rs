@@ -4,7 +4,7 @@
 //  Created:
 //    28 Jun 2024, 15:22:37
 //  Last edited:
-//    01 Jul 2024, 13:49:00
+//    01 Jul 2024, 15:32:20
 //  Auto updated?
 //    Yes
 //
@@ -26,6 +26,22 @@ use crate::span::{MatchBytes, NextChar, ToStr, WhileUtf8};
 use crate::utf8::complete::tag;
 use crate::utf8::while0;
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
+
+
+/***** AUXILLARY *****/
+/// Represents the result of the [`escaped`]-combinator.
+#[derive(Clone, Debug)]
+pub struct EscapedString<F, S> {
+    /// Represents the delimited quotes (opening and closing, respectively).
+    pub delim: (Span<F, S>, Span<F, S>),
+    /// Represents the span of the literal itself, _excluding_ the quotes.
+    pub span:  Span<F, S>,
+    /// If the literal includes escapes, then this is the resolved value after processing them.
+    pub value: Option<String>,
+}
+
+
+
 
 
 /***** LIBRARY FUNCTIONS *****/
@@ -175,13 +191,13 @@ where
     E: for<'a> FnMut(&'a str) -> std::result::Result<Cow<'a, str>, E2>,
     E2: 't + std::error::Error,
 {
-    type Output = (String, Span<F, S>);
+    type Output = EscapedString<F, S>;
     type Error = Infallible;
 
     #[inline]
     fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> crate::Result<'t, Self::Output, F, S, Self::Error> {
         // Step 1: Match the opening delimiter
-        let (mut rem, mut span): (Span<F, S>, Span<F, S>) = match tag(self.delim).parse(input) {
+        let (mut rem, open): (Span<F, S>, Span<F, S>) = match tag(self.delim).parse(input) {
             Result::Ok(rem, res) => (rem, res),
             Result::Fail(fail) => {
                 return Result::Fail(Failure::Common(Common::EscapedOpen { delim: self.delim, escaper: self.escaper, span: fail.span() }));
@@ -190,7 +206,8 @@ where
         };
 
         // Step 2: Match the middle bit as anything _but_ any escaped string _and_ the delimiter
-        let mut value: String = String::new();
+        let mut span: Span<F, S> = Span::empty(open.from_ref().clone(), open.source_ref().clone());
+        let mut value: Option<String> = None;
         loop {
             // Parse anything in the middle
             match while0(|c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
@@ -201,8 +218,10 @@ where
                     }
                     rem = mrem;
 
-                    // Also add it to the value string
-                    value.push_str(mres.to_str(SpanRange::Open).as_ref());
+                    // Also add it to the value string if we have one
+                    if let Some(value) = &mut value {
+                        value.push_str(mres.to_str(SpanRange::Open).as_ref());
+                    }
                 },
                 Result::Fail(_) => unreachable!(),
                 Result::Error(_) => unreachable!(),
@@ -214,7 +233,7 @@ where
                     if !span.join_mut(&mres) {
                         panic!("Spans are not of the same source - unexpectedly??");
                     }
-                    return Result::Ok(mrem, (value, span));
+                    return Result::Ok(mrem, EscapedString { delim: (open, mres), span, value });
                 },
                 Result::Fail(_) => {},
                 Result::Error(_) => unreachable!(),
@@ -223,7 +242,16 @@ where
             // If we didn't close, then we expect an escaped string
             match tag(self.escaper).parse(rem) {
                 Result::Ok(mrem, mres) => {
-                    // Add it to the parsed span
+                    // First, bring the value-string up-to-speed to what we parsed so far
+                    let value: &mut String = match &mut value {
+                        Some(value) => value,
+                        None => {
+                            value = Some(span.to_str(SpanRange::Open).into_owned());
+                            value.as_mut().unwrap()
+                        },
+                    };
+
+                    // Add it to the parsed span - but not the value
                     if !span.join_mut(&mres) {
                         panic!("Spans are not of the same source - unexpectedly??");
                     }
@@ -236,9 +264,7 @@ where
 
                     // Run the closure to process the escaped character
                     match (self.callback)(c) {
-                        Ok(c) => {
-                            value.push_str(c.as_ref());
-                        },
+                        Ok(c) => value.push_str(c.as_ref()),
                         Err(err) => return Result::Error(Error::Common(Common::EscapedIllegalEscapee { err: Box::new(err), span: mrem })),
                     }
 
