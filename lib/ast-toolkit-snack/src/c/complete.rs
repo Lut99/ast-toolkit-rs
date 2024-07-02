@@ -4,7 +4,7 @@
 //  Created:
 //    28 Jun 2024, 15:22:37
 //  Last edited:
-//    01 Jul 2024, 15:32:20
+//    02 Jul 2024, 13:43:34
 //  Auto updated?
 //    Yes
 //
@@ -229,11 +229,8 @@ where
 
             // Next, try to parse the delimiter
             match tag(self.delim).parse(rem.clone()) {
-                Result::Ok(mrem, mres) => {
-                    if !span.join_mut(&mres) {
-                        panic!("Spans are not of the same source - unexpectedly??");
-                    }
-                    return Result::Ok(mrem, EscapedString { delim: (open, mres), span, value });
+                Result::Ok(mrem, close) => {
+                    return Result::Ok(mrem, EscapedString { delim: (open, close), span, value });
                 },
                 Result::Fail(_) => {},
                 Result::Error(_) => unreachable!(),
