@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    01 Jul 2024, 16:06:48
+//    02 Jul 2024, 11:30:11
 //  Auto updated?
 //    Yes
 //
@@ -29,6 +29,7 @@ use crate::lines::SpannableLines;
 use crate::locate::SpannableLocate;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
+use crate::SpannableAsBytes;
 
 
 /***** AUXILLARY *****/
@@ -360,13 +361,37 @@ impl<F, S: SpannableLines> Span<F, S> {
 }
 
 // Inherited spanning
-impl<F, S: SpannableAsStr> Span<F, S> {
+impl<F, S: SpannableAsBytes> Span<F, S> {
+    /// Returns the spanned area as raw bytes.
+    ///
+    /// Note that this has to be a _reference_ to a _continious_ byte range.
+    ///
+    /// # Returns
+    /// A [`&[u8]`](u8) that represents (some) raw byte value of the spanned area.
     #[inline]
-    pub fn as_str(&self) -> &str { self.source.as_str(self.range) }
+    pub fn as_bytes(&self) -> &[u8] { self.source.as_bytes(self.range) }
 }
 impl<F, S: SpannableTryAsStr> Span<F, S> {
+    /// Attempts to return the spanned area as a string.
+    ///
+    /// This may fail if the spanned area is _not_ a string. This can theoretically happen for e.g.
+    /// byte slices if they do not span valid UTF-8.
+    ///
+    /// # Returns
+    /// A [`&str`](str) that represents the string value of the spanned area.
+    ///
+    /// # Errors
+    /// This function may error if the spanned area is not somehow a string.
     #[inline]
     pub fn try_as_str(&self) -> Result<&str, S::Error> { self.source.try_as_str(self.range) }
+}
+impl<F, S: SpannableAsStr> Span<F, S> {
+    /// Returns the spanned area as a string.
+    ///
+    /// # Returns
+    /// A [`&str`](str) that represents the string value of the spanned area.
+    #[inline]
+    pub fn as_str(&self) -> &str { self.source.as_str(self.range) }
 }
 impl<F, S: SpannableDisplay> Display for Span<F, S> {
     #[inline]
