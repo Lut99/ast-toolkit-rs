@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:24:48
 //  Last edited:
-//    02 May 2024, 15:38:11
+//    06 Aug 2024, 15:34:30
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,7 @@
 
 // Declare modules
 mod comb;
+mod combinator;
 
 // Imports
 use proc_macro::TokenStream;
@@ -31,5 +32,17 @@ pub fn comb(input: TokenStream) -> TokenStream {
         Err(err) => {
             err.abort();
         },
+    }
+}
+
+
+
+/// See `ast_toolkit_snack::procedural::combinator` in the auto-generated documentation for more information.
+#[proc_macro_attribute]
+pub fn combinator(attr: TokenStream, input: TokenStream) -> TokenStream {
+    // Pass to the main function
+    match combinator::call(attr.into(), input.into()) {
+        Ok(stream) => stream.into(),
+        Err(err) => err.into_compile_error().into(),
     }
 }

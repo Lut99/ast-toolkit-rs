@@ -4,7 +4,7 @@
 //  Created:
 //    02 May 2024, 15:04:35
 //  Last edited:
-//    01 Jul 2024, 13:35:36
+//    06 Aug 2024, 17:01:34
 //  Auto updated?
 //    Yes
 //
@@ -68,6 +68,10 @@ fn test_derived<F, S>() -> impl Combinator<'static, F, S, Output = (), Error = I
         };
     }
 }
+
+#[cfg(feature = "derive")]
+#[ast_toolkit_snack_derive::combinator(expected = "Howdy", output = (), error = Infallible)]
+fn test_derived2<F, S>(input: Span<F, S>) -> ast_toolkit_snack::Result<F, S, Infallible> {}
 
 
 fn main() {
