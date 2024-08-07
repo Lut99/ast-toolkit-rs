@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    07 Aug 2024, 22:40:38
+//    07 Aug 2024, 23:25:28
 //  Auto updated?
 //    Yes
 //
@@ -20,15 +20,59 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
-use syn::token::{And, Mut, Paren, PathSep, SelfValue};
+use syn::token::{And, Comma, Gt, Lt, Mut, Paren, PathSep, RArrow, SelfValue};
 use syn::{
-    parse2, Attribute, Block, Error, FnArg, GenericParam, Ident, Item, ItemFn, LitStr, Path, PathArguments, PathSegment, Receiver, Signature, Token,
-    Type, TypePath, TypeReference, TypeTuple, Visibility, WhereClause,
+    parse2, AngleBracketedGenericArguments, Attribute, Block, Error, FnArg, GenericArgument, GenericParam, Ident, Item, ItemFn, Lifetime, LitStr,
+    Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference, TypeTuple, Visibility, WhereClause,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 
 /***** HELPER FUNCTIONS *****/
+/// Generates the default return type.
+///
+/// # Arguments
+/// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
+///
+/// # Returns
+/// A [`Type`] representing the target return type.
+#[inline]
+fn default_return_type(attrs: &CombinatorAttributes) -> Type {
+    // Build the generic arguments
+    let mut args: Punctuated<GenericArgument, Comma> = Punctuated::new();
+    args.push(GenericArgument::Lifetime(Lifetime::new("'static", Span::mixed_site())));
+    args.push(GenericArgument::Type(attrs.output.clone()));
+    {
+        let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
+        segs.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
+        args.push(GenericArgument::Type(Type::Path(TypePath { qself: None, path: Path { leading_colon: None, segments: segs } })));
+    }
+    {
+        let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
+        segs.push(PathSegment { ident: Ident::new("S", Span::mixed_site()), arguments: PathArguments::None });
+        args.push(GenericArgument::Type(Type::Path(TypePath { qself: None, path: Path { leading_colon: None, segments: segs } })));
+    }
+    args.push(GenericArgument::Type(attrs.error.clone()));
+
+    // Build the type path itself
+    let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
+    segs.push(PathSegment { ident: Ident::new("ast_toolkit_snack", Span::mixed_site()), arguments: PathArguments::None });
+    segs.push(PathSegment {
+        ident:     Ident::new("Result", Span::mixed_site()),
+        arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+            colon2_token: None,
+            lt_token: Lt::default(),
+            args,
+            gt_token: Gt::default(),
+        }),
+    });
+
+    // OK, return the type
+    Type::Path(TypePath { qself: None, path: Path { leading_colon: Some(PathSep::default()), segments: segs } })
+}
+
+
+
 /// Generates the expected formatter implementation.
 ///
 /// # Arguments
@@ -363,17 +407,27 @@ impl Parse for CombinatorFunc {
 /// # Errors
 /// If anything fails during the above process, an appropriate [`Diagnostic`] is generated.
 pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Error> {
-    // Start by parsing the attributes
+    // Start by parsing the streams
     let mut attrs: CombinatorAttributes = parse2(attrs)?;
-    // Then parse the body as a function
-    let func: CombinatorFunc = parse2(input)?;
+    let mut func: CombinatorFunc = parse2(input)?;
 
-    // Resolve the names
+    // Populate defaults for the attributes
     if attrs.comb.is_none() {
         attrs.comb = Some(Ident::new(&CamelCaseifyer(&func.sig.ident.to_string()).to_string(), func.sig.ident.span()));
     }
     if attrs.fmt.is_none() {
         attrs.fmt = Some(Ident::new(&format!("{}ExpectsFormatter", attrs.comb.as_ref().unwrap()), func.sig.ident.span()));
+    }
+
+    // And for the function
+    if let ReturnType::Type(_, ty) = &mut func.sig.output {
+        if matches!(**ty, Type::Infer(_)) {
+            // Generate a default type instead
+            *ty = Box::new(default_return_type(&attrs));
+        }
+    } else {
+        // Also generate the default
+        func.sig.output = ReturnType::Type(RArrow::default(), Box::new(default_return_type(&attrs)));
     }
 
     // Generate the parts of the combinator implementation

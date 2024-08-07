@@ -4,7 +4,7 @@
 //  Created:
 //    07 Aug 2024, 22:04:09
 //  Last edited:
-//    07 Aug 2024, 23:03:09
+//    07 Aug 2024, 23:25:34
 //  Auto updated?
 //    Yes
 //
@@ -90,7 +90,7 @@ impl Expr {
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
 #[comb(Combinator = ExprComb, expected = "An expression", Output = Expr, Error = ParseError)]
-fn expr<F, S>(input: Span<F, S>) -> SResult<'static, Expr, F, S, ParseError>
+fn expr<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
     S: Clone + MatchBytes + SpannableAsBytes + WhileUtf8,
@@ -133,7 +133,7 @@ where
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[comb(expected = "A literal number", Output = u64, Error = ParseError)]
-fn lit<F, S>(input: Span<F, S>) -> SResult<'static, u64, F, S, ParseError>
+fn lit<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
     S: Clone + SpannableAsBytes + WhileUtf8,
