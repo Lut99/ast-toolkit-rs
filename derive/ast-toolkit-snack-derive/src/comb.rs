@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    07 Aug 2024, 23:25:28
+//    07 Aug 2024, 23:33:46
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
@@ -85,7 +85,7 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
     let sname: String = func.sig.ident.to_string();
     let vis: &Visibility = &func.vis;
     let fname: &Ident = attrs.fmt.as_ref().unwrap();
-    let exps: &LitStr = &attrs.expected;
+    let exps: &ExpectedString = &attrs.expected;
     quote! {
         #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`]-combinator.")]
         #[automatically_derived]
@@ -260,42 +260,6 @@ impl<S: AsRef<str>> Display for CamelCaseifyer<S> {
 
 
 
-/// Represents a name/value pair for the attributes.
-#[derive(Clone, Debug)]
-pub enum AttrNameValue {
-    /// It's the name of the combinator class.
-    Combinator(Ident),
-    /// It's the name of the formatter class.
-    Formatter(Ident),
-
-    /// It's the expected string.
-    Expected(LitStr),
-    /// It's the output type.
-    Output(Type),
-    /// It's the error type.
-    Error(Type),
-}
-impl Parse for AttrNameValue {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Parse the identifier first, and  then always expected an equals
-        let ident: Ident = input.parse()?;
-        input.parse::<Token![=]>()?;
-        if ident == "comb" || ident == "combinator" || ident == "Combinator" {
-            Ok(Self::Combinator(input.parse::<Ident>()?))
-        } else if ident == "fmt" || ident == "formatter" || ident == "Formatter" {
-            Ok(Self::Formatter(input.parse::<Ident>()?))
-        } else if ident == "expected" || ident == "Expected" {
-            Ok(Self::Expected(input.parse::<LitStr>()?))
-        } else if ident == "output" || ident == "Output" {
-            Ok(Self::Output(input.parse::<Type>()?))
-        } else if ident == "error" || ident == "Error" {
-            Ok(Self::Error(input.parse::<Type>()?))
-        } else {
-            Err(Error::new(ident.span(), format!("Unknown attribute '{ident}'")))
-        }
-    }
-}
-
 /// Represents the parsed information from the attribute.
 #[derive(Clone, Debug)]
 struct CombinatorAttributes {
@@ -305,7 +269,7 @@ struct CombinatorAttributes {
     fmt:  Option<Ident>,
 
     /// The string describing what to expect.
-    expected: LitStr,
+    expected: ExpectedString,
     /// Any output type. Defaults to `()`.
     output:   Type,
     /// Any error type. Defaults to `::std::convert::Infallible`.
@@ -318,7 +282,7 @@ impl Parse for CombinatorAttributes {
         // Parse the input as a list of metas
         let mut comb: Option<Ident> = None;
         let mut fmt: Option<Ident> = None;
-        let mut expected: Option<LitStr> = None;
+        let mut expected: Option<ExpectedString> = None;
         let mut output: Option<Type> = None;
         let mut error: Option<Type> = None;
         let attrs: Punctuated<AttrNameValue, Token![,]> = Punctuated::parse_terminated(input)?;
@@ -343,7 +307,7 @@ impl Parse for CombinatorAttributes {
         }
 
         // Unwrap the options
-        let expected: LitStr = match expected {
+        let expected: ExpectedString = match expected {
             Some(exp) => exp,
             None => return Err(Error::new(total, "Missing 'expected = \"...\"' attribute")),
         };
@@ -364,6 +328,71 @@ impl Parse for CombinatorAttributes {
 
         // OK, construct self
         Ok(Self { comb, fmt, expected, output, error })
+    }
+}
+
+/// Represents a name/value pair for the attributes.
+#[derive(Clone, Debug)]
+enum AttrNameValue {
+    /// It's the name of the combinator class.
+    Combinator(Ident),
+    /// It's the name of the formatter class.
+    Formatter(Ident),
+
+    /// It's the expected string.
+    Expected(ExpectedString),
+    /// It's the output type.
+    Output(Type),
+    /// It's the error type.
+    Error(Type),
+}
+impl Parse for AttrNameValue {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse the identifier first, and  then always expected an equals
+        let ident: Ident = input.parse()?;
+        input.parse::<Token![=]>()?;
+        if ident == "comb" || ident == "combinator" || ident == "Combinator" {
+            Ok(Self::Combinator(input.parse::<Ident>()?))
+        } else if ident == "fmt" || ident == "formatter" || ident == "Formatter" {
+            Ok(Self::Formatter(input.parse::<Ident>()?))
+        } else if ident == "expected" || ident == "Expected" {
+            Ok(Self::Expected(input.parse::<ExpectedString>()?))
+        } else if ident == "output" || ident == "Output" {
+            Ok(Self::Output(input.parse::<Type>()?))
+        } else if ident == "error" || ident == "Error" {
+            Ok(Self::Error(input.parse::<Type>()?))
+        } else {
+            Err(Error::new(ident.span(), format!("Unknown attribute '{ident}'")))
+        }
+    }
+}
+
+/// Represents one of two types of expected strings.
+#[derive(Clone, Debug)]
+enum ExpectedString {
+    /// It's a direct literal
+    Lit(LitStr),
+    /// It's a formatter string.
+    Fmt(()),
+}
+impl Parse for ExpectedString {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Attempt to parse a string literal, first
+        if let Ok(lit) = input.parse::<LitStr>() {
+            return Ok(ExpectedString::Lit(lit));
+        }
+
+        // Otherwise, parse as a formatter string tuple
+        todo!();
+    }
+}
+impl ToTokens for ExpectedString {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            Self::Lit(lit) => lit.to_tokens(tokens),
+            Self::Fmt(fmt) => todo!(),
+        }
     }
 }
 
