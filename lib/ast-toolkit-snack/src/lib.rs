@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    28 Jun 2024, 15:23:53
+//    07 Aug 2024, 23:01:22
 //  Auto updated?
 //    Yes
 //
@@ -136,13 +136,29 @@ pub enum Result<'a, R, F, S, E = Infallible> {
     Error(Error<'a, F, S, E>),
 }
 impl<'a, R, F, S, E> Result<'a, R, F, S, E> {
+    /// Maps this result's [`Result::Ok`]-case.
+    ///
+    /// # Arguments
+    /// - `map_fn`: A closure that will convert the result currently within into something else.
+    ///
+    /// # Returns
+    /// A [`Result::Ok`] with the result produced by `map_fn` if we were one already, or else `self` as-is.
+    #[inline]
+    pub fn map<R2>(self, map_fn: impl FnOnce(R) -> R2) -> Result<'a, R2, F, S, E> {
+        match self {
+            Self::Ok(rem, res) => Result::Ok(rem, map_fn(res)),
+            Self::Fail(fail) => Result::Fail(fail),
+            Self::Error(err) => Result::Error(err),
+        }
+    }
+
     /// Maps this result's [`Result::Fail`]-case.
     ///
     /// # Arguments
-    /// - `fail`: The [`Failure`] to return in case `self` is a [`Result::Fail`].
+    /// - `map_fn`: A closure that will convert the failure currently within into something else.
     ///
     /// # Returns
-    /// The given `fail`ure if `self` is a [`Result::Fail`]. Else, `self` is returned as-is.
+    /// A [`Result::Fail`] with the failure produced by `map_fn` if we were one already, or else `self` as-is.
     #[inline]
     pub fn map_fail(self, map_fn: impl FnOnce(Failure<F, S, E>) -> Failure<F, S, E>) -> Self {
         match self {

@@ -7,6 +7,12 @@ repository.workspace = true
 description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly debug experience."
 
 
+[[example]]
+name = "add"
+path = "examples/add.rs"
+required-features = ["derive"]
+
+
 [dependencies]
 ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", features = ["trailing"], optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span" }
