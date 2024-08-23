@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    07 Aug 2024, 23:33:46
+//    23 Aug 2024, 11:49:20
 //  Auto updated?
 //    Yes
 //
@@ -22,8 +22,9 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::token::{And, Comma, Gt, Lt, Mut, Paren, PathSep, RArrow, SelfValue};
 use syn::{
-    parse2, AngleBracketedGenericArguments, Attribute, Block, Error, FnArg, GenericArgument, GenericParam, Ident, Item, ItemFn, Lifetime, LitStr,
-    Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference, TypeTuple, Visibility, WhereClause,
+    parse2, AngleBracketedGenericArguments, Attribute, Block, Error, Expr, ExprLit, ExprTuple, FnArg, GenericArgument, GenericParam, Ident, Item,
+    ItemFn, Lifetime, Lit, LitStr, Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference,
+    TypeTuple, Visibility, WhereClause,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -373,7 +374,7 @@ enum ExpectedString {
     /// It's a direct literal
     Lit(LitStr),
     /// It's a formatter string.
-    Fmt(()),
+    Fmt(LitStr, Punctuated<Expr, Token![,]>),
 }
 impl Parse for ExpectedString {
     #[inline]
@@ -384,14 +385,36 @@ impl Parse for ExpectedString {
         }
 
         // Otherwise, parse as a formatter string tuple
-        todo!();
+        match input.parse::<ExprTuple>() {
+            Ok(ExprTuple { mut elems, .. }) => {
+                // The first element should be a literal, always
+                if let Some(fmt) = elems.pop() {
+                    // Extract the string literal
+                    if let Expr::Lit(ExprLit { lit: Lit::Str(fmt), .. }) = fmt.into_value() {
+                        // The rest are arguments to the formatter
+                        Ok(ExpectedString::Fmt(fmt, elems))
+                    } else {
+                        Err(Error::new(elems[0].span(), "Expected a string literal"))
+                    }
+                } else {
+                    Err(Error::new(elems.span(), "Expected at least a formatter string literal"))
+                }
+            },
+            Err(err) => Err(Error::new(err.span(), "Expected a string literal or a tuple with format string arguments")),
+        }
     }
 }
 impl ToTokens for ExpectedString {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             Self::Lit(lit) => lit.to_tokens(tokens),
-            Self::Fmt(fmt) => todo!(),
+            Self::Fmt(fmt, args) => {
+                fmt.to_tokens(tokens);
+                if !args.is_empty() {
+                    Comma::default().to_tokens(tokens);
+                    args.to_tokens(tokens);
+                }
+            },
         }
     }
 }
