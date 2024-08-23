@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    23 Aug 2024, 11:49:20
+//    23 Aug 2024, 11:57:40
 //  Auto updated?
 //    Yes
 //
@@ -386,18 +386,20 @@ impl Parse for ExpectedString {
 
         // Otherwise, parse as a formatter string tuple
         match input.parse::<ExprTuple>() {
-            Ok(ExprTuple { mut elems, .. }) => {
+            Ok(ExprTuple { elems, .. }) => {
                 // The first element should be a literal, always
-                if let Some(fmt) = elems.pop() {
+                let mut iter = elems.into_pairs();
+                if let Some(fmt) = iter.next() {
                     // Extract the string literal
-                    if let Expr::Lit(ExprLit { lit: Lit::Str(fmt), .. }) = fmt.into_value() {
+                    let fmt: Expr = fmt.into_value();
+                    if let Expr::Lit(ExprLit { lit: Lit::Str(fmt), .. }) = fmt {
                         // The rest are arguments to the formatter
-                        Ok(ExpectedString::Fmt(fmt, elems))
+                        Ok(ExpectedString::Fmt(fmt, iter.collect()))
                     } else {
-                        Err(Error::new(elems[0].span(), "Expected a string literal"))
+                        Err(Error::new(fmt.span(), "Expected a string literal"))
                     }
                 } else {
-                    Err(Error::new(elems.span(), "Expected at least a formatter string literal"))
+                    Err(input.error("Expected at least a formatter string literal"))
                 }
             },
             Err(err) => Err(Error::new(err.span(), "Expected a string literal or a tuple with format string arguments")),

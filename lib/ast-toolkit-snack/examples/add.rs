@@ -4,7 +4,7 @@
 //  Created:
 //    07 Aug 2024, 22:04:09
 //  Last edited:
-//    07 Aug 2024, 23:25:34
+//    23 Aug 2024, 11:57:47
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,14 @@ use ast_toolkit_snack::span::{MatchBytes, WhileUtf8};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
 use ast_toolkit_snack::{comb, Combinator as _, Result as SResult};
 use ast_toolkit_span::{Span, SpannableAsBytes};
+
+
+/***** CONSTANTS *****/
+/// Whatever we call "an expression"
+const EXPRESSION_NAME: &str = "expression";
+
+
+
 
 
 /***** ERRORS *****/
@@ -89,7 +97,7 @@ impl Expr {
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
-#[comb(Combinator = ExprComb, expected = "An expression", Output = Expr, Error = ParseError)]
+#[comb(Combinator = ExprComb, expected = ("An {}", EXPRESSION_NAME), Output = Expr, Error = ParseError)]
 fn expr<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
