@@ -4,7 +4,7 @@
 //  Created:
 //    27 May 2024, 10:49:06
 //  Last edited:
-//    27 May 2024, 14:34:39
+//    24 Aug 2024, 18:40:20
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,8 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
-use ast_toolkit_span::{Span, Spannable, SpannableLines, SpannableLocate};
+use ast_toolkit_span::{Span, Spannable, SpannableLines, SpannableLocate, Spanning as _};
+use stackvec::StackVec;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::annotations::{AnnotationHighlight, IntoAnnotation};
@@ -25,6 +26,11 @@ use crate::Annotation;
 
 
 /***** CONSTANTS *****/
+/// Dictates the maximum number of snippets per [`Diagnostic`].
+pub const MAX_SNIPPETS: usize = 8;
+/// Dictates the maximum number of annotations per snippet.
+pub const MAX_ANNOTS_PER_SNIPPET: usize = 8;
+
 /// Dictates the width of [`SnippetBuffer`]s.
 pub const SNIPPET_WIDTH: usize = 100;
 
@@ -32,6 +38,47 @@ pub const SNIPPET_WIDTH: usize = 100;
 ///
 /// Inclusive on both ends, i.e., a distance of 3 implies only one line in between highlighted areas.
 pub const MAX_SOURCE_LINES_DISTANCE: usize = 3;
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/// Groups all the [`Annotation`]s in a [`Diagnostic`] such that every group represents annotation
+/// that can be rendered in one snippet.
+///
+/// # Arguments
+/// - `diag`: The [`Diagnostic`] to group the annotations of.
+///
+/// # Returns
+/// A list of lists that represent the groups.
+fn group_annotations<F, S>(diag: &Diagnostic<F, S>) -> StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>>
+where
+    S: SpannableLocate,
+{
+    // The main one is always the first group
+    let mut groups: StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>> = StackVec::from([StackVec::from([&diag.main])]);
+
+    // Add the secondary annotations
+    for annot in &diag.annots {
+        // See with whom it can be grouped
+        for group in &mut groups {
+            // We can group if:
+            // - There is no overlap with existing annotations; and
+            // - The smallest number of lines between the new and an existing annotation is smaller than MAX_SOURCE_LINES_DISTANCE.
+
+            // Consider the annotations in the target group
+            for annot2 in group {
+                //
+            }
+        }
+
+        // Otherwise, add it to a new group
+        groups.push(StackVec::from([annot]));
+    }
+
+    todo!()
+}
 
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:38:35
 //  Last edited:
-//    27 May 2024, 10:48:14
+//    24 Aug 2024, 18:33:30
 //  Auto updated?
 //    Yes
 //
@@ -13,23 +13,9 @@
 //!   [`Diagnostic`](crate::Diagnostic)s.
 //
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use ast_toolkit_span::Span;
-
-
-/***** AUXILLARY *****/
-/// Implements translations to [`Annotation`]s.
-pub trait IntoAnnotation<F, S> {
-    /// Returns an [`Annotation`] out of `self`.
-    ///
-    /// # Returns
-    /// An [`Annotation`] made out of `self`.
-    fn into_annotation(self) -> Annotation<F, S>;
-}
-
-
-
 
 
 /***** LIBRARY *****/
@@ -37,39 +23,14 @@ pub trait IntoAnnotation<F, S> {
 ///
 /// This is stuff like a note, a replacement, etc. Depending on where it relates to the main span,
 /// this may either be integrated in the main render or produce separate renderings.
-#[derive(Clone, Debug)]
-pub enum Annotation<F, S> {
-    // Highlighting
-    /// A highlighted part of source text.
+pub trait Annotation<F, S> {
+    /// Returns the [`Span`] of the [`Annotation`].
     ///
-    /// This is typically used to show where things are defined or something that is otherwise related to the error.
-    Highlight(AnnotationHighlight<F, S>),
-    /// A suggested replacement of a part of source text.
+    /// Note that not all annotations have [`Span`]s.
     ///
-    /// This is used to suggest to users what to do next.
-    Suggestion(AnnotationSuggestion<F, S>),
-
-    // Miscellaneous
-    /// A note attached to the end of a source snippet.
-    ///
-    /// This is conventionally used to communicate "P.S.-like" information, such as how to disable a warning or where to find more information.
-    Note(AnnotationNote),
-}
-impl<F, S> IntoAnnotation<F, S> for Annotation<F, S> {
-    #[inline]
-    fn into_annotation(self) -> Annotation<F, S> { self }
-}
-impl<F, S> From<AnnotationHighlight<F, S>> for Annotation<F, S> {
-    #[inline]
-    fn from(value: AnnotationHighlight<F, S>) -> Self { value.into_annotation() }
-}
-impl<F, S> From<AnnotationSuggestion<F, S>> for Annotation<F, S> {
-    #[inline]
-    fn from(value: AnnotationSuggestion<F, S>) -> Self { value.into_annotation() }
-}
-impl<F, S> From<AnnotationNote> for Annotation<F, S> {
-    #[inline]
-    fn from(value: AnnotationNote) -> Self { value.into_annotation() }
+    /// # Returns
+    /// A reference to the inner [`Span`] or else [`None`] if this [`Annotation`] has none.
+    fn span(&self) -> Option<&Span<F, S>>;
 }
 
 
@@ -146,9 +107,9 @@ impl<F, S> AnnotationHighlight<F, S> {
         self
     }
 }
-impl<F, S> IntoAnnotation<F, S> for AnnotationHighlight<F, S> {
+impl<F, S> Annotation<F, S> for AnnotationHighlight<F, S> {
     #[inline]
-    fn into_annotation(self) -> Annotation<F, S> { Annotation::Highlight(self) }
+    fn span(&self) -> Option<&Span<F, S>> { Some(&self.span) }
 }
 
 /// Defines an annotation that suggests a replacement of some source text.
@@ -254,11 +215,10 @@ impl<F, S> AnnotationSuggestion<F, S> {
         self
     }
 }
-impl<F, S> IntoAnnotation<F, S> for AnnotationSuggestion<F, S> {
+impl<F, S> Annotation<F, S> for AnnotationSuggestion<F, S> {
     #[inline]
-    fn into_annotation(self) -> Annotation<F, S> { Annotation::Suggestion(self) }
+    fn span(&self) -> Option<&Span<F, S>> { Some(&self.span) }
 }
-
 
 
 /// Defines an annotation that doesn't highlight source text, but adds some text to the end of the source snippet.
@@ -306,7 +266,7 @@ impl AnnotationNote {
         self
     }
 }
-impl<F, S> IntoAnnotation<F, S> for AnnotationNote {
+impl<F, S> Annotation<F, S> for AnnotationNote {
     #[inline]
-    fn into_annotation(self) -> Annotation<F, S> { Annotation::Note(self) }
+    fn span(&self) -> Option<&Span<F, S>> { None }
 }
