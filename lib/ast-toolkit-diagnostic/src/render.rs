@@ -4,7 +4,7 @@
 //  Created:
 //    27 May 2024, 10:49:06
 //  Last edited:
-//    24 Aug 2024, 18:40:20
+//    25 Aug 2024, 17:49:41
 //  Auto updated?
 //    Yes
 //
@@ -61,6 +61,8 @@ where
 
     // Add the secondary annotations
     for annot in &diag.annots {
+        // Span-less annotations are always their own groups
+
         // See with whom it can be grouped
         for group in &mut groups {
             // We can group if:

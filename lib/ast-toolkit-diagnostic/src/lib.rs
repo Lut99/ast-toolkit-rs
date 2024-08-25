@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:08:52
 //  Last edited:
-//    27 May 2024, 13:29:56
+//    25 Aug 2024, 17:51:11
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 //
 
 // Declare modules
-pub mod annotations;
+// pub mod annotations;
 pub mod diagnostic;
 pub mod render;
 pub mod span;

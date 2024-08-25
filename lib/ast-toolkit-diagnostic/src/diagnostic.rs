@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:22:17
 //  Last edited:
-//    24 Aug 2024, 18:40:10
+//    25 Aug 2024, 17:59:24
 //  Auto updated?
 //    Yes
 //
@@ -14,18 +14,62 @@
 
 use std::fmt::{Debug, Display};
 
-use crate::annotations::Annotation;
+use ast_toolkit_span::Span;
+
+// use crate::annotations::Annotation;
 use crate::style::{Plain, Style};
 
 
 /***** AUXILLARY *****/
 /// The severity levels supported by the [`Diagnostic`].
+///
+/// This essentially determines some prompt and accent colouration.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Level {
+pub enum Severity {
     /// Fatal errors.
     Error,
+    /// Some other information auxillary to earlier diagnostics.
+    Help,
     /// Non-fatal warnings.
     Warning,
+}
+
+
+
+/// Defines annotations that can be given in a snippet.
+#[derive(Clone, Debug)]
+pub enum Annotation<F, S> {
+    /// Highlights a text, potentially with a message.
+    Highlight(AnnotationHighlight<F, S>),
+}
+
+/// Defines annotations that highlight a particular source text with a message.
+#[derive(Clone, Debug)]
+pub struct AnnotationHighlight<F, S> {
+    /// The [`Span`] that represents the highlighted area.
+    pub span:     Span<F, S>,
+    /// The severity level to use for this highlight.
+    pub severity: Severity,
+    /// Any message to show, if any.
+    pub message:  Option<String>,
+}
+
+/// Defines annotations that suggest a replacement (or insert) in the source text.
+#[derive(Clone, Debug)]
+pub struct AnnotationSuggestion<F, S> {
+    /// The [`Span`] that represents the highlighted area.
+    pub span: Span<F, S>,
+    /// The replacement to insert.
+    pub replacement: String,
+}
+
+
+
+/// Represents a note that is slapped at the end of a snippet.
+#[derive(Clone, Debug)]
+pub struct Note {
+    /// The message to show.
+    pub message: String,
 }
 
 

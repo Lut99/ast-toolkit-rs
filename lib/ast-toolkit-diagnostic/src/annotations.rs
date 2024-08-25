@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:38:35
 //  Last edited:
-//    24 Aug 2024, 18:33:30
+//    25 Aug 2024, 17:51:08
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 
 use std::fmt::{Debug, Display};
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spanning};
 
 
 /***** LIBRARY *****/
@@ -23,15 +23,7 @@ use ast_toolkit_span::Span;
 ///
 /// This is stuff like a note, a replacement, etc. Depending on where it relates to the main span,
 /// this may either be integrated in the main render or produce separate renderings.
-pub trait Annotation<F, S> {
-    /// Returns the [`Span`] of the [`Annotation`].
-    ///
-    /// Note that not all annotations have [`Span`]s.
-    ///
-    /// # Returns
-    /// A reference to the inner [`Span`] or else [`None`] if this [`Annotation`] has none.
-    fn span(&self) -> Option<&Span<F, S>>;
-}
+pub trait Annotation<F, S>: Spanning<F, S> {}
 
 
 
@@ -222,6 +214,8 @@ impl<F, S> Annotation<F, S> for AnnotationSuggestion<F, S> {
 
 
 /// Defines an annotation that doesn't highlight source text, but adds some text to the end of the source snippet.
+///
+/// Note that this isn't a
 #[derive(Clone, Debug)]
 pub struct AnnotationNote {
     /// The message to note.
@@ -265,8 +259,4 @@ impl AnnotationNote {
         self.msg = msg.to_string();
         self
     }
-}
-impl<F, S> Annotation<F, S> for AnnotationNote {
-    #[inline]
-    fn span(&self) -> Option<&Span<F, S>> { None }
 }
