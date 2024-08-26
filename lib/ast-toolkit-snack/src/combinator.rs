@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Aug 2024, 15:24:29
+//    26 Aug 2024, 15:33:33
 //  Auto updated?
 //    Yes
 //
@@ -13,7 +13,7 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
@@ -328,12 +328,14 @@ where
 ///
 /// let span1 = Span::new("<example>", "Hello");
 /// let span2 = Span::new("<example>", "Hello, world!");
-/// let span3 = Span::new("<example>", "Goodbye, world!");
+/// let span3 = Span::new("<example>", "SUPER Hello, world!");
+/// let span4 = Span::new("<example>", "Goodbye, world!");
 ///
 /// let mut comb = recognize(many1(tag("Hello")));
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1));
 /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(5..), span2.slice(..5)));
-/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Many1 { .. }))));
+/// assert_eq!(comb.parse(span3.slice(6..)).unwrap(), (span3.slice(11..), span3.slice(6..11)));
+/// assert!(matches!(comb.parse(span4), SResult::Fail(Failure::Common(Common::Many1 { .. }))));
 /// ```
 #[inline]
 pub const fn recognize<'t, F, S, C>(comb: C) -> Recognize<F, S, C>
@@ -657,8 +659,8 @@ impl<'t, F, S, C: Expects<'t>> Expects<'t> for Recognize<F, S, C> {
 }
 impl<'t, F, S, C> Combinator<'t, F, S> for Recognize<F, S, C>
 where
-    F: Clone + Debug,
-    S: Clone + Debug,
+    F: Clone,
+    S: Clone,
     C: Combinator<'t, F, S>,
 {
     type Output = Span<F, S>;
@@ -666,14 +668,22 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        // Get some initial span offset
+        let offset: usize = match input.range() {
+            SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => s,
+            SpanRange::OpenClosed(_) | SpanRange::Open | SpanRange::Empty => 0,
+        };
+
+        // Run the combinator
         match self.comb.parse(input.clone()) {
-            Result::Ok(rem, _) => {
-                println!("{rem:?}");
-                match rem.range() {
-                    SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => Result::Ok(rem, input.slice(..s)),
-                    SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, input.slice(..0)),
-                    SpanRange::Empty => Result::Ok(rem, input),
-                }
+            Result::Ok(rem, _) => match rem.range() {
+                SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => {
+                    Result::Ok(rem, Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..s))
+                },
+                SpanRange::OpenClosed(_) | SpanRange::Open => {
+                    Result::Ok(rem, Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..offset))
+                },
+                SpanRange::Empty => Result::Ok(rem, input),
             },
             Result::Fail(fail) => Result::Fail(fail),
             Result::Error(err) => Result::Error(err),
