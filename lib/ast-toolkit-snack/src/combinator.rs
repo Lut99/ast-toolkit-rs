@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Aug 2024, 14:13:52
+//    26 Aug 2024, 14:19:00
 //  Auto updated?
 //    Yes
 //
@@ -56,6 +56,42 @@ where
     C: Combinator<'t, F, S>,
 {
     All { comb, _f: PhantomData, _s: PhantomData }
+}
+
+/// Discards the output of another combinator.
+///
+/// This useful when you only want to advance the stream but not get anything out of it.
+///
+/// # Arguments
+/// - `comb`: Some combinator to apply and then to discard the output of.
+///
+/// # Returns
+/// A combinator [`Discard`] that will apply `comb` and discard its input.
+///
+/// # Fails
+/// The returned combinator fails exactly when `comb` fails.
+///
+/// # Exampel
+/// ```rust
+/// use ast_toolkit_snack::combinator::discard;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = discard(tag("Hello"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), ()));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// ```
+#[inline]
+pub const fn discard<'t, F, S, C>(comb: C) -> Discard<F, S, C>
+where
+    C: Combinator<'t, F, S>,
+{
+    Discard { comb, _f: PhantomData, _s: PhantomData }
 }
 
 /// Maps the result of a combinator to something else.
@@ -407,6 +443,38 @@ where
 
         // Then assert that nothing is remaining
         if rem.is_empty() { Result::Ok(rem, res) } else { Result::Fail(Failure::Common(Common::All { span: rem })) }
+    }
+}
+
+/// The concrete combinator returned by [`discard()`].
+pub struct Discard<F, S, C> {
+    /// The combinator to maybe apply.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Discard<F, S, C> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'t, F, S, C> Combinator<'t, F, S> for Discard<F, S, C>
+where
+    C: Combinator<'t, F, S>,
+{
+    type Output = ();
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input) {
+            Result::Ok(rem, _) => Result::Ok(rem, ()),
+            Result::Fail(fail) => Result::Fail(fail),
+            Result::Error(err) => Result::Error(err),
+        }
     }
 }
 
