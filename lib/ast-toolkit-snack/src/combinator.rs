@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Aug 2024, 15:04:55
+//    26 Aug 2024, 15:24:29
 //  Auto updated?
 //    Yes
 //
@@ -13,7 +13,7 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
@@ -657,8 +657,8 @@ impl<'t, F, S, C: Expects<'t>> Expects<'t> for Recognize<F, S, C> {
 }
 impl<'t, F, S, C> Combinator<'t, F, S> for Recognize<F, S, C>
 where
-    F: Clone,
-    S: Clone,
+    F: Clone + Debug,
+    S: Clone + Debug,
     C: Combinator<'t, F, S>,
 {
     type Output = Span<F, S>;
@@ -667,10 +667,13 @@ where
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
         match self.comb.parse(input.clone()) {
-            Result::Ok(rem, _) => match rem.range() {
-                SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => Result::Ok(rem, input.slice(..s)),
-                SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, input.slice(..0)),
-                SpanRange::Empty => Result::Ok(rem, input),
+            Result::Ok(rem, _) => {
+                println!("{rem:?}");
+                match rem.range() {
+                    SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => Result::Ok(rem, input.slice(..s)),
+                    SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, input.slice(..0)),
+                    SpanRange::Empty => Result::Ok(rem, input),
+                }
             },
             Result::Fail(fail) => Result::Fail(fail),
             Result::Error(err) => Result::Error(err),
