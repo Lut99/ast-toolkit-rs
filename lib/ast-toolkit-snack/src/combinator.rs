@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    08 May 2024, 11:23:24
+//    26 Aug 2024, 14:13:52
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
+use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::error::{Common, Failure};
@@ -263,6 +264,46 @@ where
     C: Combinator<'t, F, S>,
 {
     Opt { comb, _f: PhantomData, _s: PhantomData }
+}
+
+/// Turns the output of a combinator into a [`Span`].
+///
+/// This is useful when you're doing regex-like matching using many combinators. Applying this
+/// combinator to the outer one will ensure the result is simply the matched input.
+///
+/// # Arguments
+/// - `comb`: The [`Combinator`] who's output to turn into a [`Span`].
+///
+/// # Returns
+/// A combinator [`Recognize`] that will copy the behaviour of `comb` but returns the matched
+/// input instead of `comb`'s output.
+///
+/// # Fails
+/// This combinator fails exactly when `comb` fails.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_snack::combinator::{map, recognize};
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// struct HelloWorld<F, S>(Span<F, S>);
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = recognize(map(tag("Hello, world!"), HelloWorld));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), span1.slice(..13)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// ```
+#[inline]
+pub const fn recognize<'t, F, S, C>(comb: C) -> Recognize<F, S, C>
+where
+    C: Combinator<'t, F, S>,
+{
+    Recognize { comb, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -525,6 +566,44 @@ where
             Result::Ok(rem, res) => Result::Ok(rem, Some(res)),
             Result::Fail(Failure::NotEnough { needed, span }) => Result::Fail(Failure::NotEnough { needed, span }),
             Result::Fail(_) => Result::Ok(input, None),
+            Result::Error(err) => Result::Error(err),
+        }
+    }
+}
+
+/// The concrete combinator returned by [`recognize()`].
+pub struct Recognize<F, S, C> {
+    /// The combinator to maybe apply.
+    comb: C,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>> Expects<'t> for Recognize<F, S, C> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'t, F, S, C> Combinator<'t, F, S> for Recognize<F, S, C>
+where
+    F: Clone,
+    S: Clone,
+    C: Combinator<'t, F, S>,
+{
+    type Output = Span<F, S>;
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error> {
+        match self.comb.parse(input.clone()) {
+            Result::Ok(rem, _) => match rem.range() {
+                SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => Result::Ok(rem, input.slice(..s)),
+                SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, Span::empty(input.from_ref().clone(), input.source_ref().clone())),
+                SpanRange::Empty => Result::Ok(rem, input),
+            },
+            Result::Fail(fail) => Result::Fail(fail),
             Result::Error(err) => Result::Error(err),
         }
     }
