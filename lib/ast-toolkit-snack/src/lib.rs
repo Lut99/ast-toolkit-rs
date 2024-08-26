@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    26 Aug 2024, 15:05:26
+//    26 Aug 2024, 15:35:11
 //  Auto updated?
 //    Yes
 //
@@ -177,6 +177,7 @@ impl<'a, R, F, S, E> Result<'a, R, F, S, E> {
     /// # Panics
     /// This function panics if this Result is not [`Result::Ok`].
     #[inline]
+    #[track_caller]
     pub fn unwrap(self) -> (Span<F, S>, R) {
         if let Self::Ok(rem, res) = self {
             (rem, res)
