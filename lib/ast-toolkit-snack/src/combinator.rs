@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Aug 2024, 14:19:00
+//    26 Aug 2024, 15:04:55
 //  Auto updated?
 //    Yes
 //
@@ -319,20 +319,21 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::combinator::{map, recognize};
+/// use ast_toolkit_snack::combinator::recognize;
 /// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::multi::many1;
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
 ///
-/// struct HelloWorld<F, S>(Span<F, S>);
+/// let span1 = Span::new("<example>", "Hello");
+/// let span2 = Span::new("<example>", "Hello, world!");
+/// let span3 = Span::new("<example>", "Goodbye, world!");
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
-///
-/// let mut comb = recognize(map(tag("Hello, world!"), HelloWorld));
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(13..), span1.slice(..13)));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// let mut comb = recognize(many1(tag("Hello")));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(5..), span2.slice(..5)));
+/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Many1 { .. }))));
 /// ```
 #[inline]
 pub const fn recognize<'t, F, S, C>(comb: C) -> Recognize<F, S, C>
@@ -668,7 +669,7 @@ where
         match self.comb.parse(input.clone()) {
             Result::Ok(rem, _) => match rem.range() {
                 SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => Result::Ok(rem, input.slice(..s)),
-                SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, Span::empty(input.from_ref().clone(), input.source_ref().clone())),
+                SpanRange::OpenClosed(_) | SpanRange::Open => Result::Ok(rem, input.slice(..0)),
                 SpanRange::Empty => Result::Ok(rem, input),
             },
             Result::Fail(fail) => Result::Fail(fail),
