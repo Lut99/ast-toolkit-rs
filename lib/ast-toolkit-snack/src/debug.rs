@@ -4,7 +4,7 @@
 //  Created:
 //    26 Aug 2024, 15:05:07
 //  Last edited:
-//    26 Aug 2024, 15:10:15
+//    26 Aug 2024, 15:18:56
 //  Auto updated?
 //    Yes
 //
@@ -25,7 +25,7 @@ use crate::{Combinator, Expects, Result as SResult};
 /// This useful when you only want to inspect input in the midst of a large combinator chain.
 ///
 /// # Arguments
-/// - `comb`: Some combinator to apply and then to discard the output of.
+/// - `comb`: Some combinator to apply.
 /// - `call`: Some function or closure to call to inspect the input to `comb`.
 ///
 /// # Returns
@@ -56,6 +56,44 @@ where
     I: for<'a> FnMut(&'a Span<F, S>),
 {
     Inspect { comb, call, _f: PhantomData, _s: PhantomData }
+}
+
+/// Prints the result of some combinator before proceeding.
+///
+/// This useful when you only want to inspect output in the midst of a large combinator chain.
+///
+/// # Arguments
+/// - `comb`: Some combinator to apply.
+/// - `call`: Some function or closure to call to inspect the output of `comb`.
+///
+/// # Returns
+/// A combinator [`Inspect`] that will apply `comb` before running `call`.
+///
+/// # Fails
+/// The returned combinator fails exactly when `comb` fails.
+///
+/// # Exampel
+/// ```rust
+/// use ast_toolkit_snack::debug::inspect_after;
+/// use ast_toolkit_snack::error::{Common, Failure};
+/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+///
+/// let mut comb = inspect_after(tag("Hello"), |res| println!("{res:?}"));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// ```
+#[inline]
+pub const fn inspect_after<'t, F, S, C, I>(comb: C, call: I) -> InspectAfter<F, S, C, I>
+where
+    C: Combinator<'t, F, S>,
+    I: for<'a> FnMut(&'a SResult<'t, C::Output, F, S, C::Error>),
+{
+    InspectAfter { comb, call, _f: PhantomData, _s: PhantomData }
 }
 
 
@@ -95,5 +133,43 @@ where
 
         // Then call the combinator
         self.comb.parse(input)
+    }
+}
+
+/// The concrete combinator returned by [`inspect_after()`].
+pub struct InspectAfter<F, S, C, I> {
+    /// The combinator to maybe apply.
+    comb: C,
+    /// The closure to call before executing `comb`.
+    call: I,
+    /// The type of the `F`rom string, which is stored here to keep the link between combinator construction and parsing.
+    _f:   PhantomData<F>,
+    /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
+    _s:   PhantomData<S>,
+}
+impl<'t, F, S, C: Expects<'t>, I> Expects<'t> for InspectAfter<F, S, C, I> {
+    type Formatter = C::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.comb.expects() }
+}
+impl<'t, F, S, C, I> Combinator<'t, F, S> for InspectAfter<F, S, C, I>
+where
+    C: Combinator<'t, F, S>,
+    I: for<'a> FnMut(&'a SResult<'t, C::Output, F, S, C::Error>),
+{
+    type Output = C::Output;
+    type Error = C::Error;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> SResult<'t, Self::Output, F, S, Self::Error> {
+        // Call the combinator
+        let res = self.comb.parse(input);
+
+        // Call the inspector
+        (self.call)(&res);
+
+        // OK, return as usual
+        res
     }
 }
