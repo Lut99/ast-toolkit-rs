@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    28 Aug 2024, 12:01:18
+//    28 Aug 2024, 12:07:33
 //  Auto updated?
 //    Yes
 //
@@ -65,7 +65,15 @@ impl LenBytes for String {
 // The implementation for a [`Span`].
 impl<F, S: LenBytes> LenBytes for Span<F, S> {
     #[inline]
-    fn len(&self) -> usize { self.source_ref().len() }
+    fn len(&self) -> usize {
+        match self.range() {
+            SpanRange::Closed(s, e) => e - s,
+            SpanRange::ClosedOpen(s) => self.source_ref().len() - s,
+            SpanRange::OpenClosed(e) => e,
+            SpanRange::Open => self.source_ref().len(),
+            SpanRange::Empty => 0,
+        }
+    }
 }
 
 
