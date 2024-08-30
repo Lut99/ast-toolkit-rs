@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    02 Jul 2024, 11:30:11
+//    30 Aug 2024, 10:30:55
 //  Auto updated?
 //    Yes
 //
@@ -13,7 +13,7 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, RangeBounds};
 use std::rc::Rc;
@@ -65,7 +65,7 @@ impl<F, S> Spanning<F, S> for Infallible {
 /// ```rust
 /// todo!() 
 /// ````
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Span<F, S> {
     /// Something describing the input (e.g., filename).
@@ -126,6 +126,18 @@ impl<F, S> Span<F, S> {
 
         // OK, build self
         Self { from, source, range }
+    }
+}
+
+// Formatters
+impl<F, S> Debug for Span<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let mut fmt = f.debug_struct(&format!("Span<{}, {}>", std::any::type_name::<F>(), std::any::type_name::<S>()));
+        fmt.field("from", &..);
+        fmt.field("source", &..);
+        fmt.field("range", &self.range);
+        fmt.finish()
     }
 }
 
