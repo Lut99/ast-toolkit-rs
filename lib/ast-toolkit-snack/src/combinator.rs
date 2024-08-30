@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    26 Aug 2024, 15:33:33
+//    30 Aug 2024, 10:13:37
 //  Auto updated?
 //    Yes
 //
@@ -17,9 +17,10 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::error::{Common, Failure};
+use crate::span::LenBytes;
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 
@@ -258,9 +259,8 @@ pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData }
 pub const fn not<'t, F, S, C>(comb: C) -> Not<F, S, C>
 where
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
     C: Combinator<'t, F, S>,
-    C::Output: Spanning<F, S>,
 {
     Not { comb, _f: PhantomData, _s: PhantomData }
 }
@@ -590,17 +590,35 @@ impl<'t, F, S, C: Expects<'t>> Expects<'t> for Not<F, S, C> {
 impl<'c, F, S, C> Combinator<'c, F, S> for Not<F, S, C>
 where
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
     C: Combinator<'c, F, S>,
-    C::Output: Spanning<F, S>,
 {
     type Output = ();
     type Error = C::Error;
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<'c, Self::Output, F, S, Self::Error> {
+        // Run the combinator
         match self.comb.parse(input.clone()) {
-            Result::Ok(_, res) => Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span: res.span() })),
+            Result::Ok(rem, _) => {
+                // Get some initial span offset
+                let offset: usize = match input.range() {
+                    SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => s,
+                    SpanRange::OpenClosed(_) | SpanRange::Open | SpanRange::Empty => 0,
+                };
+
+                // Construct the span up to the remainder
+                let span: Span<F, S> = match rem.range() {
+                    SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => {
+                        Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..s)
+                    },
+                    SpanRange::OpenClosed(_) | SpanRange::Open => Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..offset),
+                    SpanRange::Empty => input,
+                };
+
+                // Return the failure
+                Result::Fail(Failure::Common(Common::Not { nested_fmt: Box::new(self.expects()), span }))
+            },
             Result::Fail(_) => Result::Ok(input, ()),
             Result::Error(err) => Result::Error(err),
         }
