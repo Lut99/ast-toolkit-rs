@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    26 Aug 2024, 15:35:11
+//    11 Sep 2024, 17:26:41
 //  Auto updated?
 //    Yes
 //
@@ -23,6 +23,7 @@ pub use ast_toolkit_snack_derive::comb;
 
 // Declare submodules
 pub mod branch;
+pub mod branch2;
 pub mod bytes;
 #[cfg(feature = "c")]
 pub mod c;
@@ -32,6 +33,7 @@ pub mod error;
 pub mod multi;
 #[cfg(feature = "derive")]
 pub mod procedural;
+pub mod result;
 pub mod sequence;
 pub mod span;
 pub mod tuple;
@@ -122,6 +124,25 @@ pub trait Combinator<'t, F, S>: Expects<'t> {
     /// - [`Result::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
     /// - [`Result::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
     fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error>;
+}
+
+/// The trait that unifies ALL snack parser combinators.
+pub trait Combinator2<'t, F, S>: Expects<'t> {
+    /// The output type for this Combinator.
+    type Output;
+    /// ```rust
+    /// todo!();
+    /// ```
+    type Recoverable;
+    /// ```rust
+    /// todo!();
+    /// ```
+    type Fatal;
+
+    /// ```rust
+    /// todo!();
+    /// ```
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
 }
 
 

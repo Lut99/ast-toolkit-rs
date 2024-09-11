@@ -35,3 +35,4 @@ c = []
 
 derive = ["dep:ast-toolkit-snack-derive"]
 punctuated = ["dep:ast-toolkit-punctuated"]
+streaming = []

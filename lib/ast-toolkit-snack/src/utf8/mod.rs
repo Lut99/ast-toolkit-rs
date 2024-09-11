@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    07 May 2024, 09:44:31
+//    11 Sep 2024, 17:17:01
 //  Auto updated?
 //    Yes
 //
@@ -17,6 +17,7 @@
 
 // Submodules
 pub mod complete;
+pub mod complete2;
 pub mod streaming;
 
 use std::convert::Infallible;
