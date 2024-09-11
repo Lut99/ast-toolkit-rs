@@ -1,0 +1,21 @@
+[package]
+name = "ast-toolkit-tokens"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides tools for defining tokens (i.e., nodes in an AST that relate to a keyword or punctuation) quickly and ergnomically."
+
+
+[dependencies]
+ast-toolkit-railroad = { path = "../ast-toolkit-railroad", optional = true }
+ast-toolkit-snack = { path = "../ast-toolkit-snack", optional = true }
+ast-toolkit-span = { path = "../ast-toolkit-span" }
+
+
+[features]
+default = ["macros"]
+
+macros = []
+railroad = ["dep:ast-toolkit-railroad"]
+snack = ["dep:ast-toolkit-snack"]
