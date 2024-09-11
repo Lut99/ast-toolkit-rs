@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    01 Mar 2024, 15:57:03
+//    02 Jul 2024, 11:24:58
 //  Auto updated?
 //    Yes
 //
@@ -17,15 +17,24 @@
 //
 
 // Declare modules
-// mod formatter;
-// mod formatting;
+mod as_bytes;
+mod as_str;
+mod display;
+mod eq;
+mod hash;
+mod lines;
+mod locate;
+pub mod range;
 mod span;
-#[cfg(test)]
-mod tests;
-// mod style;
+mod spannable;
 
 // Flatten them all in this namespace
-// pub use formatter::*;
-// pub use formatting::*;
+pub use as_bytes::*;
+pub use as_str::*;
+pub use display::*;
+pub use eq::*;
+pub use hash::*;
+pub use lines::*;
+pub use locate::*;
 pub use span::*;
-// pub use style::*;
+pub use spannable::*;

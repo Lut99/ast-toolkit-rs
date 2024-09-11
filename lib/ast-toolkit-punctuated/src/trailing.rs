@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    13 Mar 2024, 11:02:38
+//    26 Mar 2024, 18:05:42
 //  Auto updated?
 //    Yes
 //
@@ -14,11 +14,244 @@
 //
 
 use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
+use std::hash::{Hash, Hasher};
+use std::ops::{Index, IndexMut};
 
 use enum_debug::EnumDebug;
 
+use crate::common::{PunctIndex, ValueIndex};
+
+
+/***** MACROS *****/
+/// Builds a [`PunctuatedTrailing`] conveniently from a list.
+///
+/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values, optionally ending in a comma:
+/// ```rust
+/// use ast_toolkit_punctuated::{punct_trail, PunctIndex, PunctuatedTrailing};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Value;
+/// #[derive(Debug, PartialEq)]
+/// struct Punct;
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![];
+/// assert!(punct.is_empty());
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value, p => Punct];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+///
+/// let punct: PunctuatedTrailing<Value, Punct> = punct_trail![v => Value, p => Punct, v => Value];
+/// assert_eq!(punct.len(), 2);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+/// assert_eq!(punct[1], Value);
+/// ```
+#[macro_export]
+macro_rules! punct_trail {
+    // Nothing to be done if nothing is given
+    (__recursion $list:ident) => {};
+    // Pop values
+    (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
+        $list.push_value($value);
+        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+    };
+    // Pop punctuation
+    (__recursion $list:ident p => $punct:expr $(, $($items:tt)+)?) => {
+        $list.push_punct($punct);
+        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+    };
+
+    [$($items:tt)*] => {{
+        // Call the macro
+        let mut punct = ::ast_toolkit_punctuated::trailing::PunctuatedTrailing::new();
+        ::ast_toolkit_punctuated::punct_trail!(__recursion punct $($items)*);
+        punct
+    }};
+}
+
+
+
+
 
 /***** ITERATORS *****/
+/// Iterates over the values in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Values<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for Values<'p, V, P> {
+    type Item = &'p V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct ValuesMut<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p mut V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for ValuesMut<'p, V, P> {
+    type Item = &'p mut V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoValues<V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<V>,
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+}
+impl<V, P> Iterator for IntoValues<V, P> {
+    type Item = V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+
+
+/// Iterates over the punctuation in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Puncts<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+    /// The final punctuation to maybe include.
+    next: Option<&'p P>,
+}
+impl<'p, V, P> Iterator for Puncts<'p, V, P> {
+    type Item = &'p P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((p, _)) = self.data.next() {
+            Some(p)
+        } else if let Some(next) = self.next.take() {
+            // One more pair to go!
+            Some(next)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct PunctsMut<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+    /// The final punctuation to maybe include.
+    next: Option<&'p mut P>,
+}
+impl<'p, V, P> Iterator for PunctsMut<'p, V, P> {
+    type Item = &'p mut P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((p, _)) = self.data.next() {
+            Some(p)
+        } else if let Some(next) = self.next.take() {
+            // One more pair to go!
+            Some(next)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoPuncts<V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+    /// The final punctuation to maybe include.
+    next: Option<P>,
+}
+impl<V, P> Iterator for IntoPuncts<V, P> {
+    type Item = P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((p, _)) = self.data.next() {
+            Some(p)
+        } else if let Some(next) = self.next.take() {
+            // One more pair to go!
+            Some(next)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+
+
 /// Iterates over the pairs in a [`PunctuatedTrailing`] by reference.
 #[derive(Debug)]
 pub struct Iter<'p, V, P> {
@@ -336,64 +569,42 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// # Returns
     /// An [`Iterator`] that iterates over the values by reference.
     #[inline]
-    pub fn values<'p>(
-        &'p self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p V>, std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p V>> {
-        self.first.as_ref().map(|v| v.as_ref()).into_iter().chain(self.data.iter().map(|(_, v)| v))
-    }
+    pub fn values(&self) -> Values<V, P> { Values { prev: self.first.as_ref().map(|v| v.as_ref()), data: self.data.iter() } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn values_mut<'p>(
-        &'p mut self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p mut V>, std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut V>>
-    {
-        self.first.as_mut().map(|v| v.as_mut()).into_iter().chain(self.data.iter_mut().map(|(_, v)| v))
-    }
+    pub fn values_mut(&mut self) -> ValuesMut<V, P> { ValuesMut { prev: self.first.as_mut().map(|v| v.as_mut()), data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_values(self) -> std::iter::Chain<std::option::IntoIter<V>, std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> V>> {
-        self.first.map(|v| *v).into_iter().chain(self.data.into_iter().map(|(_, v)| v))
-    }
+    pub fn into_values(self) -> IntoValues<V, P> { IntoValues { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
 
     /// Returns an iterator over references to the punctuation in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the punctuation by reference.
     #[inline]
-    pub fn puncts<'p>(
-        &'p self,
-    ) -> std::iter::Chain<std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p P>, std::option::IntoIter<&'p P>> {
-        self.data.iter().map(|(p, _)| p).chain(self.trail.as_ref().map(|p| p.as_ref()))
-    }
+    pub fn puncts(&self) -> Puncts<V, P> { Puncts { data: self.data.iter(), next: self.trail.as_ref().map(|p| p.as_ref()) } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn puncts_mut<'p>(
-        &'p mut self,
-    ) -> std::iter::Chain<std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut P>, std::option::IntoIter<&'p mut P>>
-    {
-        self.data.iter_mut().map(|(p, _)| p).chain(self.trail.as_mut().map(|p| p.as_mut()))
-    }
+    pub fn puncts_mut(&mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut(), next: self.trail.as_mut().map(|p| p.as_mut()) } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_puncts(self) -> std::iter::Chain<std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> P>, std::option::IntoIter<P>> {
-        self.data.into_iter().map(|(p, _)| p).chain(self.trail.map(|p| *p))
-    }
+    pub fn into_puncts(self) -> IntoPuncts<V, P> { IntoPuncts { data: self.data.into_iter(), next: self.trail.map(|p| *p) } }
 
     /// Returns an iterator over references to pairs of value and punctuation in this Puncuated.
     ///
@@ -425,6 +636,25 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter(), next: self.trail.map(|p| *p) } }
+
+    /// Clears all elements from this vector.
+    ///
+    /// Doesn't de-allocate the vector, so the capacity does not change.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.first = None;
+        self.data.clear();
+        self.trail = None;
+    }
+
+    /// Reserves more space for values in this iterator.
+    ///
+    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
+    ///
+    /// # Arguments
+    /// - `additional`: The additional number of elements to reserve space for.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
 
     /// Gets the total number of elements in the list.
     ///
@@ -475,6 +705,95 @@ impl<V: Debug, P: Debug> Debug for PunctuatedTrailing<V, P> {
         list.finish()
     }
 }
+impl<V, P> Index<usize> for PunctuatedTrailing<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: usize) -> &Self::Output {
+        if index == 0 {
+            match &self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            match self.data.get(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} values", index, self.len()),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<usize> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index == 0 {
+            match &mut self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            let self_len: usize = self.len();
+            match self.data.get_mut(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with {self_len} values"),
+            }
+        }
+    }
+}
+impl<V, P> Index<ValueIndex> for PunctuatedTrailing<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: ValueIndex) -> &Self::Output { &self[*index] }
+}
+impl<V, P> IndexMut<ValueIndex> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: ValueIndex) -> &mut Self::Output { &mut self[*index] }
+}
+impl<V, P> Index<PunctIndex> for PunctuatedTrailing<V, P> {
+    type Output = P;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: PunctIndex) -> &Self::Output {
+        let self_len: usize = self.len();
+        if *index == self_len - 1 {
+            // It's the last one
+            match &self.trail {
+                Some(p) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        } else {
+            match self.data.get(*index) {
+                Some((p, _)) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<PunctIndex> for PunctuatedTrailing<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: PunctIndex) -> &mut Self::Output {
+        let self_len: usize = self.len();
+        if *index == self_len - 1 {
+            // It's the last one
+            match &mut self.trail {
+                Some(p) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        } else {
+            match self.data.get_mut(*index) {
+                Some((p, _)) => p,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self_len),
+            }
+        }
+    }
+}
 
 impl<V, P> IntoIterator for PunctuatedTrailing<V, P> {
     type IntoIter = IntoIter<V, P>;
@@ -496,4 +815,50 @@ impl<'p, V, P> IntoIterator for &'p mut PunctuatedTrailing<V, P> {
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter { self.pairs_mut() }
+}
+
+impl<V: Eq, P> Eq for PunctuatedTrailing<V, P> {}
+impl<V: Hash, P> Hash for PunctuatedTrailing<V, P> {
+    /// Implements hashing for the Punctuated.
+    ///
+    /// Note that this ignores the punctuation!
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for v in self.values() {
+            v.hash(state);
+        }
+    }
+}
+impl<V: PartialEq, P> PartialEq for PunctuatedTrailing<V, P> {
+    /// Implements equality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs != rhs {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Implements inequality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn ne(&self, other: &Self) -> bool {
+        if self.len() == other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs == rhs {
+                return false;
+            }
+        }
+        true
+    }
 }

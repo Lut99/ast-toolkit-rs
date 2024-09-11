@@ -1,0 +1,37 @@
+[package]
+name = "ast-toolkit-snack"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly debug experience."
+
+
+[[example]]
+name = "add"
+path = "examples/add.rs"
+required-features = ["derive"]
+
+
+[dependencies]
+ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", features = ["trailing"], optional = true }
+ast-toolkit-span = { path = "../ast-toolkit-span" }
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
+paste = "1.0"
+stackvec = { git = "https://github.com/Lut99/stackvec-rs" }
+unicode-segmentation = "1.11"
+
+ast-toolkit-snack-derive = { path = "../../derive/ast-toolkit-snack-derive", optional = true }
+
+
+[dev-dependencies]
+
+
+[features]
+default = ["extra"]
+
+extra = ["c"]
+c = []
+
+derive = ["dep:ast-toolkit-snack-derive"]
+punctuated = ["dep:ast-toolkit-punctuated"]

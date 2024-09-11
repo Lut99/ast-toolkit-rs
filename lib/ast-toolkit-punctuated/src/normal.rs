@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    13 Mar 2024, 11:02:24
+//    26 Mar 2024, 18:05:24
 //  Auto updated?
 //    Yes
 //
@@ -14,9 +14,204 @@
 //
 
 use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
+use std::hash::{Hash, Hasher};
+use std::ops::{Index, IndexMut};
+
+use crate::common::{PunctIndex, ValueIndex};
+
+
+/***** MACROS *****/
+/// Builds a [`Punctuated`] conveniently from a list.
+///
+/// Your items must match the order required by the punctuated. I.e., start with a value, then alternate commas and values:
+/// ```rust
+/// use ast_toolkit_punctuated::{punct, PunctIndex, Punctuated};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Value;
+/// #[derive(Debug, PartialEq)]
+/// struct Punct;
+///
+/// let punct: Punctuated<Value, Punct> = punct![];
+/// assert!(punct.is_empty());
+///
+/// let punct: Punctuated<Value, Punct> = punct![v => Value];
+/// assert_eq!(punct.len(), 1);
+/// assert_eq!(punct[0], Value);
+///
+/// let punct: Punctuated<Value, Punct> = punct![v => Value, p => Punct, v => Value];
+/// assert_eq!(punct.len(), 2);
+/// assert_eq!(punct[0], Value);
+/// assert_eq!(punct[PunctIndex(0)], Punct);
+/// assert_eq!(punct[1], Value);
+/// ```
+#[macro_export]
+macro_rules! punct {
+    // Nothing to be done if nothing is given
+    (__recursion $list:ident) => {};
+    // Pop first value
+    (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
+        $list.push_first($value);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+    };
+    // Pop punctuation, value pairs
+    (__recursion $list:ident p => $punct:expr, v => $value:expr $(, $($items:tt)+)?) => {
+        $list.push($punct, $value);
+        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+    };
+
+    [$($items:tt)*] => {{
+        // Call the macro
+        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
+        ::ast_toolkit_punctuated::punct!(__recursion punct $($items)*);
+        punct
+    }};
+}
+
+
+
 
 
 /***** ITERATORS *****/
+/// Iterates over the values in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Values<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for Values<'p, V, P> {
+    type Item = &'p V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct ValuesMut<'p, V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<&'p mut V>,
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for ValuesMut<'p, V, P> {
+    type Item = &'p mut V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+/// Iterates over the values in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoValues<V, P> {
+    /// A value buffer from the last time around.
+    prev: Option<V>,
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+}
+impl<V, P> Iterator for IntoValues<V, P> {
+    type Item = V;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        if let Some((_, v)) = self.data.next() {
+            let ret = self.prev.take().unwrap_or_else(|| panic!("Empty prev mid-iteration"));
+            self.prev = Some(v);
+            Some(ret)
+        } else if let Some(prev) = self.prev.take() {
+            // One more pair to go!
+            Some(prev)
+        } else {
+            // Done
+            None
+        }
+    }
+}
+
+
+
+/// Iterates over the punctuation in a [`Punctuated`] by reference.
+#[derive(Debug)]
+pub struct Puncts<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::Iter<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for Puncts<'p, V, P> {
+    type Item = &'p P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        self.data.next().map(|(p, _)| p)
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by mutable reference.
+#[derive(Debug)]
+pub struct PunctsMut<'p, V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::slice::IterMut<'p, (P, V)>,
+}
+impl<'p, V, P> Iterator for PunctsMut<'p, V, P> {
+    type Item = &'p mut P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Get the next element in the list
+        self.data.next().map(|(p, _)| p)
+    }
+}
+
+/// Iterates over the punctuation in a [`Punctuated`] by ownership.
+#[derive(Debug)]
+pub struct IntoPuncts<V, P> {
+    /// An iterator over the rest of the elements.
+    data: std::vec::IntoIter<(P, V)>,
+}
+impl<V, P> Iterator for IntoPuncts<V, P> {
+    type Item = P;
+
+    #[inline]
+    #[track_caller]
+    fn next(&mut self) -> Option<Self::Item> { self.data.next().map(|(p, _)| p) }
+}
+
+
+
 /// Iterates over the pairs in a [`Punctuated`] by reference.
 #[derive(Debug)]
 pub struct Iter<'p, V, P> {
@@ -269,55 +464,42 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An [`Iterator`] that iterates over the values by reference.
     #[inline]
-    pub fn values<'p>(
-        &'p self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p V>, std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p V>> {
-        self.first.as_ref().map(|v| v.as_ref()).into_iter().chain(self.data.iter().map(|(_, v)| v))
-    }
+    pub fn values(&self) -> Values<V, P> { Values { prev: self.first.as_ref().map(|v| v.as_ref()), data: self.data.iter() } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn values_mut<'p>(
-        &'p mut self,
-    ) -> std::iter::Chain<std::option::IntoIter<&'p mut V>, std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut V>>
-    {
-        self.first.as_mut().map(|v| v.as_mut()).into_iter().chain(self.data.iter_mut().map(|(_, v)| v))
-    }
+    pub fn values_mut(&mut self) -> ValuesMut<V, P> { ValuesMut { prev: self.first.as_mut().map(|v| v.as_mut()), data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_values(self) -> std::iter::Chain<std::option::IntoIter<V>, std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> V>> {
-        self.first.map(|v| *v).into_iter().chain(self.data.into_iter().map(|(_, v)| v))
-    }
+    pub fn into_values(self) -> IntoValues<V, P> { IntoValues { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
 
     /// Returns an iterator over references to the punctuation in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the punctuation by reference.
     #[inline]
-    pub fn puncts<'p>(&'p self) -> std::iter::Map<std::slice::Iter<'p, (P, V)>, impl FnMut(&'p (P, V)) -> &'p P> { self.data.iter().map(|(p, _)| p) }
+    pub fn puncts(&self) -> Puncts<V, P> { Puncts { data: self.data.iter() } }
 
     /// Returns an iterator over mutable references to the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn puncts_mut<'p>(&'p mut self) -> std::iter::Map<std::slice::IterMut<'p, (P, V)>, impl FnMut(&'p mut (P, V)) -> &'p mut P> {
-        self.data.iter_mut().map(|(p, _)| p)
-    }
+    pub fn puncts_mut<'p>(&'p mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
     /// # Returns
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
-    pub fn into_puncts(self) -> std::iter::Map<std::vec::IntoIter<(P, V)>, impl FnMut((P, V)) -> P> { self.data.into_iter().map(|(p, _)| p) }
+    pub fn into_puncts(self) -> IntoPuncts<V, P> { IntoPuncts { data: self.data.into_iter() } }
 
     /// Returns an iterator over references to pairs of value and punctuation in this Puncuated.
     ///
@@ -345,6 +527,24 @@ impl<V, P> Punctuated<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
+
+    /// Clears all elements from this vector.
+    ///
+    /// Doesn't de-allocate the vector, so the capacity does not change.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.first = None;
+        self.data.clear();
+    }
+
+    /// Reserves more space for values in this iterator.
+    ///
+    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
+    ///
+    /// # Arguments
+    /// - `additional`: The additional number of elements to reserve space for.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
 
     /// Gets the total number of elements in the list.
     ///
@@ -392,6 +592,78 @@ impl<V: Debug, P: Debug> Debug for Punctuated<V, P> {
         list.finish()
     }
 }
+impl<V, P> Index<usize> for Punctuated<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: usize) -> &Self::Output {
+        if index == 0 {
+            match &self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            match self.data.get(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {} is out-of-bounds for a Punctuated with {} values", index, self.len()),
+            }
+        }
+    }
+}
+impl<V, P> IndexMut<usize> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index == 0 {
+            match &mut self.first {
+                Some(v) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with 0 values"),
+            }
+        } else {
+            let self_len: usize = self.len();
+            match self.data.get_mut(index - 1) {
+                Some((_, v)) => v,
+                None => panic!("Index {index} is out-of-bounds for a Punctuated with {self_len} values"),
+            }
+        }
+    }
+}
+impl<V, P> Index<ValueIndex> for Punctuated<V, P> {
+    type Output = V;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: ValueIndex) -> &Self::Output { &self[*index] }
+}
+impl<V, P> IndexMut<ValueIndex> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: ValueIndex) -> &mut Self::Output { &mut self[*index] }
+}
+impl<V, P> Index<PunctIndex> for Punctuated<V, P> {
+    type Output = P;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, index: PunctIndex) -> &Self::Output {
+        match self.data.get(*index) {
+            Some((p, _)) => p,
+            None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, self.data.len()),
+        }
+    }
+}
+impl<V, P> IndexMut<PunctIndex> for Punctuated<V, P> {
+    #[inline]
+    #[track_caller]
+    fn index_mut(&mut self, index: PunctIndex) -> &mut Self::Output {
+        let data_len: usize = self.data.len();
+        match self.data.get_mut(*index) {
+            Some((p, _)) => p,
+            None => panic!("Index {} is out-of-bounds for a Punctuated with {} punctuations", *index, data_len),
+        }
+    }
+}
 
 impl<V, P> IntoIterator for Punctuated<V, P> {
     type IntoIter = IntoIter<V, P>;
@@ -413,4 +685,50 @@ impl<'p, V, P> IntoIterator for &'p mut Punctuated<V, P> {
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter { self.pairs_mut() }
+}
+
+impl<V: Eq, P> Eq for Punctuated<V, P> {}
+impl<V: Hash, P> Hash for Punctuated<V, P> {
+    /// Implements hashing for the Punctuated.
+    ///
+    /// Note that this ignores the punctuation!
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for v in self.values() {
+            v.hash(state);
+        }
+    }
+}
+impl<V: PartialEq, P> PartialEq for Punctuated<V, P> {
+    /// Implements equality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs != rhs {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Implements inequality for the Punctuated.
+    ///
+    /// Note that this ignores equality of the punctuation!
+    #[inline]
+    fn ne(&self, other: &Self) -> bool {
+        if self.len() == other.len() {
+            return false;
+        }
+        for (lhs, rhs) in self.values().zip(other.values()) {
+            if lhs == rhs {
+                return false;
+            }
+        }
+        true
+    }
 }
