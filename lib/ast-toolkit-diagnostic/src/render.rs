@@ -4,7 +4,7 @@
 //  Created:
 //    27 May 2024, 10:49:06
 //  Last edited:
-//    25 Aug 2024, 17:49:41
+//    11 Sep 2024, 16:46:20
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use ast_toolkit_span::{Span, Spannable, SpannableLines, SpannableLocate, Spannin
 use stackvec::StackVec;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::annotations::{AnnotationHighlight, IntoAnnotation};
+use crate::annotations::AnnotationHighlight;
 use crate::diagnostic::Diagnostic;
 use crate::span::AsUtf8;
 use crate::Annotation;
@@ -44,43 +44,43 @@ pub const MAX_SOURCE_LINES_DISTANCE: usize = 3;
 
 
 /***** HELPER FUNCTIONS *****/
-/// Groups all the [`Annotation`]s in a [`Diagnostic`] such that every group represents annotation
-/// that can be rendered in one snippet.
-///
-/// # Arguments
-/// - `diag`: The [`Diagnostic`] to group the annotations of.
-///
-/// # Returns
-/// A list of lists that represent the groups.
-fn group_annotations<F, S>(diag: &Diagnostic<F, S>) -> StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>>
-where
-    S: SpannableLocate,
-{
-    // The main one is always the first group
-    let mut groups: StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>> = StackVec::from([StackVec::from([&diag.main])]);
+// /// Groups all the [`Annotation`]s in a [`Diagnostic`] such that every group represents annotation
+// /// that can be rendered in one snippet.
+// ///
+// /// # Arguments
+// /// - `diag`: The [`Diagnostic`] to group the annotations of.
+// ///
+// /// # Returns
+// /// A list of lists that represent the groups.
+// fn group_annotations<F, S>(diag: &Diagnostic<F, S>) -> StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>>
+// where
+//     S: SpannableLocate,
+// {
+//     // The main one is always the first group
+//     let mut groups: StackVec<MAX_SNIPPETS, StackVec<MAX_ANNOTS_PER_SNIPPET, &dyn Annotation<F, S>>> = StackVec::from([StackVec::from([&diag.main])]);
 
-    // Add the secondary annotations
-    for annot in &diag.annots {
-        // Span-less annotations are always their own groups
+//     // Add the secondary annotations
+//     for annot in &diag.annots {
+//         // Span-less annotations are always their own groups
 
-        // See with whom it can be grouped
-        for group in &mut groups {
-            // We can group if:
-            // - There is no overlap with existing annotations; and
-            // - The smallest number of lines between the new and an existing annotation is smaller than MAX_SOURCE_LINES_DISTANCE.
+//         // See with whom it can be grouped
+//         for group in &mut groups {
+//             // We can group if:
+//             // - There is no overlap with existing annotations; and
+//             // - The smallest number of lines between the new and an existing annotation is smaller than MAX_SOURCE_LINES_DISTANCE.
 
-            // Consider the annotations in the target group
-            for annot2 in group {
-                //
-            }
-        }
+//             // Consider the annotations in the target group
+//             for annot2 in group {
+//                 //
+//             }
+//         }
 
-        // Otherwise, add it to a new group
-        groups.push(StackVec::from([annot]));
-    }
+//         // Otherwise, add it to a new group
+//         groups.push(StackVec::from([annot]));
+//     }
 
-    todo!()
-}
+//     todo!()
+// }
 
 
 
@@ -178,6 +178,6 @@ impl<F, S> Diagnostic<F, S> {
         S::Slice<'s>: AsUtf8,
     {
         // Render the main snippet first
-        let mut main = SnippetBufferUtf8::new(&self.main);
+        // let mut main = SnippetBufferUtf8::new(&self.main);
     }
 }

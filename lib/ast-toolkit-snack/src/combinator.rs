@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:01:57
 //  Last edited:
-//    30 Aug 2024, 10:13:37
+//    11 Sep 2024, 16:47:14
 //  Auto updated?
 //    Yes
 //
@@ -36,7 +36,7 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 /// # Fails
 /// The returned combinator fails if `comb` fails, or if `comb` did not consume all input.
 ///
-/// # Exampel
+/// # Example
 /// ```rust
 /// use ast_toolkit_snack::combinator::all;
 /// use ast_toolkit_snack::error::{Common, Failure};

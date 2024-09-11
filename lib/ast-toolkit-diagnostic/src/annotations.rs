@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:38:35
 //  Last edited:
-//    09 Sep 2024, 14:34:49
+//    11 Sep 2024, 16:45:51
 //  Auto updated?
 //    Yes
 //
@@ -90,9 +90,7 @@ impl<F, S> AnnotationHighlight<F, S> {
 }
 
 // Factory methods
-impl<F, S> AnnotationHighlight<F, S> {
-    ///
-}
+impl<F, S> AnnotationHighlight<F, S> {}
 
 // Convertions
 impl<F, S> From<AnnotationHighlight<F, S>> for Annotation<F, S> {
