@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    11 Sep 2024, 17:21:13
+//    13 Sep 2024, 16:57:26
 //  Auto updated?
 //    Yes
 //
@@ -52,6 +52,7 @@ pub type Result<F, S, T, E1, E2> = std::result::Result<(Span<F, S>, T), SnackErr
 /// 3. Not enough input, which is only relevant for streaming versions of combinators. In this
 ///    case, it signals that the branch _looks_ incorrect/incomplete, but that additional things
 ///    can be given after the current end-of-file that collapses the correctness one way or another.
+#[derive(Debug)]
 pub enum SnackError<F, S, E1, E2> {
     /// It's a recoverable error.
     ///

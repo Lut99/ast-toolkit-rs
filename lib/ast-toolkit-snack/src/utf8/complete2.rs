@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    12 Sep 2024, 16:42:49
+//    13 Sep 2024, 16:56:46
 //  Auto updated?
 //    Yes
 //
@@ -51,6 +51,16 @@ impl<'t, F: Clone, S: Clone> Spanning<F, S> for ParseError<'t, F, S> {
     fn span(&self) -> Span<F, S> { self.span.clone() }
 }
 impl<'t, F: Clone, S: Clone> Error<F, S> for ParseError<'t, F, S> {}
+
+
+
+pub const fn tag<'t, F, S>(tag: &'t str) -> Tag<'t, F, S>
+where
+    F: Clone,
+    S: Clone + MatchBytes,
+{
+    Tag { tag, _f: PhantomData, _s: PhantomData }
+}
 
 
 
