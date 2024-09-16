@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    13 Sep 2024, 16:57:26
+//    16 Sep 2024, 10:22:12
 //  Auto updated?
 //    Yes
 //
@@ -62,7 +62,7 @@ pub enum SnackError<F, S, E1, E2> {
     /// It's a non-recoverable error.
     ///
     /// This means that any [branch::alt](crate::branch::alt) combinator should stop searching.
-    /// You can interpret this error as "correct branch, but incorrect input". An example is a
+    /// You can interpret this error as "correct branch, but malformed input". An example is a
     /// missing closing parenthesis.
     Fatal(E2),
     /// The parser is not sure whether an error occurred.

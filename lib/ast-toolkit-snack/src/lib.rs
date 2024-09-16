@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    12 Sep 2024, 16:43:01
+//    16 Sep 2024, 10:25:54
 //  Auto updated?
 //    Yes
 //
@@ -38,6 +38,7 @@ pub mod sequence;
 pub mod span;
 pub mod tuple;
 pub mod utf8;
+mod utils;
 
 // Imports
 use std::convert::Infallible;
