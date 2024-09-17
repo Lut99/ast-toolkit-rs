@@ -4,53 +4,42 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    16 Sep 2024, 11:31:22
+//    17 Sep 2024, 09:59:57
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   ```rust
-//!   todo!();
-//!   ```
+//!   TODO
 //
 
 use std::convert::Infallible;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::Span;
 
-use crate::result::{Error, SnackError};
+use crate::result::SnackError;
 use crate::span::MatchBytes;
-use crate::utils::comb_impl;
+use crate::utils::{comb_impl, error_impl};
 
 
 /***** LIBRARY *****/
-pub struct ParseError<'t, F, S> {
-    /// What we expected
-    tag:  &'t str,
-    /// Where we expected it
-    span: Span<F, S>,
-}
-impl<'t, F, S> Debug for ParseError<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("ParseError");
-        fmt.field("tag", &self.tag);
-        fmt.field("span", &self.span);
-        fmt.finish()
+error_impl! {
+    gen struct TagRecoverable<'t, F, S> {
+        /// What we expected
+        tag:  &'t str,
+        /// Where we expected it
+        span: Span<F, S>,
+    } impl {
+        fn fmt(&self, f: &mut Formatter) {
+            write!(f, "{}", TagExpectsFormatter { tag: self.tag })
+        }
+
+        fn span(&self) where F: (Clone), S: (Clone) {
+            self.span.clone()
+        }
     }
 }
-impl<'t, F, S> Display for ParseError<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", TagExpectsFormatter { tag: self.tag }) }
-}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for ParseError<'t, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
-}
-impl<'t, F: Clone, S: Clone> Error<F, S> for ParseError<'t, F, S> {}
 
 
 
@@ -70,9 +59,9 @@ comb_impl! {
     ///
     /// # Example
     /// ```rust
-    /// use ast_toolkit_snack::error::{Common, Failure};
-    /// use ast_toolkit_snack::utf8::complete::tag;
-    /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+    /// use ast_toolkit_snack::result::SnackError;
+    /// use ast_toolkit_snack::utf8::complete2::{tag, TagRecoverable};
+    /// use ast_toolkit_snack::Combinator2 as _;
     /// use ast_toolkit_span::Span;
     ///
     /// let span1 = Span::new("<example>", "Hello, world!");
@@ -80,7 +69,7 @@ comb_impl! {
     ///
     /// let mut comb = tag("Hello");
     /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
-    /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+    /// assert!(matches!(comb.parse(span2), Err(SnackError::Recoverable(TagRecoverable { .. }))));
     /// ```
     gen Tag<'t, F, S> {
         tag: &'t str,
@@ -88,7 +77,7 @@ comb_impl! {
         _s:  PhantomData<S>,
     } impl {
         type Output = Span<F, S>;
-        type Recoverable = ParseError<'t, F, S>;
+        type Recoverable = TagRecoverable<'t, F, S>;
         type Fatal = Infallible;
 
         gen Formatter<'t> {
@@ -118,7 +107,7 @@ comb_impl! {
                 Ok((input.slice(match_point..), input.slice(..match_point)))
             } else {
                 // Didn't match the entire tag
-                Err(SnackError::Recoverable(ParseError { tag: self.tag, span: input.start_onwards() }))
+                Err(SnackError::Recoverable(TagRecoverable { tag: self.tag, span: input.start_onwards() }))
             }
         }
 
