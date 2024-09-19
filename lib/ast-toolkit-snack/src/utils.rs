@@ -4,7 +4,7 @@
 //  Created:
 //    16 Sep 2024, 10:25:19
 //  Last edited:
-//    17 Sep 2024, 09:56:38
+//    19 Sep 2024, 14:09:55
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,8 @@
 /// Macro for a little more ergonomically implementing an error type.
 macro_rules! error_impl {
     (
-        $(#[$outer:meta])* gen struct $name:ident < $($gen:tt),* > {
+        #[comb = $comb:literal]
+        gen struct $name:ident < $($gen:tt),* > {
             $($(#[$field_attrs:meta])* $field:ident : $field_ty:ty),* $(,)?
         } impl {
             fn fmt(&$fmt_self:ident, $f:ident: &mut Formatter) $(where $($fmt_var:ident: ($($fmt_bound:tt)+)),* $(,)?)? {
@@ -31,7 +32,7 @@ macro_rules! error_impl {
             })?
         }
     ) => {
-        $(#[$outer])*
+        #[doc = concat!("Error returned by the [`", $comb, "`]-combinator.")]
         pub struct $name < $($gen),* > {
             $($(#[$field_attrs])* $field: $field_ty,)*
         }
@@ -75,88 +76,99 @@ macro_rules! error_impl {
 }
 pub(crate) use error_impl;
 
-/// Macro for a little more ergonomically implementing a combinator.
-macro_rules! comb_impl {
+/// Macro for a little more ergonomically implementing a combinator's formatter.
+macro_rules! fmt_impl {
     (
-        $(#[$outer:meta])* gen $name:ident < $($gen:tt),* > {
+        #[comb = $comb:expr]
+        gen $name:ident < $($gen:tt),* > {
             $($(#[$field_attrs:meta])* $field:ident : $field_ty:ty),* $(,)?
         } impl {
-            type Output = $output:ty;
-            type Recoverable = $recoverable:ty;
-            type Fatal = $fatal:ty;
-
-            gen Formatter < $($egen:tt),* > {
-                $($(#[$efield_attrs:meta])* $efield:ident : $efield_ty:ty),* $(,)?
-            } impl {
-                fn expects_fmt(&$self:ident, $f:ident: &mut Formatter, $indent:ident: usize) {
-                    $($ebody:tt)*
-                }
-            }
-
-            fn expects<$elife:lifetime>(&$eeself:ident) $(where $($evar:ident: ($($ebound:tt)+)),* $(,)?)? {
-                $($eebody:tt)*
-            }
-            fn parse<$clife:lifetime, $cf:ident, $cs:ident>(&mut $pself:ident, $input:ident: Span<F, S>) $(where $($cvar:ident: ($($cbound:tt)+)),* $(,)?)? {
-                $($pbody:tt)*
-            }
-
-            comb $comb:ident($($cargs:ident : $cargs_ty:ty),*) {
-                $($cbody:tt)*
+            fn expects_fmt(&$self:ident, $f:ident: &mut Formatter, $indent:ident: usize) $(where $($var:ident: ($($bound:tt)+)),+ $(,)?)? {
+                $($body:tt)*
             }
         }
     ) => {
-        // Generate the formatter
         ::paste::paste! {
-            #[doc = concat!(" Formatter for generating \"Expected ...\"-strings for [`", stringify!($name), "`].")]
+            #[doc = concat!(" Formatter for generating \"Expected ...\"-strings for [`", $comb, "`].")]
             #[derive(Debug)]
-            pub struct [<$name ExpectsFormatter>]<$($egen),*> {
-                $($(#[$efield_attrs])* $efield : $efield_ty,)*
+            pub struct $name<$($gen),*> {
+                $($(#[$field_attrs])* $field : $field_ty,)*
             }
-            impl<$($egen),*> ::std::fmt::Display for [< $name ExpectsFormatter >] <$($egen),*> {
+            impl<$($gen),*> ::std::fmt::Display for $name<$($gen),*>
+            $(where
+                $($var: $($bound)+),+)?
+            {
                 #[inline]
                 fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                     write!(f, "Expected ")?;
                     <Self as crate::ExpectsFormatter>::expects_fmt(self, f, 0)
                 }
             }
-            impl<$($egen),*> crate::ExpectsFormatter for [< $name ExpectsFormatter >] <$($egen),*> {
+            impl<$($gen),*> crate::ExpectsFormatter for $name<$($gen),*>
+            $(where
+                $($var: $($bound)+),+)?
+            {
                 #[inline]
                 fn expects_fmt(&$self, $f: &mut ::std::fmt::Formatter, $indent: usize) -> ::std::fmt::Result {
-                    $($ebody)*
+                    $($body)*
                 }
             }
         }
+    };
+}
+pub(crate) use fmt_impl;
+
+/// Macro for a little more ergonomically implementing a combinator.
+macro_rules! comb_impl {
+    (
+        $(#[$outer:meta])*
+        gen $name:ident < $($gen:tt),* > {
+            $($(#[$field_attrs:meta])* $field:ident : $field_ty:ty),* $(,)?
+        } impl {
+            type Formatter = $formatter:ty;
+            type Output = $output:ty;
+            type Recoverable = $recoverable:ty;
+            type Fatal = $fatal:ty;
 
 
+            fn<$($exp_ty_gen:tt),*> Expects<$exp_life:lifetime>::expects(&$exp_self:ident: Self<$($exp_self_gen:tt),*>) $(where $($exp_var:ident: ($($exp_bound:tt)+)),+ $(,)?)? {
+                $($exp_body:tt)*
+            }
 
-        // Generate the combinator itself
+            fn<$($parse_ty_gen:tt),*> Combinator<$($parse_comb_gen:tt),*>::parse(&mut $parse_self:ident: Self<$($parse_self_gen:tt),*>, $input:ident: Span<F, S>) $(where $($parse_var:ident: ($($parse_bound:tt)+)),+ $(,)?)? {
+                $($parse_body:tt)*
+            }
+
+            comb<$($comb_ty_gen:tt),*> $comb:ident($($comb_args:ident : $comb_args_ty:ty),*) -> Self<$($comb_self_gen:tt),*> {
+                $($comb_body:tt)*
+            }
+        }
+    ) => {
         #[doc = concat!(" Combinator returned by [`", stringify!($comb), "()`].")]
         pub struct $name <$($gen),*> {
             $($(#[$field_attrs])* $field : $field_ty,)*
         }
-        ::paste::paste! {
-            impl<$($gen),*> crate::Expects<$elife> for $name<$($gen),*>
-            $(where
-                $($evar: $($ebound)+),*)?
-            {
-                type Formatter = [<$name ExpectsFormatter>]<$($egen),*>;
+        impl<$($exp_ty_gen),*> crate::Expects<$exp_life> for $name<$($exp_self_gen),*>
+        $(where
+            $($exp_var: $($exp_bound)+),+)?
+        {
+            type Formatter = $formatter;
 
-                #[inline]
-                fn expects(&$eeself) -> Self::Formatter {
-                    $($eebody)*
-                }
+            #[inline]
+            fn expects(&$exp_self) -> Self::Formatter {
+                $($exp_body)*
             }
         }
-        impl<$($gen),*> crate::Combinator2<$clife, $cf, $cs> for $name<$($gen),*>
+        impl<$($parse_ty_gen),*> crate::Combinator2<$($parse_comb_gen),*> for $name<$($parse_self_gen),*>
         $(where
-            $($cvar: $($cbound)+),*)?
+            $($parse_var: $($parse_bound)+),+)?
         {
             type Output = $output;
             type Recoverable = $recoverable;
             type Fatal = $fatal;
 
-            fn parse(&mut $pself, $input: ::ast_toolkit_span::Span<F, S>) -> Result<(::ast_toolkit_span::Span<F, S>, Self::Output), crate::result::SnackError<F, S, Self::Recoverable, Self::Fatal>> {
-                $($pbody)*
+            fn parse(&mut $parse_self, $input: ::ast_toolkit_span::Span<F, S>) -> Result<(::ast_toolkit_span::Span<F, S>, Self::Output), crate::result::SnackError<F, S, Self::Recoverable, Self::Fatal>> {
+                $($parse_body)*
             }
         }
 
@@ -165,11 +177,11 @@ macro_rules! comb_impl {
         // Generate the combinator function
         $(#[$outer])*
         #[inline]
-        pub const fn $comb<$($gen),*>($($cargs : $cargs_ty),*) -> $name<$($gen),*>
+        pub const fn $comb<$($comb_ty_gen),*>($($comb_args : $comb_args_ty),*) -> $name<$($gen),*>
         $(where
-            $($cvar: $($cbound)+),*)?
+            $($parse_var: $($parse_bound)+),*)?
         {
-            $($cbody)*
+            $($comb_body)*
         }
     };
 }

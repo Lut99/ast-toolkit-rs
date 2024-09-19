@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    17 Sep 2024, 09:59:57
+//    19 Sep 2024, 12:00:16
 //  Auto updated?
 //    Yes
 //
@@ -20,11 +20,12 @@ use ast_toolkit_span::Span;
 
 use crate::result::SnackError;
 use crate::span::MatchBytes;
-use crate::utils::{comb_impl, error_impl};
+use crate::utils::{comb_impl, error_impl, fmt_impl};
 
 
 /***** LIBRARY *****/
 error_impl! {
+    #[comb = "Tag"]
     gen struct TagRecoverable<'t, F, S> {
         /// What we expected
         tag:  &'t str,
@@ -41,7 +42,16 @@ error_impl! {
     }
 }
 
-
+fmt_impl! {
+    #[comb = "Tag"]
+    gen TagExpectsFormatter<'t> {
+        tag: &'t str,
+    } impl {
+        fn expects_fmt(&self, f: &mut Formatter, _indent: usize) {
+            write!(f, "'{}'", self.tag)
+        }
+    }
+}
 
 comb_impl! {
     /// Matches a specific "tag", i.e., a sequence of UTF-8 characters.
@@ -76,23 +86,17 @@ comb_impl! {
         _f:  PhantomData<F>,
         _s:  PhantomData<S>,
     } impl {
+        type Formatter = TagExpectsFormatter<'t>;
         type Output = Span<F, S>;
         type Recoverable = TagRecoverable<'t, F, S>;
         type Fatal = Infallible;
 
-        gen Formatter<'t> {
-            tag: &'t str,
-        } impl {
-            fn expects_fmt(&self, f: &mut Formatter, _indent: usize) {
-                write!(f, "'{}'", self.tag)
-            }
-        }
 
-        fn expects<'t>(&self) {
+        fn<'t, F, S> Expects<'t>::expects(&self: Self<'t, F, S>) {
             TagExpectsFormatter { tag: self.tag }
         }
 
-        fn parse<'t, F, S>(&mut self, input: Span<F, S>)
+        fn<'t, F, S> Combinator<'t, F, S>::parse(&mut self: Self<'t, F, S>, input: Span<F, S>)
         where
             F: (Clone),
             S: (Clone + MatchBytes),
@@ -111,7 +115,7 @@ comb_impl! {
             }
         }
 
-        comb tag(tag: &'t str) {
+        comb<'t, F, S> tag(tag: &'t str) -> Self<'t, F, S> {
             Tag { tag, _f: PhantomData, _s: PhantomData }
         }
     }
