@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    02 Nov 2024, 12:03:50
+//    02 Nov 2024, 13:02:03
 //  Auto updated?
 //    Yes
 //
@@ -20,8 +20,7 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spanning};
 
 use crate::result::{Error, Result as SResult, SnackError};
-use crate::utils::comb_impl;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, Expects, ExpectsFormatter};
 
 
 /***** HELPER MACROS *****/
@@ -301,65 +300,63 @@ tuple_branchable_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), 
 
 
 
-/***** LIBRARY *****/
-comb_impl! {
-    /// Tries different possible combinators and returns the first one that succeeds.
-    ///
-    /// The combinators are tried in-order. They must all return the same result (so use enums if you want to have options).
-    ///
-    /// # Arguments
-    /// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to and including size 12 implement this.
-    ///
-    /// # Returns
-    /// A combinator [`Alt`] that will run the given branches and try them one-by-one.
-    ///
-    /// # Fails
-    /// The returned combinator may fail if _all_ combinators in `branches` fails.
-    ///
-    /// # Examples
-    /// ```rust
-    /// use ast_toolkit_snack::branch2::{alt, Alt2Recoverable};
-    /// use ast_toolkit_snack::result::SnackError;
-    /// use ast_toolkit_snack::utf82::complete::tag;
-    /// use ast_toolkit_snack::Combinator2 as _;
-    /// use ast_toolkit_span::Span;
-    ///
-    /// let span1 = Span::new("<example>", "Hello, world!");
-    /// let span2 = Span::new("<example>", "Goodbye, world!");
-    /// let span3 = Span::new("<example>", "World!");
-    ///
-    /// let mut comb = alt((tag("Hello"), tag("Goodbye")));
-    /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
-    /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
-    /// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(Alt2Recoverable { .. }))));
-    /// ```
-    gen Alt<F, S, B> {
-        branches: B,
-        _f: PhantomData<F>,
-        _s: PhantomData<S>,
-    } impl {
-        type Formatter = B::Formatter;
-        type Output = B::Output;
-        type Recoverable = B::Recoverable;
-        type Fatal = B::Fatal;
-
-
-        fn<'t, F, S, B> Expects<'t>::expects(&self: Self<F, S, B>)
-        where
-            B: (Branchable<'t, F, S>)
-        {
-            self.branches.expects()
-        }
-
-        fn<'t, F, S, B> Combinator<'t, F, S>::parse(&mut self: Self<F, S, B>, input: Span<F, S>)
-        where
-            B: (Branchable<'t, F, S>),
-        {
-            self.branches.branch(input)
-        }
-
-        comb<'t, F, S, B> alt(branches: B) -> Self<F, S, B> {
-            Alt { branches, _f: PhantomData, _s: PhantomData }
-        }
-    }
+/***** COMBINATORS *****/
+/// Actual implementation of [`alt()`].
+pub struct Alt<B, F, S> {
+    branches: B,
+    _f: PhantomData<F>,
+    _s: PhantomData<S>,
 }
+impl<'t, B: Branchable<'t, F, S>, F, S> Expects<'t> for Alt<B, F, S> {
+    type Formatter = B::Formatter;
+
+    #[inline]
+    fn expects(&self) -> Self::Formatter { self.branches.expects() }
+}
+impl<'t, B: Branchable<'t, F, S>, F, S> Combinator2<'t, F, S> for Alt<B, F, S> {
+    type Output = B::Output;
+    type Recoverable = B::Recoverable;
+    type Fatal = B::Fatal;
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> { self.branches.branch(input) }
+}
+
+
+
+
+
+/***** LIBRARY *****/
+
+/// Tries different possible combinators and returns the first one that succeeds.
+///
+/// The combinators are tried in-order. They must all return the same result (so use enums if you want to have options).
+///
+/// # Arguments
+/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to and including size 12 implement this.
+///
+/// # Returns
+/// A combinator [`Alt`] that will run the given branches and try them one-by-one.
+///
+/// # Fails
+/// The returned combinator may fail if _all_ combinators in `branches` fails.
+///
+/// # Examples
+/// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
+/// use ast_toolkit_snack::branch2::{Alt2Recoverable, alt};
+/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::utf82::complete::tag;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span3 = Span::new("<example>", "World!");
+///
+/// let mut comb = alt((tag("Hello"), tag("Goodbye")));
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
+/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
+/// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(Alt2Recoverable { .. }))));
+/// ```
+#[inline]
+pub const fn alt<B, F, S>(branches: B) -> Alt<B, F, S> { Alt { branches, _f: PhantomData, _s: PhantomData } }

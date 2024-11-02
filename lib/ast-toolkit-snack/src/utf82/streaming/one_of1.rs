@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    02 Nov 2024, 12:39:15
+//    02 Nov 2024, 12:55:31
 //  Auto updated?
 //    Yes
 //
@@ -73,8 +73,8 @@ where
 /// Will attempt to match as many characters from the start of a span as possible, as long as those
 /// characters are in the set of to-be-searched-for characters.
 ///
-/// This version does _not_ accept matching none of them. See [`one_of0()`](super::one_of0()) to
-/// also allow finding none.
+/// This version does _not_ accept matching none of them. See [`one_of0()`](super::super::one_of0())
+/// to also allow finding none.
 ///
 /// # Arguments
 /// - `charset`: A byte array(-like) that defines the set of characters we are looking for.

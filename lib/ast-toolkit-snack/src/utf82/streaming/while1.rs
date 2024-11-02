@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    02 Nov 2024, 12:39:38
+//    02 Nov 2024, 12:46:10
 //  Auto updated?
 //    Yes
 //
@@ -73,8 +73,8 @@ where
 /// Will attempt to match as many characters from the start of a span as possible, as long as those
 /// characters match a given predicate.
 ///
-/// This version does _not_ accept matching none of them. See [`while0()`](super::while0()) to also
-/// allow finding none.
+/// This version does _not_ accept matching none of them. See [`while0()`](super::super::while0())
+/// to also allow finding none.
 ///
 /// # Arguments
 /// - `predicate`: A closure that returns true for matching characters, and false for non-matching

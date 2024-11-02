@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    02 Nov 2024, 12:37:08
+//    02 Nov 2024, 12:53:03
 //  Auto updated?
 //    Yes
 //
@@ -63,7 +63,7 @@ impl<F, S: SpannableEq> PartialEq for Digit1Recoverable<F, S> {
 
 
 /***** FORMATTERS *****/
-/// ExpectsFormatter for the [`Digit1`]-combinator.
+/// ExpectsFormatter for the [`digit1()`]-combinator.
 #[derive(Debug)]
 pub struct Digit1ExpectsFormatter;
 impl Display for Digit1ExpectsFormatter {
@@ -129,7 +129,8 @@ where
 /***** LIBRARY *****/
 /// Matches as many digits as possible.
 ///
-/// This version also accepts matching none of them. See [`digit1()`] to match at least 1.
+/// This version does _not_ accept matching none of them. See [`digit0()`](super::super::digit0())
+/// to also allow finding none.
 ///
 /// # Returns
 /// A combinator [`Digit1`] that matches only digits 0-9.
