@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    11 Sep 2024, 17:17:01
+//    02 Nov 2024, 11:48:23
 //  Auto updated?
 //    Yes
 //
@@ -17,16 +17,15 @@
 
 // Submodules
 pub mod complete;
-pub mod complete2;
 pub mod streaming;
 
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
+use ast_toolkit_span::Span;
 // Imports
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::Span;
 
 use crate::span::{OneOfBytes, OneOfUtf8, WhileUtf8};
 use crate::{Combinator, Expects, ExpectsFormatter, Result};
@@ -45,8 +44,8 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::utf8::digit0;
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::utf8::digit0;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "12345six");
@@ -80,8 +79,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::utf8::one_of0;
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::utf8::one_of0;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "abcdefg");
@@ -117,8 +116,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::utf8::while0;
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::utf8::while0;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "abcdefg");
@@ -164,8 +163,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::utf8::whitespace0;
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::utf8::whitespace0;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "   \t\n  awesome");

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    19 Sep 2024, 13:15:54
+//    02 Nov 2024, 11:48:33
 //  Auto updated?
 //    Yes
 //
@@ -39,6 +39,7 @@ pub mod sequence2;
 pub mod span;
 pub mod tuple;
 pub mod utf8;
+pub mod utf82;
 mod utils;
 
 // Imports

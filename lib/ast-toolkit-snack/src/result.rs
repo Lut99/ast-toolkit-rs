@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    02 Nov 2024, 10:37:48
+//    02 Nov 2024, 12:07:18
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 
 use std::fmt::{Debug, Display};
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, SpannableEq, Spanning};
 
 
 /***** INTERFACES *****/
@@ -71,9 +71,37 @@ pub enum SnackError<F, S, E1, E2> {
     /// to being incomplete somehow (more was expected). More input may be given to turn this error
     /// into a complete phrase.
     NotEnough {
-        /// How much more input should be given if this is known.
+        /// How much more input should (at least) be given to make it correct - if this is known.
         needed: Option<usize>,
         /// The span pointing to the end of the input stream.
         span:   Span<F, S>,
     },
+}
+impl<F, S, E1, E2> Eq for SnackError<F, S, E1, E2>
+where
+    S: SpannableEq,
+    E1: Eq,
+    E2: Eq,
+{
+}
+impl<F, S, E1, E2> PartialEq for SnackError<F, S, E1, E2>
+where
+    S: SpannableEq,
+    E1: PartialEq,
+    E2: PartialEq,
+{
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Only match other with the same variant
+            (Self::Recoverable(err1), Self::Recoverable(err2)) => err1 == err2,
+            (Self::Fatal(err1), Self::Fatal(err2)) => err1 == err2,
+            (Self::NotEnough { needed: needed1, span: span1 }, Self::NotEnough { needed: needed2, span: span2 }) => {
+                needed1 == needed2 && span1 == span2
+            },
+
+            // Anything else never equals
+            _ => false,
+        }
+    }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    02 Nov 2024, 10:38:12
+//    02 Nov 2024, 12:03:50
 //  Auto updated?
 //    Yes
 //
@@ -320,7 +320,7 @@ comb_impl! {
     /// ```rust
     /// use ast_toolkit_snack::branch2::{alt, Alt2Recoverable};
     /// use ast_toolkit_snack::result::SnackError;
-    /// use ast_toolkit_snack::utf8::complete2::tag;
+    /// use ast_toolkit_snack::utf82::complete::tag;
     /// use ast_toolkit_snack::Combinator2 as _;
     /// use ast_toolkit_span::Span;
     ///

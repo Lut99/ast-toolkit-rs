@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    11 Sep 2024, 17:10:40
+//    02 Nov 2024, 11:38:32
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,7 @@ use std::rc::Rc;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::SpannableAsBytes;
 use crate::as_str::{SpannableAsStr, SpannableTryAsStr};
 use crate::display::SpannableDisplay;
 use crate::eq::SpannableEq;
@@ -29,7 +30,6 @@ use crate::lines::SpannableLines;
 use crate::locate::SpannableLocate;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
-use crate::SpannableAsBytes;
 
 
 /***** AUXILLARY *****/
@@ -38,8 +38,23 @@ pub trait Spanning<F, S> {
     /// Returns some [`Span`] representing self's relation to the source text it was parsed from.
     ///
     /// # Returns
-    /// A new [`Span`] that represents the spanned area.
+    /// Some [`Span`] that represents the spanned area.
+    ///
+    /// Note that, because this function takes `self` by reference, the given span may be a copy.
+    /// You can prefer to use [`IntoSpanning::into_span()`] when possible to get it by ownership
+    /// instead.
     fn span(&self) -> Span<F, S>;
+
+    /// Returns some [`Span`] representing self's relation to the source text it was parsed from.
+    ///
+    /// # Returns
+    /// Some [`Span`] that represents the spanned area.
+    fn into_span(self) -> Span<F, S>
+    where
+        Self: Sized,
+    {
+        self.span()
+    }
 }
 
 // Default impls
