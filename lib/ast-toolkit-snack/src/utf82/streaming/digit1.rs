@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    02 Nov 2024, 12:17:36
+//    02 Nov 2024, 12:38:57
 //  Auto updated?
 //    Yes
 //
@@ -15,12 +15,12 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning as _};
+use ast_toolkit_span::{Span, Spanning as _};
 
-pub use super::super::complete::{Digit1ExpectsFormatter, Digit1Recoverable};
+pub use super::super::complete::digit1::{Digit1ExpectsFormatter, Digit1Recoverable};
 use super::while1;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::WhileUtf8;
+use crate::span::{LenBytes, WhileUtf8};
 use crate::{Combinator2, Expects};
 
 
@@ -40,7 +40,7 @@ impl<F, S> Expects<'static> for Digit1<F, S> {
 impl<F, S> Combinator2<'static, F, S> for Digit1<F, S>
 where
     F: Clone,
-    S: Clone + Spannable + WhileUtf8,
+    S: Clone + LenBytes + WhileUtf8,
 {
     type Output = Span<F, S>;
     type Recoverable = Digit1Recoverable<F, S>;
@@ -84,7 +84,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::streaming::{Digit1Recoverable, digit1};
+/// use ast_toolkit_snack::utf82::streaming::digit1;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "12345six");
@@ -93,14 +93,17 @@ where
 ///
 /// let mut comb = digit1();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
-/// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(Digit1Recoverable { span: span2 })));
+/// assert_eq!(
+///     comb.parse(span2),
+///     Err(SnackError::Recoverable(digit1::Digit1Recoverable { span: span2 }))
+/// );
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```
 #[inline]
 pub const fn digit1<F, S>() -> Digit1<F, S>
 where
     F: Clone,
-    S: Clone + Spannable + WhileUtf8,
+    S: Clone + LenBytes + WhileUtf8,
 {
     Digit1 { _f: PhantomData, _s: PhantomData }
 }

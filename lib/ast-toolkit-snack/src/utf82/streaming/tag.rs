@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    02 Nov 2024, 12:10:09
+//    02 Nov 2024, 12:39:28
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
-pub use super::super::complete::{TagExpectsFormatter, TagRecoverable};
+pub use super::super::complete::tag::{TagExpectsFormatter, TagRecoverable};
 use crate::result::SnackError;
 use crate::span::{LenBytes, MatchBytes};
 use crate::{Combinator2, Expects};
@@ -91,7 +91,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::streaming::{TagRecoverable, tag};
+/// use ast_toolkit_snack::utf82::streaming::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
@@ -102,7 +102,7 @@ where
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),

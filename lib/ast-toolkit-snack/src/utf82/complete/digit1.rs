@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    02 Nov 2024, 12:16:37
+//    02 Nov 2024, 12:37:08
 //  Auto updated?
 //    Yes
 //
@@ -141,7 +141,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::complete::{Digit1Recoverable, digit1};
+/// use ast_toolkit_snack::utf82::complete::digit1;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "12345six");
@@ -150,8 +150,14 @@ where
 ///
 /// let mut comb = digit1();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
-/// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(Digit1Recoverable { span: span2 })));
-/// assert_eq!(comb.parse(span3), Err(SnackError::Recoverable(Digit1Recoverable { span: span3 })));
+/// assert_eq!(
+///     comb.parse(span2),
+///     Err(SnackError::Recoverable(digit1::Digit1Recoverable { span: span2 }))
+/// );
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::Recoverable(digit1::Digit1Recoverable { span: span3 }))
+/// );
 /// ```
 #[inline]
 pub const fn digit1<F, S>() -> Digit1<F, S>

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    02 Nov 2024, 12:16:44
+//    02 Nov 2024, 12:38:14
 //  Auto updated?
 //    Yes
 //
@@ -145,7 +145,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::streaming::{While1Recoverable, while1};
+/// use ast_toolkit_snack::utf82::complete::while1;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "abcdefg");
@@ -158,8 +158,14 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
-/// assert_eq!(comb.parse(span4), Err(SnackError::Recoverable(While1Recoverable { span: span4 })));
-/// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::Recoverable(while1::While1Recoverable { span: span4 }))
+/// );
+/// assert_eq!(
+///     comb.parse(span5),
+///     Err(SnackError::Recoverable(while1::While1Recoverable { span: span5 }))
+/// );
 /// ```
 #[inline]
 pub const fn while1<P, F, S>(predicate: P) -> While1<P, F, S>

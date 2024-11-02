@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    02 Nov 2024, 12:16:55
+//    02 Nov 2024, 12:37:59
 //  Auto updated?
 //    Yes
 //
@@ -146,7 +146,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::complete::{TagRecoverable, tag};
+/// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
@@ -157,11 +157,11 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(TagRecoverable { tag: "Hello", span: span3.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span3.slice(0..) }))
 /// );
 /// ```
 #[inline]
