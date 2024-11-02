@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    19 Sep 2024, 12:00:20
+//    02 Nov 2024, 10:38:12
 //  Auto updated?
 //    Yes
 //
@@ -189,7 +189,7 @@ macro_rules! tuple_branchable_impl {
                                 fails.$fi.write(err);
                             },
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Alt $li Fatal>]::[<Branch $fi>](err))),
-                            Err(SnackError::NotEnough { span }) => return Err(SnackError::NotEnough { span }),
+                            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         }
                         $(match self.$i.parse(input.clone()) {
                             Ok((rem, res)) => return Ok((rem, res)),
@@ -197,7 +197,7 @@ macro_rules! tuple_branchable_impl {
                                 fails.$i.write(err);
                             },
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Alt $li Fatal>]::[<Branch $i>](err))),
-                            Err(SnackError::NotEnough { span }) => return Err(SnackError::NotEnough { span }),
+                            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         })*
 
                         // If we're here, all branches failed. So we can assume that their error is initialized...

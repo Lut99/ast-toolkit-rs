@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    16 Sep 2024, 10:22:12
+//    02 Nov 2024, 10:37:48
 //  Auto updated?
 //    Yes
 //
@@ -71,7 +71,9 @@ pub enum SnackError<F, S, E1, E2> {
     /// to being incomplete somehow (more was expected). More input may be given to turn this error
     /// into a complete phrase.
     NotEnough {
+        /// How much more input should be given if this is known.
+        needed: Option<usize>,
         /// The span pointing to the end of the input stream.
-        span: Span<F, S>,
+        span:   Span<F, S>,
     },
 }
