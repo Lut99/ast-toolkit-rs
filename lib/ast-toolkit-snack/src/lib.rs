@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    03 Nov 2024, 19:58:58
+//    03 Nov 2024, 20:02:38
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,6 @@
 pub use ast_toolkit_snack_derive::comb;
 
 // Declare submodules
-pub mod branch;
 pub mod branch2;
 pub mod bytes;
 #[cfg(feature = "c")]
