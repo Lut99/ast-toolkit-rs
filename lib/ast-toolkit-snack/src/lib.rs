@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    03 Nov 2024, 19:20:26
+//    03 Nov 2024, 19:58:58
 //  Auto updated?
 //    Yes
 //
@@ -165,6 +165,24 @@ pub trait Combinator2<'t, F, S> {
     fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
 }
 
+// Default impl for pointer-like types
+impl<'a, 't, F, S, T: Combinator2<'t, F, S>> Combinator2<'t, F, S> for &'a mut T {
+    type ExpectsFormatter = T::ExpectsFormatter;
+    type Output = T::Output;
+    type Recoverable = T::Recoverable;
+    type Fatal = T::Fatal;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator2<'t, F, S>>::expects(self) }
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
+        <T as Combinator2<'t, F, S>>::parse(self, input)
+    }
+}
+
+
+
 /// A trait that unifies snack combinators that are trying different parsing paths. This in
 /// contrast to the [`Combinator2`], which assumes that combinators are doing all paths
 /// sequentially (see it for more information).
@@ -231,6 +249,22 @@ pub trait BranchingCombinator<'t, F, S> {
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
     fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
+}
+
+// Default impl for pointer-like types
+impl<'a, 't, F, S, T: BranchingCombinator<'t, F, S>> BranchingCombinator<'t, F, S> for &'a mut T {
+    type ExpectsFormatter = T::ExpectsFormatter;
+    type Output = T::Output;
+    type Recoverable = T::Recoverable;
+    type Fatal = T::Fatal;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, F, S>>::expects(self) }
+
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
+        <T as BranchingCombinator<'t, F, S>>::parse(self, input)
+    }
 }
 
 

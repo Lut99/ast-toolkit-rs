@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    28 Aug 2024, 12:07:33
+//    03 Nov 2024, 19:39:34
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,8 @@
 
 use std::borrow::Cow;
 
-use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::Span;
+use ast_toolkit_span::range::SpanRange;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 
@@ -28,6 +28,13 @@ pub trait LenBytes {
     /// # Returns
     /// A `usize` with the number of bytes of length.
     fn len(&self) -> usize;
+
+    /// A convenience function for checking [`LenBytes::len() == 0`](LenBytes::len()).
+    ///
+    /// # Returns
+    /// True if the span is empty, or false otherwise.
+    #[inline]
+    fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 // Default binary impls for [`LenBytes`]
