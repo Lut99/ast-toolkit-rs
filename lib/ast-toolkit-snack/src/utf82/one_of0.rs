@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    02 Nov 2024, 12:55:08
+//    03 Nov 2024, 19:21:09
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
 use crate::span::OneOfUtf8;
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** FORMATTERS *****/
@@ -70,20 +70,18 @@ pub struct OneOf0<'t, F, S> {
     _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Expects<'t> for OneOf0<'t, F, S> {
-    type Formatter = OneOf0ExpectsFormatter<'t>;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { OneOf0ExpectsFormatter { charset: self.charset } }
-}
 impl<'t, F, S> Combinator2<'t, F, S> for OneOf0<'t, F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
+    type ExpectsFormatter = OneOf0ExpectsFormatter<'t>;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { OneOf0ExpectsFormatter { charset: self.charset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    02 Nov 2024, 12:46:10
+//    03 Nov 2024, 19:25:26
 //  Auto updated?
 //    Yes
 //
@@ -19,9 +19,9 @@ use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
 pub use super::super::complete::while1::{While1ExpectsFormatter, While1Recoverable};
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, WhileUtf8};
-use crate::{Combinator2, Expects};
 
 
 /***** COMBINATORS *****/
@@ -32,21 +32,19 @@ pub struct While1<P, F, S> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<P, F, S> Expects<'static> for While1<P, F, S> {
-    type Formatter = While1ExpectsFormatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { While1ExpectsFormatter }
-}
 impl<P, F, S> Combinator2<'static, F, S> for While1<P, F, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
     F: Clone,
     S: Clone + LenBytes + WhileUtf8,
 {
+    type ExpectsFormatter = While1ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = While1Recoverable<F, S>;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    02 Nov 2024, 12:55:31
+//    03 Nov 2024, 19:24:49
 //  Auto updated?
 //    Yes
 //
@@ -20,9 +20,9 @@ use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
 pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, OneOf1Recoverable};
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, OneOfUtf8};
-use crate::{Combinator2, Expects};
 
 
 /***** COMBINATORS *****/
@@ -33,20 +33,18 @@ pub struct OneOf1<'t, F, S> {
     _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Expects<'t> for OneOf1<'t, F, S> {
-    type Formatter = OneOf1ExpectsFormatter<'t>;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { OneOf1ExpectsFormatter { charset: self.charset } }
-}
 impl<'t, F, S> Combinator2<'t, F, S> for OneOf1<'t, F, S>
 where
     F: Clone,
     S: Clone + LenBytes + OneOfUtf8,
 {
+    type ExpectsFormatter = OneOf1ExpectsFormatter<'t>;
     type Output = Span<F, S>;
     type Recoverable = OneOf1Recoverable<'t, F, S>;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { OneOf1ExpectsFormatter { charset: self.charset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

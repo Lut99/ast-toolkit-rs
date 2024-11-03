@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    03 Nov 2024, 11:19:08
+//    03 Nov 2024, 19:26:18
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spanning};
 
 use crate::result::SnackError;
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** IMPLEMENTATIONS *****/
@@ -138,22 +138,20 @@ macro_rules! tuple_comb_impl {
                 /// The internal combinators making up the tuple.
                 pub(crate) combs: ([<C $fi>], $([<C $i>]),*),
             }
-            impl<'t, [<C $fi>]: Expects<'t> $(, [<C $i>]: Expects<'t>)*> Expects<'t> for [<Tuple $li>]<[<C $fi>] $(, [<C $i>])*> {
-                type Formatter = [<Tuple $li ExpectsFormatter>]<[<C $fi>]::Formatter $(, [<C $i>]::Formatter)*>;
-
-                #[inline]
-                fn expects(&self) -> Self::Formatter {
-                    [<Tuple $li ExpectsFormatter>] { fmts: (self.combs.$fi.expects(), $(self.combs.$i.expects(),)*) }
-                }
-            }
             impl<'t, F, S, [<C $fi>] $(, [<C $i>])*> Combinator2<'t, F, S> for [<Tuple $li>]<[<C $fi>] $(, [<C $i>])*>
             where
                 [<C $fi>]: Combinator2<'t, F, S>,
                 $([<C $i>]: Combinator2<'t, F, S>,)*
             {
+                type ExpectsFormatter = [<Tuple $li ExpectsFormatter>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                 type Output = ([<C $fi>]::Output, $([<C $i>]::Output),*);
                 type Recoverable = [<Tuple $li Error>]<[<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*>;
                 type Fatal = [<Tuple $li Error>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
+
+                #[inline]
+                fn expects(&self) -> Self::ExpectsFormatter {
+                    [<Tuple $li ExpectsFormatter>] { fmts: (self.combs.$fi.expects(), $(self.combs.$i.expects(),)*) }
+                }
 
                 fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
                     // We collect the results as we find them

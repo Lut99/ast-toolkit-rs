@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:45:04
 //  Last edited:
-//    02 Nov 2024, 12:50:34
+//    03 Nov 2024, 19:21:36
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
 use crate::span::WhileUtf8;
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** FORMATTERS *****/
@@ -52,21 +52,19 @@ pub struct While0<P, F, S> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<P, F, S> Expects<'static> for While0<P, F, S> {
-    type Formatter = While0ExpectsFormatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { While0ExpectsFormatter }
-}
 impl<P, F, S> Combinator2<'static, F, S> for While0<P, F, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
     F: Clone,
     S: Clone + WhileUtf8,
 {
+    type ExpectsFormatter = While0ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { While0ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

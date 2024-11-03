@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    03 Nov 2024, 11:56:31
+//    03 Nov 2024, 19:26:38
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, SpannableEq, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** ERRORS *****/
@@ -131,20 +131,18 @@ pub struct Consume<C, F, S> {
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C: Expects<'t>, F, S> Expects<'t> for Consume<C, F, S> {
-    type Formatter = ConsumeExpectsFormatter<C::Formatter>;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { ConsumeExpectsFormatter { fmt: self.comb.expects() } }
-}
 impl<'t, C, F, S> Combinator2<'t, F, S> for Consume<C, F, S>
 where
     C: Combinator2<'t, F, S>,
     S: Spannable,
 {
+    type ExpectsFormatter = ConsumeExpectsFormatter<C::ExpectsFormatter>;
     type Output = C::Output;
     type Recoverable = ConsumeRecoverable<C::Recoverable, F, S>;
     type Fatal = C::Fatal;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { ConsumeExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -184,10 +182,10 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::consume;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello");

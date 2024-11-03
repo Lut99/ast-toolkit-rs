@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    02 Nov 2024, 13:02:03
+//    03 Nov 2024, 19:17:54
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,7 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spanning};
 
 use crate::result::{Error, Result as SResult, SnackError};
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{BranchingCombinator, Combinator2, ExpectsFormatter};
 
 
 /***** HELPER MACROS *****/
@@ -50,7 +50,7 @@ macro_rules! tuple_branchable_expected_impl {
 }
 
 /// Implements [`Combinator`] for a particular tuple for us.
-macro_rules! tuple_branchable_impl {
+macro_rules! tuple_branching_comb_impl {
     // Non-empty tuple implementation
     (impl => $li:tt : $fi:tt $(, $i:tt)*) => {
         paste::paste! {
@@ -165,21 +165,21 @@ macro_rules! tuple_branchable_impl {
             /***** IMPL *****/
             // Then implement Branchable for the tuple
             paste::paste!(
-                impl<'t, F: Clone, S: Clone, O, [<C $fi>]: Combinator2<'t, F, S, Output = O> $(, [<C $i>]: Combinator2<'t, F, S, Output = O>)*> Branchable<'t, F, S> for ([<C $fi>], $([<C $i>],)*) {
-                    type Formatter = [< Alt $li Formatter >]<[<C $fi>]::Formatter $(, [<C $i>]::Formatter)*>;
+                impl<'t, F: Clone, S: Clone, O, [<C $fi>]: Combinator2<'t, F, S, Output = O> $(, [<C $i>]: Combinator2<'t, F, S, Output = O>)*> BranchingCombinator<'t, F, S> for ([<C $fi>], $([<C $i>],)*) {
+                    type ExpectsFormatter = [< Alt $li Formatter >]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
-                    type Recoverable = [<Alt $li Recoverable>]<F, S, [<C $fi>]::Formatter $(, [<C $i>]::Formatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*>;
+                    type Recoverable = [<Alt $li Recoverable>]<F, S, [<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*>;
                     type Fatal = [<Alt $li Fatal>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
 
                     #[inline]
-                    fn expects(&self) -> Self::Formatter {
+                    fn expects(&self) -> Self::ExpectsFormatter {
                         [< Alt $li Formatter >] {
                             fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
                         }
                     }
 
                     #[inline]
-                    fn branch(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
+                    fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
                         // We attempt to parse first, collecting errors as they occur
                         let mut fails: (MaybeUninit<[<C $fi>]::Recoverable>, $(MaybeUninit<[<C $i>]::Recoverable>),*) = (MaybeUninit::<[<C $fi>]::Recoverable>::uninit(), $(MaybeUninit::<[<C $i>]::Recoverable>::uninit()),*);
                         match self.$fi.parse(input.clone()) {
@@ -216,39 +216,39 @@ macro_rules! tuple_branchable_impl {
 
     // Done with reversing the arguments; call us forwardly
     ($li:tt: reverse: $($i:tt),*) => {
-        tuple_branchable_impl!(impl => $li: $($i),*);
+        tuple_branching_comb_impl!(impl => $li: $($i),*);
     };
     // More to reverse
     ($li:tt: $fi:tt $(, $i:tt)* reverse: $($ri:tt),*) => {
-        tuple_branchable_impl!($li: $($i),* reverse: $fi $(, $ri)*);
+        tuple_branching_comb_impl!($li: $($i),* reverse: $fi $(, $ri)*);
     };
 }
 
 /// Implements [`Combinator`] for various sizes of tuples for us.
-macro_rules! tuple_branchable_impls {
+macro_rules! tuple_branching_comb_impls {
     // Base case; empty tuple implementation (we don't do that here)
     (impl:) => {};
     // "Forward" run of all the arguments once reversed
     (impl: ($fli:tt, $fi:tt) $(, ($li:tt, $i:tt))*) => {
         // Build the smaller edition first
-        tuple_branchable_impls!(impl: $(($li, $i)),*);
+        tuple_branching_comb_impls!(impl: $(($li, $i)),*);
 
         // Then implement this length
-        tuple_branchable_impl!($fli: $fi $(, $i)* reverse:);
+        tuple_branching_comb_impl!($fli: $fi $(, $i)* reverse:);
     };
 
     // More to reverse
     (($fli:tt, $fi:tt) $(, ($li:tt, $i:tt))* reverse: $(($rli:tt, $ri:tt)),*) => {
-        tuple_branchable_impls!($(($li, $i)),* reverse: ($fli, $fi) $(, ($rli, $ri))*);
+        tuple_branching_comb_impls!($(($li, $i)),* reverse: ($fli, $fi) $(, ($rli, $ri))*);
     };
     // Done with reversing the arguments; call us forwardly
     (reverse: $(($li:tt, $i:tt)),*) => {
-        tuple_branchable_impls!(impl: $(($li, $i)),*);
+        tuple_branching_comb_impls!(impl: $(($li, $i)),*);
     };
 
     // Calling interface
     ($(($li:tt, $i:tt)),*) => {
-        tuple_branchable_impls!($(($li, $i)),* reverse:);
+        tuple_branching_comb_impls!($(($li, $i)),* reverse:);
     }
 }
 
@@ -256,70 +256,26 @@ macro_rules! tuple_branchable_impls {
 
 
 
-/***** AUXILLARY *****/
-/// Abstracts over types that can be [`branch()`]ed over. Most notably, these are tuples.
-pub trait Branchable<'t, F, S> {
-    /// The formatter for the branched combinators combined.
-    type Formatter: 't + ExpectsFormatter;
-    /// The output type shared by all branched combinators.
-    type Output;
-    /// The custom recoverable error type of all branched combinators combined.
-    type Recoverable;
-    /// The custom fatal error type of all branched combinators combined.
-    type Fatal;
-
-
-    /// Returns an [`ExpectsFormatter`] that does the actual formatting.
-    ///
-    /// This [`Formatter`] may implement [`Display`] to show a fully-fledged error string.
-    ///
-    /// # Returns
-    /// A [`Self::Formatter`](Expects::Formatter) that can be used to create the expects string.
-    fn expects(&self) -> Self::Formatter;
-
-    /// Runs all combinators in this Branchable.
-    ///
-    /// # Arguments
-    /// - `input`: The input to run it with.
-    ///
-    /// # Returns
-    /// A [`Result::Ok`] with the result of the _first_ combinator that returned OK.
-    ///
-    /// # Fails
-    /// This function returns [`Result::Fail`] with [`Failure::Branch`] if _all_ internal combinators failed.
-    ///
-    /// # Errors
-    /// This function returns [`Result:Error`] if _any_ of the internal combinators failed./// The output type for this Combinator.
-    fn branch(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
-}
-
-// Default impls for tuples
-tuple_branchable_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8), (10, 9), (11, 10), (12, 11));
-
-
-
-
-
 /***** COMBINATORS *****/
+// Default impls for tuples
+tuple_branching_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8), (10, 9), (11, 10), (12, 11));
+
 /// Actual implementation of [`alt()`].
 pub struct Alt<B, F, S> {
     branches: B,
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<'t, B: Branchable<'t, F, S>, F, S> Expects<'t> for Alt<B, F, S> {
-    type Formatter = B::Formatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { self.branches.expects() }
-}
-impl<'t, B: Branchable<'t, F, S>, F, S> Combinator2<'t, F, S> for Alt<B, F, S> {
+impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator2<'t, F, S> for Alt<B, F, S> {
+    type ExpectsFormatter = B::ExpectsFormatter;
     type Output = B::Output;
     type Recoverable = B::Recoverable;
     type Fatal = B::Fatal;
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> { self.branches.branch(input) }
+    fn expects(&self) -> Self::ExpectsFormatter { self.branches.expects() }
+    #[inline]
+    fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> { self.branches.parse(input) }
 }
 
 
@@ -330,16 +286,26 @@ impl<'t, B: Branchable<'t, F, S>, F, S> Combinator2<'t, F, S> for Alt<B, F, S> {
 
 /// Tries different possible combinators and returns the first one that succeeds.
 ///
-/// The combinators are tried in-order. They must all return the same result (so use enums if you want to have options).
+/// The combinators are tried in-order. They must all return the same result (so use enums if you
+/// want to have options).
+///
+/// In essence, all this combinator does is turn something [`BranchingCombinator`] (i.e., join
+/// combinators by disjunction) into a [`Combinator2`] for compatability with other combinators.
 ///
 /// # Arguments
-/// - `branches`: Some [`Branchable`] type that can be given as input. Tuples up to and including size 12 implement this.
+/// - `branches`: Some [`BranchingCombinator`] type that can be given as input. Tuples up to and
+///   including size 12 implement this.
 ///
 /// # Returns
 /// A combinator [`Alt`] that will run the given branches and try them one-by-one.
 ///
-/// # Fails
-/// The returned combinator may fail if _all_ combinators in `branches` fails.
+/// # Errors
+/// The returned combinator may fail recoverably if _all_ combinators in the given `branches` fail
+/// recoverably.
+///
+/// The returned combinator may fail fatally if _any_ combinator in the given `branches` fails
+/// fatally. This behaviour short-circuits (i.e., it is guaranteed no combinators after the failing
+/// one are called).
 ///
 /// # Examples
 /// ```rust

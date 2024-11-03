@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    03 Nov 2024, 12:34:07
+//    03 Nov 2024, 19:27:01
 //  Auto updated?
 //    Yes
 //
@@ -18,8 +18,8 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
 
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, Expects};
 
 
 /***** ERRORS *****/
@@ -92,20 +92,18 @@ pub struct MapFallible<C, P, F, S> {
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C: Expects<'t>, P, F, S> Expects<'t> for MapFallible<C, P, F, S> {
-    type Formatter = C::Formatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { self.comb.expects() }
-}
 impl<'t, C, P, O1, O2, E1, E2, F, S> Combinator2<'t, F, S> for MapFallible<C, P, F, S>
 where
     C: Combinator2<'t, F, S, Output = O1>,
     P: FnMut(O1) -> Result<O2, SnackError<F, S, E1, E2>>,
 {
+    type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
     type Recoverable = MapFallibleError<C::Recoverable, E1>;
     type Fatal = MapFallibleError<C::Fatal, E2>;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
     fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -145,10 +143,10 @@ where
 /// use std::convert::Infallible;
 /// use std::num::ParseIntError;
 ///
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::map_fallible;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::digit1;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "128");

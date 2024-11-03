@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    02 Nov 2024, 12:38:37
+//    03 Nov 2024, 19:24:09
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,7 @@ use ast_toolkit_span::{Span, SpannableEq, Spanning};
 use super::one_of1;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfUtf8;
-use crate::{Combinator2, Expects, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** ERRORS *****/
@@ -90,20 +90,18 @@ pub struct Whitespace1<F, S> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<F, S> Expects<'static> for Whitespace1<F, S> {
-    type Formatter = Whitespace1ExpectsFormatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { Whitespace1ExpectsFormatter }
-}
 impl<F, S> Combinator2<'static, F, S> for Whitespace1<F, S>
 where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
+    type ExpectsFormatter = Whitespace1ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = Whitespace1Recoverable<F, S>;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { Whitespace1ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

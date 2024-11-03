@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:11:28
 //  Last edited:
-//    03 Nov 2024, 12:13:38
+//    03 Nov 2024, 19:27:24
 //  Auto updated?
 //    Yes
 //
@@ -14,8 +14,8 @@
 
 use std::marker::PhantomData;
 
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, Expects};
 
 
 /***** COMBINATORS *****/
@@ -28,20 +28,18 @@ pub struct MapFatal<C, P, F, S> {
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C: Expects<'t>, P, F, S> Expects<'t> for MapFatal<C, P, F, S> {
-    type Formatter = C::Formatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { self.comb.expects() }
-}
 impl<'t, C, P, E1, E2, F, S> Combinator2<'t, F, S> for MapFatal<C, P, F, S>
 where
     C: Combinator2<'t, F, S, Fatal = E1>,
     P: FnMut(E1) -> E2,
 {
+    type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
     type Recoverable = C::Recoverable;
     type Fatal = E2;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
     fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -74,11 +72,11 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::map_fatal;
 /// use ast_toolkit_snack::error2::cut;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// #[derive(Debug, PartialEq)]

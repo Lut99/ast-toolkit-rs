@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    02 Nov 2024, 12:52:55
+//    03 Nov 2024, 19:24:33
 //  Auto updated?
 //    Yes
 //
@@ -19,9 +19,9 @@ use ast_toolkit_span::{Span, Spanning as _};
 
 pub use super::super::complete::digit1::{Digit1ExpectsFormatter, Digit1Recoverable};
 use super::while1;
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, WhileUtf8};
-use crate::{Combinator2, Expects};
 
 
 /***** COMBINATORS *****/
@@ -31,20 +31,18 @@ pub struct Digit1<F, S> {
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<F, S> Expects<'static> for Digit1<F, S> {
-    type Formatter = Digit1ExpectsFormatter;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { Digit1ExpectsFormatter }
-}
 impl<F, S> Combinator2<'static, F, S> for Digit1<F, S>
 where
     F: Clone,
     S: Clone + LenBytes + WhileUtf8,
 {
+    type ExpectsFormatter = Digit1ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = Digit1Recoverable<F, S>;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { Digit1ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    02 Nov 2024, 12:39:28
+//    03 Nov 2024, 19:25:09
 //  Auto updated?
 //    Yes
 //
@@ -19,9 +19,9 @@ use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
 pub use super::super::complete::tag::{TagExpectsFormatter, TagRecoverable};
+use crate::Combinator2;
 use crate::result::SnackError;
 use crate::span::{LenBytes, MatchBytes};
-use crate::{Combinator2, Expects};
 
 
 /***** COMBINATORS *****/
@@ -32,20 +32,18 @@ pub struct Tag<'t, F, S> {
     _f:  PhantomData<F>,
     _s:  PhantomData<S>,
 }
-impl<'t, F, S> Expects<'t> for Tag<'t, F, S> {
-    type Formatter = TagExpectsFormatter<'t>;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { TagExpectsFormatter { tag: self.tag } }
-}
 impl<'t, F, S> Combinator2<'t, F, S> for Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + LenBytes + MatchBytes,
 {
+    type ExpectsFormatter = TagExpectsFormatter<'t>;
     type Output = Span<F, S>;
     type Recoverable = TagRecoverable<'t, F, S>;
     type Fatal = Infallible;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
