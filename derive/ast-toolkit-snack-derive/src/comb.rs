@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    23 Aug 2024, 11:57:40
+//    28 Nov 2024, 14:37:56
 //  Auto updated?
 //    Yes
 //
@@ -83,6 +83,8 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
 /// # Returns
 /// A [`TokenStream2`] with the generated `ExpectsFormatter` implementation.
 fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> TokenStream2 {
+    let mut exp_fmt: Path = attrs.prefix.clone();
+    exp_fmt.segments.push(PathSegment { ident: Ident::new("ExpectsFormatter", Span::call_site()), arguments: PathArguments::None });
     let sname: String = func.sig.ident.to_string();
     let vis: &Visibility = &func.vis;
     let fname: &Ident = attrs.fmt.as_ref().unwrap();
@@ -97,11 +99,11 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 write!(f, "Expected ")?;
-                <Self as ::ast_toolkit_snack::ExpectsFormatter>::expects_fmt(self, f, 0)
+                <Self as #exp_fmt>::expects_fmt(self, f, 0)
             }
         }
         #[automatically_derived]
-        impl ::ast_toolkit_snack::ExpectsFormatter for #fname {
+        impl #exp_fmt for #fname {
             #[inline]
             fn expects_fmt(&self, f: &mut ::std::fmt::Formatter, _ident: usize) -> ::std::fmt::Result { ::std::write!(f, #exps) }
         }
@@ -139,11 +141,16 @@ fn generate_combinator(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> T
 /// # Returns
 /// A [`TokenStream2`] with the generated `Expects` implementation.
 fn generate_expects_impl(attrs: &CombinatorAttributes) -> TokenStream2 {
+    // Prepare the trait path
+    let mut exp: Path = attrs.prefix.clone();
+    exp.segments.push(PathSegment { ident: Ident::new("Expects", Span::call_site()), arguments: PathArguments::None });
+
+    // Generate the impl
     let fname: &Ident = attrs.fmt.as_ref().unwrap();
     let cname: &Ident = attrs.comb.as_ref().unwrap();
     quote! {
         #[automatically_derived]
-        impl<F, S> ::ast_toolkit_snack::Expects<'static> for #cname<F, S> {
+        impl<F, S> #exp<'static> for #cname<F, S> {
             type Formatter = #fname;
 
             #[inline]
@@ -188,13 +195,17 @@ fn generate_combinator_impl(attrs: &CombinatorAttributes, func: &CombinatorFunc)
     std::mem::swap(&mut prm, &mut sig.generics.params);
     std::mem::swap(&mut whr, &mut sig.generics.where_clause);
 
+    // Prepare the combinator path
+    let mut comb = attrs.prefix.clone();
+    comb.segments.push(PathSegment { ident: Ident::new("Combinator", Span::call_site()), arguments: PathArguments::None });
+
     // Write the impl
     let cname: &Ident = attrs.comb.as_ref().unwrap();
     let (out, err): (&Type, &Type) = (&attrs.output, &attrs.error);
     let body: &Block = &func.body;
     quote! {
         #[automatically_derived]
-        impl<#prm> ::ast_toolkit_snack::Combinator<'static, F, S> for #cname<F, S> #whr {
+        impl<#prm> #comb<'static, F, S> for #cname<F, S> #whr {
             type Output = #out;
             type Error = #err;
 
@@ -264,10 +275,12 @@ impl<S: AsRef<str>> Display for CamelCaseifyer<S> {
 /// Represents the parsed information from the attribute.
 #[derive(Clone, Debug)]
 struct CombinatorAttributes {
+    /// The path to prefix to paths referring to the `ast_toolkit_snack` crate.
+    prefix: Path,
     /// The name of the combinator to generate. If omitted, equals the camelcase version of the function name.
-    comb: Option<Ident>,
+    comb:   Option<Ident>,
     /// The name of the formatter to generate. If omitted, equals the combinator's name + `ExpectsFormatter`.
-    fmt:  Option<Ident>,
+    fmt:    Option<Ident>,
 
     /// The string describing what to expect.
     expected: ExpectedString,
@@ -281,6 +294,11 @@ impl Parse for CombinatorAttributes {
         let total: Span = input.span();
 
         // Parse the input as a list of metas
+        let mut prefix = {
+            let mut segments = Punctuated::new();
+            segments.push(PathSegment { ident: Ident::new("ast_toolkit_snack", Span::call_site()), arguments: PathArguments::None });
+            Path { leading_colon: Some(PathSep::default()), segments }
+        };
         let mut comb: Option<Ident> = None;
         let mut fmt: Option<Ident> = None;
         let mut expected: Option<ExpectedString> = None;
@@ -289,6 +307,9 @@ impl Parse for CombinatorAttributes {
         let attrs: Punctuated<AttrNameValue, Token![,]> = Punctuated::parse_terminated(input)?;
         for attr in attrs {
             match attr {
+                AttrNameValue::Snack(v) => {
+                    prefix = v;
+                },
                 AttrNameValue::Combinator(v) => {
                     comb = Some(v);
                 },
@@ -328,13 +349,15 @@ impl Parse for CombinatorAttributes {
         };
 
         // OK, construct self
-        Ok(Self { comb, fmt, expected, output, error })
+        Ok(Self { prefix, comb, fmt, expected, output, error })
     }
 }
 
 /// Represents a name/value pair for the attributes.
 #[derive(Clone, Debug)]
 enum AttrNameValue {
+    /// The root path prefix.
+    Snack(Path),
     /// It's the name of the combinator class.
     Combinator(Ident),
     /// It's the name of the formatter class.
@@ -352,7 +375,9 @@ impl Parse for AttrNameValue {
         // Parse the identifier first, and  then always expected an equals
         let ident: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
-        if ident == "comb" || ident == "combinator" || ident == "Combinator" {
+        if ident == "snack" || ident == "crate" || ident == "prefix" {
+            Ok(Self::Snack(input.parse::<Path>()?))
+        } else if ident == "comb" || ident == "combinator" || ident == "Combinator" {
             Ok(Self::Combinator(input.parse::<Ident>()?))
         } else if ident == "fmt" || ident == "formatter" || ident == "Formatter" {
             Ok(Self::Formatter(input.parse::<Ident>()?))
