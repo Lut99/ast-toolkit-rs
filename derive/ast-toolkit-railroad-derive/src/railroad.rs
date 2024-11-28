@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    28 Nov 2024, 13:44:23
+//    28 Nov 2024, 14:40:14
 //  Auto updated?
 //    Yes
 //
@@ -28,25 +28,22 @@ use syn::{Attribute, Data, Expr, ExprLit, Generics, Ident, Lit, LitInt, LitStr, 
 macro_rules! path {
     // With leading colon
     (:: $($path:tt)*) => {
-        Path {
-            leading_colon: Some(PathSep::default()),
-            segments: {
-                let mut punc: Punctuated<PathSegment,PathSep> = Punctuated::new();
-                _path_segments!(punc, $($path)*);
-                punc
-            },
+        {
+            let mut path = Path {
+                leading_colon: Some(PathSep::default()),
+                segments: Punctuated::new(),
+            };
+            _path_segments!(path, $($path)*);
+            path
         }
     };
 
     // W/o leading colon
     ($prefix:expr, $($path:tt)*) => {
-        Path {
-            leading_colon: None,
-            segments: {
-                let mut punc = $prefix.segments.clone();
-                _path_segments!(punc, $($path)*);
-                punc
-            },
+        {
+            let mut path = $prefix.clone();
+            _path_segments!(path, $($path)*);
+            path
         }
     };
 }
@@ -54,12 +51,12 @@ macro_rules! _path_segments {
     ($punc:ident,) => {};
 
     ($punc:ident, $seg:ident $($t:tt)*) => {
-        $punc.push(PathSegment { ident: Ident::new(stringify!($seg), Span::call_site()), arguments: PathArguments::None });
+        $punc.segments.push(PathSegment { ident: Ident::new(stringify!($seg), Span::call_site()), arguments: PathArguments::None });
         _path_segments!($punc, $($t)*);
     };
 
     ($punc:ident, :: $($t:tt)*) => {
-        $punc.push_punct(PathSep::default());
+        $punc.segments.push_punct(PathSep::default());
         _path_segments!($punc, $($t)*);
     };
 
