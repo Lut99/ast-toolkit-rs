@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    30 Aug 2024, 10:30:55
+//    28 Nov 2024, 16:06:13
 //  Auto updated?
 //    Yes
 //
@@ -38,8 +38,23 @@ pub trait Spanning<F, S> {
     /// Returns some [`Span`] representing self's relation to the source text it was parsed from.
     ///
     /// # Returns
-    /// A new [`Span`] that represents the spanned area.
+    /// Some [`Span`] that represents the spanned area.
+    ///
+    /// Note that, because this function takes `self` by reference, the given span may be a copy.
+    /// You can prefer to use [`IntoSpanning::into_span()`] when possible to get it by ownership
+    /// instead.
     fn span(&self) -> Span<F, S>;
+
+    /// Returns some [`Span`] representing self's relation to the source text it was parsed from.
+    ///
+    /// # Returns
+    /// Some [`Span`] that represents the spanned area.
+    fn into_span(self) -> Span<F, S>
+    where
+        Self: Sized,
+    {
+        self.span()
+    }
 }
 
 // Default impls

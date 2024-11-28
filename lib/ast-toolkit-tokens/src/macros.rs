@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    28 Nov 2024, 13:19:00
+//    28 Nov 2024, 16:08:46
 //  Auto updated?
 //    Yes
 //
@@ -82,6 +82,16 @@ macro_rules! utf8_token {
         // Token impls
         impl<F, S> $crate::Utf8Token<F, S> for $name<F, S> {
             const TOKEN: &'static str = $token;
+        }
+        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        where
+            F: ::core::clone::Clone,
+            S: ::core::clone::Clone,
+        {
+            #[inline]
+            fn span(&self) -> $crate::__private::Span<F, S> { self.span.clone() }
+            #[inline]
+            fn into_span(self) -> $crate::__private::Span<F, S> { self.span }
         }
 
         // Convertion impls
@@ -204,6 +214,15 @@ macro_rules! utf8_delimiter {
         impl<F, S> $crate::Utf8Delimiter<F, S> for $name<F, S> {
             const OPEN_TOKEN: &'static str = $open;
             const CLOSE_TOKEN: &'static str = $close;
+        }
+        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        where
+            F: ::core::clone::Clone,
+            S: ::core::clone::Clone + $crate::__private::Spannable,
+        {
+            #[inline]
+            #[track_caller]
+            fn span(&self) -> $crate::__private::Span<F, S> { self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files")) }
         }
 
         // Convertion impls
