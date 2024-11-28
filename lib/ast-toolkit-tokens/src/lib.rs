@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:37:40
 //  Last edited:
-//    28 Nov 2024, 13:17:46
+//    28 Nov 2024, 14:44:00
 //  Auto updated?
 //    Yes
 //
@@ -24,6 +24,7 @@ use ast_toolkit_span::Span;
 
 // Re-exports
 pub mod __private {
+    #[cfg(feature = "railroad")]
     pub use ast_toolkit_railroad as railroad;
     pub use ast_toolkit_span::Span;
 }
