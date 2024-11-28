@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    26 Mar 2024, 18:05:24
+//    28 Nov 2024, 16:55:22
 //  Auto updated?
 //    Yes
 //
@@ -52,18 +52,18 @@ macro_rules! punct {
     // Pop first value
     (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_first($value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+        $crate::punct!(__recursion $list $($($items)+)?);
     };
     // Pop punctuation, value pairs
     (__recursion $list:ident p => $punct:expr, v => $value:expr $(, $($items:tt)+)?) => {
         $list.push($punct, $value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+        $crate::punct!(__recursion $list $($($items)+)?);
     };
 
     [$($items:tt)*] => {{
         // Call the macro
-        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
-        ::ast_toolkit_punctuated::punct!(__recursion punct $($items)*);
+        let mut punct = $crate::normal::Punctuated::new();
+        $crate::punct!(__recursion punct $($items)*);
         punct
     }};
 }

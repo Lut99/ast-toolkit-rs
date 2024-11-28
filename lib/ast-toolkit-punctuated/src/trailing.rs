@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    26 Mar 2024, 18:05:42
+//    28 Nov 2024, 16:55:34
 //  Auto updated?
 //    Yes
 //
@@ -59,18 +59,18 @@ macro_rules! punct_trail {
     // Pop values
     (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_value($value);
-        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::::punct_trail!(__recursion $list $($($items)+)?);
     };
     // Pop punctuation
     (__recursion $list:ident p => $punct:expr $(, $($items:tt)+)?) => {
         $list.push_punct($punct);
-        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::::punct_trail!(__recursion $list $($($items)+)?);
     };
 
     [$($items:tt)*] => {{
         // Call the macro
-        let mut punct = ::ast_toolkit_punctuated::trailing::PunctuatedTrailing::new();
-        ::ast_toolkit_punctuated::punct_trail!(__recursion punct $($items)*);
+        let mut punct = $crate::::trailing::PunctuatedTrailing::new();
+        $crate::::punct_trail!(__recursion punct $($items)*);
         punct
     }};
 }
