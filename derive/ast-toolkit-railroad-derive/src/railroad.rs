@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    28 Nov 2024, 13:41:53
+//    28 Nov 2024, 13:44:23
 //  Auto updated?
 //    Yes
 //
@@ -499,6 +499,16 @@ impl ToplevelDelimAttributes {
                                 },
 
                                 Meta::Path(p) => {
+                                    return Err(Diagnostic::spanned(
+                                        p.span(),
+                                        Level::Error,
+                                        format!(
+                                            "Unknown ToDelimNode-attribute '{}' in '#[railroad(...)]'",
+                                            p.span().source_text().unwrap_or_else(String::new)
+                                        ),
+                                    ));
+                                },
+                                Meta::List(l) => {
                                     if l.path.is_ident("prefix") {
                                         path = match l.parse_args() {
                                             Ok(path) => path,
@@ -506,24 +516,14 @@ impl ToplevelDelimAttributes {
                                         };
                                     } else {
                                         return Err(Diagnostic::spanned(
-                                            p.span(),
+                                            l.path.span(),
                                             Level::Error,
                                             format!(
                                                 "Unknown ToDelimNode-attribute '{}' in '#[railroad(...)]'",
-                                                p.span().source_text().unwrap_or_else(String::new)
+                                                l.path.span().source_text().unwrap_or_else(String::new)
                                             ),
                                         ));
                                     }
-                                },
-                                Meta::List(l) => {
-                                    return Err(Diagnostic::spanned(
-                                        l.path.span(),
-                                        Level::Error,
-                                        format!(
-                                            "Unknown ToDelimNode-attribute '{}' in '#[railroad(...)]'",
-                                            l.path.span().source_text().unwrap_or_else(String::new)
-                                        ),
-                                    ));
                                 },
                             }
                         }
