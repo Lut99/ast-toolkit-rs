@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    11 Sep 2024, 12:01:37
+//    28 Nov 2024, 17:02:19
 //  Auto updated?
 //    Yes
 //
@@ -365,6 +365,7 @@ where
 /// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::Custom("that's not hello world!")))));
 /// ```
 #[inline]
+#[track_caller]
 pub const fn transmute<'t, F, S, C, E2>(comb: C) -> Transmute<F, S, C, E2>
 where
     C: Combinator<'t, F, S>,
