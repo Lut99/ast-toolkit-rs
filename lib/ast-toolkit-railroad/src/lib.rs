@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    26 Feb 2024, 17:10:40
+//    28 Nov 2024, 13:00:52
 //  Auto updated?
 //    Yes
 //
@@ -337,11 +337,11 @@ propagate_impl!(Arc<T>);
 propagate_impl!(lifetime MutexGuard<'a, T>);
 propagate_impl!(lifetime RwLockReadGuard<'a, T>);
 propagate_impl!(lifetime RwLockWriteGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::MutexGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::RwLockReadGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::RwLockWriteGuard<'a, T>);
 
 // Propagation for `Option`, but with optional tracks around it.

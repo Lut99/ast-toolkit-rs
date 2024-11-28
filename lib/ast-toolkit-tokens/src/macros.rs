@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    11 Sep 2024, 14:07:46
+//    28 Nov 2024, 12:57:29
 //  Auto updated?
 //    Yes
 //
@@ -61,6 +61,10 @@ macro_rules! utf8_token {
 
         // Standard impls
         impl<F, S> ::std::cmp::Eq for $name<F, S> {}
+        impl<F, S> ::std::hash::Hash for $name<F, S> {
+            #[inline]
+            fn hash<H: ::std::hash::Hasher>(&self, _hasher: &mut H) {}
+        }
         impl<F, S> ::std::cmp::PartialEq for $name<F, S> {
             /// Compares two tokens of the same type.
             ///
@@ -80,23 +84,50 @@ macro_rules! utf8_token {
             const TOKEN: &'static str = $token;
         }
 
-        // Railroad impls (if enabled)
-        #[cfg(feature = "railroad")]
-        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
-            type Node = ::ast_toolkit_railroad::railroad::Terminal;
-
-            #[inline]
-            fn railroad() -> Self::Node {
-                ::ast_toolkit_railroad::railroad::Terminal::new($token_desc.into())
-            }
-        }
-
         // Convertion impls
         impl<F, S> ::std::convert::From<::ast_toolkit_span::Span<F, S>> for $name<F, S> {
             #[inline]
             fn from(value: ::ast_toolkit_span::Span<F, S>) -> Self {
                 Self { span: value }
             }
+        }
+    };
+}
+
+/// Generates a ast-toolkit-railroad `ToNode` implementation for a Token that parses UTF-8 text.
+///
+/// # Arguments
+/// This macro accepts a comma-separated list of:
+/// - `$name:ident`: An identifier that is used as the macro name.
+/// - `$desc:literal`: A secondary string that will be written to the railroad diagram to represent
+///   this token's input.
+///
+/// # Generates
+/// This macro generates an impl for a type with the given `$name` that implements `ToNode`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_railroad::ToNode as _;
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_tokens::{utf8_token, utf8_token_railroad};
+///
+/// // The implementation
+/// utf8_token!(Dot, ".");
+/// utf8_token_railroad!(Dot, ".");
+///
+/// // Now you can call this!
+/// let node = Dot::<(), ()>::railroad();
+/// ```
+#[macro_export]
+#[cfg(feature = "railroad")]
+macro_rules! utf8_token_railroad {
+    ($name:ident, $desc:literal) => {
+        // Railroad impl
+        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
+            type Node = ::ast_toolkit_railroad::railroad::Terminal;
+
+            #[inline]
+            fn railroad() -> Self::Node { ::ast_toolkit_railroad::railroad::Terminal::new($desc.into()) }
         }
     };
 }
@@ -144,13 +175,17 @@ macro_rules! utf8_delimiter {
         #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
         pub struct $name<F, S> {
             #[doc = concat!("The opening delimiter `", $open, "`.\n")]
-            pub open:  Span<F, S>,
+            pub open:  ::ast_toolkit_span::Span<F, S>,
             #[doc = concat!("The closing delimiter `", $close, "`.\n")]
-            pub close: Span<F, S>,
+            pub close: ::ast_toolkit_span::Span<F, S>,
         }
 
         // Standard impls
         impl<F, S> ::std::cmp::Eq for $name<F, S> {}
+        impl<F, S> ::std::hash::Hash for $name<F, S> {
+            #[inline]
+            fn hash<H: ::std::hash::Hasher>(&self, _hasher: &mut H) {}
+        }
         impl<F, S> ::std::cmp::PartialEq for $name<F, S> {
             /// Compares two tokens of the same type.
             ///
@@ -171,37 +206,63 @@ macro_rules! utf8_delimiter {
             const CLOSE_TOKEN: &'static str = $close;
         }
 
-        // Railroad impls (if enabled)
-        #[cfg(feature = "railroad")]
-        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
-            type Node = ::ast_toolkit_railroad::railroad::Terminal;
-
-            #[inline]
-            fn railroad() -> Self::Node {
-                ::ast_toolkit_railroad::railroad::Terminal::new(concat!($open, $close).into())
-            }
-        }
-        #[cfg(feature = "railroad")]
-        impl<F, S> ::ast_toolkit_railroad::ToDelimNode for $name<F, S> {
-            type NodeOpen = ::ast_toolkit_railroad::railroad::Terminal;
-            type NodeClose = ::ast_toolkit_railroad::railroad::Terminal;
-
-            #[inline]
-            fn railroad_open() -> Self::NodeOpen {
-                ::ast_toolkit_railroad::railroad::Terminal::new($open.into())
-            }
-            #[inline]
-            fn railroad_close() -> Self::NodeClose {
-                ::ast_toolkit_railroad::railroad::Terminal::new($close.into())
-            }
-        }
-
         // Convertion impls
         impl<F, S> ::std::convert::From<(::ast_toolkit_span::Span<F, S>, ::ast_toolkit_span::Span<F, S>)> for $name<F, S> {
             #[inline]
             fn from((open, close): (::ast_toolkit_span::Span<F, S>, ::ast_toolkit_span::Span<F, S>)) -> Self {
                 Self { open, close }
             }
+        }
+    };
+}
+
+/// Generates a ast-toolkit-railroad `ToDelimNode` implementation for a delimited token that parses
+/// UTF-8 text.
+///
+/// # Arguments
+/// This macro accepts a comma-separated list of:
+/// - `$name:ident`: An identifier that is used as the macro name.
+/// - `$open:literal`: A string that will be written to the railroad diagram to represent
+///   the opening token's input.
+/// - `$close:literal`: A string that will be written to the railroad diagram to represent
+///   the closing token's input.
+///
+/// # Generates
+/// This macro generates an impl for a type with the given `$name` that implements `ToNode`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_railroad::ToDelimNode as _;
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_tokens::{utf8_delimiter, utf8_delimiter_railroad};
+///
+/// // The implementation
+/// utf8_delimiter!(Parens, "(", ")");
+/// utf8_delimiter_railroad!(Parens, "(", ")");
+///
+/// // Now you can call this!
+/// let node1 = Parens::<(), ()>::railroad_open();
+/// let node2 = Parens::<(), ()>::railroad_close();
+/// ```
+#[macro_export]
+#[cfg(feature = "railroad")]
+macro_rules! utf8_delimiter_railroad {
+    ($name:ident, $open:literal, $close:literal) => {
+        // Railroad impls
+        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
+            type Node = ::ast_toolkit_railroad::railroad::Terminal;
+
+            #[inline]
+            fn railroad() -> Self::Node { ::ast_toolkit_railroad::railroad::Terminal::new(concat!($open, $close).into()) }
+        }
+        impl<F, S> ::ast_toolkit_railroad::ToDelimNode for $name<F, S> {
+            type NodeOpen = ::ast_toolkit_railroad::railroad::Terminal;
+            type NodeClose = ::ast_toolkit_railroad::railroad::Terminal;
+
+            #[inline]
+            fn railroad_open() -> Self::NodeOpen { ::ast_toolkit_railroad::railroad::Terminal::new($open.into()) }
+            #[inline]
+            fn railroad_close() -> Self::NodeClose { ::ast_toolkit_railroad::railroad::Terminal::new($close.into()) }
         }
     };
 }
