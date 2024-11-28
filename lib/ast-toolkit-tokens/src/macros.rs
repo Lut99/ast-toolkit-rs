@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    28 Nov 2024, 12:57:29
+//    28 Nov 2024, 13:19:00
 //  Auto updated?
 //    Yes
 //
@@ -48,7 +48,7 @@
 #[macro_export]
 macro_rules! utf8_token {
     ($name:ident, $token:literal) => {
-        ::ast_toolkit_tokens::utf8_token!{ $name, $token, $token }
+        $crate::utf8_token!{ $name, $token, $token }
     };
 
     ($name:ident, $token:literal, $token_desc:literal) => {
@@ -56,7 +56,7 @@ macro_rules! utf8_token {
         #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
         pub struct $name<F, S> {
             /// The span that locates this token in the source text.
-            pub span: ::ast_toolkit_span::Span<F, S>,
+            pub span: $crate::__private::Span<F, S>,
         }
 
         // Standard impls
@@ -80,14 +80,14 @@ macro_rules! utf8_token {
         }
 
         // Token impls
-        impl<F, S> ::ast_toolkit_tokens::Utf8Token<F, S> for $name<F, S> {
+        impl<F, S> $crate::Utf8Token<F, S> for $name<F, S> {
             const TOKEN: &'static str = $token;
         }
 
         // Convertion impls
-        impl<F, S> ::std::convert::From<::ast_toolkit_span::Span<F, S>> for $name<F, S> {
+        impl<F, S> ::std::convert::From<$crate::__private::Span<F, S>> for $name<F, S> {
             #[inline]
-            fn from(value: ::ast_toolkit_span::Span<F, S>) -> Self {
+            fn from(value: $crate::__private::Span<F, S>) -> Self {
                 Self { span: value }
             }
         }
@@ -123,11 +123,11 @@ macro_rules! utf8_token {
 macro_rules! utf8_token_railroad {
     ($name:ident, $desc:literal) => {
         // Railroad impl
-        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
-            type Node = ::ast_toolkit_railroad::railroad::Terminal;
+        impl<F, S> $crate::__private::railroad::ToNode for $name<F, S> {
+            type Node = $crate::__private::railroad::railroad::Terminal;
 
             #[inline]
-            fn railroad() -> Self::Node { ::ast_toolkit_railroad::railroad::Terminal::new($desc.into()) }
+            fn railroad() -> Self::Node { $crate::__private::railroad::railroad::Terminal::new($desc.into()) }
         }
     };
 }
@@ -175,9 +175,9 @@ macro_rules! utf8_delimiter {
         #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
         pub struct $name<F, S> {
             #[doc = concat!("The opening delimiter `", $open, "`.\n")]
-            pub open:  ::ast_toolkit_span::Span<F, S>,
+            pub open:  $crate::__private::Span<F, S>,
             #[doc = concat!("The closing delimiter `", $close, "`.\n")]
-            pub close: ::ast_toolkit_span::Span<F, S>,
+            pub close: $crate::__private::Span<F, S>,
         }
 
         // Standard impls
@@ -201,15 +201,15 @@ macro_rules! utf8_delimiter {
         }
 
         // Token impls
-        impl<F, S> ::ast_toolkit_tokens::Utf8Delimiter<F, S> for $name<F, S> {
+        impl<F, S> $crate::Utf8Delimiter<F, S> for $name<F, S> {
             const OPEN_TOKEN: &'static str = $open;
             const CLOSE_TOKEN: &'static str = $close;
         }
 
         // Convertion impls
-        impl<F, S> ::std::convert::From<(::ast_toolkit_span::Span<F, S>, ::ast_toolkit_span::Span<F, S>)> for $name<F, S> {
+        impl<F, S> ::std::convert::From<($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)> for $name<F, S> {
             #[inline]
-            fn from((open, close): (::ast_toolkit_span::Span<F, S>, ::ast_toolkit_span::Span<F, S>)) -> Self {
+            fn from((open, close): ($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)) -> Self {
                 Self { open, close }
             }
         }
@@ -249,20 +249,20 @@ macro_rules! utf8_delimiter {
 macro_rules! utf8_delimiter_railroad {
     ($name:ident, $open:literal, $close:literal) => {
         // Railroad impls
-        impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
-            type Node = ::ast_toolkit_railroad::railroad::Terminal;
+        impl<F, S> $crate::__private::railroad::ToNode for $name<F, S> {
+            type Node = $crate::__private::railroad::railroad::Terminal;
 
             #[inline]
-            fn railroad() -> Self::Node { ::ast_toolkit_railroad::railroad::Terminal::new(concat!($open, $close).into()) }
+            fn railroad() -> Self::Node { $crate::__private::railroad::railroad::Terminal::new(concat!($open, $close).into()) }
         }
-        impl<F, S> ::ast_toolkit_railroad::ToDelimNode for $name<F, S> {
-            type NodeOpen = ::ast_toolkit_railroad::railroad::Terminal;
-            type NodeClose = ::ast_toolkit_railroad::railroad::Terminal;
+        impl<F, S> $crate::__private::railroad::ToDelimNode for $name<F, S> {
+            type NodeOpen = $crate::__private::railroad::railroad::Terminal;
+            type NodeClose = $crate::__private::railroad::railroad::Terminal;
 
             #[inline]
-            fn railroad_open() -> Self::NodeOpen { ::ast_toolkit_railroad::railroad::Terminal::new($open.into()) }
+            fn railroad_open() -> Self::NodeOpen { $crate::__private::railroad::railroad::Terminal::new($open.into()) }
             #[inline]
-            fn railroad_close() -> Self::NodeClose { ::ast_toolkit_railroad::railroad::Terminal::new($close.into()) }
+            fn railroad_close() -> Self::NodeClose { $crate::__private::railroad::railroad::Terminal::new($close.into()) }
         }
     };
 }

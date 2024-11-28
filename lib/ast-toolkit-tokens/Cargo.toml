@@ -8,17 +8,14 @@ description = "Provides tools for defining tokens (i.e., nodes in an AST that re
 
 
 [dependencies]
+ast-toolkit-railroad = { path = "../ast-toolkit-railroad", optional = true }
 ast-toolkit-snack = { path = "../ast-toolkit-snack", optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span" }
-
-
-[dev-dependencies]
-ast-toolkit-railroad = { path = "../ast-toolkit-railroad" }
 
 
 [features]
 default = ["macros"]
 
 macros = []
-railroad = []
+railroad = ["dep:ast-toolkit-railroad"]
 snack = ["dep:ast-toolkit-snack"]
