@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    28 Nov 2024, 14:37:56
+//    28 Nov 2024, 14:47:01
 //  Auto updated?
 //    Yes
 //
@@ -56,9 +56,8 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
     args.push(GenericArgument::Type(attrs.error.clone()));
 
     // Build the type path itself
-    let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
-    segs.push(PathSegment { ident: Ident::new("ast_toolkit_snack", Span::mixed_site()), arguments: PathArguments::None });
-    segs.push(PathSegment {
+    let mut path: Path = attrs.prefix.clone();
+    path.segments.push(PathSegment {
         ident:     Ident::new("Result", Span::mixed_site()),
         arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
             colon2_token: None,
@@ -69,7 +68,7 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
     });
 
     // OK, return the type
-    Type::Path(TypePath { qself: None, path: Path { leading_colon: Some(PathSep::default()), segments: segs } })
+    Type::Path(TypePath { qself: None, path })
 }
 
 
