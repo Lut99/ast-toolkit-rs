@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly debug experience."
+description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly error experience."
 
 
 [[example]]
