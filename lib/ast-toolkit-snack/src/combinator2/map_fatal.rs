@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:11:28
 //  Last edited:
-//    03 Nov 2024, 19:27:24
+//    30 Nov 2024, 21:50:10
 //  Auto updated?
 //    Yes
 //
@@ -92,7 +92,7 @@ where
 #[inline]
 pub const fn map_fatal<'t, C, P, E1, E2, F, S>(comb: C, pred: P) -> MapFatal<C, P, F, S>
 where
-    C: Combinator2<'t, F, S, Recoverable = E1>,
+    C: Combinator2<'t, F, S, Fatal = E1>,
     P: FnMut(E1) -> E2,
 {
     MapFatal { comb, pred, _f: PhantomData, _s: PhantomData }

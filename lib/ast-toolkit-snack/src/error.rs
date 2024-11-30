@@ -4,7 +4,7 @@
 //  Created:
 //    07 Apr 2024, 17:58:35
 //  Last edited:
-//    11 Sep 2024, 12:01:37
+//    30 Nov 2024, 21:49:02
 //  Auto updated?
 //    Yes
 //
@@ -177,7 +177,7 @@ fn replace_with_rc<'a, F, S, FO: From<F>, SO: From<S>, E>(
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{fail, Common, Failure};
+/// use ast_toolkit_snack::error::{Common, Failure, fail};
 /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
 ///
@@ -211,7 +211,7 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{err, Common, Error};
+/// use ast_toolkit_snack::error::{Common, Error, err};
 /// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
 ///
@@ -247,7 +247,7 @@ where
 ///
 /// # Examples
 /// The following example illustrates the default behaviour of branching:
-/// ```rust
+/// ```ignore
 /// use ast_toolkit_snack::branch::alt;
 /// use ast_toolkit_snack::error::{Common, Failure};
 /// use ast_toolkit_snack::sequence::pair;
@@ -272,7 +272,7 @@ where
 /// ```
 ///
 /// However, we can improve upon the error message by cutting:
-/// ```rust
+/// ```ignore
 /// use ast_toolkit_snack::branch::alt;
 /// use ast_toolkit_snack::sequence::pair;
 /// use ast_toolkit_snack::error::{cut, Common, Error};
