@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    30 Nov 2024, 14:33:04
+//    30 Nov 2024, 22:06:40
 //  Auto updated?
 //    Yes
 //
@@ -32,11 +32,11 @@ pub mod c2;
 pub mod combinator;
 pub mod combinator2;
 pub mod debug;
-// pub mod debug2;
+pub mod debug2;
 pub mod error;
 pub mod error2;
 pub mod multi;
-// pub mod multi2;
+pub mod multi2;
 #[cfg(feature = "derive")]
 pub mod procedural;
 pub mod result;
