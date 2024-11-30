@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 14:25:05
 //  Last edited:
-//    30 Nov 2024, 14:28:40
+//    30 Nov 2024, 22:18:04
 //  Auto updated?
 //    Yes
 //
@@ -13,11 +13,11 @@
 //
 
 // Declare modules
-// pub mod while0;
-// pub mod one_of0;
 pub mod complete;
+pub mod one_of0;
 pub mod streaming;
+pub mod while0;
 
 // Import some of that
-// pub use while0::while0;
-// pub use one_of0::one_of0;
+pub use one_of0::one_of0;
+pub use while0::while0;

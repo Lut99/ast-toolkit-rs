@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    03 Nov 2024, 19:24:49
+//    30 Nov 2024, 22:52:52
 //  Auto updated?
 //    Yes
 //
@@ -17,8 +17,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
-use ast_toolkit_span::range::SpanRange;
 
+use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, OneOf1Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
@@ -54,12 +54,7 @@ where
         }
 
         // Otherwise, continue as usual
-        let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
-        if match_point > 0 {
-            Ok((input.slice(match_point..), input.slice(..match_point)))
-        } else {
-            Err(SnackError::Recoverable(OneOf1Recoverable { charset: self.charset, span: input.start_onwards() }))
-        }
+        one_of1_complete(self.charset).parse(input)
     }
 }
 

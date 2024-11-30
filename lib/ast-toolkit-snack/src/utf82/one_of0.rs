@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    03 Nov 2024, 19:21:09
+//    30 Nov 2024, 22:22:28
 //  Auto updated?
 //    Yes
 //
@@ -110,7 +110,7 @@ where
 /// `charset`.
 ///
 /// # Fails
-/// The returned combinator fails if it did not match at least one character.
+/// The returned combinator will never fail.
 ///
 /// # Example
 /// ```rust

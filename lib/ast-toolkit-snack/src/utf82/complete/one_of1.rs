@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    03 Nov 2024, 19:22:55
+//    30 Nov 2024, 22:37:07
 //  Auto updated?
 //    Yes
 //
@@ -112,8 +112,11 @@ pub struct OneOf1<'t, F, S> {
     _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Combinator2<'t, F, S> for OneOf1<'t, F, S>
+// NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
+// any smaller lifetime than `'t`.
+impl<'c, 't, F, S> Combinator2<'c, F, S> for OneOf1<'t, F, S>
 where
+    't: 'c,
     F: Clone,
     S: Clone + OneOfUtf8,
 {

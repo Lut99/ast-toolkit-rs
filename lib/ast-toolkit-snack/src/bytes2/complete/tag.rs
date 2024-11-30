@@ -2,14 +2,14 @@
 //    by Lut99
 //
 //  Created:
-//    11 Sep 2024, 17:16:33
+//    30 Nov 2024, 22:25:00
 //  Last edited:
-//    30 Nov 2024, 22:30:05
+//    30 Nov 2024, 22:54:41
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implemens the [`tag()`]-combinator.
+//!   Implements the (binary) [`tag()`]-combinator.
 //
 
 use std::convert::Infallible;
@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, SpannableEq, Spanning};
 
-use crate::result::SnackError;
+use crate::result::{Result as SResult, SnackError};
 use crate::span::MatchBytes;
 use crate::{Combinator2, ExpectsFormatter};
 
@@ -29,7 +29,7 @@ use crate::{Combinator2, ExpectsFormatter};
 // Recoverable error for the [`Tag`]-combinator.
 pub struct TagRecoverable<'t, F, S> {
     /// What we expected
-    pub tag:  &'t str,
+    pub tag:  &'t [u8],
     /// Where we expected it
     pub span: Span<F, S>,
 }
@@ -66,10 +66,11 @@ impl<'t, F, S: SpannableEq> PartialEq for TagRecoverable<'t, F, S> {
 
 
 /***** FORMATTERS *****/
-/// Expects formatter for the [`Tag`]-combinator.
+/// ExpectsFormatter for the [`Tag`] combinator.
 #[derive(Debug)]
 pub struct TagExpectsFormatter<'t> {
-    pub(crate) tag: &'t str,
+    /// The tag of bytes we expect one of.
+    pub(crate) tag: &'t [u8],
 }
 impl<'t> Display for TagExpectsFormatter<'t> {
     #[inline]
@@ -80,7 +81,7 @@ impl<'t> Display for TagExpectsFormatter<'t> {
 }
 impl<'t> ExpectsFormatter for TagExpectsFormatter<'t> {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:?}", self.tag) }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
 }
 
 
@@ -89,10 +90,12 @@ impl<'t> ExpectsFormatter for TagExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`tag()`].
-#[derive(Debug)]
 pub struct Tag<'t, F, S> {
-    tag: &'t str,
+    /// The actual tag that is being matched for.
+    tag: &'t [u8],
+    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
     _f:  PhantomData<F>,
+    /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
@@ -111,15 +114,13 @@ where
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
 
-    #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
+    fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         // See if we can parse the input
-        let tag: &'t [u8] = self.tag.as_bytes();
-        let match_point: usize = input.match_bytes(SpanRange::Open, tag);
-        if match_point >= tag.len() {
+        let match_point: usize = input.match_bytes(SpanRange::Open, self.tag);
+        if match_point >= self.tag.len() {
             // Matched the entire tag
             #[cfg(debug_assertions)]
-            assert!(match_point == tag.len());
+            assert!(match_point == self.tag.len());
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
             // Didn't match the entire tag
@@ -133,9 +134,9 @@ where
 
 
 /***** LIBRARY *****/
-/// Matches a specific "tag", i.e., a sequence of UTF-8 characters.
+/// Matches a specific "tag", i.e., a sequence of bytes.
 ///
-/// Useful for matching keywords.
+/// Useful for matching (binary) keywords.
 ///
 /// # Arguments
 /// - `tag`: The tag to match for.
@@ -149,27 +150,32 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
+/// use ast_toolkit_snack::bytes2::complete::tag;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
-/// let span3 = Span::new("<example>", "Hell");
+/// let span1 = Span::<&str, &[u8]>::new("<example>", b"Hello, world!");
+/// let span2 = Span::<&str, &[u8]>::new("<example>", b"Goodbye, world!");
+/// let span3 = Span::<&str, &[u8]>::new("<example>", b"Hell");
 ///
-/// let mut comb = tag("Hello");
+/// let mut comb = tag(b"Hello");
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::TagRecoverable {
+///         tag:  b"Hello",
+///         span: span2.slice(0..),
+///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span3.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::TagRecoverable {
+///         tag:  b"Hello",
+///         span: span3.slice(0..),
+///     }))
 /// );
 /// ```
-#[inline]
-pub const fn tag<'t, F, S>(tag: &'t str) -> Tag<'t, F, S>
+pub const fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>
 where
     F: Clone,
     S: Clone + MatchBytes,
