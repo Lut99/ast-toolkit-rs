@@ -1,10 +1,10 @@
-//  BRANCH 2.rs
+//  ALT.rs
 //    by Lut99
 //
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    03 Nov 2024, 19:17:54
+//    30 Nov 2024, 22:08:38
 //  Auto updated?
 //    Yes
 //
@@ -310,7 +310,8 @@ impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator2<'t, F, S> for Alt<B
 /// # Examples
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
-/// use ast_toolkit_snack::branch2::{Alt2Recoverable, alt};
+/// use ast_toolkit_snack::branch2::alt;
+/// use ast_toolkit_snack::branch2::alt::Alt2Recoverable;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
