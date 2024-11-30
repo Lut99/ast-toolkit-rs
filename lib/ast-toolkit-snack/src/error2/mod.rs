@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 14:19:41
 //  Last edited:
-//    30 Nov 2024, 22:01:23
+//    30 Nov 2024, 23:12:07
 //  Auto updated?
 //    Yes
 //
@@ -17,11 +17,13 @@
 pub mod cut;
 pub mod fatal;
 pub mod recoverable;
+pub mod uncut;
 
 // Use some of those things
 pub use cut::cut;
 pub use fatal::fatal;
 pub use recoverable::recoverable;
+pub use uncut::uncut;
 
 // Re-export some things from the combinator module
 pub use crate::combinator2::{map_fallible, map_recoverable};
