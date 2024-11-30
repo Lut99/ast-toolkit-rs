@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    03 Nov 2024, 12:33:18
+//    30 Nov 2024, 23:46:38
 //  Auto updated?
 //    Yes
 //
@@ -72,6 +72,8 @@ pub enum SnackError<F, S, E1, E2> {
     /// into a complete phrase.
     NotEnough {
         /// How much more input should (at least) be given to make it correct - if this is known.
+        ///
+        /// Note the input is given in _bytes_.
         needed: Option<usize>,
         /// The span pointing to the end of the input stream.
         span:   Span<F, S>,
