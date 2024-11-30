@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:21:02
 //  Last edited:
-//    03 Nov 2024, 19:38:40
+//    30 Nov 2024, 14:07:34
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,8 @@ pub mod map_fatal;
 pub mod map_recoverable;
 pub mod nop;
 pub mod not;
+pub mod opt;
+pub mod recognize;
 
 // Imports
 pub use consume::consume;
@@ -31,3 +33,5 @@ pub use map_fatal::map_fatal;
 pub use map_recoverable::map_recoverable;
 pub use nop::nop;
 pub use not::not;
+pub use opt::opt;
+pub use recognize::recognize;

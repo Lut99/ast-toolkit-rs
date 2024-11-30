@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    03 Nov 2024, 19:59:27
+//    30 Nov 2024, 13:58:07
 //  Auto updated?
 //    Yes
 //
@@ -159,12 +159,15 @@ where
 /// # Fails
 /// The returned combinator fails if the given `comb`inator succeeds.
 ///
+/// Note that fatal errors of the nested combinator are _not_ propagated. Instead, this is treated
+/// as that the not-combinator succeeds.
+///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::not;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
