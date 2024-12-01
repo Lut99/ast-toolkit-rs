@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    30 Nov 2024, 22:06:40
+//    01 Dec 2024, 21:16:39
 //  Auto updated?
 //    Yes
 //
@@ -47,6 +47,7 @@ pub mod tuple;
 pub mod utf8;
 pub mod utf82;
 
+use std::borrow::Cow;
 // Imports
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
@@ -96,6 +97,20 @@ impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
 }
 
+// Default impls for string-like types
+impl ExpectsFormatter for str {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <str as Display>::fmt(self, f) }
+}
+impl<'a> ExpectsFormatter for Cow<'a, str> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <Cow<str> as Display>::fmt(self, f) }
+}
+impl ExpectsFormatter for String {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <String as Display>::fmt(self, f) }
+}
+
 
 
 /// A trait that unifies all snack combinators.
@@ -119,7 +134,7 @@ impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
 pub trait Combinator2<'t, F, S> {
     /// The type that is in charge of generating the expects-string.
-    type ExpectsFormatter;
+    type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
     type Output;
     /// Some error type that is thrown when the combinator fails but in a recoverable way.
@@ -205,7 +220,7 @@ impl<'a, 't, F, S, T: Combinator2<'t, F, S>> Combinator2<'t, F, S> for &'a mut T
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
 pub trait BranchingCombinator<'t, F, S> {
     /// The type that is in charge of generating the expects-string.
-    type ExpectsFormatter;
+    type ExpectsFormatter: ExpectsFormatter;
     /// The output type for all paths of this Combinator.
     type Output;
     /// Some error type that is thrown when a combinator fails but in a recoverable way.

@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    01 Dec 2024, 12:31:30
+//    01 Dec 2024, 21:08:58
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::LenBytes;
 use crate::{Combinator2, ExpectsFormatter};
 
 
@@ -58,7 +59,7 @@ pub struct Many0<F, S, C> {
 impl<'t, F, S, C> Combinator2<'t, F, S> for Many0<F, S, C>
 where
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
     C: Combinator2<'t, F, S>,
 {
     type ExpectsFormatter = Many0ExpectsFormatter<C::ExpectsFormatter>;
@@ -74,6 +75,9 @@ where
         let mut res: Vec<C::Output> = Vec::new();
         let mut rem: Span<F, S> = input;
         loop {
+            if rem.is_empty() {
+                return Ok((rem, res));
+            }
             match self.comb.parse(rem.clone()) {
                 Ok((rem2, res2)) => {
                     if res.len() >= res.capacity() {
@@ -100,6 +104,14 @@ where
 ///
 /// Note that this combinator is OK with matching no input, and can therefore itself not fail.
 /// If you want at least one, see [`many1()`](super::many1()) instead.
+///
+/// # Streaming
+/// The many0-combinator's streamingness comes from using a streamed version of the nested
+/// combinator or not. However, note that there is a special use-case: if the many0-combinator
+/// precisely consumed the input, it will not re-try parsing the input and throw a
+/// [`SnackError::NotEnough`] if it's streaming, but instead stop with the happy path. This
+/// prevents users from being endlessly prompted to provide more instances of the thing being
+/// parsed multiple times.
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
@@ -136,7 +148,7 @@ where
 pub const fn many0<'t, F, S, C>(comb: C) -> Many0<F, S, C>
 where
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
     C: Combinator2<'t, F, S>,
 {
     Many0 { comb, _f: PhantomData, _s: PhantomData }
