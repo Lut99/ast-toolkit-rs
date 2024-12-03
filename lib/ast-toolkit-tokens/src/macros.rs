@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    28 Nov 2024, 16:08:46
+//    03 Dec 2024, 15:29:40
 //  Auto updated?
 //    Yes
 //
@@ -28,7 +28,7 @@
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{utf8_token, Utf8Token as _};
+/// use ast_toolkit_tokens::{Utf8Token as _, utf8_token};
 ///
 /// // The implementation
 /// utf8_token!(Dot, ".");
@@ -57,6 +57,14 @@ macro_rules! utf8_token {
         pub struct $name<F, S> {
             /// The span that locates this token in the source text.
             pub span: $crate::__private::Span<F, S>,
+        }
+
+        // Default
+        impl ::std::default::Default for $name<&'static str, &'static str> {
+            #[inline]
+            fn default() -> Self {
+                Self { span: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default()"), Self::TOKEN) }
+            }
         }
 
         // Standard impls
@@ -158,7 +166,7 @@ macro_rules! utf8_token_railroad {
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{utf8_delimiter, Utf8Delimiter as _};
+/// use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delimiter};
 ///
 /// // The implementation
 /// utf8_delimiter!(Parens, "(", ")");
@@ -188,6 +196,17 @@ macro_rules! utf8_delimiter {
             pub open:  $crate::__private::Span<F, S>,
             #[doc = concat!("The closing delimiter `", $close, "`.\n")]
             pub close: $crate::__private::Span<F, S>,
+        }
+
+        // Default
+        impl ::std::default::Default for $name<&'static str, &'static str> {
+            #[inline]
+            fn default() -> Self {
+                Self {
+                    open: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::open()"), Self::OPEN_TOKEN),
+                    close: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::close()"), Self::CLOSE_TOKEN),
+                }
+            }
         }
 
         // Standard impls
