@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    28 Nov 2024, 16:55:22
+//    03 Dec 2024, 15:25:22
 //  Auto updated?
 //    Yes
 //
@@ -492,7 +492,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn puncts_mut<'p>(&'p mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
+    pub fn puncts_mut(&mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///
@@ -730,5 +730,35 @@ impl<V: PartialEq, P> PartialEq for Punctuated<V, P> {
             }
         }
         true
+    }
+}
+
+impl<V, P, I> From<I> for Punctuated<V, P>
+where
+    P: Default,
+    I: IntoIterator<Item = V>,
+{
+    #[inline]
+    fn from(value: I) -> Self { Self::from_iter(value) }
+}
+impl<V, P> FromIterator<V> for Punctuated<V, P>
+where
+    P: Default,
+{
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        // Turn the into-iterator into an iterator
+        let mut iter = iter.into_iter();
+        let size_hint: (usize, Option<usize>) = iter.size_hint();
+        let size_hint: usize = size_hint.1.unwrap_or(size_hint.0);
+
+        // Loop through it to find the values. The puncts we default.
+        let first: Option<Box<V>> = iter.next().map(Box::new);
+        let mut data: Vec<(P, V)> = Vec::with_capacity(size_hint);
+        for value in iter {
+            data.push((P::default(), value));
+        }
+
+        // Done
+        Self { first, data }
     }
 }

@@ -13,5 +13,6 @@ enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"
 
 [features]
 default = [ "normal" ]
+
 normal = [ "dep:enum-debug" ]
 trailing = []
