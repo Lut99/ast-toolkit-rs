@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    03 Dec 2024, 15:29:40
+//    03 Dec 2024, 15:34:17
 //  Auto updated?
 //    Yes
 //
@@ -63,7 +63,7 @@ macro_rules! utf8_token {
         impl ::std::default::Default for $name<&'static str, &'static str> {
             #[inline]
             fn default() -> Self {
-                Self { span: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default()"), Self::TOKEN) }
+                Self { span: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default()"), <Self as $crate::Utf8Token<&'static str, &'static str>>::TOKEN) }
             }
         }
 
@@ -203,8 +203,8 @@ macro_rules! utf8_delimiter {
             #[inline]
             fn default() -> Self {
                 Self {
-                    open: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::open()"), Self::OPEN_TOKEN),
-                    close: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::close()"), Self::CLOSE_TOKEN),
+                    open: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::open()"), <Self as $crate::Utf8Delimiter<&'static str, &'static str>>::OPEN_TOKEN),
+                    close: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::close()"), <Self as $crate::Utf8Delimiter<&'static str, &'static str>>::CLOSE_TOKEN),
                 }
             }
         }
