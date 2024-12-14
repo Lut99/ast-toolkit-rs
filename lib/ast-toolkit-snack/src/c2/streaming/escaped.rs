@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    30 Nov 2024, 23:47:18
+//    14 Dec 2024, 19:33:17
 //  Auto updated?
 //    Yes
 //
@@ -71,7 +71,7 @@ where
         let mut value: Option<String> = None;
         loop {
             // Parse anything in the middle
-            match utf82::while0(|c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
+            match utf82::while0("", |c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
                 Ok((mrem, mres)) => {
                     // Add whatever we've parsed to the middle bit
                     if !span.join_mut(&mres) {

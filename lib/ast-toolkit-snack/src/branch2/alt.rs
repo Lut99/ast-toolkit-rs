@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    30 Nov 2024, 22:08:38
+//    14 Dec 2024, 19:35:16
 //  Auto updated?
 //    Yes
 //
@@ -137,10 +137,10 @@ macro_rules! tuple_branching_comb_impl {
 
             /***** FORMATTER *****/
             /// Formats the expects-string for a tuple of a particular size
-            #[derive(Clone, Debug)]
+            #[derive(Clone, Debug, Eq, PartialEq)]
             pub struct [< Alt $li Formatter >]<[<F $fi>] $(, [<F $i>])*> {
                 /// The formatters for all nested combinators.
-                pub(crate) fmts: ([<F $fi>], $([<F $i>],)*),
+                pub fmts: ([<F $fi>], $([<F $i>],)*),
             }
             impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [< Alt $li Formatter >]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]

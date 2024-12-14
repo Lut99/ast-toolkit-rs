@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:56:52
 //  Last edited:
-//    30 Nov 2024, 14:11:14
+//    14 Dec 2024, 19:36:06
 //  Auto updated?
 //    Yes
 //
@@ -24,10 +24,10 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Opt`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct OptExpectsFormatter<F> {
     /// The nested formatter of the thing we _didn't_ expect.
-    fmt: F,
+    pub fmt: F,
 }
 impl<F: ExpectsFormatter> Display for OptExpectsFormatter<F> {
     #[inline]
@@ -102,10 +102,10 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::opt;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");

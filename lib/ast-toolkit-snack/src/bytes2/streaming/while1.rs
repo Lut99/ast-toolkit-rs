@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    30 Nov 2024, 22:59:01
+//    14 Dec 2024, 19:19:24
 //  Auto updated?
 //    Yes
 //
@@ -26,9 +26,11 @@ use crate::span::{LenBytes, WhileBytes};
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<F, S, P> {
+pub struct While1<'t, F, S, P> {
     /// The predicate used for matching.
     predicate: P,
+    /// A helper provided by the user to describe what is expected.
+    what: &'t str,
     /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
     _f: PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
@@ -36,19 +38,19 @@ pub struct While1<F, S, P> {
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'b`.
-impl<F, S, P> Combinator2<'static, F, S> for While1<F, S, P>
+impl<'t, F, S, P> Combinator2<'t, F, S> for While1<'t, F, S, P>
 where
     F: Clone,
     S: Clone + LenBytes + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = While1ExpectsFormatter;
+    type ExpectsFormatter = While1ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = While1Recoverable<F, S>;
+    type Recoverable = While1Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -58,7 +60,7 @@ where
         }
 
         // Otherwise, continue as usual
-        while1_complete(&mut self.predicate).parse(input)
+        while1_complete(self.what, &mut self.predicate).parse(input)
     }
 }
 
@@ -74,6 +76,8 @@ where
 /// to also allow finding none.
 ///
 /// # Arguments
+/// - `what`: A short string describing what byte is being matched. Should finish the sentence
+///   "Expected at least one ...".
 /// - `predicate`: A closure that returns true for matching bytes, and false for non-matching
 ///   bytes. All bytes that are matched are returned up to the first for which
 ///   `predicate` returns false (if any).
@@ -99,23 +103,27 @@ where
 /// let span4 = Span::<&str, &[u8]>::new("<example>", b"hijklmn");
 /// let span5 = Span::<&str, &[u8]>::new("<example>", b"");
 ///
-/// let mut comb =
-///     while1(|b: u8| -> bool { b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195 });
+/// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |b: u8| -> bool {
+///     b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195
+/// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(while1::While1Recoverable { span: span4 }))
+///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///         what: "'a', 'b', 'c' or 'ÿ'",
+///         span: span4,
+///     }))
 /// );
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn while1<F, S, P>(predicate: P) -> While1<F, S, P>
+pub const fn while1<'t, F, S, P>(what: &'t str, predicate: P) -> While1<'t, F, S, P>
 where
     F: Clone,
     S: Clone + LenBytes + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    While1 { predicate, _f: PhantomData, _s: PhantomData }
+    While1 { predicate, what, _f: PhantomData, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:33:56
 //  Last edited:
-//    03 Nov 2024, 19:37:37
+//    14 Dec 2024, 19:23:11
 //  Auto updated?
 //    Yes
 //
@@ -24,7 +24,7 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Nop`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct NopExpectsFormatter;
 impl Display for NopExpectsFormatter {
     #[inline]

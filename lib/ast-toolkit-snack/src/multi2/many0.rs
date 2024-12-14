@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    14 Dec 2024, 18:40:13
+//    14 Dec 2024, 19:36:24
 //  Auto updated?
 //    Yes
 //
@@ -24,10 +24,10 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Many0`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Many0ExpectsFormatter<F> {
     /// The thing we expect multiple times.
-    pub(crate) fmt: F,
+    pub fmt: F,
 }
 impl<F: ExpectsFormatter> Display for Many0ExpectsFormatter<F> {
     #[inline]

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    14 Dec 2024, 18:49:41
+//    14 Dec 2024, 19:34:47
 //  Auto updated?
 //    Yes
 //
@@ -37,7 +37,7 @@ where
 {
     type ExpectsFormatter = Few1ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Few1Recoverable<F, S>;
+    type Recoverable = Few1Recoverable<F, S, C::ExpectsFormatter>;
     type Fatal = C::Fatal;
 
     #[inline]
@@ -66,7 +66,7 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => {
                     if res.is_empty() {
-                        return Err(SnackError::Recoverable(Few1Recoverable { what: self.comb.expects().to_string(), span: rem }));
+                        return Err(SnackError::Recoverable(Few1Recoverable { what: self.comb.expects(), span: rem }));
                     } else {
                         return Ok((rem, res));
                     }
@@ -131,7 +131,10 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(few1::Few1Recoverable { what: "hello".into(), span: span3 }))
+///     Err(SnackError::Recoverable(few1::Few1Recoverable {
+///         what: tag::TagExpectsFormatter { tag: "hello" },
+///         span: span3,
+///     }))
 /// );
 /// ```
 ///

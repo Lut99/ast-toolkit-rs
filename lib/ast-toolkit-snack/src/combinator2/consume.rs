@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    03 Nov 2024, 19:26:38
+//    14 Dec 2024, 19:35:52
 //  Auto updated?
 //    Yes
 //
@@ -99,10 +99,10 @@ impl<E: PartialEq, F, S: SpannableEq> PartialEq for ConsumeRecoverable<E, F, S> 
 
 /***** FORMATTERS *****/
 /// Expects formatter for the [`Consume`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ConsumeExpectsFormatter<F> {
     /// The nested combinator is what we're expecting.
-    fmt: F,
+    pub fmt: F,
 }
 impl<F: ExpectsFormatter> Display for ConsumeExpectsFormatter<F> {
     #[inline]

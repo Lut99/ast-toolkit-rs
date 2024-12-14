@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    03 Nov 2024, 19:23:47
+//    14 Dec 2024, 19:38:56
 //  Auto updated?
 //    Yes
 //
@@ -28,12 +28,14 @@ use crate::{Combinator2, ExpectsFormatter};
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
-pub struct While1Recoverable<F, S> {
+pub struct While1Recoverable<'t, F, S> {
+    /// Some string describing what we were matching.
+    pub what: &'t str,
     /// The location where no characters were found.
     pub span: Span<F, S>,
 }
 // NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<F, S> Debug for While1Recoverable<F, S> {
+impl<'t, F, S> Debug for While1Recoverable<'t, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         let mut fmt = f.debug_struct("While1Recoverable");
@@ -41,20 +43,20 @@ impl<F, S> Debug for While1Recoverable<F, S> {
         fmt.finish()
     }
 }
-impl<F, S> Display for While1Recoverable<F, S> {
+impl<'t, F, S> Display for While1Recoverable<'t, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", While1ExpectsFormatter) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", While1ExpectsFormatter { what: self.what }) }
 }
-impl<F, S> Error for While1Recoverable<F, S> {}
-impl<F: Clone, S: Clone> Spanning<F, S> for While1Recoverable<F, S> {
+impl<'t, F, S> Error for While1Recoverable<'t, F, S> {}
+impl<'t, F: Clone, S: Clone> Spanning<F, S> for While1Recoverable<'t, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
 }
-impl<F, S: SpannableEq> Eq for While1Recoverable<F, S> {}
-impl<F, S: SpannableEq> PartialEq for While1Recoverable<F, S> {
+impl<'t, F, S: SpannableEq> Eq for While1Recoverable<'t, F, S> {}
+impl<'t, F, S: SpannableEq> PartialEq for While1Recoverable<'t, F, S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.span == other.span }
 }
@@ -66,17 +68,20 @@ impl<F, S: SpannableEq> PartialEq for While1Recoverable<F, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While1`]-combinator.
 #[derive(Debug)]
-pub struct While1ExpectsFormatter;
-impl Display for While1ExpectsFormatter {
+pub struct While1ExpectsFormatter<'t> {
+    /// Some string describing what we were matching.
+    pub what: &'t str,
+}
+impl<'t> Display for While1ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl ExpectsFormatter for While1ExpectsFormatter {
+impl<'t> ExpectsFormatter for While1ExpectsFormatter<'t> {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one specific character") }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one {}", self.what) }
 }
 
 
@@ -86,24 +91,25 @@ impl ExpectsFormatter for While1ExpectsFormatter {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`While1()`].
 #[derive(Debug)]
-pub struct While1<P, F, S> {
+pub struct While1<'t, P, F, S> {
     predicate: P,
+    what: &'t str,
     _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<P, F, S> Combinator2<'static, F, S> for While1<P, F, S>
+impl<'t, P, F, S> Combinator2<'t, F, S> for While1<'t, P, F, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    type ExpectsFormatter = While1ExpectsFormatter;
+    type ExpectsFormatter = While1ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = While1Recoverable<F, S>;
+    type Recoverable = While1Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -111,7 +117,7 @@ where
         if match_point > 0 {
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
-            Err(SnackError::Recoverable(While1Recoverable { span: input.start_onwards() }))
+            Err(SnackError::Recoverable(While1Recoverable { what: self.what, span: input.start_onwards() }))
         }
     }
 }
@@ -128,6 +134,8 @@ where
 /// to also allow finding none.
 ///
 /// # Arguments
+/// - `what`: A short string describing what byte is being matched. Should finish the sentence
+///   "Expected at least one ...".
 /// - `predicate`: A closure that returns true for matching characters, and false for non-matching
 ///   characters. All characters that are matched are returned up to the first for which
 ///   `predicate` returns false (if any).
@@ -152,25 +160,33 @@ where
 /// let span4 = Span::new("<example>", "hijklmn");
 /// let span5 = Span::new("<example>", "");
 ///
-/// let mut comb = while1(|c: &str| -> bool { c == "a" || c == "b" || c == "c" || c == "ÿ" });
+/// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |c: &str| -> bool {
+///     c == "a" || c == "b" || c == "c" || c == "ÿ"
+/// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(while1::While1Recoverable { span: span4 }))
+///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///         what: "'a', 'b', 'c' or 'ÿ'",
+///         span: span4,
+///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Recoverable(while1::While1Recoverable { span: span5 }))
+///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///         what: "'a', 'b', 'c' or 'ÿ'",
+///         span: span5,
+///     }))
 /// );
 /// ```
 #[inline]
-pub const fn while1<P, F, S>(predicate: P) -> While1<P, F, S>
+pub const fn while1<'t, P, F, S>(what: &'t str, predicate: P) -> While1<'t, P, F, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    While1 { predicate, _f: PhantomData, _s: PhantomData }
+    While1 { predicate, what, _f: PhantomData, _s: PhantomData }
 }

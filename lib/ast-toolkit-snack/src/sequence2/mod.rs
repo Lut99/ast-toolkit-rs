@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:13
 //  Last edited:
-//    14 Dec 2024, 18:04:28
+//    14 Dec 2024, 18:14:32
 //  Auto updated?
 //    Yes
 //
@@ -14,8 +14,8 @@
 
 // Modules
 pub mod pair;
+pub mod repeated;
 pub mod tuple;
-// pub mod repeated;
 // pub mod preceded;
 // pub mod terminated;
 // pub mod delimited;
@@ -23,8 +23,8 @@ pub mod tuple;
 
 // Use the combinators
 pub use pair::pair;
+pub use repeated::repeated;
 pub use tuple::tuple;
-// pub use repeated::repeated
 // pub use preceded::preceded;
 // pub use terminated::terminated;
 // pub use delimited::delimited;

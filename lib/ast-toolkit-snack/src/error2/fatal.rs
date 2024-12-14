@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:50:58
 //  Last edited:
-//    30 Nov 2024, 22:00:47
+//    14 Dec 2024, 19:23:37
 //  Auto updated?
 //    Yes
 //
@@ -66,7 +66,7 @@ impl<F, S: SpannableEq> PartialEq for FatalFatal<F, S> {
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Fatal`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct FatalExpectsFormatter;
 impl Display for FatalExpectsFormatter {
     #[inline]

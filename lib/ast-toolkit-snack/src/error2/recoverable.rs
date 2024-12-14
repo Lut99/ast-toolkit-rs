@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:01:07
 //  Last edited:
-//    30 Nov 2024, 22:02:39
+//    14 Dec 2024, 19:23:43
 //  Auto updated?
 //    Yes
 //
@@ -66,7 +66,7 @@ impl<F, S: SpannableEq> PartialEq for RecoverableRecoverable<F, S> {
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Recoverable`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct RecoverableExpectsFormatter;
 impl Display for RecoverableExpectsFormatter {
     #[inline]

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    03 Nov 2024, 19:20:38
+//    14 Dec 2024, 19:32:38
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,7 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Digit0`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Digit0ExpectsFormatter;
 impl Display for Digit0ExpectsFormatter {
     #[inline]
@@ -66,7 +66,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
-        match while0(|c: &str| -> bool {
+        match while0("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
                 c >= '0' && c <= '9'

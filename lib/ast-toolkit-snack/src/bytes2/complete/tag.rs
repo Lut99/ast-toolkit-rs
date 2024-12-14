@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    30 Nov 2024, 22:54:41
+//    14 Dec 2024, 19:35:26
 //  Auto updated?
 //    Yes
 //
@@ -67,10 +67,10 @@ impl<'t, F, S: SpannableEq> PartialEq for TagRecoverable<'t, F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Tag`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TagExpectsFormatter<'t> {
     /// The tag of bytes we expect one of.
-    pub(crate) tag: &'t [u8],
+    pub tag: &'t [u8],
 }
 impl<'t> Display for TagExpectsFormatter<'t> {
     #[inline]

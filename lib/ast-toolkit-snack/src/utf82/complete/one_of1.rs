@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    30 Nov 2024, 22:37:07
+//    14 Dec 2024, 19:36:55
 //  Auto updated?
 //    Yes
 //
@@ -68,10 +68,10 @@ impl<'t, F, S: SpannableEq> PartialEq for OneOf1Recoverable<'t, F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct OneOf1ExpectsFormatter<'t> {
     /// The charset that we expected one of.
-    pub(crate) charset: &'t [&'t str],
+    pub charset: &'t [&'t str],
 }
 impl<'t> Display for OneOf1ExpectsFormatter<'t> {
     #[inline]

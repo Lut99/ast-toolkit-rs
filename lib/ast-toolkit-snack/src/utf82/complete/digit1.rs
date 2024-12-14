@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    03 Nov 2024, 19:22:26
+//    14 Dec 2024, 19:29:00
 //  Auto updated?
 //    Yes
 //
@@ -64,7 +64,7 @@ impl<F, S: SpannableEq> PartialEq for Digit1Recoverable<F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`digit1()`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Digit1ExpectsFormatter;
 impl Display for Digit1ExpectsFormatter {
     #[inline]
@@ -104,7 +104,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
-        match while1(|c: &str| -> bool {
+        match while1("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
                 c >= '0' && c <= '9'

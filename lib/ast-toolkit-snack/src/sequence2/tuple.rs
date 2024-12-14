@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    03 Nov 2024, 19:26:18
+//    14 Dec 2024, 19:36:45
 //  Auto updated?
 //    Yes
 //
@@ -106,10 +106,10 @@ macro_rules! tuple_comb_impl {
 
             /* FORMATTERS */
             #[doc = concat!("Expects formatter for the ", stringify!([<Tuple $li>]), " combinator.")]
-            #[derive(Debug)]
+            #[derive(Debug, Eq, PartialEq)]
             pub struct [<Tuple $li ExpectsFormatter>]<[<F $fi>] $(, [<F $i>])*> {
                 /// The internal formatters for every combinator making up the tuple.
-                pub(crate) fmts: ([<F $fi>], $([<F $i>]),*),
+                pub fmts: ([<F $fi>], $([<F $i>]),*),
             }
             impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [<Tuple $li ExpectsFormatter>]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]

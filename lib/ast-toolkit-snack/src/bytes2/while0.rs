@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    30 Nov 2024, 22:24:21
+//    14 Dec 2024, 19:35:40
 //  Auto updated?
 //    Yes
 //
@@ -26,18 +26,21 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While0`] combinator.
-#[derive(Debug)]
-pub struct While0ExpectsFormatter;
-impl Display for While0ExpectsFormatter {
+#[derive(Debug, Eq, PartialEq)]
+pub struct While0ExpectsFormatter<'t> {
+    /// A description of what was while'd
+    pub what: &'t str,
+}
+impl<'t> Display for While0ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl ExpectsFormatter for While0ExpectsFormatter {
+impl<'t> ExpectsFormatter for While0ExpectsFormatter<'t> {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "specific bytes") }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{}", self.what) }
 }
 
 
@@ -46,27 +49,29 @@ impl ExpectsFormatter for While0ExpectsFormatter {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`while0()`]-combinator.
-pub struct While0<F, S, P> {
+pub struct While0<'t, F, S, P> {
     /// The predicate used for matching.
     predicate: P,
+    /// A description of what was while'd
+    what: &'t str,
     /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
     _f: PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<F, S, P> Combinator2<'static, F, S> for While0<F, S, P>
+impl<'t, F, S, P> Combinator2<'t, F, S> for While0<'t, F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = While0ExpectsFormatter;
+    type ExpectsFormatter = While0ExpectsFormatter<'t>;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While0ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { While0ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -88,6 +93,8 @@ where
 /// be matched.
 ///
 /// # Arguments
+/// - `what`: A short string describing what byte is being matched. Should finish the sentence
+///   "Expected ...".
 /// - `predicate`: A closure that returns true for matching bytes, and false for non-matching
 ///   bytes. All bytes that are matched are returned up to the first for which `predicate` returns
 ///   false (if any).
@@ -113,8 +120,9 @@ where
 /// let span5 = Span::<&str, &[u8]>::new("<example>", b"");
 ///
 /// // Note: the magic numbers below are the two bytes made up by "ÿ"
-/// let mut comb =
-///     while0(|b: u8| -> bool { b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195 });
+/// let mut comb = while0("'a', 'b', 'c' or 'ÿ'", |b: u8| -> bool {
+///     b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195
+/// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
@@ -122,11 +130,11 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5, span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn while0<F, S, P>(predicate: P) -> While0<F, S, P>
+pub const fn while0<'t, F, S, P>(what: &'t str, predicate: P) -> While0<'t, F, S, P>
 where
     F: Clone,
     S: Clone + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    While0 { predicate, _f: PhantomData, _s: PhantomData }
+    While0 { predicate, what, _f: PhantomData, _s: PhantomData }
 }

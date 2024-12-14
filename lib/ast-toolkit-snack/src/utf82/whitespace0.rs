@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    03 Nov 2024, 19:22:02
+//    14 Dec 2024, 19:32:49
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,7 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Whitespace0`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Whitespace0ExpectsFormatter;
 impl Display for Whitespace0ExpectsFormatter {
     #[inline]

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    30 Nov 2024, 22:23:43
+//    14 Dec 2024, 19:35:34
 //  Auto updated?
 //    Yes
 //
@@ -26,10 +26,10 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf0`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct OneOf0ExpectsFormatter<'b> {
     /// The set of bytes we expect one of.
-    byteset: &'b [u8],
+    pub byteset: &'b [u8],
 }
 impl<'b> Display for OneOf0ExpectsFormatter<'b> {
     #[inline]

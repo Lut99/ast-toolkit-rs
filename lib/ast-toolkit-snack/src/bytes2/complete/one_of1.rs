@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    30 Nov 2024, 22:54:48
+//    14 Dec 2024, 19:35:22
 //  Auto updated?
 //    Yes
 //
@@ -68,10 +68,10 @@ impl<'b, F, S: SpannableEq> PartialEq for OneOf1Recoverable<'b, F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct OneOf1ExpectsFormatter<'b> {
     /// The set of bytes we expect one of.
-    pub(crate) byteset: &'b [u8],
+    pub byteset: &'b [u8],
 }
 impl<'b> Display for OneOf1ExpectsFormatter<'b> {
     #[inline]

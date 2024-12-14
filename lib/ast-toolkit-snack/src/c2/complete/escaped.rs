@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    30 Nov 2024, 23:39:09
+//    14 Dec 2024, 19:33:02
 //  Auto updated?
 //    Yes
 //
@@ -161,7 +161,7 @@ impl<'t, F, S: SpannableEq, E: PartialEq> PartialEq for EscapedFatal<'t, F, S, E
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Escaped`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct EscapedExpectsFormatter<'t> {
     /// The opening/closing character
     pub delim:   &'t str,
@@ -252,7 +252,7 @@ where
         let mut value: Option<String> = None;
         loop {
             // Parse anything in the middle
-            match utf82::while0(|c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
+            match utf82::while0("", |c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
                 Ok((mrem, mres)) => {
                     // Add whatever we've parsed to the middle bit
                     if !span.join_mut(&mres) {

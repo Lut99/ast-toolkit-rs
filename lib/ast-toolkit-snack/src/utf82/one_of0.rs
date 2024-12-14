@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    30 Nov 2024, 22:22:28
+//    14 Dec 2024, 19:37:16
 //  Auto updated?
 //    Yes
 //
@@ -29,7 +29,7 @@ use crate::{Combinator2, ExpectsFormatter};
 #[derive(Debug)]
 pub struct OneOf0ExpectsFormatter<'t> {
     /// The charset that we expected one of.
-    pub(crate) charset: &'t [&'t str],
+    pub charset: &'t [&'t str],
 }
 impl<'t> Display for OneOf0ExpectsFormatter<'t> {
     #[inline]
@@ -64,7 +64,7 @@ impl<'t> ExpectsFormatter for OneOf0ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of0()`].
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct OneOf0<'t, F, S> {
     charset: &'t [&'t str],
     _f:      PhantomData<F>,

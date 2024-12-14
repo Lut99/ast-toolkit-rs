@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    03 Nov 2024, 19:24:09
+//    14 Dec 2024, 19:26:36
 //  Auto updated?
 //    Yes
 //
@@ -65,7 +65,7 @@ impl<F, S: SpannableEq> PartialEq for Whitespace1Recoverable<F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Whitespace1`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Whitespace1ExpectsFormatter;
 impl Display for Whitespace1ExpectsFormatter {
     #[inline]

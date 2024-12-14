@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    30 Nov 2024, 13:58:07
+//    14 Dec 2024, 19:36:01
 //  Auto updated?
 //    Yes
 //
@@ -65,10 +65,10 @@ impl<FM, F, S: SpannableEq> PartialEq for NotRecoverable<FM, F, S> {
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Not`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct NotExpectsFormatter<F> {
     /// The nested formatter of the thing we _didn't_ expect.
-    fmt: F,
+    pub fmt: F,
 }
 impl<F: ExpectsFormatter> Display for NotExpectsFormatter<F> {
     #[inline]
@@ -164,10 +164,10 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::not;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");

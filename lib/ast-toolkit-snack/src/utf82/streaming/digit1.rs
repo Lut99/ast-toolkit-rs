@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    03 Nov 2024, 19:24:33
+//    14 Dec 2024, 19:30:24
 //  Auto updated?
 //    Yes
 //
@@ -46,7 +46,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
-        match while1(|c: &str| -> bool {
+        match while1("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
                 c >= '0' && c <= '9'

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 17:57:55
 //  Last edited:
-//    14 Dec 2024, 18:40:26
+//    14 Dec 2024, 19:38:01
 //  Auto updated?
 //    Yes
 //
@@ -24,30 +24,29 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** ERRORS *****/
 /// Defines the error that is thrown by [`Many1`] when there isn't any.
-pub struct Many1Recoverable<F, S> {
-    // NOTE: The `what` is a little hacky. But using the real formatter here is VERY inconvenient.
-    //       Open to ideas!
+pub struct Many1Recoverable<F, S, C> {
     /// Some thing describing what we expected.
-    pub what: String,
+    pub what: C,
     /// The span where the error occurred.
     pub span: Span<F, S>,
 }
 // NOTE: We don't derive this, as the macro automatically applies unnecessary [`Debug`] bounds on
 // `F` and `S`
-impl<F, S> Debug for Many1Recoverable<F, S> {
+impl<F, S, C: Debug> Debug for Many1Recoverable<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         let mut fmt = f.debug_struct("Many1Recoverable");
+        fmt.field("what", &self.what);
         fmt.field("span", &self.span);
         fmt.finish()
     }
 }
-impl<F, S: ExpectsFormatter> Display for Many1Recoverable<F, S> {
+impl<F, S: ExpectsFormatter, C: ExpectsFormatter> Display for Many1Recoverable<F, S, C> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", Many1ExpectsFormatter { fmt: &self.what }) }
 }
-impl<F, S: ExpectsFormatter> Error for Many1Recoverable<F, S> {}
-impl<F: Clone, S: Clone> Spanning<F, S> for Many1Recoverable<F, S> {
+impl<F, S: ExpectsFormatter, C: ExpectsFormatter> Error for Many1Recoverable<F, S, C> {}
+impl<F: Clone, S: Clone, C> Spanning<F, S> for Many1Recoverable<F, S, C> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
@@ -59,11 +58,11 @@ impl<F: Clone, S: Clone> Spanning<F, S> for Many1Recoverable<F, S> {
         self.span
     }
 }
-impl<F, S: SpannableEq> Eq for Many1Recoverable<F, S> {}
-impl<F, S: SpannableEq> PartialEq for Many1Recoverable<F, S> {
+impl<F, S: SpannableEq, C: Eq> Eq for Many1Recoverable<F, S, C> {}
+impl<F, S: SpannableEq, C: PartialEq> PartialEq for Many1Recoverable<F, S, C> {
     /// NOTE: This does not include `fmt`. Debatable, but much easier this way.
     #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
+    fn eq(&self, other: &Self) -> bool { self.what == other.what && self.span == other.span }
 }
 
 
@@ -72,10 +71,10 @@ impl<F, S: SpannableEq> PartialEq for Many1Recoverable<F, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Many1`] combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Many1ExpectsFormatter<E> {
     /// The thing we expect multiple times.
-    pub(crate) fmt: E,
+    pub fmt: E,
 }
 impl<E: ExpectsFormatter> Display for Many1ExpectsFormatter<E> {
     #[inline]
@@ -111,7 +110,7 @@ where
 {
     type ExpectsFormatter = Many1ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Many1Recoverable<F, S>;
+    type Recoverable = Many1Recoverable<F, S, C::ExpectsFormatter>;
     type Fatal = C::Fatal;
 
     #[inline]
@@ -132,7 +131,7 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => {
                     if res.is_empty() {
-                        return Err(SnackError::Recoverable(Many1Recoverable { what: self.comb.expects().to_string(), span: rem }));
+                        return Err(SnackError::Recoverable(Many1Recoverable { what: self.comb.expects(), span: rem }));
                     } else {
                         return Ok((rem, res));
                     }
@@ -193,7 +192,10 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(many1::Many1Recoverable { what: "hello".into(), span: span3 }))
+///     Err(SnackError::Recoverable(many1::Many1Recoverable {
+///         what: tag::TagExpectsFormatter { tag: "hello" },
+///         span: span3,
+///     }))
 /// );
 /// ```
 ///
