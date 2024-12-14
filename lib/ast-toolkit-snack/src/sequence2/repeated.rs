@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:14:44
 //  Last edited:
-//    14 Dec 2024, 19:41:33
+//    14 Dec 2024, 19:46:40
 //  Auto updated?
 //    Yes
 //
@@ -105,7 +105,7 @@ impl<F: ExpectsFormatter> ExpectsFormatter for RepeatedExpectsFormatter<F> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`repeated()`]-combinator.
-pub struct Repeated<F, S, C> {
+pub struct Repeated<C, F, S> {
     /// The nested combinator to repeat.
     comb: C,
     /// The number of times to apply it.
@@ -113,11 +113,11 @@ pub struct Repeated<F, S, C> {
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Repeated<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Repeated<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone,
-    C: Combinator2<'t, F, S>,
 {
     type ExpectsFormatter = RepeatedExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -217,7 +217,7 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn repeated<'t, F, S, C>(n: usize, comb: C) -> Repeated<F, S, C>
+pub const fn repeated<'t, F, S, C>(n: usize, comb: C) -> Repeated<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {
