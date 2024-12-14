@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 20:50:18
 //  Last edited:
-//    01 Dec 2024, 21:17:02
+//    14 Dec 2024, 18:00:27
 //  Auto updated?
 //    Yes
 //
@@ -123,12 +123,10 @@ where
         let mut res: Vec<C::Output> = Vec::new();
         let mut rem: Span<F, S> = input;
         loop {
-            if rem.is_empty() {
-                if res.is_empty() {
-                    return Err(SnackError::NotEnough { needed: None, span: rem });
-                } else {
-                    return Ok((rem, res));
-                }
+            // In the complete version, let's defer realising there isn't any to the nested
+            // combinator
+            if rem.is_empty() && !res.is_empty() {
+                return Ok((rem, res));
             }
             match self.comb.parse(rem.clone()) {
                 Ok((rem2, res2)) => {
@@ -186,15 +184,16 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::multi2::many1;
+/// use ast_toolkit_snack::Combinator2 as _;
+/// use ast_toolkit_snack::multi2::complete::many1;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "hellohellohellogoodbye");
 /// let span2 = Span::new("<example>", "hellohelgoodbye");
 /// let span3 = Span::new("<example>", "goodbye");
+/// let span4 = Span::new("<example>", "");
 ///
 /// let mut comb = many1(tag("hello"));
 /// assert_eq!(
@@ -205,6 +204,10 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(many1::Many1Recoverable { what: "hello".into(), span: span3 }))
+/// );
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::Recoverable(many1::Many1Recoverable { what: "hello".into(), span: span4 }))
 /// );
 /// ```
 #[inline]

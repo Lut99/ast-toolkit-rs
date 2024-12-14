@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    01 Dec 2024, 21:08:58
+//    14 Dec 2024, 18:07:44
 //  Auto updated?
 //    Yes
 //
@@ -103,7 +103,7 @@ where
 /// multiple instances of the same input.
 ///
 /// Note that this combinator is OK with matching no input, and can therefore itself not fail.
-/// If you want at least one, see [`many1()`](super::many1()) instead.
+/// If you want at least one, see [`many1()`](super::complete::many1()) instead.
 ///
 /// # Streaming
 /// The many0-combinator's streamingness comes from using a streamed version of the nested
@@ -127,9 +127,9 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::multi2::many0;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "hellohellohellogoodbye");
