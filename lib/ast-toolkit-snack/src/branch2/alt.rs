@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    14 Dec 2024, 19:35:16
+//    09 Jan 2025, 00:44:54
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,14 @@
 //!   Experimental test for branching using the new error type.
 //
 
-
+use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
 use ast_toolkit_span::{Span, Spanning};
 
-use crate::result::{Error, Result as SResult, SnackError};
+use crate::result::{Result as SResult, SnackError};
 use crate::{BranchingCombinator, Combinator2, ExpectsFormatter};
 
 
@@ -81,14 +81,14 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn span(&self) -> Span<F, S> { self.span.clone() }
             }
-            impl<F, S, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*> Error<F, S> for [<Alt $li Recoverable>]<F, S, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*>
+            impl<F, S, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*> Error for [<Alt $li Recoverable>]<F, S, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*>
             where
                 F: Clone + Debug,
                 S: Clone + Debug,
                 [<F $fi>]: ExpectsFormatter,
                 $([<F $i>]: ExpectsFormatter,)*
-                [<E $fi>]: Error<F, S>,
-                $([<E $i>]: Error<F, S>,)*
+                [<E $fi>]: Error,
+                $([<E $i>]: Error,)*
             {}
 
 
@@ -107,8 +107,8 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult {
                     match self {
-                        Self::[<Branch $fi>](err) => write!(f, "{err}"),
-                        $(Self::[<Branch $i>](err) => write!(f, "{err}"),)*
+                        Self::[<Branch $fi>](err) => err.fmt(f),
+                        $(Self::[<Branch $i>](err) => err.fmt(f),)*
                     }
                 }
             }
@@ -121,12 +121,12 @@ macro_rules! tuple_branching_comb_impl {
                     }
                 }
             }
-            impl<F, S, [<E $fi>]: Error<F, S> $(, [<E $i>]: Error<F, S>)*> Error<F, S> for [<Alt $li Fatal>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<[<E $fi>]: Error $(, [<E $i>]: Error)*> Error for [<Alt $li Fatal>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
-                fn source(&self) -> Option<&dyn Error<F, S>> {
+                fn source(&self) -> Option<&(dyn 'static + Error)> {
                     match self {
-                        Self::[<Branch $fi>](err) => Some(err),
-                        $(Self::[<Branch $i>](err) => Some(err),)*
+                        Self::[<Branch $fi>](err) => err.source(),
+                        $(Self::[<Branch $i>](err) => err.source(),)*
                     }
                 }
             }

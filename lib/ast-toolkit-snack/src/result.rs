@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    30 Nov 2024, 23:46:38
+//    09 Jan 2025, 01:00:23
 //  Auto updated?
 //    Yes
 //
@@ -13,28 +13,13 @@
 //!   including the error types.
 //
 
-use std::fmt::{Debug, Display};
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use debug::Debug;
 
-
-/***** INTERFACES *****/
-/// Something is a snack error.
-pub trait Error<F, S>: Debug + Display + Spanning<F, S> {
-    /// Returns a more specific error explaining additional details.
-    ///
-    /// For example: you're trying to parse an integer. The main error may be something indicating
-    /// that an integer was failed to be parsed. Then the source of that error may be an error
-    /// indicating further this was because the number was too large to fit in the buffer.
-    ///
-    /// # Returns
-    /// A nested [`Error`] if there is a more specific one, or else [`None`].
-    #[inline]
-    fn source(&self) -> Option<&(dyn Error<F, S>)> { None }
-}
-
-
-
+use crate::ExpectsFormatter;
 
 
 /***** LIBRARY *****/
@@ -73,7 +58,7 @@ pub enum SnackError<F, S, E1, E2> {
     NotEnough {
         /// How much more input should (at least) be given to make it correct - if this is known.
         ///
-        /// Note the input is given in _bytes_.
+        /// Note the size is given in _bytes_.
         needed: Option<usize>,
         /// The span pointing to the end of the input stream.
         span:   Span<F, S>,
@@ -81,6 +66,7 @@ pub enum SnackError<F, S, E1, E2> {
 }
 impl<F, S, E1, E2> Eq for SnackError<F, S, E1, E2>
 where
+    F: Eq,
     S: SpannableEq,
     E1: Eq,
     E2: Eq,
@@ -88,6 +74,7 @@ where
 }
 impl<F, S, E1, E2> PartialEq for SnackError<F, S, E1, E2>
 where
+    F: PartialEq,
     S: SpannableEq,
     E1: PartialEq,
     E2: PartialEq,
@@ -106,4 +93,36 @@ where
             _ => false,
         }
     }
+}
+
+/// Defines a common [recoverable](SnackError::Recoverable) error type that simply describes what
+/// was expected.
+#[derive(Debug)]
+pub struct Expected<F, S, O> {
+    /// The formatter that will tell us what was expected.
+    pub fmt:  O,
+    /// The span that tells us where we expected it.
+    pub span: Span<F, S>,
+}
+impl<F, S, O: ExpectsFormatter> Display for Expected<F, S, O> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <O as Display>::fmt(&self.fmt, f) }
+}
+impl<F, S, O: ExpectsFormatter> Error for Expected<F, S, O> {}
+impl<F: Clone, S: Clone, O> Spanning<F, S> for Expected<F, S, O> {
+    #[inline]
+    fn span(&self) -> Span<F, S> { self.span.clone() }
+
+    #[inline]
+    fn into_span(self) -> Span<F, S>
+    where
+        Self: Sized,
+    {
+        self.span
+    }
+}
+impl<F: Eq, S: SpannableEq, O: Eq> Eq for Expected<F, S, O> {}
+impl<F: PartialEq, S: SpannableEq, O: PartialEq> PartialEq for Expected<F, S, O> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { self.fmt == other.fmt && self.span == other.span }
 }

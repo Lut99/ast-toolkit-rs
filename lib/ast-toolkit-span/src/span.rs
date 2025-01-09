@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    02 Nov 2024, 11:38:32
+//    09 Jan 2025, 00:58:01
 //  Auto updated?
 //    Yes
 //
@@ -424,14 +424,17 @@ impl<F, S: SpannableDisplay> Display for Span<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.source.slice_fmt(self.range, f) }
 }
-impl<F, S: SpannableEq> Eq for Span<F, S> {}
-impl<F, S: SpannableHash> Hash for Span<F, S> {
+impl<F: Eq, S: SpannableEq> Eq for Span<F, S> {}
+impl<F: Hash, S: SpannableHash> Hash for Span<F, S> {
     #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.range, state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.from.hash(state);
+        self.source.slice_hash(self.range, state)
+    }
 }
-impl<F, S: SpannableEq> PartialEq for Span<F, S> {
+impl<F: PartialEq, S: SpannableEq> PartialEq for Span<F, S> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
+    fn eq(&self, other: &Self) -> bool { self.from == other.from && self.source.slice_eq(self.range, &other.source, other.range) }
 }
 impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
     #[inline]

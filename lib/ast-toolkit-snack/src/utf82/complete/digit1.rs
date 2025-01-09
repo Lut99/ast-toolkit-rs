@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    14 Dec 2024, 19:29:00
+//    09 Jan 2025, 01:00:11
 //  Auto updated?
 //    Yes
 //
@@ -13,53 +13,15 @@
 //
 
 use std::convert::Infallible;
-use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
 
 use super::while1;
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{Expected, Result as SResult, SnackError};
 use crate::span::WhileUtf8;
 use crate::{Combinator2, ExpectsFormatter};
-
-
-/***** ERRORS *****/
-/// Error thrown by the [`Digit1`]-combinator that encodes that not even one digit was parsed.
-pub struct Digit1Recoverable<F, S> {
-    /// The location where no digits were found.
-    pub span: Span<F, S>,
-}
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<F, S> Debug for Digit1Recoverable<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("Digit1Recoverable");
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
-}
-impl<F, S> Display for Digit1Recoverable<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", Digit1ExpectsFormatter) }
-}
-impl<F, S> Error for Digit1Recoverable<F, S> {}
-impl<F: Clone, S: Clone> Spanning<F, S> for Digit1Recoverable<F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
-
-    #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<F, S: SpannableEq> Eq for Digit1Recoverable<F, S> {}
-impl<F, S: SpannableEq> PartialEq for Digit1Recoverable<F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
-}
-
-
-
 
 
 /***** FORMATTERS *****/
@@ -96,7 +58,7 @@ where
 {
     type ExpectsFormatter = Digit1ExpectsFormatter;
     type Output = Span<F, S>;
-    type Recoverable = Digit1Recoverable<F, S>;
+    type Recoverable = Expected<F, S, Digit1ExpectsFormatter>;
     type Fatal = Infallible;
 
     #[inline]
@@ -113,7 +75,7 @@ where
         .parse(input)
         {
             Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Digit1Recoverable { span: err.into_span() })),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Expected { fmt: Digit1ExpectsFormatter, span: err.into_span() })),
             Err(SnackError::Fatal(_)) => unreachable!(),
             Err(SnackError::NotEnough { .. }) => unreachable!(),
         }
