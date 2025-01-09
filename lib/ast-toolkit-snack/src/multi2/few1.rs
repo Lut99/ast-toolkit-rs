@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    14 Dec 2024, 19:34:47
+//    09 Jan 2025, 20:36:39
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-pub use super::many1::{Many1ExpectsFormatter as Few1ExpectsFormatter, Many1Recoverable as Few1Recoverable};
+pub use super::many1::Many1ExpectsFormatter as Few1ExpectsFormatter;
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::LenBytes;

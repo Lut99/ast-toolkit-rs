@@ -4,7 +4,7 @@
 //  Created:
 //    28 Jun 2024, 15:22:37
 //  Last edited:
-//    26 Aug 2024, 14:13:35
+//    09 Jan 2025, 19:03:23
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,8 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spannable, SpannableEq, Spanning as _};
+use ast_toolkit_span::{Span, Spannable, Spanning as _};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::error::{Common, Error, Failure};
 use crate::span::{MatchBytes, NextChar, ToStr, WhileUtf8};
@@ -30,7 +31,7 @@ use crate::{Combinator, Expects, ExpectsFormatter, Result};
 
 /***** AUXILLARY *****/
 /// Represents the result of the [`escaped`]-combinator.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscapedString<F, S> {
     /// Represents the delimited quotes (opening and closing, respectively).
     pub delim: (Span<F, S>, Span<F, S>),
@@ -38,11 +39,6 @@ pub struct EscapedString<F, S> {
     pub span:  Span<F, S>,
     /// If the literal includes escapes, then this is the resolved value after processing them.
     pub value: Option<String>,
-}
-impl<F, S: SpannableEq> Eq for EscapedString<F, S> {}
-impl<F, S: SpannableEq> PartialEq for EscapedString<F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.delim == other.delim && self.span == other.span && self.value == other.value }
 }
 
 
@@ -87,7 +83,7 @@ impl<F, S: SpannableEq> PartialEq for EscapedString<F, S> {
 /// use std::error;
 /// use std::fmt::{Display, Formatter, Result as FResult};
 ///
-/// use ast_toolkit_snack::c::complete::{escaped, EscapedString};
+/// use ast_toolkit_snack::c::complete::{EscapedString, escaped};
 /// use ast_toolkit_snack::error::{Common, Error, Failure};
 /// use ast_toolkit_snack::{Combinator as _, Result};
 /// use ast_toolkit_span::Span;

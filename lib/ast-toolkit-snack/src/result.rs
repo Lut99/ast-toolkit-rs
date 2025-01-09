@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    09 Jan 2025, 01:00:23
+//    09 Jan 2025, 20:32:41
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, SpannableEq, Spanning};
-use debug::Debug;
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::ExpectsFormatter;
 
@@ -97,19 +97,22 @@ where
 
 /// Defines a common [recoverable](SnackError::Recoverable) error type that simply describes what
 /// was expected.
-#[derive(Debug)]
-pub struct Expected<F, S, O> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Expected<O, F, S> {
     /// The formatter that will tell us what was expected.
     pub fmt:  O,
     /// The span that tells us where we expected it.
     pub span: Span<F, S>,
 }
-impl<F, S, O: ExpectsFormatter> Display for Expected<F, S, O> {
+impl<O: ExpectsFormatter, F, S> Display for Expected<O, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <O as Display>::fmt(&self.fmt, f) }
 }
-impl<F, S, O: ExpectsFormatter> Error for Expected<F, S, O> {}
-impl<F: Clone, S: Clone, O> Spanning<F, S> for Expected<F, S, O> {
+impl<O: ExpectsFormatter, F, S> Error for Expected<O, F, S> {}
+impl<O, F, S> Spanning<F, S> for Expected<O, F, S>
+where
+    Span<F, S>: Clone,
+{
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
@@ -120,9 +123,4 @@ impl<F: Clone, S: Clone, O> Spanning<F, S> for Expected<F, S, O> {
     {
         self.span
     }
-}
-impl<F: Eq, S: SpannableEq, O: Eq> Eq for Expected<F, S, O> {}
-impl<F: PartialEq, S: SpannableEq, O: PartialEq> PartialEq for Expected<F, S, O> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.fmt == other.fmt && self.span == other.span }
 }

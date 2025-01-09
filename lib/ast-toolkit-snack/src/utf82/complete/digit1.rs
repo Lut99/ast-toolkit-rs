@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    09 Jan 2025, 01:00:11
+//    09 Jan 2025, 20:33:43
 //  Auto updated?
 //    Yes
 //
@@ -58,7 +58,7 @@ where
 {
     type ExpectsFormatter = Digit1ExpectsFormatter;
     type Output = Span<F, S>;
-    type Recoverable = Expected<F, S, Digit1ExpectsFormatter>;
+    type Recoverable = Expected<Digit1ExpectsFormatter, F, S>;
     type Fatal = Infallible;
 
     #[inline]

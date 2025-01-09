@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:50:58
 //  Last edited:
-//    14 Dec 2024, 19:23:37
+//    09 Jan 2025, 20:35:06
 //  Auto updated?
 //    Yes
 //
@@ -14,10 +14,11 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator2, ExpectsFormatter};
@@ -25,17 +26,10 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** ERRORS *****/
 /// Defines the fatal error thrown by the [`Fatal`]-combinator.
+#[derive(Debug, Eq, PartialEq)]
 pub struct FatalFatal<F, S> {
     /// The place where the fatal error was thrown.
     pub span: Span<F, S>,
-}
-impl<F, S> Debug for FatalFatal<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("FatalFatal");
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
 }
 impl<F, S> Display for FatalFatal<F, S> {
     #[inline]
@@ -53,11 +47,6 @@ impl<F: Clone, S: Clone> Spanning<F, S> for FatalFatal<F, S> {
     {
         self.span
     }
-}
-impl<F, S: SpannableEq> Eq for FatalFatal<F, S> {}
-impl<F, S: SpannableEq> PartialEq for FatalFatal<F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span.eq(&other.span) }
 }
 
 

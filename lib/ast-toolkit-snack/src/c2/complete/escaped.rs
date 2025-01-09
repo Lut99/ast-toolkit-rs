@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    14 Dec 2024, 19:33:02
+//    09 Jan 2025, 19:05:00
 //  Auto updated?
 //    Yes
 //
@@ -14,11 +14,12 @@
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spannable, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{MatchBytes, NextChar, ToStr, WhileUtf8};
@@ -29,6 +30,7 @@ use crate::{Combinator2, ExpectsFormatter, utf82};
 /// Defines the recoverable error of the [`Escaped`]-combinator.
 ///
 /// This error means that no opening delimiter was found.
+#[derive(Debug, Eq, PartialEq)]
 pub struct EscapedRecoverable<'t, F, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
     pub delim:   &'t str,
@@ -36,16 +38,6 @@ pub struct EscapedRecoverable<'t, F, S> {
     pub escaper: &'t str,
     /// The span where the error occurred.
     pub span:    Span<F, S>,
-}
-impl<'t, F, S> Debug for EscapedRecoverable<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("EscapedRecoverable");
-        fmt.field("delim", &self.delim);
-        fmt.field("escaper", &self.escaper);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
 }
 impl<'t, F, S> Display for EscapedRecoverable<'t, F, S> {
     #[inline]
@@ -59,13 +51,9 @@ impl<'t, F: Clone, S: Clone> Spanning<F, S> for EscapedRecoverable<'t, F, S> {
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
 }
-impl<'t, F, S: SpannableEq> Eq for EscapedRecoverable<'t, F, S> {}
-impl<'t, F, S: SpannableEq> PartialEq for EscapedRecoverable<'t, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.delim.eq(other.delim) && self.escaper.eq(other.escaper) && self.span.eq(&other.span) }
-}
 
 /// Defines the fatal errors of the [`Escaped`]-combinator.
+#[derive(Debug, Eq, PartialEq)]
 pub enum EscapedFatal<'t, F, S, E> {
     /// Failed to find the matching closing delimiter.
     DelimClose { delim: &'t str, escaper: &'t str, span: Span<F, S> },
@@ -73,31 +61,6 @@ pub enum EscapedFatal<'t, F, S, E> {
     IllegalEscapee { err: E },
     /// An escape-character (e.g., `\`) was given without an escapee.
     OrphanEscaper { escaper: &'t str, span: Span<F, S> },
-}
-impl<'t, F, S, E: Debug> Debug for EscapedFatal<'t, F, S, E> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        match self {
-            Self::DelimClose { delim, escaper, span } => {
-                let mut fmt = f.debug_struct("EscapedFatal::DelimClose");
-                fmt.field("delim", delim);
-                fmt.field("escaper", escaper);
-                fmt.field("span", span);
-                fmt.finish()
-            },
-            Self::IllegalEscapee { err } => {
-                let mut fmt = f.debug_struct("EscapedFatal::IllegalEscapee");
-                fmt.field("err", err);
-                fmt.finish()
-            },
-            Self::OrphanEscaper { escaper, span } => {
-                let mut fmt = f.debug_struct("EscapedFatal::OrphanEscaper");
-                fmt.field("escaper", escaper);
-                fmt.field("span", span);
-                fmt.finish()
-            },
-        }
-    }
 }
 impl<'t, F, S, E: Display> Display for EscapedFatal<'t, F, S, E> {
     #[inline]
@@ -137,23 +100,6 @@ impl<'t, F: Clone, S: Clone, E: Spanning<F, S>> Spanning<F, S> for EscapedFatal<
         }
     }
 }
-impl<'t, F, S: SpannableEq, E: Eq> Eq for EscapedFatal<'t, F, S, E> {}
-impl<'t, F, S: SpannableEq, E: PartialEq> PartialEq for EscapedFatal<'t, F, S, E> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                Self::DelimClose { delim: ldelim, escaper: lescaper, span: lspan },
-                Self::DelimClose { delim: rdelim, escaper: rescaper, span: rspan },
-            ) => ldelim == rdelim && lescaper == rescaper && lspan == rspan,
-            (Self::IllegalEscapee { err: lerr }, Self::IllegalEscapee { err: rerr }) => lerr == rerr,
-            (Self::OrphanEscaper { escaper: lescaper, span: lspan }, Self::OrphanEscaper { escaper: rescaper, span: rspan }) => {
-                lescaper == rescaper && lspan == rspan
-            },
-            _ => false,
-        }
-    }
-}
 
 
 
@@ -188,7 +134,7 @@ impl<'t> ExpectsFormatter for EscapedExpectsFormatter<'t> {
 
 /***** AUXILLARY *****/
 /// Represents the result of the [`escaped`]-combinator.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscapedString<F, S> {
     /// Represents the delimited quotes (opening and closing, respectively).
     pub delim: (Span<F, S>, Span<F, S>),
@@ -196,11 +142,6 @@ pub struct EscapedString<F, S> {
     pub span:  Span<F, S>,
     /// If the literal includes escapes, then this is the resolved value after processing them.
     pub value: Option<String>,
-}
-impl<F, S: SpannableEq> Eq for EscapedString<F, S> {}
-impl<F, S: SpannableEq> PartialEq for EscapedString<F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.delim == other.delim && self.span == other.span && self.value == other.value }
 }
 
 

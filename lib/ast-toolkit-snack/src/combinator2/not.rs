@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    14 Dec 2024, 19:36:01
+//    09 Jan 2025, 20:33:20
 //  Auto updated?
 //    Yes
 //
@@ -13,54 +13,14 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
+use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
 
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{Expected, Result as SResult, SnackError};
 use crate::{Combinator2, ExpectsFormatter};
-
-
-/***** ERRORS *****/
-/// The error returned by the [`Not`]-combinator.
-pub struct NotRecoverable<FM, F, S> {
-    /// The formatter of the given combinator.
-    pub fmt:  FM,
-    /// Where we failed to not parse something.
-    pub span: Span<F, S>,
-}
-impl<FM: Debug, F, S> Debug for NotRecoverable<FM, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("NotRecoverable");
-        fmt.field("fmt", &self.fmt);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
-}
-impl<FM: ExpectsFormatter, F, S> Display for NotRecoverable<FM, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Unexpected ")?;
-        self.fmt.expects_fmt(f, 0)
-    }
-}
-impl<FM, F: Clone, S: Clone> Spanning<F, S> for NotRecoverable<FM, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
-
-    #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<FM, F, S: SpannableEq> Eq for NotRecoverable<FM, F, S> {}
-impl<FM, F, S: SpannableEq> PartialEq for NotRecoverable<FM, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
-}
-
-
 
 
 /***** FORMATTERS *****/
@@ -104,7 +64,7 @@ where
 {
     type ExpectsFormatter = NotExpectsFormatter<C::ExpectsFormatter>;
     type Output = ();
-    type Recoverable = NotRecoverable<C::ExpectsFormatter, F, S>;
+    type Recoverable = Expected<NotExpectsFormatter<C::ExpectsFormatter>, F, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -133,7 +93,7 @@ where
                 };
 
                 // OK, that's what we want
-                Err(SnackError::Recoverable(NotRecoverable { fmt: self.comb.expects(), span }))
+                Err(SnackError::Recoverable(Expected { fmt: self.expects(), span }))
             },
             Err(SnackError::Recoverable(_) | SnackError::Fatal(_)) => Ok((input, ())),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),

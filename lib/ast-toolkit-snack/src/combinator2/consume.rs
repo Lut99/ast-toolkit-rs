@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    14 Dec 2024, 19:35:52
+//    09 Jan 2025, 20:30:46
 //  Auto updated?
 //    Yes
 //
@@ -13,10 +13,11 @@
 //
 
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator2, ExpectsFormatter};
@@ -24,28 +25,12 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** ERRORS *****/
 /// Defines the errors emitted by [`Consume`].
+#[derive(Debug, Eq, PartialEq)]
 pub enum ConsumeRecoverable<E, F, S> {
     /// The nested combinator failed.
     Comb(E),
     /// There was input left.
     RemainingInput { span: Span<F, S> },
-}
-impl<E: Debug, F, S> Debug for ConsumeRecoverable<E, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        match self {
-            Self::Comb(err) => {
-                let mut fmt = f.debug_tuple("ConsumeRecoverable::Comb");
-                fmt.field(err);
-                fmt.finish()
-            },
-            Self::RemainingInput { span } => {
-                let mut fmt = f.debug_struct("ConsumeRecoverable::RemainingInput");
-                fmt.field("span", span);
-                fmt.finish()
-            },
-        }
-    }
 }
 impl<E: Display, F, S> Display for ConsumeRecoverable<E, F, S> {
     #[inline]
@@ -79,17 +64,6 @@ impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for ConsumeRecoverabl
         match self {
             Self::Comb(err) => err.into_span(),
             Self::RemainingInput { span } => span,
-        }
-    }
-}
-impl<E: Eq, F, S: SpannableEq> Eq for ConsumeRecoverable<E, F, S> {}
-impl<E: PartialEq, F, S: SpannableEq> PartialEq for ConsumeRecoverable<E, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Comb(lhs), Self::Comb(rhs)) => lhs == rhs,
-            (Self::RemainingInput { span: lhs }, Self::RemainingInput { span: rhs }) => lhs == rhs,
-            _ => false,
         }
     }
 }

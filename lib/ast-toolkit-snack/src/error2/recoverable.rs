@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:01:07
 //  Last edited:
-//    14 Dec 2024, 19:23:43
+//    09 Jan 2025, 20:34:39
 //  Auto updated?
 //    Yes
 //
@@ -14,10 +14,11 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator2, ExpectsFormatter};
@@ -25,17 +26,10 @@ use crate::{Combinator2, ExpectsFormatter};
 
 /***** ERRORS *****/
 /// Defines the recoverable error thrown by the [`Recoverable`]-combinator.
+#[derive(Debug, Eq, PartialEq)]
 pub struct RecoverableRecoverable<F, S> {
     /// The place where the recoverable error was thrown.
     pub span: Span<F, S>,
-}
-impl<F, S> Debug for RecoverableRecoverable<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("RecoverableRecoverable");
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
 }
 impl<F, S> Display for RecoverableRecoverable<F, S> {
     #[inline]
@@ -53,11 +47,6 @@ impl<F: Clone, S: Clone> Spanning<F, S> for RecoverableRecoverable<F, S> {
     {
         self.span
     }
-}
-impl<F, S: SpannableEq> Eq for RecoverableRecoverable<F, S> {}
-impl<F, S: SpannableEq> PartialEq for RecoverableRecoverable<F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span.eq(&other.span) }
 }
 
 

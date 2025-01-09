@@ -16,7 +16,7 @@ required-features = ["derive"]
 [dependencies]
 ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", features = ["trailing"], optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span" }
-debug = { git = "https://github.com/Lut99/debug-rs" }
+better-derive = { git = "https://github.com/Lut99/better-derive-rs" }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 paste = "1.0"
 stackvec = { git = "https://github.com/Lut99/stackvec-rs" }

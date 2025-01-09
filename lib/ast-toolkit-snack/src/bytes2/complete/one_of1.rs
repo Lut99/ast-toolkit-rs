@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    09 Jan 2025, 01:00:55
+//    09 Jan 2025, 19:01:05
 //  Auto updated?
 //    Yes
 //
@@ -14,11 +14,12 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfBytes;
@@ -28,21 +29,12 @@ use crate::{Combinator2, ExpectsFormatter};
 /***** ERRORS *****/
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
+#[derive(Debug, Eq, PartialEq)]
 pub struct OneOf1Recoverable<'b, F, S> {
     /// The set of bytes to one of.
     pub byteset: &'b [u8],
     /// The location where no characters were found.
     pub span:    Span<F, S>,
-}
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<'b, F, S> Debug for OneOf1Recoverable<'b, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("OneOf1Recoverable");
-        fmt.field("byteset", &self.byteset);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
 }
 impl<'b, F, S> Display for OneOf1Recoverable<'b, F, S> {
     #[inline]
@@ -55,11 +47,6 @@ impl<'b, F: Clone, S: Clone> Spanning<F, S> for OneOf1Recoverable<'b, F, S> {
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<'b, F, S: SpannableEq> Eq for OneOf1Recoverable<'b, F, S> {}
-impl<'b, F, S: SpannableEq> PartialEq for OneOf1Recoverable<'b, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.byteset == other.byteset && self.span == other.span }
 }
 
 

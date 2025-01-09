@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    14 Dec 2024, 19:35:31
+//    09 Jan 2025, 19:02:40
 //  Auto updated?
 //    Yes
 //
@@ -14,11 +14,12 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::WhileBytes;
@@ -28,21 +29,12 @@ use crate::{Combinator2, ExpectsFormatter};
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
+#[derive(Debug, Eq, PartialEq)]
 pub struct While1Recoverable<'t, F, S> {
     /// Some description of what was expected.
     pub what: &'t str,
     /// The location where no bytes were found.
     pub span: Span<F, S>,
-}
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<'t, F, S> Debug for While1Recoverable<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("While1Recoverable");
-        fmt.field("what", &self.what);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
 }
 impl<'t, F, S> Display for While1Recoverable<'t, F, S> {
     #[inline]
@@ -55,11 +47,6 @@ impl<'t, F: Clone, S: Clone> Spanning<F, S> for While1Recoverable<'t, F, S> {
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<'t, F, S: SpannableEq> Eq for While1Recoverable<'t, F, S> {}
-impl<'t, F, S: SpannableEq> PartialEq for While1Recoverable<'t, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
 }
 
 

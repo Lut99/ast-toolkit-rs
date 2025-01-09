@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 17:57:55
 //  Last edited:
-//    14 Dec 2024, 19:38:01
+//    09 Jan 2025, 20:36:27
 //  Auto updated?
 //    Yes
 //
@@ -12,61 +12,13 @@
 //!   Implements the [`many1()`]-combinator.
 //
 
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::Span;
 
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{Expected, Result as SResult, SnackError};
 use crate::{Combinator2, ExpectsFormatter};
-
-
-/***** ERRORS *****/
-/// Defines the error that is thrown by [`Many1`] when there isn't any.
-pub struct Many1Recoverable<F, S, C> {
-    /// Some thing describing what we expected.
-    pub what: C,
-    /// The span where the error occurred.
-    pub span: Span<F, S>,
-}
-// NOTE: We don't derive this, as the macro automatically applies unnecessary [`Debug`] bounds on
-// `F` and `S`
-impl<F, S, C: Debug> Debug for Many1Recoverable<F, S, C> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("Many1Recoverable");
-        fmt.field("what", &self.what);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
-}
-impl<F, S: ExpectsFormatter, C: ExpectsFormatter> Display for Many1Recoverable<F, S, C> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", Many1ExpectsFormatter { fmt: &self.what }) }
-}
-impl<F, S: ExpectsFormatter, C: ExpectsFormatter> Error for Many1Recoverable<F, S, C> {}
-impl<F: Clone, S: Clone, C> Spanning<F, S> for Many1Recoverable<F, S, C> {
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
-
-    #[inline]
-    fn into_span(self) -> Span<F, S>
-    where
-        Self: Sized,
-    {
-        self.span
-    }
-}
-impl<F, S: SpannableEq, C: Eq> Eq for Many1Recoverable<F, S, C> {}
-impl<F, S: SpannableEq, C: PartialEq> PartialEq for Many1Recoverable<F, S, C> {
-    /// NOTE: This does not include `fmt`. Debatable, but much easier this way.
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.what == other.what && self.span == other.span }
-}
-
-
-
 
 
 /***** FORMATTERS *****/
@@ -110,7 +62,7 @@ where
 {
     type ExpectsFormatter = Many1ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Many1Recoverable<F, S, C::ExpectsFormatter>;
+    type Recoverable = Expected<Many1ExpectsFormatter<C::ExpectsFormatter>, F, S>;
     type Fatal = C::Fatal;
 
     #[inline]
@@ -131,7 +83,7 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => {
                     if res.is_empty() {
-                        return Err(SnackError::Recoverable(Many1Recoverable { what: self.comb.expects(), span: rem }));
+                        return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: rem }));
                     } else {
                         return Ok((rem, res));
                     }
