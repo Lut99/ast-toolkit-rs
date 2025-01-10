@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    09 Jan 2025, 19:01:05
+//    10 Jan 2025, 12:07:50
 //  Auto updated?
 //    Yes
 //
@@ -21,27 +21,27 @@ use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
+use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfBytes;
-use crate::{Combinator2, ExpectsFormatter};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf1Recoverable<'b, F, S> {
+pub struct Recoverable<'b, F, S> {
     /// The set of bytes to one of.
     pub byteset: &'b [u8],
     /// The location where no characters were found.
     pub span:    Span<F, S>,
 }
-impl<'b, F, S> Display for OneOf1Recoverable<'b, F, S> {
+impl<'b, F, S> Display for Recoverable<'b, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", OneOf1ExpectsFormatter { byteset: self.byteset }) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { byteset: self.byteset }) }
 }
-impl<'b, F, S> Error for OneOf1Recoverable<'b, F, S> {}
-impl<'b, F: Clone, S: Clone> Spanning<F, S> for OneOf1Recoverable<'b, F, S> {
+impl<'b, F, S> Error for Recoverable<'b, F, S> {}
+impl<'b, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'b, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
@@ -56,18 +56,18 @@ impl<'b, F: Clone, S: Clone> Spanning<F, S> for OneOf1Recoverable<'b, F, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf1ExpectsFormatter<'b> {
+pub struct ExpectsFormatter<'b> {
     /// The set of bytes we expect one of.
     pub byteset: &'b [u8],
 }
-impl<'b> Display for OneOf1ExpectsFormatter<'b> {
+impl<'b> Display for ExpectsFormatter<'b> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'b> ExpectsFormatter for OneOf1ExpectsFormatter<'b> {
+impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
         for i in 0..self.byteset.len() {
@@ -108,13 +108,13 @@ where
     F: Clone,
     S: Clone + OneOfBytes,
 {
-    type ExpectsFormatter = OneOf1ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'b>;
     type Output = Span<F, S>;
-    type Recoverable = OneOf1Recoverable<'b, F, S>;
+    type Recoverable = Recoverable<'b, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OneOf1ExpectsFormatter { byteset: self.byteset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -122,7 +122,7 @@ where
         if match_point > 0 {
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
-            Err(SnackError::Recoverable(OneOf1Recoverable { byteset: self.byteset, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { byteset: self.byteset, span: input.start_onwards() }))
         }
     }
 }
@@ -168,14 +168,14 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         byteset: &[b'a', b'b', b'c', 191, 195],
 ///         span:    span4,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         byteset: &[b'a', b'b', b'c', 191, 195],
 ///         span:    span5,
 ///     }))

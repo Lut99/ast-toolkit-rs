@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    30 Nov 2024, 22:56:38
+//    10 Jan 2025, 12:06:47
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use super::super::complete::one_of1 as one_of1_complete;
-pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, OneOf1Recoverable};
+pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, OneOfBytes};
@@ -44,7 +44,7 @@ where
 {
     type ExpectsFormatter = OneOf1ExpectsFormatter<'b>;
     type Output = Span<F, S>;
-    type Recoverable = OneOf1Recoverable<'b, F, S>;
+    type Recoverable = Recoverable<'b, F, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -104,7 +104,7 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         byteset: &[b'a', b'b', b'c', 191, 195],
 ///         span:    span4,
 ///     }))
