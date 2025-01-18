@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:11:28
 //  Last edited:
-//    01 Dec 2024, 12:20:41
+//    18 Jan 2025, 17:52:09
 //  Auto updated?
 //    Yes
 //
@@ -16,13 +16,13 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-use crate::result::Result as SResult;
 use crate::Combinator2;
+use crate::result::Result as SResult;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`inspect_after()`]-combinator.
-pub struct InspectAfter<F, S, C, P> {
+pub struct InspectAfter<C, P, F, S> {
     /// The combinator to maybe apply.
     comb: C,
     /// The closure to call after executing `comb`.
@@ -32,7 +32,7 @@ pub struct InspectAfter<F, S, C, P> {
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C, P> Combinator2<'t, F, S> for InspectAfter<F, S, C, P>
+impl<'t, C, P, F, S> Combinator2<'t, F, S> for InspectAfter<C, P, F, S>
 where
     C: Combinator2<'t, F, S>,
     P: for<'a> FnMut(&'a SResult<F, S, C::Output, C::Recoverable, C::Fatal>),
@@ -79,10 +79,10 @@ where
 ///
 /// # Exampel
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::debug2::inspect_after;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
@@ -92,11 +92,11 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2 }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span2 }))
 /// );
 /// ```
 #[inline]
-pub const fn inspect_after<'t, F, S, C, P>(comb: C, pred: P) -> InspectAfter<F, S, C, P>
+pub const fn inspect_after<'t, C, P, F, S>(comb: C, pred: P) -> InspectAfter<C, P, F, S>
 where
     C: Combinator2<'t, F, S>,
     P: for<'a> FnMut(&'a SResult<F, S, C::Output, C::Recoverable, C::Fatal>),

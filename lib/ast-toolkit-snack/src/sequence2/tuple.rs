@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    14 Dec 2024, 19:36:45
+//    18 Jan 2025, 18:42:29
 //  Auto updated?
 //    Yes
 //
@@ -30,7 +30,14 @@ macro_rules! tuple_comb_impl {
         ::paste::paste! {
             /* ERRORS */
             #[doc = concat!("The recoverable error returned by a tuple of ", stringify!($li), " combinators.")]
-            pub enum [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
+            pub type [<Recoverable $li >]<[<E $fi>] $(, [<E $i>])*> = [<Error $li >]<[<E $fi>] $(, [<E $i>])*>;
+
+            #[doc = concat!("The fatal error returned by a tuple of ", stringify!($li), " combinators.")]
+            pub type [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> = [<Error $li>]<[<E $fi>] $(, [<E $i>])*>;
+
+            #[doc = concat!("The recoverable/fatal error returned by a tuple of ", stringify!($li), " combinators.")]
+            #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+            pub enum [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[doc = concat!("Combinator ", stringify!($fi), " failed.")]
                 [<Comb $fi>]([<E $fi>]),
                 $(
@@ -38,23 +45,7 @@ macro_rules! tuple_comb_impl {
                     [<Comb $i>]([<E $i>]),
                 )*
             }
-            impl<[<E $fi>]: Debug $(, [<E $i>]: Debug)*> Debug for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
-                fn fmt(&self, f: &mut Formatter) -> FResult {
-                    match self {
-                        Self::[<Comb $fi>](err) => {
-                            let mut fmt = f.debug_tuple(concat!(stringify!([<Tuple $li Error>]), "::", stringify!([<Comb $fi>])));
-                            fmt.field(err);
-                            fmt.finish()
-                        },
-                        $(Self::[<Comb $i>](err) => {
-                            let mut fmt = f.debug_tuple(concat!(stringify!([<Tuple $li Error>]), "::", stringify!([<Comb $i>])));
-                            fmt.field(err);
-                            fmt.finish()
-                        },)*
-                    }
-                }
-            }
-            impl<[<E $fi>]: Display $(, [<E $i>]: Display)*> Display for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<[<E $fi>]: Display $(, [<E $i>]: Display)*> Display for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult {
                     match self {
@@ -63,7 +54,7 @@ macro_rules! tuple_comb_impl {
                     }
                 }
             }
-            impl<[<E $fi>]: 'static + Error $(, [<E $i>]: 'static + Error)*> Error for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<[<E $fi>]: 'static + Error $(, [<E $i>]: 'static + Error)*> Error for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
                 fn source(&self) -> Option<&(dyn 'static + Error)> {
                     match self {
@@ -72,7 +63,7 @@ macro_rules! tuple_comb_impl {
                     }
                 }
             }
-            impl<F: Clone, S: Clone, [<E $fi>]: Spanning<F, S> $(, [<E $i>]: Spanning<F, S>)*> Spanning<F, S> for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<F: Clone, S: Clone, [<E $fi>]: Spanning<F, S> $(, [<E $i>]: Spanning<F, S>)*> Spanning<F, S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
                 fn span(&self) -> Span<F, S> {
                     match self {
@@ -89,36 +80,24 @@ macro_rules! tuple_comb_impl {
                     }
                 }
             }
-            impl<[<E $fi>]: Eq $(, [<E $i>]: Eq)*> Eq for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {}
-            impl<[<E $fi>]: PartialEq $(, [<E $i>]: PartialEq)*> PartialEq for [<Tuple $li Error>]<[<E $fi>] $(, [<E $i>])*> {
-                #[inline]
-                fn eq(&self, other: &Self) -> bool {
-                    match (self, other) {
-                        (Self::[<Comb $fi>](lhs), Self::[<Comb $fi>](rhs)) => lhs == rhs,
-                        $((Self::[<Comb $i>](lhs), Self::[<Comb $i>](rhs)) => lhs == rhs,)*
-                        #[allow(unreachable_patterns)]
-                        _ => false,
-                    }
-                }
-            }
 
 
 
             /* FORMATTERS */
             #[doc = concat!("Expects formatter for the ", stringify!([<Tuple $li>]), " combinator.")]
             #[derive(Debug, Eq, PartialEq)]
-            pub struct [<Tuple $li ExpectsFormatter>]<[<F $fi>] $(, [<F $i>])*> {
+            pub struct [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 /// The internal formatters for every combinator making up the tuple.
                 pub fmts: ([<F $fi>], $([<F $i>]),*),
             }
-            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [<Tuple $li ExpectsFormatter>]<[<F $fi>] $(, [<F $i>])*> {
+            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
                     write!(f, "Expected ")?;
                     self.expects_fmt(f, 0)
                 }
             }
-            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> ExpectsFormatter for [<Tuple $li ExpectsFormatter>]<[<F $fi>] $(, [<F $i>])*> {
+            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> ExpectsFormatter for [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]
                 fn expects_fmt(&self, f: &mut Formatter<'_>, indent: usize) -> FResult {
                     self.fmts.$fi.expects_fmt(f, indent)?;
@@ -133,46 +112,41 @@ macro_rules! tuple_comb_impl {
 
 
             /* COMBINATORS */
-            #[doc = concat!("Combinator for a tuple of ", stringify!($li), " combinators.\n\nAll combinators are applied in-order, where any failure short-circuits the parsing.")]
-            pub struct [<Tuple $li>]<[<C $fi>] $(, [<C $i>])*> {
-                /// The internal combinators making up the tuple.
-                pub(crate) combs: ([<C $fi>], $([<C $i>]),*),
-            }
-            impl<'t, F, S, [<C $fi>] $(, [<C $i>])*> Combinator2<'t, F, S> for [<Tuple $li>]<[<C $fi>] $(, [<C $i>])*>
+            impl<'t, [<C $fi>] $(, [<C $i>])*, F, S> Combinator2<'t, F, S> for ([<C $fi>], $([<C $i>],)*)
             where
                 [<C $fi>]: Combinator2<'t, F, S>,
                 $([<C $i>]: Combinator2<'t, F, S>,)*
             {
-                type ExpectsFormatter = [<Tuple $li ExpectsFormatter>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
+                type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                 type Output = ([<C $fi>]::Output, $([<C $i>]::Output),*);
-                type Recoverable = [<Tuple $li Error>]<[<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*>;
-                type Fatal = [<Tuple $li Error>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
+                type Recoverable = [<Error $li>]<[<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*>;
+                type Fatal = [<Error $li>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
 
                 #[inline]
                 fn expects(&self) -> Self::ExpectsFormatter {
-                    [<Tuple $li ExpectsFormatter>] { fmts: (self.combs.$fi.expects(), $(self.combs.$i.expects(),)*) }
+                    [<ExpectsFormatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects(),)*) }
                 }
 
                 fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
                     // We collect the results as we find them
                     let mut results: (MaybeUninit<[<C $fi>]::Output>, $(MaybeUninit<[<C $i>]::Output>,)*) = (MaybeUninit::<[<C $fi>]::Output>::uninit(), $(MaybeUninit::<[<C $i>]::Output>::uninit(),)*);
-                    let rem: Span<F, S> = match self.combs.$fi.parse(input) {
+                    let rem: Span<F, S> = match self.$fi.parse(input) {
                         Ok((rem, res)) => {
                             results.$fi.write(res);
                             rem
                         },
-                        Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Tuple $li Error>]::[<Comb $fi>](err))),
-                        Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Tuple $li Error>]::[<Comb $fi>](err))),
+                        Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $fi>](err))),
+                        Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $fi>](err))),
                         Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                     };
                     $(
-                        let rem: Span<F, S> = match self.combs.$i.parse(rem) {
+                        let rem: Span<F, S> = match self.$i.parse(rem) {
                             Ok((rem, res)) => {
                                 results.$i.write(res);
                                 rem
                             },
-                            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Tuple $li Error>]::[<Comb $i>](err))),
-                            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Tuple $li Error>]::[<Comb $i>](err))),
+                            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $i>](err))),
+                            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $i>](err))),
                             Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         };
                     )*
@@ -257,10 +231,11 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::sequence::tuple;
-/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::sequence2::tuple;
+/// use ast_toolkit_snack::utf82::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello123");
@@ -268,12 +243,21 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 /// let span3 = Span::new("<example>", "HelloWorld");
 ///
 /// let mut comb = tuple((tag("Hello"), digit1()));
+/// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))));
 /// assert_eq!(
-///     comb.parse(span1).unwrap(),
-///     (span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))
+///     comb.parse(span2),
+///     Err(SnackError::Recoverable(tuple::Recoverable2::Comb0(tag::Recoverable {
+///         tag:  "Hello",
+///         span: span2,
+///     })))
 /// );
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
-/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Digit1 { .. }))));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::Recoverable(tuple::Recoverable2::Comb1(digit1::Recoverable {
+///         fmt:  digit1::ExpectsFormatter,
+///         span: span3.slice(5..),
+///     })))
+/// );
 /// ```
 #[inline]
 pub const fn tuple<C>(combs: C) -> C { combs }

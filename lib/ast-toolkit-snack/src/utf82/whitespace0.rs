@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    14 Dec 2024, 19:32:49
+//    18 Jan 2025, 18:21:23
 //  Auto updated?
 //    Yes
 //
@@ -21,21 +21,21 @@ use ast_toolkit_span::Span;
 use super::one_of0;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfUtf8;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Whitespace0`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Whitespace0ExpectsFormatter;
-impl Display for Whitespace0ExpectsFormatter {
+pub struct ExpectsFormatter;
+impl Display for ExpectsFormatter {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl ExpectsFormatter for Whitespace0ExpectsFormatter {
+impl crate::ExpectsFormatter for ExpectsFormatter {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "spaces, tabs, carriage returns or newlines") }
 }
@@ -56,13 +56,13 @@ where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
-    type ExpectsFormatter = Whitespace0ExpectsFormatter;
+    type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Whitespace0ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

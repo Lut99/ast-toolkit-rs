@@ -14,11 +14,11 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::Span;
+use ast_toolkit_span::range::SpanRange;
 
-use crate::result::Result as SResult;
 use crate::Combinator2;
+use crate::result::Result as SResult;
 
 
 /***** COMBINATORS *****/
@@ -83,11 +83,11 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::combinator2::recognize;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::sequence2::pair;
 /// use ast_toolkit_snack::utf82::complete::tag;
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello, world!");
@@ -97,7 +97,7 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(13..), span1.slice(..13))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(pair::PairError::Comb0(tag::TagRecoverable {
+///     Err(SnackError::Recoverable(pair::Recoverable::Comb0(tag::Recoverable {
 ///         tag:  "Hello, ",
 ///         span: span2,
 ///     })))

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    09 Jan 2025, 20:30:46
+//    18 Jan 2025, 18:48:58
 //  Auto updated?
 //    Yes
 //
@@ -20,19 +20,19 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the errors emitted by [`Consume`].
 #[derive(Debug, Eq, PartialEq)]
-pub enum ConsumeRecoverable<E, F, S> {
+pub enum Recoverable<E, F, S> {
     /// The nested combinator failed.
     Comb(E),
     /// There was input left.
     RemainingInput { span: Span<F, S> },
 }
-impl<E: Display, F, S> Display for ConsumeRecoverable<E, F, S> {
+impl<E: Display, F, S> Display for Recoverable<E, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -41,7 +41,7 @@ impl<E: Display, F, S> Display for ConsumeRecoverable<E, F, S> {
         }
     }
 }
-impl<E: Error, F, S> Error for ConsumeRecoverable<E, F, S> {
+impl<E: Error, F, S> Error for Recoverable<E, F, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -50,7 +50,7 @@ impl<E: Error, F, S> Error for ConsumeRecoverable<E, F, S> {
         }
     }
 }
-impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for ConsumeRecoverable<E, F, S> {
+impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Recoverable<E, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -74,18 +74,18 @@ impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for ConsumeRecoverabl
 /***** FORMATTERS *****/
 /// Expects formatter for the [`Consume`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ConsumeExpectsFormatter<F> {
+pub struct ExpectsFormatter<F> {
     /// The nested combinator is what we're expecting.
     pub fmt: F,
 }
-impl<F: ExpectsFormatter> Display for ConsumeExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<F: ExpectsFormatter> ExpectsFormatter for ConsumeExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         self.fmt.expects_fmt(f, indent)?;
@@ -110,26 +110,26 @@ where
     C: Combinator2<'t, F, S>,
     S: Spannable,
 {
-    type ExpectsFormatter = ConsumeExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = C::Output;
-    type Recoverable = ConsumeRecoverable<C::Recoverable, F, S>;
+    type Recoverable = Recoverable<C::Recoverable, F, S>;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { ConsumeExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         // First, parse the combinator as usual
         let (rem, res): (Span<F, S>, C::Output) = match self.comb.parse(input) {
             Ok(res) => res,
-            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(ConsumeRecoverable::Comb(err))),
+            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Comb(err))),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
             Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
 
         // Then assert that nothing is remaining
-        if rem.is_empty() { Result::Ok((rem, res)) } else { Err(SnackError::Recoverable(ConsumeRecoverable::RemainingInput { span: rem })) }
+        if rem.is_empty() { Result::Ok((rem, res)) } else { Err(SnackError::Recoverable(Recoverable::RemainingInput { span: rem })) }
     }
 }
 
@@ -170,13 +170,13 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(consume::ConsumeRecoverable::RemainingInput {
+///     Err(SnackError::Recoverable(consume::Recoverable::RemainingInput {
 ///         span: span2.slice(5..),
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(consume::ConsumeRecoverable::Comb(tag::TagRecoverable {
+///     Err(SnackError::Recoverable(consume::Recoverable::Comb(tag::Recoverable {
 ///         tag:  "Hello",
 ///         span: span3,
 ///     })))

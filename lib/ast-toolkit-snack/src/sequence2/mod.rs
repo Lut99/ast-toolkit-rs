@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:13
 //  Last edited:
-//    15 Dec 2024, 10:19:03
+//    18 Jan 2025, 18:45:30
 //  Auto updated?
 //    Yes
 //
@@ -13,19 +13,19 @@
 //
 
 // Modules
+pub mod delimited;
 pub mod pair;
-// pub mod preceded;
+pub mod preceded;
 pub mod repeated;
+pub mod separated_pair;
+pub mod terminated;
 pub mod tuple;
-// pub mod terminated;
-// pub mod delimited;
-// pub mod separated_pair;
 
 // Use the combinators
+pub use delimited::delimited;
 pub use pair::pair;
-// pub use preceded::preceded;
+pub use preceded::preceded;
 pub use repeated::repeated;
+pub use separated_pair::separated_pair;
+pub use terminated::terminated;
 pub use tuple::tuple;
-// pub use terminated::terminated;
-// pub use delimited::delimited;
-// pub use separated_pair::separated_pair;

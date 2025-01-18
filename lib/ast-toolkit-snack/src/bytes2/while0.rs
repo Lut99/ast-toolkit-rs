@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    14 Dec 2024, 19:35:40
+//    18 Jan 2025, 17:42:58
 //  Auto updated?
 //    Yes
 //
@@ -21,24 +21,24 @@ use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
 use crate::span::WhileBytes;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While0`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct While0ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'t> {
     /// A description of what was while'd
     pub what: &'t str,
 }
-impl<'t> Display for While0ExpectsFormatter<'t> {
+impl<'t> Display for ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for While0ExpectsFormatter<'t> {
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{}", self.what) }
 }
@@ -65,13 +65,13 @@ where
     S: Clone + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = While0ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While0ExpectsFormatter { what: self.what } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

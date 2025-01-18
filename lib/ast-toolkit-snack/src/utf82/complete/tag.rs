@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    14 Dec 2024, 19:37:00
+//    18 Jan 2025, 18:16:59
 //  Auto updated?
 //    Yes
 //
@@ -14,51 +14,38 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::SnackError;
 use crate::span::MatchBytes;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 // Recoverable error for the [`Tag`]-combinator.
-pub struct TagRecoverable<'t, F, S> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Recoverable<'t, F, S> {
     /// What we expected
     pub tag:  &'t str,
     /// Where we expected it
     pub span: Span<F, S>,
 }
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<'t, F, S> Debug for TagRecoverable<'t, F, S> {
+impl<'t, F, S> Display for Recoverable<'t, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("TagRecoverable");
-        fmt.field("tag", &self.tag);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
+    fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", ExpectsFormatter { tag: self.tag }) }
 }
-impl<'t, F, S> Display for TagRecoverable<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", TagExpectsFormatter { tag: self.tag }) }
-}
-impl<'t, F, S> Error for TagRecoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for TagRecoverable<'t, F, S> {
+impl<'t, F, S> Error for Recoverable<'t, F, S> {}
+impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<'t, F, S: SpannableEq> Eq for TagRecoverable<'t, F, S> {}
-impl<'t, F, S: SpannableEq> PartialEq for TagRecoverable<'t, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.tag == other.tag && self.span == other.span }
 }
 
 
@@ -68,17 +55,17 @@ impl<'t, F, S: SpannableEq> PartialEq for TagRecoverable<'t, F, S> {
 /***** FORMATTERS *****/
 /// Expects formatter for the [`Tag`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct TagExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'t> {
     pub tag: &'t str,
 }
-impl<'t> Display for TagExpectsFormatter<'t> {
+impl<'t> Display for ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for TagExpectsFormatter<'t> {
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:?}", self.tag) }
 }
@@ -103,13 +90,13 @@ where
     F: Clone,
     S: Clone + MatchBytes,
 {
-    type ExpectsFormatter = TagExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = TagRecoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
@@ -123,7 +110,7 @@ where
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
             // Didn't match the entire tag
-            Err(SnackError::Recoverable(TagRecoverable { tag: self.tag, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input.start_onwards() }))
         }
     }
 }
@@ -161,11 +148,11 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span3.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span3.slice(0..) }))
 /// );
 /// ```
 #[inline]

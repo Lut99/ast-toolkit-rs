@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    14 Dec 2024, 19:35:34
+//    18 Jan 2025, 17:42:38
 //  Auto updated?
 //    Yes
 //
@@ -21,24 +21,24 @@ use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
 use crate::span::OneOfBytes;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf0`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf0ExpectsFormatter<'b> {
+pub struct ExpectsFormatter<'b> {
     /// The set of bytes we expect one of.
     pub byteset: &'b [u8],
 }
-impl<'b> Display for OneOf0ExpectsFormatter<'b> {
+impl<'b> Display for ExpectsFormatter<'b> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'b> ExpectsFormatter for OneOf0ExpectsFormatter<'b> {
+impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "one of ")?;
         for i in 0..self.byteset.len() {
@@ -76,13 +76,13 @@ where
     F: Clone,
     S: Clone + OneOfBytes,
 {
-    type ExpectsFormatter = OneOf0ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'b>;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OneOf0ExpectsFormatter { byteset: self.byteset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

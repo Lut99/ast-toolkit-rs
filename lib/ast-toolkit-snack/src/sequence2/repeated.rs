@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:14:44
 //  Last edited:
-//    14 Dec 2024, 19:46:40
+//    18 Jan 2025, 18:04:53
 //  Auto updated?
 //    Yes
 //
@@ -13,18 +13,20 @@
 //
 
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the recoverable error thrown by [`Repeated`].
-pub struct RepeatedRecoverable<F, S, C, E> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Recoverable<C, E, F, S> {
     /// What we're expected.
     pub fmt:  C,
     /// How many times we've seen it.
@@ -36,39 +38,20 @@ pub struct RepeatedRecoverable<F, S, C, E> {
     /// The nested error for trace purposes.
     pub err:  E,
 }
-impl<F, S, C: Debug, E: Debug> Debug for RepeatedRecoverable<F, S, C, E> {
+impl<C: crate::ExpectsFormatter, E, F, S> Display for Recoverable<C, E, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("RepeatedRecoverable");
-        fmt.field("fmt", &self.fmt);
-        fmt.field("got", &self.got);
-        fmt.field("n", &self.n);
-        fmt.field("span", &self.span);
-        fmt.field("err", &self.err);
-        fmt.finish()
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { fmt: &self.fmt, n: self.n }) }
 }
-impl<F, S, C: ExpectsFormatter, E> Display for RepeatedRecoverable<F, S, C, E> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", RepeatedExpectsFormatter { fmt: &self.fmt, n: self.n }) }
-}
-impl<F, S, C: ExpectsFormatter, E: 'static + Error> Error for RepeatedRecoverable<F, S, C, E> {
+impl<C: crate::ExpectsFormatter, E: 'static + Error, F, S> Error for Recoverable<C, E, F, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> { Some(&self.err) }
 }
-impl<F: Clone, S: Clone, C, E> Spanning<F, S> for RepeatedRecoverable<F, S, C, E> {
+impl<C, E, F: Clone, S: Clone> Spanning<F, S> for Recoverable<C, E, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<F, S: SpannableEq, C: Eq, E: Eq> Eq for RepeatedRecoverable<F, S, C, E> {}
-impl<F, S: SpannableEq, C: PartialEq, E: PartialEq> PartialEq for RepeatedRecoverable<F, S, C, E> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.fmt == other.fmt && self.got == other.got && self.n == other.n && self.span == other.span && self.err == other.err
-    }
 }
 
 
@@ -78,20 +61,20 @@ impl<F, S: SpannableEq, C: PartialEq, E: PartialEq> PartialEq for RepeatedRecove
 /***** FORMATTERS *****/
 /// Expects formatter for the [`Repeated`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct RepeatedExpectsFormatter<F> {
+pub struct ExpectsFormatter<F> {
     /// The formatter of the nested combinator.
     pub fmt: F,
     /// The number of times to apply it.
     pub n:   usize,
 }
-impl<F: ExpectsFormatter> Display for RepeatedExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<F: ExpectsFormatter> ExpectsFormatter for RepeatedExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "exactly {} repetitions of ", self.n)?;
@@ -119,13 +102,13 @@ where
     F: Clone,
     S: Clone,
 {
-    type ExpectsFormatter = RepeatedExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = RepeatedRecoverable<F, S, C::ExpectsFormatter, C::Recoverable>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, C::Recoverable, F, S>;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { RepeatedExpectsFormatter { fmt: self.comb.expects(), n: self.n } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects(), n: self.n } }
 
     #[inline]
     fn parse(&mut self, mut input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -138,7 +121,7 @@ where
                     results.push(res);
                 },
                 Err(SnackError::Recoverable(err)) => {
-                    return Err(SnackError::Recoverable(RepeatedRecoverable { fmt: self.comb.expects(), got: i, n: self.n, span: input, err }));
+                    return Err(SnackError::Recoverable(Recoverable { fmt: self.comb.expects(), got: i, n: self.n, span: input, err }));
                 },
                 // TODO: Also wrap this in an error for nicer tracing, but wait until `Diagnostics` are done so we know how that looks.
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
@@ -197,27 +180,27 @@ where
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(repeated::RepeatedRecoverable {
-///         fmt:  tag::TagExpectsFormatter { tag: "hello" },
+///     Err(SnackError::Recoverable(repeated::Recoverable {
+///         fmt:  tag::ExpectsFormatter { tag: "hello" },
 ///         got:  2,
 ///         n:    3,
 ///         span: span3.slice(10..),
-///         err:  tag::TagRecoverable { tag: "hello", span: span3.slice(10..) },
+///         err:  tag::Recoverable { tag: "hello", span: span3.slice(10..) },
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(repeated::RepeatedRecoverable {
-///         fmt:  tag::TagExpectsFormatter { tag: "hello" },
+///     Err(SnackError::Recoverable(repeated::Recoverable {
+///         fmt:  tag::ExpectsFormatter { tag: "hello" },
 ///         got:  2,
 ///         n:    3,
 ///         span: span4.slice(10..),
-///         err:  tag::TagRecoverable { tag: "hello", span: span4.slice(10..) },
+///         err:  tag::Recoverable { tag: "hello", span: span4.slice(10..) },
 ///     }))
 /// );
 /// ```
 #[inline]
-pub const fn repeated<'t, F, S, C>(n: usize, comb: C) -> Repeated<C, F, S>
+pub const fn repeated<'t, C, F, S>(n: usize, comb: C) -> Repeated<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {

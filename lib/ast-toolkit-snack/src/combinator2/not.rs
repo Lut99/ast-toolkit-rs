@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    09 Jan 2025, 20:33:20
+//    18 Jan 2025, 18:49:13
 //  Auto updated?
 //    Yes
 //
@@ -20,24 +20,32 @@ use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
+
+
+/***** TYPE ALIASES *****/
+/// The recoverable error returned by [`Not`].
+pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
+
+
+
 
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Not`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct NotExpectsFormatter<F> {
+pub struct ExpectsFormatter<F> {
     /// The nested formatter of the thing we _didn't_ expect.
     pub fmt: F,
 }
-impl<F: ExpectsFormatter> Display for NotExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<F: ExpectsFormatter> ExpectsFormatter for NotExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "not ")?;
@@ -62,13 +70,13 @@ where
     S: Clone,
     C: Combinator2<'t, F, S>,
 {
-    type ExpectsFormatter = NotExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = ();
-    type Recoverable = Expected<NotExpectsFormatter<C::ExpectsFormatter>, F, S>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { NotExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -93,7 +101,7 @@ where
                 };
 
                 // OK, that's what we want
-                Err(SnackError::Recoverable(Expected { fmt: self.expects(), span }))
+                Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), span }))
             },
             Err(SnackError::Recoverable(_) | SnackError::Fatal(_)) => Ok((input, ())),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
@@ -138,8 +146,8 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1, ())));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(not::NotRecoverable {
-///         fmt:  tag.expects(),
+///     Err(SnackError::Recoverable(not::Recoverable {
+///         fmt:  comb.expects(),
 ///         span: span2.slice(..7),
 ///     }))
 /// );

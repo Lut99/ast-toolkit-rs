@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    09 Jan 2025, 19:01:54
+//    18 Jan 2025, 17:40:56
 //  Auto updated?
 //    Yes
 //
@@ -23,24 +23,24 @@ use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::MatchBytes;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 // Recoverable error for the [`Tag`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct TagRecoverable<'t, F, S> {
+pub struct Recoverable<'t, F, S> {
     /// What we expected
     pub tag:  &'t [u8],
     /// Where we expected it
     pub span: Span<F, S>,
 }
-impl<'t, F, S> Display for TagRecoverable<'t, F, S> {
+impl<'t, F, S> Display for Recoverable<'t, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", TagExpectsFormatter { tag: self.tag }) }
+    fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", ExpectsFormatter { tag: self.tag }) }
 }
-impl<'t, F, S> Error for TagRecoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for TagRecoverable<'t, F, S> {
+impl<'t, F, S> Error for Recoverable<'t, F, S> {}
+impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
@@ -55,18 +55,18 @@ impl<'t, F: Clone, S: Clone> Spanning<F, S> for TagRecoverable<'t, F, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Tag`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct TagExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'t> {
     /// The tag of bytes we expect one of.
     pub tag: &'t [u8],
 }
-impl<'t> Display for TagExpectsFormatter<'t> {
+impl<'t> Display for ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for TagExpectsFormatter<'t> {
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
 }
@@ -93,13 +93,13 @@ where
     F: Clone,
     S: Clone + MatchBytes,
 {
-    type ExpectsFormatter = TagExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = TagRecoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         // See if we can parse the input
@@ -111,7 +111,7 @@ where
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
             // Didn't match the entire tag
-            Err(SnackError::Recoverable(TagRecoverable { tag: self.tag, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input.start_onwards() }))
         }
     }
 }
@@ -149,17 +149,11 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable {
-///         tag:  b"Hello",
-///         span: span2.slice(0..),
-///     }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(tag::TagRecoverable {
-///         tag:  b"Hello",
-///         span: span3.slice(0..),
-///     }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span3.slice(0..) }))
 /// );
 /// ```
 pub const fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    30 Nov 2024, 22:59:04
+//    18 Jan 2025, 17:41:28
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
-pub use super::super::complete::tag::{TagExpectsFormatter, TagRecoverable};
+pub use super::super::complete::tag::{ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, MatchBytes};
@@ -42,13 +42,13 @@ where
     F: Clone,
     S: Clone + LenBytes + MatchBytes,
 {
-    type ExpectsFormatter = TagExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = TagRecoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         // See if we can parse the input
@@ -63,7 +63,7 @@ where
             if match_point == input.len() {
                 Err(SnackError::NotEnough { needed: Some(self.tag.len() - match_point), span: input.slice(match_point..) })
             } else {
-                Err(SnackError::Recoverable(TagRecoverable { tag: self.tag, span: input.start_onwards() }))
+                Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input.start_onwards() }))
             }
         }
     }
@@ -103,10 +103,7 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable {
-///         tag:  b"Hello",
-///         span: span2.slice(0..),
-///     }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),

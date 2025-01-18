@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    10 Jan 2025, 12:06:47
+//    18 Jan 2025, 17:40:18
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use super::super::complete::one_of1 as one_of1_complete;
-pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, Recoverable};
+pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, OneOfBytes};
@@ -42,13 +42,13 @@ where
     F: Clone,
     S: Clone + LenBytes + OneOfBytes,
 {
-    type ExpectsFormatter = OneOf1ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'b>;
     type Output = Span<F, S>;
     type Recoverable = Recoverable<'b, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OneOf1ExpectsFormatter { byteset: self.byteset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

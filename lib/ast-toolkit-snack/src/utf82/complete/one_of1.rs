@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    14 Dec 2024, 19:36:55
+//    18 Jan 2025, 18:15:10
 //  Auto updated?
 //    Yes
 //
@@ -14,52 +14,39 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfUtf8;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
-pub struct OneOf1Recoverable<'t, F, S> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Recoverable<'t, F, S> {
     /// The set of characters to one of.
     pub charset: &'t [&'t str],
     /// The location where no characters were found.
     pub span:    Span<F, S>,
 }
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<'t, F, S> Debug for OneOf1Recoverable<'t, F, S> {
+impl<'t, F, S> Display for Recoverable<'t, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("OneOf1Recoverable");
-        fmt.field("charset", &self.charset);
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { charset: self.charset }) }
 }
-impl<'t, F, S> Display for OneOf1Recoverable<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", OneOf1ExpectsFormatter { charset: self.charset }) }
-}
-impl<'t, F, S> Error for OneOf1Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for OneOf1Recoverable<'t, F, S> {
+impl<'t, F, S> Error for Recoverable<'t, F, S> {}
+impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<'t, F, S: SpannableEq> Eq for OneOf1Recoverable<'t, F, S> {}
-impl<'t, F, S: SpannableEq> PartialEq for OneOf1Recoverable<'t, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
 }
 
 
@@ -69,18 +56,18 @@ impl<'t, F, S: SpannableEq> PartialEq for OneOf1Recoverable<'t, F, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf1ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'t> {
     /// The charset that we expected one of.
     pub charset: &'t [&'t str],
 }
-impl<'t> Display for OneOf1ExpectsFormatter<'t> {
+impl<'t> Display for ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for OneOf1ExpectsFormatter<'t> {
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
@@ -120,13 +107,13 @@ where
     F: Clone,
     S: Clone + OneOfUtf8,
 {
-    type ExpectsFormatter = OneOf1ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = OneOf1Recoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OneOf1ExpectsFormatter { charset: self.charset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { charset: self.charset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -134,7 +121,7 @@ where
         if match_point > 0 {
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
-            Err(SnackError::Recoverable(OneOf1Recoverable { charset: self.charset, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { charset: self.charset, span: input.start_onwards() }))
         }
     }
 }
@@ -179,14 +166,14 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         charset: &["a", "b", "c", "ÿ"],
 ///         span:    span4,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         charset: &["a", "b", "c", "ÿ"],
 ///         span:    span5,
 ///     }))

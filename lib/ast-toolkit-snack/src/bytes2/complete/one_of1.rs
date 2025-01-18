@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    10 Jan 2025, 12:07:50
+//    18 Jan 2025, 17:38:18
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,7 @@ use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
+use crate::ExpectsFormatter as _;
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::OneOfBytes;

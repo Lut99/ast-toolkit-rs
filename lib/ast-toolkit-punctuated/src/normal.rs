@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    26 Mar 2024, 18:05:24
+//    18 Jan 2025, 18:48:17
 //  Auto updated?
 //    Yes
 //
@@ -492,7 +492,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An [`Iterator`] that iterates over the values by mutable reference.
     #[inline]
-    pub fn puncts_mut<'p>(&'p mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
+    pub fn puncts_mut(&mut self) -> PunctsMut<V, P> { PunctsMut { data: self.data.iter_mut() } }
 
     /// Returns an iterator the values in this Puncuated.
     ///

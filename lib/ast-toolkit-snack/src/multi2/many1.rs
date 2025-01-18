@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 17:57:55
 //  Last edited:
-//    09 Jan 2025, 20:36:27
+//    18 Jan 2025, 18:13:36
 //  Auto updated?
 //    Yes
 //
@@ -18,24 +18,32 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
+
+
+/***** TYPE ALIASES *****/
+/// The recoverable error returned by [`Many1`].
+pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
+
+
+
 
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Many1`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Many1ExpectsFormatter<E> {
+pub struct ExpectsFormatter<E> {
     /// The thing we expect multiple times.
     pub fmt: E,
 }
-impl<E: ExpectsFormatter> Display for Many1ExpectsFormatter<E> {
+impl<E: crate::ExpectsFormatter> Display for ExpectsFormatter<E> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<E: ExpectsFormatter> ExpectsFormatter for Many1ExpectsFormatter<E> {
+impl<E: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<E> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "at least one repetition of ")?;
@@ -49,24 +57,24 @@ impl<E: ExpectsFormatter> ExpectsFormatter for Many1ExpectsFormatter<E> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`many1()`]-combinator.
-pub struct Many1<F, S, C> {
+pub struct Many1<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Many1<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Many1<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone,
-    C: Combinator2<'t, F, S>,
 {
-    type ExpectsFormatter = Many1ExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Expected<Many1ExpectsFormatter<C::ExpectsFormatter>, F, S>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, F, S>;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Many1ExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -144,8 +152,8 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(many1::Many1Recoverable {
-///         what: tag::TagExpectsFormatter { tag: "hello" },
+///     Err(SnackError::Recoverable(many1::Recoverable {
+///         fmt:  many1::ExpectsFormatter { fmt: tag::ExpectsFormatter { tag: "hello" } },
 ///         span: span3,
 ///     }))
 /// );
@@ -175,11 +183,11 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
 /// ```
 #[inline]
-pub const fn many1<'t, F, S, C>(comb: C) -> Many1<F, S, C>
+pub const fn many1<'t, C, F, S>(comb: C) -> Many1<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone,
-    C: Combinator2<'t, F, S>,
 {
     Many1 { comb, _f: PhantomData, _s: PhantomData }
 }

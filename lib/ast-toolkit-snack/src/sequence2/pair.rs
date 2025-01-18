@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:06:36
 //  Last edited:
-//    03 Nov 2024, 11:16:56
+//    18 Jan 2025, 18:43:19
 //  Auto updated?
 //    Yes
 //
@@ -12,8 +12,22 @@
 //!   Implements the [`pair()`]-combinator.
 //
 
-pub use super::tuple::{Tuple2 as Pair, Tuple2Error as PairError, Tuple2ExpectsFormatter as PairExpectsFormatter};
+pub use super::tuple::{Error2 as Error, ExpectsFormatter2 as ExpectsFormatter};
 use crate::Combinator2;
+
+
+/***** TYPE ALIASES *****/
+/// Actual implementation for the [`pair()`]-combinator.
+pub type Pair<C1, C2> = (C1, C2);
+
+/// Recoverable errors emitted by [`Pair`].
+pub type Recoverable<E1, E2> = Error<E1, E2>;
+
+/// Fatal errors emitted by [`Pair`].
+pub type Fatal<E1, E2> = Error<E1, E2>;
+
+
+
 
 
 /***** LIBRARY *****/
@@ -33,10 +47,10 @@ use crate::Combinator2;
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::sequence2::pair;
 /// use ast_toolkit_snack::utf82::complete::{digit1, tag};
-/// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "Hello123");
@@ -47,23 +61,24 @@ use crate::Combinator2;
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(pair::PairError::Comb0(tag::TagRecoverable {
+///     Err(SnackError::Recoverable(pair::Recoverable::Comb0(tag::Recoverable {
 ///         tag:  "Hello",
 ///         span: span2,
 ///     })))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(pair::PairError::Comb1(digit1::Digit1Recoverable {
+///     Err(SnackError::Recoverable(pair::Recoverable::Comb1(digit1::Recoverable {
+///         fmt:  digit1::ExpectsFormatter,
 ///         span: span3.slice(5..),
 ///     })))
 /// );
 /// ```
 #[inline]
-pub const fn pair<'t, F, S, C1, C2>(first: C1, second: C2) -> Pair<C1, C2>
+pub const fn pair<'t, C1, C2, F, S>(first: C1, second: C2) -> Pair<C1, C2>
 where
     C1: Combinator2<'t, F, S>,
     C2: Combinator2<'t, F, S>,
 {
-    Pair { combs: (first, second) }
+    (first, second)
 }

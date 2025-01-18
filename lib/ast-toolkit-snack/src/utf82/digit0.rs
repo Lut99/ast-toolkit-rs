@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    14 Dec 2024, 19:32:38
+//    18 Jan 2025, 18:20:42
 //  Auto updated?
 //    Yes
 //
@@ -21,21 +21,21 @@ use ast_toolkit_span::Span;
 use super::while0;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::WhileUtf8;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Digit0`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Digit0ExpectsFormatter;
-impl Display for Digit0ExpectsFormatter {
+pub struct ExpectsFormatter;
+impl Display for ExpectsFormatter {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl ExpectsFormatter for Digit0ExpectsFormatter {
+impl crate::ExpectsFormatter for ExpectsFormatter {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "digits") }
 }
@@ -56,13 +56,13 @@ where
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    type ExpectsFormatter = Digit0ExpectsFormatter;
+    type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<F, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Digit0ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

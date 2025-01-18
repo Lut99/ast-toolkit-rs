@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    03 Nov 2024, 19:25:09
+//    18 Jan 2025, 18:16:19
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 use ast_toolkit_span::range::SpanRange;
 
-pub use super::super::complete::tag::{TagExpectsFormatter, TagRecoverable};
+pub use super::super::complete::tag::{ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::SnackError;
 use crate::span::{LenBytes, MatchBytes};
@@ -37,13 +37,13 @@ where
     F: Clone,
     S: Clone + LenBytes + MatchBytes,
 {
-    type ExpectsFormatter = TagExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = TagRecoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { TagExpectsFormatter { tag: self.tag } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<F, S, Self::Recoverable, Self::Fatal>> {
@@ -60,7 +60,7 @@ where
             if match_point == input.len() {
                 Err(SnackError::NotEnough { needed: Some(self.tag.len() - match_point), span: input.slice(match_point..) })
             } else {
-                Err(SnackError::Recoverable(TagRecoverable { tag: self.tag, span: input.start_onwards() }))
+                Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input.start_onwards() }))
             }
         }
     }
@@ -100,7 +100,7 @@ where
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span2.slice(0..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),

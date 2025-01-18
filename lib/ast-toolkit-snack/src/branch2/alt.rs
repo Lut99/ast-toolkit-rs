@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    10 Jan 2025, 12:06:01
+//    18 Jan 2025, 18:07:40
 //  Auto updated?
 //    Yes
 //
@@ -59,7 +59,7 @@ macro_rules! tuple_branching_comb_impl {
             #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
             pub struct [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S> {
                 /// The formatter built to describe what we expected.
-                pub fmt: [<Formatter $li>]<[<F $fi>] $(, [<F $i>])*>,
+                pub fmt: [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*>,
                 /// The nested failures of all branches.
                 pub fails: ([<E $fi>], $([<E $i>]),*),
                 /// The span where the failure occurred.
@@ -145,18 +145,18 @@ macro_rules! tuple_branching_comb_impl {
             /***** FORMATTER *****/
             /// Formats the expects-string for a tuple of a particular size
             #[derive(Clone, Debug, Eq, PartialEq)]
-            pub struct [<Formatter $li>]<[<F $fi>] $(, [<F $i>])*> {
+            pub struct [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 /// The formatters for all nested combinators.
                 pub fmts: ([<F $fi>], $([<F $i>],)*),
             }
-            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [<Formatter $li>]<[<F $fi>] $(, [<F $i>])*> {
+            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> Display for [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult {
                     write!(f, "Expected ")?;
                     self.expects_fmt(f, 0)
                 }
             }
-            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> ExpectsFormatter for [<Formatter $li>]<[<F $fi>] $(, [<F $i>])*> {
+            impl<[<F $fi>]: ExpectsFormatter $(, [<F $i>]: ExpectsFormatter)*> ExpectsFormatter for [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*> {
                 #[inline]
                 fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
                     write!(f, "either ")?;
@@ -173,14 +173,14 @@ macro_rules! tuple_branching_comb_impl {
             // Then implement Branchable for the tuple
             paste::paste!(
                 impl<'t, F: Clone, S: Clone, O, [<C $fi>]: Combinator2<'t, F, S, Output = O> $(, [<C $i>]: Combinator2<'t, F, S, Output = O>)*> BranchingCombinator<'t, F, S> for ([<C $fi>], $([<C $i>],)*) {
-                    type ExpectsFormatter = [<Formatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
+                    type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
                     type Recoverable = [<Recoverable $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*, F, S>;
                     type Fatal = [<Fatal $li>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
 
                     #[inline]
                     fn expects(&self) -> Self::ExpectsFormatter {
-                        [<Formatter $li>] {
+                        [<ExpectsFormatter $li>] {
                             fmts: (self.$fi.expects(), $(self.$i.expects(),)*),
                         }
                     }
@@ -214,7 +214,7 @@ macro_rules! tuple_branching_comb_impl {
                         )};
 
                         // ...and then return it
-                        Err(SnackError::Recoverable([<Recoverable $li>] { fmt: [<Formatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects()),*) }, fails, span: input }))
+                        Err(SnackError::Recoverable([<Recoverable $li>] { fmt: [<ExpectsFormatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects()),*) }, fails, span: input }))
                     }
                 }
             );

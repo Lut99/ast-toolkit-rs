@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    30 Nov 2024, 22:52:52
+//    18 Jan 2025, 18:15:45
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use super::super::complete::one_of1 as one_of1_complete;
-pub use super::super::complete::one_of1::{OneOf1ExpectsFormatter, OneOf1Recoverable};
+pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, OneOfUtf8};
@@ -38,13 +38,13 @@ where
     F: Clone,
     S: Clone + LenBytes + OneOfUtf8,
 {
-    type ExpectsFormatter = OneOf1ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = OneOf1Recoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OneOf1ExpectsFormatter { charset: self.charset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { charset: self.charset } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -99,7 +99,7 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(one_of1::OneOf1Recoverable {
+///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         charset: &["a", "b", "c", "ÿ"],
 ///         span:    span4,
 ///     }))

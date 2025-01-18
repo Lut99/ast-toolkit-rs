@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    14 Dec 2024, 19:33:17
+//    18 Jan 2025, 17:46:28
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
-pub use super::super::complete::escaped::{EscapedExpectsFormatter, EscapedFatal, EscapedRecoverable, EscapedString};
+pub use super::super::complete::escaped::{EscapedString, ExpectsFormatter, Fatal, Recoverable};
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{MatchBytes, NextChar, ToStr, WhileUtf8};
 use crate::{Combinator2, utf82};
@@ -27,7 +27,7 @@ use crate::{Combinator2, utf82};
 
 /***** COMBINATORS *****/
 /// The combinator returned by [`escaped()`].
-pub struct Escaped<'t, F, S, P> {
+pub struct Escaped<'t, P, F, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
     delim: &'t str,
     /// Some character acting as the escape character.
@@ -39,20 +39,20 @@ pub struct Escaped<'t, F, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, F, S, P, E> Combinator2<'t, F, S> for Escaped<'t, F, S, P>
+impl<'t, P, E, F, S> Combinator2<'t, F, S> for Escaped<'t, P, F, S>
 where
-    F: Clone,
-    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
     E: 't + Error,
+    F: Clone,
+    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
 {
-    type ExpectsFormatter = EscapedExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = EscapedString<F, S>;
-    type Recoverable = EscapedRecoverable<'t, F, S>;
-    type Fatal = EscapedFatal<'t, F, S, E>;
+    type Recoverable = Recoverable<'t, F, S>;
+    type Fatal = Fatal<'t, E, F, S>;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { EscapedExpectsFormatter { delim: self.delim, escaper: self.escaper } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { delim: self.delim, escaper: self.escaper } }
 
     #[inline]
     fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -60,7 +60,7 @@ where
         let (mut rem, open): (Span<F, S>, Span<F, S>) = match utf82::streaming::tag(self.delim).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
-                return Err(SnackError::Recoverable(EscapedRecoverable { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
+                return Err(SnackError::Recoverable(Recoverable { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
             },
             Err(SnackError::Fatal(_)) => unreachable!(),
             Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
@@ -123,7 +123,7 @@ where
                     // Run the closure to process the escaped character
                     match (self.callback)(c) {
                         Ok(c) => value.push_str(c.as_ref()),
-                        Err(err) => return Err(SnackError::Fatal(EscapedFatal::IllegalEscapee { err })),
+                        Err(err) => return Err(SnackError::Fatal(Fatal::IllegalEscapee { err })),
                     }
 
                     // Extend `middle` to match
@@ -136,7 +136,7 @@ where
                     continue;
                 },
                 Err(SnackError::Recoverable(err)) => {
-                    return Err(SnackError::Fatal(EscapedFatal::DelimClose { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
+                    return Err(SnackError::Fatal(Fatal::DelimClose { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
                 },
                 Err(SnackError::Fatal(_)) => unreachable!(),
                 Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
@@ -234,7 +234,7 @@ where
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(escaped::EscapedRecoverable {
+///     Err(SnackError::Recoverable(escaped::Recoverable {
 ///         delim:   "\"",
 ///         escaper: "\\",
 ///         span:    span3,
@@ -250,15 +250,15 @@ where
 /// );
 /// assert_eq!(
 ///     comb.parse(span6),
-///     Err(SnackError::Fatal(escaped::EscapedFatal::IllegalEscapee { err: IllegalEscapee }))
+///     Err(SnackError::Fatal(escaped::Fatal::IllegalEscapee { err: IllegalEscapee }))
 /// );
 /// ```
-pub const fn escaped<'t, F, S, P, E>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, F, S, P>
+pub const fn escaped<'t, P, E, F, S>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, P, F, S>
 where
-    F: Clone,
-    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
     E: 't + Error,
+    F: Clone,
+    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
 {
     Escaped { delim, escaper, callback, _f: PhantomData, _s: PhantomData }
 }

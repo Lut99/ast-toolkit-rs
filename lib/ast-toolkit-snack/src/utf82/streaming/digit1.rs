@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    14 Dec 2024, 19:30:24
+//    18 Jan 2025, 18:11:02
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning as _};
 
-pub use super::super::complete::digit1::{Digit1ExpectsFormatter, Digit1Recoverable};
+pub use super::super::complete::digit1::{ExpectsFormatter, Recoverable};
 use super::while1;
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
@@ -36,13 +36,13 @@ where
     F: Clone,
     S: Clone + LenBytes + WhileUtf8,
 {
-    type ExpectsFormatter = Digit1ExpectsFormatter;
+    type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<F, S>;
-    type Recoverable = Digit1Recoverable<F, S>;
+    type Recoverable = Recoverable<F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Digit1ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -55,7 +55,7 @@ where
         .parse(input)
         {
             Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Digit1Recoverable { span: err.into_span() })),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), span: err.into_span() })),
             Err(SnackError::Fatal(_)) => unreachable!(),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
@@ -94,7 +94,10 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(digit1::Digit1Recoverable { span: span2 }))
+///     Err(SnackError::Recoverable(digit1::Recoverable {
+///         fmt:  digit1::ExpectsFormatter,
+///         span: span2,
+///     }))
 /// );
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```

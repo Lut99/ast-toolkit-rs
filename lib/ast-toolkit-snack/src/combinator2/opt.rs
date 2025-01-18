@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:56:52
 //  Last edited:
-//    14 Dec 2024, 19:36:06
+//    18 Jan 2025, 17:51:27
 //  Auto updated?
 //    Yes
 //
@@ -19,24 +19,24 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Opt`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct OptExpectsFormatter<F> {
+pub struct ExpectsFormatter<F> {
     /// The nested formatter of the thing we _didn't_ expect.
     pub fmt: F,
 }
-impl<F: ExpectsFormatter> Display for OptExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<F: ExpectsFormatter> ExpectsFormatter for OptExpectsFormatter<F> {
+impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
         write!(f, "optionally ")?;
@@ -61,13 +61,13 @@ where
     S: Clone,
     C: Combinator2<'t, F, S>,
 {
-    type ExpectsFormatter = OptExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Option<C::Output>;
     type Recoverable = Infallible;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { OptExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {

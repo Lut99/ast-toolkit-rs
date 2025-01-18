@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:37:50
 //  Last edited:
-//    14 Dec 2024, 18:43:30
+//    18 Jan 2025, 18:00:06
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-pub use super::many0::Many0ExpectsFormatter as Few0ExpectsFormatter;
+pub use super::many0::ExpectsFormatter;
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::LenBytes;
@@ -25,24 +25,24 @@ use crate::span::LenBytes;
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`few0()`]-combinator.
-pub struct Few0<F, S, C> {
+pub struct Few0<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Few0<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Few0<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone + LenBytes,
-    C: Combinator2<'t, F, S>,
 {
-    type ExpectsFormatter = Few0ExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
     type Recoverable = Infallible;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Few0ExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -143,11 +143,11 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span1.slice(10..), vec![])));
 /// ```
 #[inline]
-pub const fn few0<'t, F, S, C>(comb: C) -> Few0<F, S, C>
+pub const fn few0<'t, C, F, S>(comb: C) -> Few0<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone + LenBytes,
-    C: Combinator2<'t, F, S>,
 {
     Few0 { comb, _f: PhantomData, _s: PhantomData }
 }

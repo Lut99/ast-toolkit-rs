@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    14 Dec 2024, 19:19:24
+//    18 Jan 2025, 17:42:08
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use super::super::complete::while1 as while1_complete;
-pub use super::super::complete::while1::{While1ExpectsFormatter, While1Recoverable};
+pub use super::super::complete::while1::{ExpectsFormatter, Recoverable};
 use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 use crate::span::{LenBytes, WhileBytes};
@@ -44,13 +44,13 @@ where
     S: Clone + LenBytes + WhileBytes,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = While1ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = While1Recoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter { what: self.what } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -111,7 +111,7 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///     Err(SnackError::Recoverable(while1::Recoverable {
 ///         what: "'a', 'b', 'c' or 'ÿ'",
 ///         span: span4,
 ///     }))

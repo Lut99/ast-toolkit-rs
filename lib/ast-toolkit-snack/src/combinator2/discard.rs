@@ -79,7 +79,7 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), ())));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::TagRecoverable { tag: "Hello", span: span2 }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span2 }))
 /// );
 /// ```
 #[inline]

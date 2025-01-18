@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    14 Dec 2024, 19:38:56
+//    18 Jan 2025, 18:18:01
 //  Auto updated?
 //    Yes
 //
@@ -14,51 +14,39 @@
 
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spanning};
+use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::WhileUtf8;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
-pub struct While1Recoverable<'t, F, S> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Recoverable<'t, F, S> {
     /// Some string describing what we were matching.
     pub what: &'t str,
     /// The location where no characters were found.
     pub span: Span<F, S>,
 }
-// NOTE: We manually implement `Debug` to avoid an unnecessary `Debug`-bound on `F` and `S`
-impl<'t, F, S> Debug for While1Recoverable<'t, F, S> {
+impl<'t, F, S> Display for Recoverable<'t, F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("While1Recoverable");
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
 }
-impl<'t, F, S> Display for While1Recoverable<'t, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", While1ExpectsFormatter { what: self.what }) }
-}
-impl<'t, F, S> Error for While1Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for While1Recoverable<'t, F, S> {
+impl<'t, F, S> Error for Recoverable<'t, F, S> {}
+impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> { self.span.clone() }
 
     #[inline]
     fn into_span(self) -> Span<F, S> { self.span }
-}
-impl<'t, F, S: SpannableEq> Eq for While1Recoverable<'t, F, S> {}
-impl<'t, F, S: SpannableEq> PartialEq for While1Recoverable<'t, F, S> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool { self.span == other.span }
 }
 
 
@@ -68,18 +56,18 @@ impl<'t, F, S: SpannableEq> PartialEq for While1Recoverable<'t, F, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While1`]-combinator.
 #[derive(Debug)]
-pub struct While1ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'t> {
     /// Some string describing what we were matching.
     pub what: &'t str,
 }
-impl<'t> Display for While1ExpectsFormatter<'t> {
+impl<'t> Display for ExpectsFormatter<'t> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> ExpectsFormatter for While1ExpectsFormatter<'t> {
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one {}", self.what) }
 }
@@ -103,13 +91,13 @@ where
     F: Clone,
     S: Clone + WhileUtf8,
 {
-    type ExpectsFormatter = While1ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'t>;
     type Output = Span<F, S>;
-    type Recoverable = While1Recoverable<'t, F, S>;
+    type Recoverable = Recoverable<'t, F, S>;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { While1ExpectsFormatter { what: self.what } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -117,7 +105,7 @@ where
         if match_point > 0 {
             Ok((input.slice(match_point..), input.slice(..match_point)))
         } else {
-            Err(SnackError::Recoverable(While1Recoverable { what: self.what, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { what: self.what, span: input.start_onwards() }))
         }
     }
 }
@@ -168,14 +156,14 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span4),
-///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///     Err(SnackError::Recoverable(while1::Recoverable {
 ///         what: "'a', 'b', 'c' or 'ÿ'",
 ///         span: span4,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Recoverable(while1::While1Recoverable {
+///     Err(SnackError::Recoverable(while1::Recoverable {
 ///         what: "'a', 'b', 'c' or 'ÿ'",
 ///         span: span5,
 ///     }))

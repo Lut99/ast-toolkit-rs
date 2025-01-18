@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:33:56
 //  Last edited:
-//    14 Dec 2024, 19:23:11
+//    18 Jan 2025, 17:50:40
 //  Auto updated?
 //    Yes
 //
@@ -19,21 +19,21 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::Result as SResult;
-use crate::{Combinator2, ExpectsFormatter};
+use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** FORMATTERS *****/
 /// Expectsformatter for the [`Nop`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct NopExpectsFormatter;
-impl Display for NopExpectsFormatter {
+pub struct ExpectsFormatter;
+impl Display for ExpectsFormatter {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl ExpectsFormatter for NopExpectsFormatter {
+impl crate::ExpectsFormatter for ExpectsFormatter {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "nothing") }
 }
@@ -49,13 +49,13 @@ pub struct Nop<F, S> {
     _s: PhantomData<S>,
 }
 impl<F, S> Combinator2<'static, F, S> for Nop<F, S> {
-    type ExpectsFormatter = NopExpectsFormatter;
+    type ExpectsFormatter = ExpectsFormatter;
     type Output = ();
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { NopExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> { Ok((input, ())) }

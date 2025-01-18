@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    09 Jan 2025, 20:36:39
+//    18 Jan 2025, 18:13:20
 //  Auto updated?
 //    Yes
 //
@@ -16,32 +16,40 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-pub use super::many1::Many1ExpectsFormatter as Few1ExpectsFormatter;
+pub use super::many1::ExpectsFormatter;
 use crate::Combinator2;
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{Expected, Result as SResult, SnackError};
 use crate::span::LenBytes;
+
+
+/***** TYPE ALIASES *****/
+/// The recoverable error returned by [`Few1`].
+pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
+
+
+
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`many1()`]-combinator.
-pub struct Few1<F, S, C> {
+pub struct Few1<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Few1<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Few1<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone + LenBytes,
-    C: Combinator2<'t, F, S>,
 {
-    type ExpectsFormatter = Few1ExpectsFormatter<C::ExpectsFormatter>;
+    type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Few1Recoverable<F, S, C::ExpectsFormatter>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, F, S>;
     type Fatal = C::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { Few1ExpectsFormatter { fmt: self.comb.expects() } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
@@ -66,7 +74,7 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => {
                     if res.is_empty() {
-                        return Err(SnackError::Recoverable(Few1Recoverable { what: self.comb.expects(), span: rem }));
+                        return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: rem }));
                     } else {
                         return Ok((rem, res));
                     }
@@ -131,8 +139,8 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(few1::Few1Recoverable {
-///         what: tag::TagExpectsFormatter { tag: "hello" },
+///     Err(SnackError::Recoverable(few1::Recoverable {
+///         fmt:  few1::ExpectsFormatter { fmt: tag::ExpectsFormatter { tag: "hello" } },
 ///         span: span3,
 ///     }))
 /// );
@@ -162,11 +170,11 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: None, span: span3 }));
 /// ```
 #[inline]
-pub const fn few1<'t, F, S, C>(comb: C) -> Few1<F, S, C>
+pub const fn few1<'t, C, F, S>(comb: C) -> Few1<C, F, S>
 where
+    C: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone + LenBytes,
-    C: Combinator2<'t, F, S>,
 {
     Few1 { comb, _f: PhantomData, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    03 Nov 2024, 19:27:01
+//    18 Jan 2025, 17:49:43
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,7 @@
 //!   Implements the [`map_fallible()`]-combinator.
 //
 
-use std::error::Error;
+use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
@@ -22,16 +22,27 @@ use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
 
 
+/***** TYPE ALIASES *****/
+/// Recoverable errors emitted by [`MapFallible`].
+pub type Recoverable<E1, E2> = Error<E1, E2>;
+
+/// Fatal errors emitted by [`MapFallible`].
+pub type Fatal<E1, E2> = Error<E1, E2>;
+
+
+
+
+
 /***** ERRORS *****/
 /// Recoverable & fatal errors emitted by [`MapFallible`].
-#[derive(Debug)]
-pub enum MapFallibleError<E1, E2> {
+#[derive(Debug, Eq, PartialEq)]
+pub enum Error<E1, E2> {
     /// The error emitted by the combinator failing.
     Comb(E1),
     /// The error emitted by the map failing.
     Map(E2),
 }
-impl<E1: Display, E2: Display> Display for MapFallibleError<E1, E2> {
+impl<E1: Display, E2: Display> Display for Error<E1, E2> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -40,16 +51,16 @@ impl<E1: Display, E2: Display> Display for MapFallibleError<E1, E2> {
         }
     }
 }
-impl<E1: Error, E2: Error> Error for MapFallibleError<E1, E2> {
+impl<E1: error::Error, E2: error::Error> error::Error for Error<E1, E2> {
     #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Self::Comb(err) => <E1 as Error>::source(err),
-            Self::Map(err) => <E2 as Error>::source(err),
+            Self::Comb(err) => <E1 as error::Error>::source(err),
+            Self::Map(err) => <E2 as error::Error>::source(err),
         }
     }
 }
-impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for MapFallibleError<E1, E2> {
+impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Error<E1, E2> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -63,17 +74,6 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for MapFallibl
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Map(err) => err.into_span(),
-        }
-    }
-}
-impl<E1: Eq, E2: Eq> Eq for MapFallibleError<E1, E2> {}
-impl<E1: PartialEq, E2: PartialEq> PartialEq for MapFallibleError<E1, E2> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Comb(lhs), Self::Comb(rhs)) => lhs == rhs,
-            (Self::Map(lhs), Self::Map(rhs)) => lhs == rhs,
-            _ => false,
         }
     }
 }
@@ -99,8 +99,8 @@ where
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
-    type Recoverable = MapFallibleError<C::Recoverable, E1>;
-    type Fatal = MapFallibleError<C::Fatal, E2>;
+    type Recoverable = Error<C::Recoverable, E1>;
+    type Fatal = Error<C::Fatal, E2>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
@@ -110,12 +110,12 @@ where
         match self.comb.parse(input) {
             Ok((rem, res)) => match (self.pred)(res) {
                 Ok(res) => Ok((rem, res)),
-                Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(MapFallibleError::Map(err))),
-                Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(MapFallibleError::Map(err))),
+                Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Error::Map(err))),
+                Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Error::Map(err))),
                 Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
             },
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(MapFallibleError::Comb(err))),
-            Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(MapFallibleError::Comb(err))),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Error::Comb(err))),
+            Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Error::Comb(err))),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
@@ -160,13 +160,14 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(map_fallible::MapFallibleError::Comb(
-///         digit1::Digit1Recoverable { span: span2 }
-///     )))
+///     Err(SnackError::Recoverable(map_fallible::Error::Comb(digit1::Recoverable {
+///         fmt:  digit1::ExpectsFormatter,
+///         span: span2,
+///     })))
 /// );
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     Err(SnackError::Fatal(map_fallible::MapFallibleError::Map(ParseIntError { .. })))
+///     Err(SnackError::Fatal(map_fallible::Error::Map(ParseIntError { .. })))
 /// ));
 /// ```
 #[inline]

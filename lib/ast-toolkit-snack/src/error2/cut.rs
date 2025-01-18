@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:34:30
 //  Last edited:
-//    30 Nov 2024, 21:47:50
+//    18 Jan 2025, 17:53:35
 //  Auto updated?
 //    Yes
 //
@@ -26,13 +26,13 @@ use crate::result::{Result as SResult, SnackError};
 /***** ERRORS *****/
 /// Defines fatal errors for the [`Cut`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum CutFatal<E1, E2> {
+pub enum Fatal<E1, E2> {
     /// It's a recoverable error of the nested combinator.
     Recoverable(E1),
     /// It's a fatal error of the nested combinator.
     Fatal(E2),
 }
-impl<E1: Display, E2: Display> Display for CutFatal<E1, E2> {
+impl<E1: Display, E2: Display> Display for Fatal<E1, E2> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -41,7 +41,7 @@ impl<E1: Display, E2: Display> Display for CutFatal<E1, E2> {
         }
     }
 }
-impl<E1: Error, E2: Error> Error for CutFatal<E1, E2> {
+impl<E1: Error, E2: Error> Error for Fatal<E1, E2> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -50,7 +50,7 @@ impl<E1: Error, E2: Error> Error for CutFatal<E1, E2> {
         }
     }
 }
-impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for CutFatal<E1, E2> {
+impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Fatal<E1, E2> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -74,19 +74,19 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for CutFatal<E
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`cut()`]-operator.
-pub struct Cut<F, S, C> {
+pub struct Cut<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Cut<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Cut<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
     type Recoverable = Infallible;
-    type Fatal = CutFatal<C::Recoverable, C::Fatal>;
+    type Fatal = Fatal<C::Recoverable, C::Fatal>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
@@ -95,8 +95,8 @@ where
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         match self.comb.parse(input) {
             Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(CutFatal::Recoverable(err))),
-            Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(CutFatal::Fatal(err))),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(Fatal::Recoverable(err))),
+            Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Fatal::Fatal(err))),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
@@ -122,14 +122,14 @@ where
 /// The returned combinator fails exactly when the given `comb`inator fails. However, if this
 /// failure is a recoverable error, it is returned as a fatal one instead.
 ///
-/// Note that, to do this, the cut-combinator returns its own [fatal error type](CutFatal) that
+/// Note that, to do this, the cut-combinator returns its own [fatal error type](Fatal) that
 /// covers both possible errors of the given `comb`inator.
 ///
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
 /// use ast_toolkit_snack::error2::cut;
-/// use ast_toolkit_snack::error2::cut::CutFatal;
+/// use ast_toolkit_snack::error2::cut::Fatal;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
@@ -141,14 +141,14 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Fatal(CutFatal::Recoverable(tag::TagRecoverable {
+///     Err(SnackError::Fatal(Fatal::Recoverable(tag::Recoverable {
 ///         tag:  "Hello",
 ///         span: span2.slice(0..),
 ///     })))
 /// );
 /// ```
 #[inline]
-pub const fn cut<'t, F, S, C>(comb: C) -> Cut<F, S, C>
+pub const fn cut<'t, C, F, S>(comb: C) -> Cut<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {

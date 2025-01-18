@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:12:16
 //  Last edited:
-//    30 Nov 2024, 23:14:59
+//    18 Jan 2025, 17:56:18
 //  Auto updated?
 //    Yes
 //
@@ -24,15 +24,15 @@ use crate::result::{Result as SResult, SnackError};
 
 
 /***** ERRORS *****/
-/// Defines fatal errors for the [`Uncut`]-combinator.
+/// Defines recoverable errors for the [`Uncut`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum UncutRecoverable<E1, E2> {
+pub enum Recoverable<E1, E2> {
     /// It's a recoverable error of the nested combinator.
     Recoverable(E1),
     /// It's a fatal error of the nested combinator.
     Fatal(E2),
 }
-impl<E1: Display, E2: Display> Display for UncutRecoverable<E1, E2> {
+impl<E1: Display, E2: Display> Display for Recoverable<E1, E2> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -41,7 +41,7 @@ impl<E1: Display, E2: Display> Display for UncutRecoverable<E1, E2> {
         }
     }
 }
-impl<E1: Error, E2: Error> Error for UncutRecoverable<E1, E2> {
+impl<E1: Error, E2: Error> Error for Recoverable<E1, E2> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -50,7 +50,7 @@ impl<E1: Error, E2: Error> Error for UncutRecoverable<E1, E2> {
         }
     }
 }
-impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for UncutRecoverable<E1, E2> {
+impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Recoverable<E1, E2> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
@@ -74,18 +74,18 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for UncutRecov
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`uncut()`]-operator.
-pub struct Uncut<F, S, C> {
+pub struct Uncut<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, F, S, C> Combinator2<'t, F, S> for Uncut<F, S, C>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Uncut<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
-    type Recoverable = UncutRecoverable<C::Recoverable, C::Fatal>;
+    type Recoverable = Recoverable<C::Recoverable, C::Fatal>;
     type Fatal = Infallible;
 
     #[inline]
@@ -95,8 +95,8 @@ where
     fn parse(&mut self, input: Span<F, S>) -> SResult<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
         match self.comb.parse(input) {
             Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(UncutRecoverable::Recoverable(err))),
-            Err(SnackError::Fatal(err)) => Err(SnackError::Recoverable(UncutRecoverable::Fatal(err))),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable::Recoverable(err))),
+            Err(SnackError::Fatal(err)) => Err(SnackError::Recoverable(Recoverable::Fatal(err))),
             Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
@@ -123,7 +123,7 @@ where
 /// failure is a fatal error, it is returned as a recoverable one instead.
 ///
 /// Note that, to do this, the uncut-combinator returns its own
-/// [recoverable error type](UncutRecoverable) that covers both possible errors of the given
+/// [recoverable error type](Recoverable) that covers both possible errors of the given
 /// `comb`inator.
 ///
 /// # Example
@@ -138,13 +138,11 @@ where
 /// let mut comb = uncut(fatal());
 /// assert_eq!(
 ///     comb.parse(span1),
-///     Err(SnackError::Recoverable(uncut::UncutRecoverable::Fatal(fatal::FatalFatal {
-///         span: span1,
-///     })))
+///     Err(SnackError::Recoverable(uncut::Recoverable::Fatal(fatal::Fatal { span: span1 })))
 /// );
 /// ```
 #[inline]
-pub const fn uncut<'t, F, S, C>(comb: C) -> Uncut<F, S, C>
+pub const fn uncut<'t, C, F, S>(comb: C) -> Uncut<C, F, S>
 where
     C: Combinator2<'t, F, S>,
 {
