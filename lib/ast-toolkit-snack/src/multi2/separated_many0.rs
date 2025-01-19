@@ -4,7 +4,7 @@
 //  Created:
 //    18 Jan 2025, 18:56:39
 //  Last edited:
-//    18 Jan 2025, 18:56:39
+//    19 Jan 2025, 22:49:30
 //  Auto updated?
 //    Yes
 //
@@ -123,9 +123,9 @@ impl<O1: crate::ExpectsFormatter, O2: crate::ExpectsFormatter> crate::ExpectsFor
 /// Actual implementation of the [`separated_many0()`]-combinator.
 pub struct SeparatedMany0<C1, C2, F, S> {
     comb: C1,
-    sep: C2,
-    _f: PhantomData<F>,
-    _s: PhantomData<S>,
+    sep:  C2,
+    _f:   PhantomData<F>,
+    _s:   PhantomData<S>,
 }
 impl<'t, C1, C2, F, S> Combinator2<'t, F, S> for SeparatedMany0<C1, C2, F, S>
 where
@@ -154,53 +154,131 @@ where
                 res.push(elem);
                 rem
             },
-            Err(SnackError::Recoverable(_)) => 
+            Err(SnackError::Recoverable(_)) => return Ok((input, res)),
+            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
+            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
 
-        let mut rem: Span<F, S> = input;
+        // Then parse as long as there are commas
         loop {
-            // If we've already parsed an element, expected a comma
-            let next: Span<F, S> = if !res.is_empty() {
-                match self.sep.parse(rem.clone()) {
-                    Ok((rem, _)) => rem,
-                    Err(SnackError::Recoverable(_)) => {
-                        // In principle, we are done. However, we may want to lint for a missing separator.
-                        if self.lint_missing_sep {
-                            if let Ok((_, span)) = recognize(&mut self.comb).parse(rem.clone()) {
-                                return Err(SnackError::Fatal(Fatal::MissingSeparator { sep: self.sep.expects(), span }));
-                            }
-                        }
-
-                        // If it doesn't detect, we're gucci
-                        return Ok((rem, res));
-                    },
-                    Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Separator(err))),
-                    Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
-                }
-            } else {
-                rem
+            // Try the comma first
+            let sep: Span<F, S> = match recognize(&mut self.sep).parse(rem.clone()) {
+                Ok((rem2, sep)) => {
+                    rem = rem2;
+                    sep
+                },
+                Err(SnackError::Recoverable(_)) => return Ok((rem, res)),
+                Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Separator(err))),
+                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             };
 
             // Parse the element
-            match self.comb.parse(next.clone()) {
-                Ok((rem2, res2)) => {
+            match self.comb.parse(rem) {
+                Ok((rem2, elem)) => {
                     if res.len() >= res.capacity() {
                         res.reserve(1 + res.len())
                     }
-                    res.push(res2);
+                    res.push(elem);
                     rem = rem2;
                 },
-                Err(SnackError::Recoverable(_)) => {
-                    // We're eager, which means that we won't stop here (except for the first element, since we're 0)
-                    if !res.is_empty() && self.lint_trailing_comma {
-                        return Err(SnackError::Fatal(Fatal::TrailingSeparator { span: next }));
-                    } else {
-                        return Ok((next, res));
-                    }
-                },
+                Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span: sep })),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
                 Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
         }
     }
+}
+
+
+
+
+
+/***** LIBRARY *****/
+/// Applies some combinator interleaved by some separator as many times as possible until it fails,
+/// greedily parsing multiple instances of the same input.
+///
+/// Note that this combinator is OK with matching no input, and can therefore itself not fail.
+/// If you want at least one, see [`separated_many1()`](super::separated_many1()) instead.
+///
+/// # Streaming
+/// The separated_many0-combinator's streamingness comes from using a streamed version of the
+/// nested combinator or not. Being greedy, if no input is left after a successful parse of `comb`,
+/// this will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop
+/// parsing in such a scenario instead, consider using
+/// [`separated_few0()`](super::separated_few0()) instead.
+///
+/// # Arguments
+/// - `comb`: The combinator to repeatedly apply until it fails.
+///
+/// # Returns
+/// A combinator [`SeparatedMany0`] that applies the given `comb`inator until it fails.
+///
+/// It will return the input as a [`Vec`].
+///
+/// # Fails
+/// The returned combinator cannot fail recoverably. However, if the given `comb`inator fails
+/// fatally, that error is propagated up.
+///
+/// # Examples
+/// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
+/// use ast_toolkit_snack::multi2::separated_many0;
+/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::utf82::complete::tag;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "hello,hello,hellogoodbye");
+/// let span2 = Span::new("<example>", "hellogoodbye");
+/// let span3 = Span::new("<example>", "goodbye");
+/// let span4 = Span::new("<example>", ",hello");
+/// let span5 = Span::new("<example>", "hello,helgoodbye");
+///
+/// let mut comb = separated_many0(tag("hello"), tag(","));
+/// assert_eq!(
+///     comb.parse(span1),
+///     Ok((span1.slice(17..), vec![span1.slice(..5), span1.slice(6..11), span1.slice(12..17)]))
+/// );
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
+/// assert_eq!(comb.parse(span3), Ok((span3, vec![])));
+/// assert_eq!(comb.parse(span4), Ok((span4, vec![])));
+/// assert_eq!(
+///     comb.parse(span5),
+///     Err(SnackError::Fatal(separated_many0::Fatal::TrailingSeparator {
+///         span: span5.slice(5..6),
+///     }))
+/// );
+/// ```
+///
+/// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
+/// ```rust
+/// use ast_toolkit_snack::Combinator2 as _;
+/// use ast_toolkit_snack::multi2::separated_many0;
+/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::utf82::streaming::tag;
+/// use ast_toolkit_span::Span;
+///
+/// let span1 = Span::new("<example>", "hello,hello");
+/// let span2 = Span::new("<example>", "hello,hel");
+/// let span3 = Span::new("<example>", "");
+///
+/// let mut comb = separated_many0(tag("hello"), tag(","));
+/// assert_eq!(
+///     comb.parse(span1),
+///     Err(SnackError::NotEnough { needed: Some(1), span: span1.slice(11..) })
+/// );
+/// assert_eq!(
+///     comb.parse(span2),
+///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(9..) })
+/// );
+/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// ```
+#[inline]
+pub const fn separated_many0<'t, C1, C2, F, S>(comb: C1, sep: C2) -> SeparatedMany0<C1, C2, F, S>
+where
+    C1: Combinator2<'t, F, S>,
+    C2: Combinator2<'t, F, S>,
+    F: Clone,
+    S: Clone,
+{
+    SeparatedMany0 { comb, sep, _f: PhantomData, _s: PhantomData }
 }
