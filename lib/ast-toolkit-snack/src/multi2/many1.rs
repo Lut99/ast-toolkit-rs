@@ -2,9 +2,9 @@
 //    by Lut99
 //
 //  Created:
-//    14 Dec 2024, 17:57:55
+//    14 Dec 2024, 18:44:42
 //  Last edited:
-//    18 Jan 2025, 18:13:36
+//    01 Feb 2025, 13:07:16
 //  Auto updated?
 //    Yes
 //
@@ -12,44 +12,19 @@
 //!   Implements the [`many1()`]-combinator.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
+pub use super::most1::ExpectsFormatter;
+use crate::Combinator2;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::{Combinator2, ExpectsFormatter as _};
+use crate::span::LenBytes;
 
 
 /***** TYPE ALIASES *****/
 /// The recoverable error returned by [`Many1`].
 pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
-
-
-
-
-
-/***** FORMATTERS *****/
-/// ExpectsFormatter for the [`Many1`] combinator.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<E> {
-    /// The thing we expect multiple times.
-    pub fmt: E,
-}
-impl<E: crate::ExpectsFormatter> Display for ExpectsFormatter<E> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl<E: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<E> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "at least one repetition of ")?;
-        self.fmt.expects_fmt(f, indent)
-    }
-}
 
 
 
@@ -66,7 +41,7 @@ impl<'t, C, F, S> Combinator2<'t, F, S> for Many1<C, F, S>
 where
     C: Combinator2<'t, F, S>,
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -81,6 +56,14 @@ where
         let mut res: Vec<C::Output> = Vec::new();
         let mut rem: Span<F, S> = input;
         loop {
+            // This is why it's lazy; if there's no input left, stop
+            if rem.is_empty() {
+                if !res.is_empty() {
+                    return Ok((rem, res));
+                } else {
+                    return Err(SnackError::NotEnough { needed: None, span: rem });
+                }
+            }
             match self.comb.parse(rem.clone()) {
                 Ok((rem2, res2)) => {
                     if res.len() >= res.capacity() {
@@ -108,17 +91,21 @@ where
 
 
 /***** LIBRARY *****/
-/// Applies some other combinator as many times as possible until it fails, greedily parsing
-/// multiple instances of the same input.
+/// Defines a lazy alternative to [`many1()`](super::many1()) that applies some other combinator as
+/// many times as possible until it fails, parsing multiple instances of the same input.
 ///
 /// Note that this combinator requires at least 1 occurrence of the chosen combinator. If you want
 /// a version that also accepts parsing none, see [`many0()`](super::many0()) instead.
 ///
 /// # Streaming
 /// The many1-combinator's streamingness comes from using a streamed version of the nested
-/// combinator or not. Being greedy, if no input is left after a successful parse of `comb`, this
-/// will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop parsing in
-/// such a scenario instead, consider using [`few1()`](super::few1()) instead.
+/// combinator or not. Being lazy, if no input is left after a successful parse of `comb`, this
+/// will _not_ return a [`SnackError::NotEnough`] (unlike [`most1()`](super::most1())). If you want
+/// the combinator to try and fetch more input to continue parsing instead, consider using
+/// [`most1()`](super::most1()).
+///
+/// Note that, in the case the above occurs while no input is parsed, [`SnackError::NotEnough`]
+/// _is_ returned to indicate at least one is expected.
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
@@ -129,8 +116,8 @@ where
 /// It will return the input as a [`Vec`].
 ///
 /// # Fails
-/// The returned combinator fails if the given `comb`inator cannot be applied at least once. In
-/// addition, if the given `comb`inator fails fatally, that error is propagated up.
+/// The returned combinator cannot fail recoverably. However, if the given `comb`inator fails
+/// fatally, that error is propagated up.
 ///
 /// # Examples
 /// ```rust
@@ -174,20 +161,20 @@ where
 /// let mut comb = many1(tag("hello"));
 /// assert_eq!(
 ///     comb.parse(span1),
-///     Err(SnackError::NotEnough { needed: Some(5), span: span1.slice(10..) })
+///     Ok((span1.slice(10..), vec![span1.slice(..5), span1.slice(5..10)]))
 /// );
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(8..) })
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: None, span: span3 }));
 /// ```
 #[inline]
 pub const fn many1<'t, C, F, S>(comb: C) -> Many1<C, F, S>
 where
     C: Combinator2<'t, F, S>,
     F: Clone,
-    S: Clone,
+    S: Clone + LenBytes,
 {
     Many1 { comb, _f: PhantomData, _s: PhantomData }
 }

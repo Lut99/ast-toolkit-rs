@@ -1,40 +1,65 @@
-//  FEW 0.rs
+//  MOST 0.rs
 //    by Lut99
 //
 //  Created:
-//    14 Dec 2024, 18:37:50
+//    01 Dec 2024, 12:23:14
 //  Last edited:
-//    18 Jan 2025, 18:00:06
+//    01 Feb 2025, 13:05:11
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements the [`few0()`]-combinator.
+//!   Implements the [`most0()`]-combinator.
 //
 
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
 
-pub use super::many0::ExpectsFormatter;
-use crate::Combinator2;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::LenBytes;
+use crate::{Combinator2, ExpectsFormatter as _};
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Most0`] combinator.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExpectsFormatter<F> {
+    /// The thing we expect multiple times.
+    pub fmt: F,
+}
+impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        write!(f, "multiple repetitions of ")?;
+        self.fmt.expects_fmt(f, indent)
+    }
+}
+
+
+
 
 
 /***** COMBINATORS *****/
-/// Actual implementation of the [`few0()`]-combinator.
-pub struct Few0<C, F, S> {
+/// Actual implementation of the [`most0()`]-combinator.
+pub struct Most0<C, F, S> {
     comb: C,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator2<'t, F, S> for Few0<C, F, S>
+impl<'t, C, F, S> Combinator2<'t, F, S> for Most0<C, F, S>
 where
-    C: Combinator2<'t, F, S>,
     F: Clone,
-    S: Clone + LenBytes,
+    S: Clone,
+    C: Combinator2<'t, F, S>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -49,10 +74,6 @@ where
         let mut res: Vec<C::Output> = Vec::new();
         let mut rem: Span<F, S> = input;
         loop {
-            // This is why it's lazy; if there's no input left, stop
-            if rem.is_empty() {
-                return Ok((rem, res));
-            }
             match self.comb.parse(rem.clone()) {
                 Ok((rem2, res2)) => {
                     if res.len() >= res.capacity() {
@@ -74,24 +95,23 @@ where
 
 
 /***** LIBRARY *****/
-/// Defines a lazy alternative to [`many0()`](super::many0()) that applies some other combinator as
-/// many times as possible until it fails, parsing multiple instances of the same input.
+/// Applies some other combinator as many times as possible until it fails, greedily parsing
+/// multiple instances of the same input.
 ///
 /// Note that this combinator is OK with matching no input, and can therefore itself not fail.
-/// If you want at least one, see [`few1()`](super::few1()) instead.
+/// If you want at least one, see [`most1()`](super::most1()) instead.
 ///
 /// # Streaming
-/// The few0-combinator's streamingness comes from using a streamed version of the nested
-/// combinator or not. Being lazy, if no input is left after a successful parse of `comb`, this
-/// will _not_ return a [`SnackError::NotEnough`] (unlike [`many0()`](super::many0())). If you want
-/// the combinator to try and fetch more input to continue parsing instead, consider using
-/// [`many0()`](super::many0()).
+/// The most0-combinator's streamingness comes from using a streamed version of the nested
+/// combinator or not. Being greedy, if no input is left after a successful parse of `comb`, this
+/// will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop parsing in
+/// such a scenario instead, consider using [`many0()`](super::many0()) instead.
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
 ///
 /// # Returns
-/// A combinator [`Few0`] that applies the given `comb`inator until it fails.
+/// A combinator [`Most0`] that applies the given `comb`inator until it fails.
 ///
 /// It will return the input as a [`Vec`].
 ///
@@ -102,7 +122,7 @@ where
 /// # Examples
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
-/// use ast_toolkit_snack::multi2::few0;
+/// use ast_toolkit_snack::multi2::most0;
 /// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
@@ -110,7 +130,7 @@ where
 /// let span2 = Span::new("<example>", "hellohelgoodbye");
 /// let span3 = Span::new("<example>", "goodbye");
 ///
-/// let mut comb = few0(tag("hello"));
+/// let mut comb = most0(tag("hello"));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(15..), vec![span1.slice(..5), span1.slice(5..10), span1.slice(10..15)]))
@@ -122,7 +142,7 @@ where
 /// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
-/// use ast_toolkit_snack::multi2::few0;
+/// use ast_toolkit_snack::multi2::most0;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::streaming::tag;
 /// use ast_toolkit_span::Span;
@@ -131,23 +151,23 @@ where
 /// let span2 = Span::new("<example>", "hellohel");
 /// let span3 = Span::new("<example>", "");
 ///
-/// let mut comb = few0(tag("hello"));
+/// let mut comb = most0(tag("hello"));
 /// assert_eq!(
 ///     comb.parse(span1),
-///     Ok((span1.slice(10..), vec![span1.slice(..5), span1.slice(5..10)]))
+///     Err(SnackError::NotEnough { needed: Some(5), span: span1.slice(10..) })
 /// );
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(8..) })
 /// );
-/// assert_eq!(comb.parse(span3), Ok((span1.slice(10..), vec![])));
+/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
 /// ```
 #[inline]
-pub const fn few0<'t, C, F, S>(comb: C) -> Few0<C, F, S>
+pub const fn most0<'t, C, F, S>(comb: C) -> Most0<C, F, S>
 where
     C: Combinator2<'t, F, S>,
     F: Clone,
-    S: Clone + LenBytes,
+    S: Clone,
 {
-    Few0 { comb, _f: PhantomData, _s: PhantomData }
+    Most0 { comb, _f: PhantomData, _s: PhantomData }
 }
