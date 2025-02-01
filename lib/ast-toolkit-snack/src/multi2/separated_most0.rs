@@ -1,15 +1,15 @@
-//  SEPARATED MANY 0.rs
+//  SEPARATED MOST 0.rs
 //    by Lut99
 //
 //  Created:
 //    18 Jan 2025, 18:56:39
 //  Last edited:
-//    19 Jan 2025, 22:49:30
+//    01 Feb 2025, 13:13:44
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements the [`separated_many0()`]-combinator.
+//!   Implements the [`separated_most0()`]-combinator.
 //
 
 use std::convert::Infallible;
@@ -26,50 +26,42 @@ use crate::{Combinator2, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
-/// Defines the fatal errors thrown by [`SeparatedMany0`].
+/// Defines the fatal errors thrown by [`SeparatedMost0`].
 #[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<E1, E2, O2, F, S> {
+pub enum Fatal<E1, E2, F, S> {
     /// The element-combinator failed fatally.
     Comb(E1),
     /// The separator-combinator failed fatally.
     Separator(E2),
-    /// Lint that will explain the user they are missing a separator.
-    MissingSeparator { sep: O2, span: Span<F, S> },
     /// Lint that will explain the user they added an incorrect trailing separator.
     TrailingSeparator { span: Span<F, S> },
 }
-impl<E1: Display, E2: Display, O2: crate::ExpectsFormatter, F, S> Display for Fatal<E1, E2, O2, F, S> {
+impl<E1: Display, E2: Display, F, S> Display for Fatal<E1, E2, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
             Self::Comb(err) => err.fmt(f),
             Self::Separator(err) => err.fmt(f),
-            Self::MissingSeparator { sep, span: _ } => {
-                <O2 as Display>::fmt(sep, f)?;
-                write!(f, " as separator")
-            },
             Self::TrailingSeparator { span: _ } => write!(f, "Encountered trailing separator"),
         }
     }
 }
-impl<E1: error::Error, E2: error::Error, O2: crate::ExpectsFormatter, F, S> error::Error for Fatal<E1, E2, O2, F, S> {
+impl<E1: error::Error, E2: error::Error, F, S> error::Error for Fatal<E1, E2, F, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Comb(err) => err.source(),
             Self::Separator(err) => err.source(),
-            Self::MissingSeparator { sep: _, span: _ } => None,
             Self::TrailingSeparator { span: _ } => None,
         }
     }
 }
-impl<E1: Spanning<F, S>, E2: Spanning<F, S>, O2, F: Clone, S: Clone> Spanning<F, S> for Fatal<E1, E2, O2, F, S> {
+impl<E1: Spanning<F, S>, E2: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Fatal<E1, E2, F, S> {
     #[inline]
     fn span(&self) -> Span<F, S> {
         match self {
             Self::Comb(err) => err.span(),
             Self::Separator(err) => err.span(),
-            Self::MissingSeparator { sep: _, span } => span.clone(),
             Self::TrailingSeparator { span } => span.clone(),
         }
     }
@@ -79,7 +71,6 @@ impl<E1: Spanning<F, S>, E2: Spanning<F, S>, O2, F: Clone, S: Clone> Spanning<F,
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Separator(err) => err.into_span(),
-            Self::MissingSeparator { sep: _, span } => span,
             Self::TrailingSeparator { span } => span,
         }
     }
@@ -90,7 +81,7 @@ impl<E1: Spanning<F, S>, E2: Spanning<F, S>, O2, F: Clone, S: Clone> Spanning<F,
 
 
 /***** FORMATTERS *****/
-/// ExpectsFormatter for the [`SeparatedMany0`] combinator.
+/// ExpectsFormatter for the [`SeparatedMost0`] combinator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExpectsFormatter<O1, O2> {
     /// The thing we expect multiple times.
@@ -120,14 +111,14 @@ impl<O1: crate::ExpectsFormatter, O2: crate::ExpectsFormatter> crate::ExpectsFor
 
 
 /***** COMBINATORS *****/
-/// Actual implementation of the [`separated_many0()`]-combinator.
-pub struct SeparatedMany0<C1, C2, F, S> {
+/// Actual implementation of the [`separated_most0()`]-combinator.
+pub struct SeparatedMost0<C1, C2, F, S> {
     comb: C1,
     sep:  C2,
     _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, F, S> Combinator2<'t, F, S> for SeparatedMany0<C1, C2, F, S>
+impl<'t, C1, C2, F, S> Combinator2<'t, F, S> for SeparatedMost0<C1, C2, F, S>
 where
     F: Clone,
     S: Clone,
@@ -137,7 +128,7 @@ where
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
     type Recoverable = Infallible;
-    type Fatal = Fatal<C1::Fatal, C2::Fatal, C2::ExpectsFormatter, F, S>;
+    type Fatal = Fatal<C1::Fatal, C2::Fatal, F, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects(), sep: self.sep.expects() } }
@@ -201,7 +192,7 @@ where
 /// If you want at least one, see [`separated_many1()`](super::separated_many1()) instead.
 ///
 /// # Streaming
-/// The separated_many0-combinator's streamingness comes from using a streamed version of the
+/// The separated_most0-combinator's streamingness comes from using a streamed version of the
 /// nested combinator or not. Being greedy, if no input is left after a successful parse of `comb`,
 /// this will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop
 /// parsing in such a scenario instead, consider using
@@ -211,7 +202,7 @@ where
 /// - `comb`: The combinator to repeatedly apply until it fails.
 ///
 /// # Returns
-/// A combinator [`SeparatedMany0`] that applies the given `comb`inator until it fails.
+/// A combinator [`SeparatedMost0`] that applies the given `comb`inator until it fails.
 ///
 /// It will return the input as a [`Vec`].
 ///
@@ -222,7 +213,7 @@ where
 /// # Examples
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
-/// use ast_toolkit_snack::multi2::separated_many0;
+/// use ast_toolkit_snack::multi2::separated_most0;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::complete::tag;
 /// use ast_toolkit_span::Span;
@@ -233,7 +224,7 @@ where
 /// let span4 = Span::new("<example>", ",hello");
 /// let span5 = Span::new("<example>", "hello,helgoodbye");
 ///
-/// let mut comb = separated_many0(tag("hello"), tag(","));
+/// let mut comb = separated_most0(tag("hello"), tag(","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(17..), vec![span1.slice(..5), span1.slice(6..11), span1.slice(12..17)]))
@@ -243,7 +234,7 @@ where
 /// assert_eq!(comb.parse(span4), Ok((span4, vec![])));
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Fatal(separated_many0::Fatal::TrailingSeparator {
+///     Err(SnackError::Fatal(separated_most0::Fatal::TrailingSeparator {
 ///         span: span5.slice(5..6),
 ///     }))
 /// );
@@ -252,7 +243,7 @@ where
 /// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
 /// ```rust
 /// use ast_toolkit_snack::Combinator2 as _;
-/// use ast_toolkit_snack::multi2::separated_many0;
+/// use ast_toolkit_snack::multi2::separated_most0;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf82::streaming::tag;
 /// use ast_toolkit_span::Span;
@@ -261,7 +252,7 @@ where
 /// let span2 = Span::new("<example>", "hello,hel");
 /// let span3 = Span::new("<example>", "");
 ///
-/// let mut comb = separated_many0(tag("hello"), tag(","));
+/// let mut comb = separated_most0(tag("hello"), tag(","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Err(SnackError::NotEnough { needed: Some(1), span: span1.slice(11..) })
@@ -273,12 +264,12 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
 /// ```
 #[inline]
-pub const fn separated_many0<'t, C1, C2, F, S>(comb: C1, sep: C2) -> SeparatedMany0<C1, C2, F, S>
+pub const fn separated_most0<'t, C1, C2, F, S>(comb: C1, sep: C2) -> SeparatedMost0<C1, C2, F, S>
 where
     C1: Combinator2<'t, F, S>,
     C2: Combinator2<'t, F, S>,
     F: Clone,
     S: Clone,
 {
-    SeparatedMany0 { comb, sep, _f: PhantomData, _s: PhantomData }
+    SeparatedMost0 { comb, sep, _f: PhantomData, _s: PhantomData }
 }

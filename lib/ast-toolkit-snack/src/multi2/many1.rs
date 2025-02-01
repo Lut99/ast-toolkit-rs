@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    01 Feb 2025, 13:07:16
+//    01 Feb 2025, 13:09:55
 //  Auto updated?
 //    Yes
 //
@@ -106,6 +106,9 @@ where
 ///
 /// Note that, in the case the above occurs while no input is parsed, [`SnackError::NotEnough`]
 /// _is_ returned to indicate at least one is expected.
+///
+/// As a rule of thumb, use the `many`-combinators when the user indicates the end of the
+/// repetitions by simply not specifying any more (e.g., statements).
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.

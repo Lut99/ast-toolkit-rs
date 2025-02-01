@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:37:50
 //  Last edited:
-//    01 Feb 2025, 13:07:28
+//    01 Feb 2025, 13:09:47
 //  Auto updated?
 //    Yes
 //
@@ -86,6 +86,9 @@ where
 /// will _not_ return a [`SnackError::NotEnough`] (unlike [`most0()`](super::most0())). If you want
 /// the combinator to try and fetch more input to continue parsing instead, consider using
 /// [`most0()`](super::most0()).
+///
+/// As a rule of thumb, use the `many`-combinators when the user indicates the end of the
+/// repetitions by simply not specifying any more (e.g., statements).
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.

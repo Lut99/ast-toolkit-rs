@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 17:57:55
 //  Last edited:
-//    01 Feb 2025, 13:05:44
+//    01 Feb 2025, 13:10:29
 //  Auto updated?
 //    Yes
 //
@@ -119,6 +119,9 @@ where
 /// combinator or not. Being greedy, if no input is left after a successful parse of `comb`, this
 /// will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop parsing in
 /// such a scenario instead, consider using [`many1()`](super::many1()) instead.
+///
+/// As a rule of thumb, use the `most`-combinators when the user indicates the end of the
+/// repetitions by something concrete (e.g., expressions wrapped in parenthesis).
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
