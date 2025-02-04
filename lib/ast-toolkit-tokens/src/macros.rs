@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    03 Dec 2024, 15:34:17
+//    04 Feb 2025, 17:23:59
 //  Auto updated?
 //    Yes
 //
@@ -53,7 +53,6 @@ macro_rules! utf8_token {
 
     ($name:ident, $token:literal, $token_desc:literal) => {
         #[doc = concat!("Represents a '", $token_desc, "' token.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
-        #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
         pub struct $name<F, S> {
             /// The span that locates this token in the source text.
             pub span: $crate::__private::Span<F, S>,
@@ -68,6 +67,30 @@ macro_rules! utf8_token {
         }
 
         // Standard impls
+        impl<F, S> ::std::clone::Clone for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::clone::Clone,
+        {
+            #[inline]
+            fn clone(&self) -> Self {
+                Self { span: self.close.clone() }
+            }
+        }
+        impl<F, S> ::std::marker::Copy for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::marker::Copy,
+        {}
+        impl<F, S> ::std::fmt::Debug for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::fmt::Debug,
+        {
+            #[inline]
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                let mut fmt = f.debug_struct(::std::stringify!($name));
+                fmt.field("span", &self.span);
+                fmt.finish()
+            }
+        }
         impl<F, S> ::std::cmp::Eq for $name<F, S> {}
         impl<F, S> ::std::hash::Hash for $name<F, S> {
             #[inline]
@@ -190,7 +213,6 @@ macro_rules! utf8_token_railroad {
 macro_rules! utf8_delimiter {
     ($name:ident, $open:literal, $close:literal) => {
         #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
-        #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
         pub struct $name<F, S> {
             #[doc = concat!("The opening delimiter `", $open, "`.\n")]
             pub open:  $crate::__private::Span<F, S>,
@@ -210,6 +232,31 @@ macro_rules! utf8_delimiter {
         }
 
         // Standard impls
+        impl<F, S> ::std::clone::Clone for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::clone::Clone,
+        {
+            #[inline]
+            fn clone(&self) -> Self {
+                Self { open: self.open.clone(), close: self.close.clone() }
+            }
+        }
+        impl<F, S> ::std::marker::Copy for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::marker::Copy,
+        {}
+        impl<F, S> ::std::fmt::Debug for $name<F, S>
+        where
+            $crate::__private::Span<F, S>: ::std::fmt::Debug,
+        {
+            #[inline]
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                let mut fmt = f.debug_struct(::std::stringify!($name));
+                fmt.field("open", &self.open);
+                fmt.field("close", &self.close);
+                fmt.finish()
+            }
+        }
         impl<F, S> ::std::cmp::Eq for $name<F, S> {}
         impl<F, S> ::std::hash::Hash for $name<F, S> {
             #[inline]
