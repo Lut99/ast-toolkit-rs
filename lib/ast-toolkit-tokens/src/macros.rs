@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    04 Feb 2025, 17:23:59
+//    04 Feb 2025, 17:25:09
 //  Auto updated?
 //    Yes
 //
@@ -73,7 +73,7 @@ macro_rules! utf8_token {
         {
             #[inline]
             fn clone(&self) -> Self {
-                Self { span: self.close.clone() }
+                Self { span: self.span.clone() }
             }
         }
         impl<F, S> ::std::marker::Copy for $name<F, S>
