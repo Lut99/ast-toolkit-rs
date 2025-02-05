@@ -4,7 +4,7 @@
 //  Created:
 //    28 Jun 2024, 15:22:37
 //  Last edited:
-//    26 Aug 2024, 14:13:35
+//    05 Feb 2025, 16:23:31
 //  Auto updated?
 //    Yes
 //
@@ -87,7 +87,7 @@ impl<F, S: SpannableEq> PartialEq for EscapedString<F, S> {
 /// use std::error;
 /// use std::fmt::{Display, Formatter, Result as FResult};
 ///
-/// use ast_toolkit_snack::c::complete::{escaped, EscapedString};
+/// use ast_toolkit_snack::c::complete::{EscapedString, escaped};
 /// use ast_toolkit_snack::error::{Common, Error, Failure};
 /// use ast_toolkit_snack::{Combinator as _, Result};
 /// use ast_toolkit_span::Span;

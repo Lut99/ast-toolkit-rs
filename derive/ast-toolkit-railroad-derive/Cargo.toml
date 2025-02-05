@@ -15,9 +15,9 @@ proc-macro = true
 lazy_static = "1.4"
 proc-macro2 = "1.0"
 proc-macro-error = "1.0"
-rand = "0.8"
+# rand = "0.9"
 quote = "1.0"
-syn   = { version = "2.0", features = ["derive", "extra-traits", "full"] }
+syn   = { version = "2.0", features = ["derive", "extra-traits", "full", "visit"] }
 
 
 [features]

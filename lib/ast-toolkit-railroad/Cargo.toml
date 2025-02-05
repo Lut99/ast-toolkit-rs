@@ -7,6 +7,17 @@ repository.workspace = true
 description = "Provides traits for recursively generating [railroad](https://crates.io/crates/railroad/0.2.0) diagrams. Comes with a derive macro for convenience."
 
 
+[[example]]
+name = "railroad"
+path = "examples/railroad.rs"
+required-features = []
+
+[[example]]
+name = "railroad_derive"
+path = "examples/railroad_derive.rs"
+required-features = ["derive"]
+
+
 [dependencies]
 parking_lot = { version = "0.12.3", optional = true }
 railroad = "0.3.2"

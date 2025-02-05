@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 14:26:07
 //  Last edited:
-//    26 Feb 2024, 17:09:39
+//    05 Feb 2025, 16:33:03
 //  Auto updated?
 //    Yes
 //
@@ -15,10 +15,7 @@
 
 #![allow(dead_code)]
 
-#[cfg(not(feature = "derive"))]
-compile_error!("Please enable the 'derive' feature when running the 'railroad_derive' example.");
-
-use ast_toolkit_railroad::{diagram_svg, railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit_railroad::{ToDelimNode, ToNode, ToNonTerm, diagram_svg, railroad as rr};
 use rr::Diagram;
 
 

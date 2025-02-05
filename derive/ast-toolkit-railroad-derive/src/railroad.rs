@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    28 Nov 2024, 14:40:14
+//    05 Feb 2025, 16:33:57
 //  Auto updated?
 //    Yes
 //
@@ -12,15 +12,21 @@
 //!   Implements the `#[derive(ToNode)]`-macro.
 //
 
+use std::collections::HashSet;
+
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_error::{Diagnostic, Level};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseBuffer};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, PathSep};
-use syn::{Attribute, Data, Expr, ExprLit, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments, PathSegment, Type, Visibility};
+use syn::visit::{Visit, visit_type};
+use syn::{
+    Attribute, Data, Expr, ExprLit, Field, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments, PathSegment, PredicateType, TraitBound,
+    TraitBoundModifier, Type, TypeParam, TypeParamBound, Visibility, WherePredicate,
+};
 
 
 /***** MACRO RULES *****/
@@ -710,6 +716,61 @@ impl FieldAttributes {
 
 
 
+/// Mods the given generics to include necessary bounds on the type.
+///
+/// # Arguments
+/// - `path`: The bound to set to all the field's types.
+/// - `data`: The [`Data`] to mod for.
+/// - `generics`: The [`Generics`] to mod.
+pub fn update_generics(path: &Path, data: &Data, generics: &mut Generics) {
+    struct HasGenericsVisitor {
+        has_generics: bool,
+    }
+    impl<'ast> Visit<'ast> for HasGenericsVisitor {
+        fn visit_type_param(&mut self, _: &'ast TypeParam) { self.has_generics = true; }
+    }
+
+
+    // Go through all the fields in the structure to collect the necessary (unique) types
+    let fields = match data {
+        Data::Enum(e) => Box::new(e.variants.iter().flat_map(|e| e.fields.iter())) as Box<dyn Iterator<Item = &Field>>,
+        Data::Struct(s) => Box::new(s.fields.iter()),
+        Data::Union(u) => Box::new(u.fields.named.iter()),
+    };
+    let size_hint: (usize, Option<usize>) = fields.size_hint();
+    let mut tys: HashSet<&Type> = HashSet::with_capacity(size_hint.1.unwrap_or(size_hint.0));
+    for field in fields {
+        tys.insert(&field.ty);
+    }
+
+    // Add where clauses for each of them
+    for ty in tys {
+        // First, filter out any types not using generics (to prevent needless self-recursion where not relevant)
+        let mut visitor = HasGenericsVisitor { has_generics: false };
+        visit_type(&mut visitor, ty);
+        if !visitor.has_generics {
+            continue;
+        }
+
+        // Otherwise, add it
+        generics.make_where_clause().predicates.push(WherePredicate::Type(PredicateType {
+            lifetimes:   None,
+            bounded_ty:  ty.clone(),
+            colon_token: Default::default(),
+            bounds:      {
+                let mut bounds = Punctuated::new();
+                bounds.push(TypeParamBound::Trait(TraitBound {
+                    paren_token: None,
+                    modifier: TraitBoundModifier::None,
+                    lifetimes: None,
+                    path: path.clone(),
+                }));
+                bounds
+            },
+        }))
+    }
+}
+
 /// Derives the expression that generates a type's `railroad::Node`.
 ///
 /// # Arguments
@@ -922,7 +983,7 @@ pub fn derive_railroad_expr(path: &Path, what: &'static str, ident: &Ident, data
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
+pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, mut generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
     // Parse the toplevel attributes
     let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNode", &attrs)?;
 
@@ -939,13 +1000,16 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
     );
 
     // Match on what to do
-    let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
     match toplevel.kind {
         NodeKind::Derived => {
             // Generate the type & expression for the impl
             let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr(&toplevel.path, "ToNode", &ident, &data)?;
 
+            // Update the generics
+            update_generics(&ast_to_node, &data, &mut generics);
+
             // Use those to build the full impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #node_ty;
@@ -961,6 +1025,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 
         NodeKind::Terminal(NodeTermKind::Value(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_terminal;
@@ -974,6 +1039,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 
         NodeKind::Terminal(NodeTermKind::Regex(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_sequence<#std_box<dyn #rr_node>>;
@@ -1011,6 +1077,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
             }
 
             // Generate the impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_choice<#std_box<dyn #rr_node>>;
@@ -1041,7 +1108,13 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
+pub fn derive_to_non_term(
+    ident: Ident,
+    data: Data,
+    attrs: Vec<Attribute>,
+    mut generics: Generics,
+    _vis: Visibility,
+) -> Result<TokenStream, Diagnostic> {
     // Parse the toplevel attributes
     let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNonTerm", &attrs)?;
 
@@ -1060,13 +1133,16 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
     );
 
     let name: String = ident.to_string();
-    let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
     match toplevel.kind {
         NodeKind::Derived => {
             // Generate the type & expression for the impl
             let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr(&toplevel.path, "ToNonTerm", &ident, &data)?;
 
+            // Update the generics
+            update_generics(&ast_to_non_termm, &data, &mut generics);
+
             // Use those to build the full impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1091,6 +1167,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
 
         NodeKind::Terminal(NodeTermKind::Value(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1113,6 +1190,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
 
         NodeKind::Terminal(NodeTermKind::Regex(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1159,6 +1237,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
             }
 
             // Generate the impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
