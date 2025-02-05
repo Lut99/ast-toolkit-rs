@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    05 Feb 2025, 16:33:57
+//    05 Feb 2025, 16:46:22
 //  Auto updated?
 //    Yes
 //
@@ -24,8 +24,8 @@ use syn::spanned::Spanned;
 use syn::token::{Comma, PathSep};
 use syn::visit::{Visit, visit_type};
 use syn::{
-    Attribute, Data, Expr, ExprLit, Field, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments, PathSegment, PredicateType, TraitBound,
-    TraitBoundModifier, Type, TypeParam, TypeParamBound, Visibility, WherePredicate,
+    Attribute, Data, Expr, ExprLit, Field, GenericArgument, GenericParam, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments,
+    PathSegment, PredicateType, TraitBound, TraitBoundModifier, Type, TypeParam, TypeParamBound, Visibility, WherePredicate,
 };
 
 
@@ -723,11 +723,26 @@ impl FieldAttributes {
 /// - `data`: The [`Data`] to mod for.
 /// - `generics`: The [`Generics`] to mod.
 pub fn update_generics(path: &Path, data: &Data, generics: &mut Generics) {
-    struct HasGenericsVisitor {
-        has_generics: bool,
+    struct HasGenericsVisitor<'g> {
+        generics: &'g Generics,
+        should_add_bound: bool,
     }
-    impl<'ast> Visit<'ast> for HasGenericsVisitor {
-        fn visit_type_param(&mut self, _: &'ast TypeParam) { self.has_generics = true; }
+    impl<'g, 'ast> Visit<'ast> for HasGenericsVisitor<'g> {
+        fn visit_type(&mut self, ty: &'ast Type) {
+            // Check if it is a generic, by accident
+            if self.generics.params.iter().any(|p| {
+                if let (Type::Path(ty_path), GenericParam::Type(TypeParam { ident, .. })) = (ty, p) {
+                    if let Some(ty_ident) = ty_path.path.get_ident() { ty_ident == ident } else { false }
+                } else {
+                    false
+                }
+            }) {
+                self.should_add_bound = true;
+            }
+
+            // Continue as we were
+            syn::visit::visit_type(self, ty)
+        }
     }
 
 
@@ -746,9 +761,9 @@ pub fn update_generics(path: &Path, data: &Data, generics: &mut Generics) {
     // Add where clauses for each of them
     for ty in tys {
         // First, filter out any types not using generics (to prevent needless self-recursion where not relevant)
-        let mut visitor = HasGenericsVisitor { has_generics: false };
+        let mut visitor = HasGenericsVisitor { generics, should_add_bound: false };
         visit_type(&mut visitor, ty);
-        if !visitor.has_generics {
+        if !visitor.should_add_bound {
             continue;
         }
 
