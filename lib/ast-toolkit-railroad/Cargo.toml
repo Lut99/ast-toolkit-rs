@@ -18,6 +18,12 @@ path = "examples/railroad_derive.rs"
 required-features = ["derive"]
 
 
+[[test]]
+name = "derive_generics"
+path = "tests/derive_generics.rs"
+required-features = ["derive"]
+
+
 [dependencies]
 parking_lot = { version = "0.12.3", optional = true }
 railroad = "0.3.2"

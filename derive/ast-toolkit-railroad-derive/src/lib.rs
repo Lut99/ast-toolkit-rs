@@ -4,7 +4,7 @@
 //  Created:
 //    05 Jul 2023, 15:47:40
 //  Last edited:
-//    28 Nov 2024, 13:28:05
+//    06 Feb 2025, 09:51:29
 //  Auto updated?
 //    Yes
 //
@@ -17,13 +17,12 @@
 mod railroad;
 
 
-
 /***** LIBRARY *****/
 /// See the auto-generated documentation at `ast_toolkit_railroad::procedural::ToNode` for more information.
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_derive(ToNode, attributes(railroad))]
 pub fn derive_to_node(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use syn::{parse_macro_input, DeriveInput};
+    use syn::{DeriveInput, parse_macro_input};
 
 
     // Parse the thing we've gotten
@@ -42,7 +41,7 @@ pub fn derive_to_node(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_derive(ToNonTerm, attributes(railroad))]
 pub fn derive_to_nonterm(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use syn::{parse_macro_input, DeriveInput};
+    use syn::{DeriveInput, parse_macro_input};
 
 
     // Parse the thing we've gotten
@@ -61,7 +60,7 @@ pub fn derive_to_nonterm(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_derive(ToDelimNode, attributes(railroad))]
 pub fn derive_to_delim_node(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use syn::{parse_macro_input, DeriveInput};
+    use syn::{DeriveInput, parse_macro_input};
 
 
     // Parse the thing we've gotten
