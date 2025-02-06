@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    06 Feb 2025, 09:59:57
+//    06 Feb 2025, 10:10:13
 //  Auto updated?
 //    Yes
 //
@@ -1156,7 +1156,7 @@ pub fn derive_to_non_term(
             let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr(&toplevel.path, "ToNonTerm", &ident, &data)?;
 
             // Update the generics
-            update_generics(&ast_to_non_termm, &data, &mut generics);
+            update_generics(&ast_to_node, &data, &mut generics);
 
             // Use those to build the full impl
             let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
