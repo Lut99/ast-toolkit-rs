@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    06 Feb 2025, 10:10:13
+//    13 Feb 2025, 15:48:06
 //  Auto updated?
 //    Yes
 //
@@ -729,8 +729,6 @@ pub fn update_generics(path: &Path, data: &Data, generics: &mut Generics) {
     }
     impl<'g, 'ast> Visit<'ast> for HasGenericsVisitor<'g> {
         fn visit_type(&mut self, ty: &'ast Type) {
-            println!("{ty:?}");
-
             // Check if it is a generic, by accident
             if self.generics.params.iter().any(|p| {
                 if let (Type::Path(ty_path), GenericParam::Type(TypeParam { ident, .. })) = (ty, p) {
