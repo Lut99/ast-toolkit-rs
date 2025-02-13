@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    28 Nov 2024, 16:06:13
+//    13 Feb 2025, 11:07:52
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements a [`Span`], which abstracts over some input to track a particular location in it.
 //
 
+use std::cmp::Ordering;
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
@@ -29,7 +30,7 @@ use crate::lines::SpannableLines;
 use crate::locate::SpannableLocate;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
-use crate::SpannableAsBytes;
+use crate::{SpannableAsBytes, SpannableOrd};
 
 
 /***** AUXILLARY *****/
@@ -429,9 +430,17 @@ impl<F, S: SpannableHash> Hash for Span<F, S> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.range, state) }
 }
+impl<F, S: SpannableEq + SpannableOrd> Ord for Span<F, S> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering { self.source.slice_ord(self.range, &other.source, other.range) }
+}
 impl<F, S: SpannableEq> PartialEq for Span<F, S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
+}
+impl<F, S: SpannableEq + SpannableOrd> PartialOrd for Span<F, S> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
     #[inline]
