@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    07 Mar 2025, 14:45:17
+//    07 Mar 2025, 17:29:10
 //  Auto updated?
 //    Yes
 //
@@ -232,7 +232,6 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::error::{Common, Failure};
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::sequence::tuple;
 /// use ast_toolkit_snack::utf8::complete::{digit1, tag};

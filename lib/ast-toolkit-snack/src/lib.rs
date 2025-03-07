@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    07 Mar 2025, 14:42:11
+//    07 Mar 2025, 18:16:06
 //  Auto updated?
 //    Yes
 //
@@ -37,11 +37,12 @@ pub mod sequence;
 pub mod span;
 pub mod utf8;
 
-use std::borrow::Cow;
 // Imports
+use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::Span;
+// We re-export the span, both for macro purposes and convenience.
+pub use ast_toolkit_span::Span;
 
 
 /***** CONSTANTS *****/

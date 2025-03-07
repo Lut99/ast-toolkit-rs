@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    07 Mar 2025, 16:59:25
+//    07 Mar 2025, 18:41:36
 //  Auto updated?
 //    Yes
 //
@@ -18,11 +18,11 @@ use quote::{ToTokens, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
-use syn::token::{And, Comma, Gt, Lt, Mut, Paren, PathSep, RArrow, SelfValue};
+use syn::token::{And, Comma, Gt, Lt, Mut, PathSep, RArrow, SelfValue};
 use syn::{
-    AngleBracketedGenericArguments, Attribute, Block, Error, Expr, ExprLit, ExprTuple, FnArg, GenericArgument, GenericParam, Ident, Item, ItemFn,
-    Lit, LitStr, Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference, TypeTuple, VisRestricted,
-    Visibility, WhereClause, parse2,
+    AngleBracketedGenericArguments, Attribute, Block, Error, Expr, FnArg, GenericArgument, GenericParam, Ident, Item, ItemFn, LitStr, Path,
+    PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference, VisRestricted, Visibility, WhereClause,
+    parenthesized, parse2,
 };
 
 
@@ -118,7 +118,7 @@ fn get_vis_plus_one(vis: &Visibility) -> Visibility {
 
 
 
-/// Generates the expected formatter implementation.
+/// Generates the expected formatter.
 ///
 /// # Arguments
 /// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
@@ -131,11 +131,10 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
     let vis: Visibility = get_vis_plus_one(&func.vis);
     let sname: String = func.sig.ident.to_string();
     let fname: &Ident = &attrs.fmt;
-    let exps: &ExpectedString = &attrs.expected;
     quote! {
         #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`]-combinator.")]
         #[automatically_derived]
-        #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug)]
+        #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug, ::std::cmp::Eq, ::std::cmp::PartialEq)]
         #vis struct #fname;
         #[automatically_derived]
         impl ::std::fmt::Display for #fname {
@@ -145,8 +144,25 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
                 <Self as #prefix::ExpectsFormatter>::expects_fmt(self, f, 0)
             }
         }
+    }
+}
+
+/// Generates the expected formatter implementation.
+///
+/// # Arguments
+/// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
+/// - `func`: The main combinator function parsed from the input.
+///
+/// # Returns
+/// A [`TokenStream2`] with the generated `ExpectsFormatter` implementation.
+fn generate_formatter_impl(attrs: &CombinatorAttributes) -> TokenStream2 {
+    let prefix: &Path = &attrs.prefix;
+    let module: &Ident = attrs.module.as_ref().unwrap();
+    let fname: &Ident = &attrs.fmt;
+    let exps: &ExpectedString = &attrs.expected;
+    quote! {
         #[automatically_derived]
-        impl #prefix::ExpectsFormatter for #fname {
+        impl #prefix::ExpectsFormatter for #module::#fname {
             #[inline]
             fn expects_fmt(&self, f: &mut ::std::fmt::Formatter, _ident: usize) -> ::std::fmt::Result { ::std::write!(f, #exps) }
         }
@@ -359,7 +375,44 @@ impl Parse for CombinatorAttributes {
         };
         let output: Type = match output {
             Some(out) => out,
-            None => Type::Tuple(TypeTuple { paren_token: Paren::default(), elems: Punctuated::new() }),
+            None => {
+                let mut path: Path = prefix.clone();
+                path.segments.push(PathSegment {
+                    ident:     Ident::new("Span", Span::mixed_site()),
+                    arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        colon2_token: None,
+                        lt_token: Default::default(),
+                        gt_token: Default::default(),
+                        args: {
+                            let mut args = Punctuated::new();
+                            args.push(GenericArgument::Type(Type::Path(TypePath {
+                                qself: None,
+                                path:  Path {
+                                    leading_colon: None,
+                                    segments:      {
+                                        let mut segments = Punctuated::new();
+                                        segments.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
+                                        segments
+                                    },
+                                },
+                            })));
+                            args.push(GenericArgument::Type(Type::Path(TypePath {
+                                qself: None,
+                                path:  Path {
+                                    leading_colon: None,
+                                    segments:      {
+                                        let mut segments = Punctuated::new();
+                                        segments.push(PathSegment { ident: Ident::new("S", Span::mixed_site()), arguments: PathArguments::None });
+                                        segments
+                                    },
+                                },
+                            })));
+                            args
+                        },
+                    }),
+                });
+                Type::Path(TypePath { qself: None, path })
+            },
         };
         let recoverable: Type = match recoverable {
             Some(out) => out,
@@ -452,26 +505,13 @@ impl Parse for ExpectedString {
             return Ok(ExpectedString::Lit(lit));
         }
 
-        // Otherwise, parse as a formatter string tuple
-        match input.parse::<ExprTuple>() {
-            Ok(ExprTuple { elems, .. }) => {
-                // The first element should be a literal, always
-                let mut iter = elems.into_pairs();
-                if let Some(fmt) = iter.next() {
-                    // Extract the string literal
-                    let fmt: Expr = fmt.into_value();
-                    if let Expr::Lit(ExprLit { lit: Lit::Str(fmt), .. }) = fmt {
-                        // The rest are arguments to the formatter
-                        Ok(ExpectedString::Fmt(fmt, iter.collect()))
-                    } else {
-                        Err(Error::new(fmt.span(), "Expected a string literal"))
-                    }
-                } else {
-                    Err(input.error("Expected at least a formatter string literal"))
-                }
-            },
-            Err(err) => Err(Error::new(err.span(), "Expected a string literal or a tuple with format string arguments")),
-        }
+        // Else, check if there are parenthesis.
+        let content;
+        parenthesized!(content in input);
+        let fmt: LitStr = content.parse()?;
+        let args: Punctuated<Expr, Token![,]> =
+            if content.parse::<Token![,]>().is_ok() { Punctuated::parse_terminated(&content)? } else { Punctuated::new() };
+        Ok(ExpectedString::Fmt(fmt, args))
     }
 }
 impl ToTokens for ExpectedString {
@@ -551,6 +591,7 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
 
     // Generate the parts of the combinator implementation
     let fmt: TokenStream2 = generate_formatter(&attrs, &func);
+    let fmt_impl: TokenStream2 = generate_formatter_impl(&attrs);
     let comb: TokenStream2 = generate_combinator(&attrs, &func);
     let comb_impl: TokenStream2 = generate_combinator_impl(&attrs, &func);
     let factory: TokenStream2 = generate_factory(&attrs, &func);
@@ -564,6 +605,7 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
             #fmt
             #comb
         }
+        #fmt_impl
         #comb_impl
         #factory
     })

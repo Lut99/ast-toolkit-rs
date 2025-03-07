@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    07 Mar 2025, 14:45:03
+//    07 Mar 2025, 17:33:48
 //  Auto updated?
 //    Yes
 //
@@ -126,17 +126,23 @@ where
 
 
 /***** LIBRARY *****/
-/// Maps the result of a combinator to something else.
+/// Maps the result of a combinator to something else, but fallibly so.
+///
+/// This is useful for when you are doing additional validation on parsed objects.
+///
+/// Not to be confused with [`map_fatal()`](super::map_fatal()).
 ///
 /// # Arguments
 /// - `comb`: Some combinator to run.
-/// - `pred`: Some closure that takes the `comb`'s result and maps it to something else.
+/// - `pred`: Some closure that takes the `comb`'s result and maps it to something else, or emits
+///   a custom error.
 ///
 /// # Returns
-/// A combinator [`MapFallible`] that runs the given `comb`inator, and then maps the result using `pred`.
+/// A combinator [`MapFallible`] that runs the given `comb`inator, and then maps the result using
+/// pred`, fallibly.
 ///
 /// # Fails
-/// The returned combinator fails if the given `comb`inator fails.
+/// The returned combinator fails if the given `comb`inator fails or if the given closure fails.
 ///
 /// # Example
 /// ```rust
@@ -155,7 +161,7 @@ where
 ///
 /// let mut comb = map_fallible(digit1(), |parsed| {
 ///     u8::from_str_radix(parsed.value(), 10)
-///         .map_err(|err| SnackError::<_, _, Infallible, ParseIntError>::Fatal(err))
+///         .map_err(|err| SnackError::<Infallible, ParseIntError, _, _>::Fatal(err))
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
@@ -174,7 +180,7 @@ where
 pub const fn map_fallible<'t, C, P, O1, O2, E1, E2, F, S>(comb: C, pred: P) -> MapFallible<C, P, F, S>
 where
     C: Combinator<'t, F, S, Output = O1>,
-    P: FnMut(O1) -> Result<O2, SnackError<F, S, E1, E2>>,
+    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, F, S>>,
 {
     MapFallible { comb, pred, _f: PhantomData, _s: PhantomData }
 }

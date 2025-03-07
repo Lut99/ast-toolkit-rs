@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:01:57
 //  Last edited:
-//    15 Mar 2024, 16:30:32
+//    07 Mar 2025, 17:12:37
 //  Auto updated?
 //    Yes
 //
@@ -18,6 +18,8 @@
 pub mod common;
 #[cfg(feature = "normal")]
 pub mod normal;
+#[cfg(feature = "snack")]
+pub mod snack;
 #[cfg(feature = "trailing")]
 pub mod trailing;
 

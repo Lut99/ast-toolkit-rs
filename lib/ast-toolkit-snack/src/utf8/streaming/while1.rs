@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    18 Jan 2025, 18:18:22
+//    07 Mar 2025, 17:29:32
 //  Auto updated?
 //    Yes
 //
@@ -87,9 +87,9 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf8::streaming::while1;
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("<example>", "abcdefg");

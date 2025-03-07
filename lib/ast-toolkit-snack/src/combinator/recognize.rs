@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:58:07
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    07 Mar 2025, 17:43:48
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,8 @@
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
-use ast_toolkit_span::range::SpanRange;
 
+use super::remember;
 use crate::Combinator;
 use crate::result::Result as SResult;
 
@@ -44,20 +44,8 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        // Get some initial span offset
-        let offset: usize = match input.range() {
-            SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => s,
-            SpanRange::OpenClosed(_) | SpanRange::Open | SpanRange::Empty => 0,
-        };
-
-        // Run the combinator
-        self.comb.parse(input.clone()).map(|(rem, _)| match rem.range() {
-            SpanRange::Closed(s, _) | SpanRange::ClosedOpen(s) => {
-                (rem, Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..s))
-            },
-            SpanRange::OpenClosed(_) | SpanRange::Open => (rem, Span::ranged(input.from_ref().clone(), input.source_ref().clone(), offset..offset)),
-            SpanRange::Empty => (rem, input),
-        })
+        // We simply use remember but discard the actual result
+        remember(&mut self.comb).parse(input).map(|(rem, (_, span))| (rem, span))
     }
 }
 

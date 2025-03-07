@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:21:02
 //  Last edited:
-//    30 Nov 2024, 14:07:34
+//    07 Mar 2025, 17:35:12
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,9 @@ pub mod map_recoverable;
 pub mod nop;
 pub mod not;
 pub mod opt;
+pub mod peek;
 pub mod recognize;
+pub mod remember;
 
 // Imports
 pub use consume::consume;
@@ -34,4 +36,6 @@ pub use map_recoverable::map_recoverable;
 pub use nop::nop;
 pub use not::not;
 pub use opt::opt;
+pub use peek::peek;
 pub use recognize::recognize;
+pub use remember::remember;

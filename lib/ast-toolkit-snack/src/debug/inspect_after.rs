@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:11:28
 //  Last edited:
-//    07 Mar 2025, 14:44:29
+//    07 Mar 2025, 17:28:21
 //  Auto updated?
 //    Yes
 //
@@ -99,7 +99,7 @@ where
 pub const fn inspect_after<'t, C, P, F, S>(comb: C, pred: P) -> InspectAfter<C, P, F, S>
 where
     C: Combinator<'t, F, S>,
-    P: for<'a> FnMut(&'a SResult<F, S, C::Output, C::Recoverable, C::Fatal>),
+    P: for<'a> FnMut(&'a SResult<C::Output, C::Recoverable, C::Fatal, F, S>),
 {
     InspectAfter { comb, pred, _f: PhantomData, _s: PhantomData }
 }
