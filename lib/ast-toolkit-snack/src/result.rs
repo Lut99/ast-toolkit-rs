@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    09 Jan 2025, 20:32:41
+//    07 Mar 2025, 14:41:23
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,7 @@ use crate::ExpectsFormatter;
 /// The return type of all snack [`Combinator`](crate::Combinator)s.
 ///
 /// It is essentially a three-way return type but separated in two levels to use the stock [`Result`] (so that `?` works).
-pub type Result<F, S, T, E1, E2> = std::result::Result<(Span<F, S>, T), SnackError<F, S, E1, E2>>;
+pub type Result<T, E1, E2, F, S> = std::result::Result<(Span<F, S>, T), SnackError<E1, E2, F, S>>;
 
 /// The main snack error type.
 ///
@@ -38,7 +38,7 @@ pub type Result<F, S, T, E1, E2> = std::result::Result<(Span<F, S>, T), SnackErr
 ///    case, it signals that the branch _looks_ incorrect/incomplete, but that additional things
 ///    can be given after the current end-of-file that collapses the correctness one way or another.
 #[derive(Debug)]
-pub enum SnackError<F, S, E1, E2> {
+pub enum SnackError<E1, E2, F, S> {
     /// It's a recoverable error.
     ///
     /// This means that any [branch::alt](crate::branch::alt) combinator should try another branch
@@ -64,20 +64,20 @@ pub enum SnackError<F, S, E1, E2> {
         span:   Span<F, S>,
     },
 }
-impl<F, S, E1, E2> Eq for SnackError<F, S, E1, E2>
+impl<E1, E2, F, S> Eq for SnackError<E1, E2, F, S>
 where
-    F: Eq,
-    S: SpannableEq,
     E1: Eq,
     E2: Eq,
+    F: Eq,
+    S: SpannableEq,
 {
 }
-impl<F, S, E1, E2> PartialEq for SnackError<F, S, E1, E2>
+impl<E1, E2, F, S> PartialEq for SnackError<E1, E2, F, S>
 where
-    F: PartialEq,
-    S: SpannableEq,
     E1: PartialEq,
     E2: PartialEq,
+    F: PartialEq,
+    S: SpannableEq,
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {

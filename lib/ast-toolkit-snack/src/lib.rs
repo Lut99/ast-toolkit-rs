@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    01 Dec 2024, 21:16:39
+//    07 Mar 2025, 14:42:11
 //  Auto updated?
 //    Yes
 //
@@ -22,39 +22,26 @@
 pub use ast_toolkit_snack_derive::comb;
 
 // Declare submodules
-pub mod branch2;
+pub mod branch;
 pub mod bytes;
-pub mod bytes2;
 #[cfg(feature = "c")]
 pub mod c;
-#[cfg(feature = "c")]
-pub mod c2;
 pub mod combinator;
-pub mod combinator2;
 pub mod debug;
-pub mod debug2;
 pub mod error;
-pub mod error2;
 pub mod multi;
-pub mod multi2;
 #[cfg(feature = "derive")]
 pub mod procedural;
 pub mod result;
 pub mod sequence;
-pub mod sequence2;
 pub mod span;
-pub mod tuple;
 pub mod utf8;
-pub mod utf82;
 
 use std::borrow::Cow;
 // Imports
-use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::Span;
-use enum_debug::EnumDebug;
-use error::{Error, Failure};
 
 
 /***** CONSTANTS *****/
@@ -128,22 +115,22 @@ impl ExpectsFormatter for String {
 ///
 /// # Generics
 /// - `'t`: Some lifetime of something upon which the combinator depends. Typically, this is used
-///   to make the [`Combinator2::ExpectsFormatter`] depend on it too and efficiently delay
+///   to make the [`Combinator::ExpectsFormatter`] depend on it too and efficiently delay
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait Combinator2<'t, F, S> {
+pub trait Combinator<'t, F, S> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
     type Output;
     /// Some error type that is thrown when the combinator fails but in a recoverable way.
     ///
-    /// This means that any wrapping [`alt()`](branch2::alt()) should still try another branch.
+    /// This means that any wrapping [`alt()`](branch::alt()) should still try another branch.
     type Recoverable;
     /// Some error type that is thrown when the combinator fails unrecoverably.
     ///
-    /// This means that there is no point for any wrapping [`alt()`](branch2::alt()) to still try
+    /// This means that there is no point for any wrapping [`alt()`](branch::alt()) to still try
     /// another branch.
     type Fatal;
 
@@ -154,7 +141,7 @@ pub trait Combinator2<'t, F, S> {
     /// It typically implements [`Display`] to show a fully-fledged error string.
     ///
     /// # Returns
-    /// A [`Combinator2::ExpectsFormatter`] that can be used to create the expects string.
+    /// A [`Combinator::ExpectsFormatter`] that can be used to create the expects string.
     fn expects(&self) -> Self::ExpectsFormatter;
 
     /// Runs the combinator on a [`Span`] of input.
@@ -164,17 +151,17 @@ pub trait Combinator2<'t, F, S> {
     ///
     /// # Returns
     /// A pair of the remaining input left unparsed (as a [`Span`]) and something of type
-    /// [`Combinator2::Output`] that encodes the result of this parser.
+    /// [`Combinator::Output`] that encodes the result of this parser.
     ///
     /// # Errors
     /// The parse function should error if it failed to parse anything. It has three ways of doing
     /// so:
     /// - It can emit a [`SnackError::Recoverable`](crate::result::SnackError::Recoverable), which
-    ///   returns something of [`Combinator2::Recoverable`] and encodes that any wrapping
-    ///   [`alt()`](branch2::alt()) should still try another branch;
+    ///   returns something of [`Combinator::Recoverable`] and encodes that any wrapping
+    ///   [`alt()`](branch::alt()) should still try another branch;
     /// - It can emit a [`SnackError::Fatal`](crate::result::SnackError::Fatal), which returns
-    ///   something of [`Combinator2::Fatal`] and encodes that there is no point for any wrapping
-    ///   [`alt()`](branch2::alt()) to still try another branch.
+    ///   something of [`Combinator::Fatal`] and encodes that there is no point for any wrapping
+    ///   [`alt()`](branch::alt()) to still try another branch.
     /// - It can emit a [`SnackError::NotEnough`](crate::result::SnackError::NotEnough), which
     ///   encodes that the input *may* become parsable if additional input is given. This is useful
     ///   when streaming the input from e.g. stdin or a socket, and one retrieves input in chunks
@@ -182,29 +169,29 @@ pub trait Combinator2<'t, F, S> {
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S>;
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, F, S, T: Combinator2<'t, F, S>> Combinator2<'t, F, S> for &'a mut T {
+impl<'a, 't, F, S, T: Combinator<'t, F, S>> Combinator<'t, F, S> for &'a mut T {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator2<'t, F, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, F, S>>::expects(self) }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
-        <T as Combinator2<'t, F, S>>::parse(self, input)
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+        <T as Combinator<'t, F, S>>::parse(self, input)
     }
 }
 
 
 
 /// A trait that unifies snack combinators that are trying different parsing paths. This in
-/// contrast to the [`Combinator2`], which assumes that combinators are doing all paths
+/// contrast to the [`Combinator`], which assumes that combinators are doing all paths
 /// sequentially (see it for more information).
 ///
 /// You typically don't have to interact with this trait; it is hidden behind
@@ -214,7 +201,7 @@ impl<'a, 't, F, S, T: Combinator2<'t, F, S>> Combinator2<'t, F, S> for &'a mut T
 ///
 /// # Generics
 /// - `'t`: Some lifetime of something upon which the combinator depends. Typically, this is used
-///   to make the [`Combinator2::ExpectsFormatter`] depend on it too and efficiently delay
+///   to make the [`Combinator::ExpectsFormatter`] depend on it too and efficiently delay
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
@@ -225,11 +212,11 @@ pub trait BranchingCombinator<'t, F, S> {
     type Output;
     /// Some error type that is thrown when a combinator fails but in a recoverable way.
     ///
-    /// This means that any wrapping [`alt()`](branch2::alt()) should still try another branch.
+    /// This means that any wrapping [`alt()`](branch::alt()) should still try another branch.
     type Recoverable;
     /// Some error type that is thrown when a combinator fails unrecoverably.
     ///
-    /// This means that there is no point for any wrapping [`alt()`](branch2::alt()) to still try
+    /// This means that there is no point for any wrapping [`alt()`](branch::alt()) to still try
     /// another branch.
     type Fatal;
 
@@ -257,10 +244,10 @@ pub trait BranchingCombinator<'t, F, S> {
     /// so:
     /// - It can emit a [`SnackError::Recoverable`](crate::result::SnackError::Recoverable), which
     ///   returns something of [`BranchingCombinator::Recoverable`] and encodes that any wrapping
-    ///   [`alt()`](branch2::alt()) should still try another branch;
+    ///   [`alt()`](branch::alt()) should still try another branch;
     /// - It can emit a [`SnackError::Fatal`](crate::result::SnackError::Fatal), which returns
     ///   something of [`BranchingCombinator::Fatal`] and encodes that there is no point for any
-    ///   wrapping [`alt()`](branch2::alt()) to still try another branch.
+    ///   wrapping [`alt()`](branch::alt()) to still try another branch.
     /// - It can emit a [`SnackError::NotEnough`](crate::result::SnackError::NotEnough), which
     ///   encodes that the input *may* become parsable if additional input is given. This is useful
     ///   when streaming the input from e.g. stdin or a socket, and one retrieves input in chunks
@@ -268,7 +255,7 @@ pub trait BranchingCombinator<'t, F, S> {
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal>;
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S>;
 }
 
 // Default impl for pointer-like types
@@ -282,134 +269,7 @@ impl<'a, 't, F, S, T: BranchingCombinator<'t, F, S>> BranchingCombinator<'t, F, 
     fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, F, S>>::expects(self) }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<F, S, Self::Output, Self::Recoverable, Self::Fatal> {
+    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
         <T as BranchingCombinator<'t, F, S>>::parse(self, input)
     }
-}
-
-
-
-/// A trait that allows something (probably a combinator) to express what it expect(s|ed) as input.
-///
-/// This actually serves as an interface to an external type that does all the work. This is important in producing [`Failure`]s with lenient lifetimes.
-pub trait Expects<'t> {
-    /// The type of formatter that actually handles the work.
-    type Formatter: 't + ExpectsFormatter;
-
-    /// Returns an [`ExpectsFormatter`] that does the actual formatting.
-    ///
-    /// This [`Formatter`] may implement [`Display`] to show a fully-fledged error string.
-    ///
-    /// # Returns
-    /// A [`Self::Formatter`](Expects::Formatter) that can be used to create the expects string.
-    fn expects(&self) -> Self::Formatter;
-}
-
-/// The trait that unifies ALL snack parser combinators.
-pub trait Combinator<'t, F, S>: Expects<'t> {
-    /// The output type for this Combinator.
-    type Output;
-    /// The custom error type for this Combinator, if applicable. Use [`Infallible`] if it isn't.
-    type Error;
-
-    /// Runs the parser on the given input to produce something of output [`Self::Output`](Combinator::Output).
-    ///
-    /// # Arguments
-    /// - `input`: The input to parse.
-    ///
-    /// # Returns
-    /// A snack [`Result`] that encodes:
-    /// - [`Result::Ok((rem, output))`]: We parsed an `output` of type `R`, with `rem` left unparsed.
-    /// - [`Result::Fail(fail)`]: We failed to parse with reason `fail`, but another parser might still parse it.
-    /// - [`Result::Error(err)`]: We failed to parse with reason `err` and we know the input is in an unrecoverable state (e.g., exhausted all branches).
-    fn parse(&mut self, input: Span<F, S>) -> Result<'t, Self::Output, F, S, Self::Error>;
-}
-
-/// Defines the shape of the output of [`Combinators`].
-#[derive(Debug, EnumDebug)]
-pub enum Result<'a, R, F, S, E = Infallible> {
-    /// An `output` of type `R` was parsed (1), with the remainder left unparsed (0).
-    Ok(Span<F, S>, R),
-    /// Failed to parse input with the given reason, but recoverably so.
-    Fail(Failure<'a, F, S, E>),
-    /// Failed to parse input with the given reason, but unrecoverably so.
-    Error(Error<'a, F, S, E>),
-}
-impl<'a, R, F, S, E> Result<'a, R, F, S, E> {
-    /// Maps this result's [`Result::Ok`]-case.
-    ///
-    /// # Arguments
-    /// - `map_fn`: A closure that will convert the result currently within into something else.
-    ///
-    /// # Returns
-    /// A [`Result::Ok`] with the result produced by `map_fn` if we were one already, or else `self` as-is.
-    #[inline]
-    pub fn map<R2>(self, map_fn: impl FnOnce(R) -> R2) -> Result<'a, R2, F, S, E> {
-        match self {
-            Self::Ok(rem, res) => Result::Ok(rem, map_fn(res)),
-            Self::Fail(fail) => Result::Fail(fail),
-            Self::Error(err) => Result::Error(err),
-        }
-    }
-
-    /// Maps this result's [`Result::Fail`]-case.
-    ///
-    /// # Arguments
-    /// - `map_fn`: A closure that will convert the failure currently within into something else.
-    ///
-    /// # Returns
-    /// A [`Result::Fail`] with the failure produced by `map_fn` if we were one already, or else `self` as-is.
-    #[inline]
-    pub fn map_fail(self, map_fn: impl FnOnce(Failure<F, S, E>) -> Failure<F, S, E>) -> Self {
-        match self {
-            Self::Ok(rem, res) => Self::Ok(rem, res),
-            Self::Fail(fail) => Self::Fail(map_fn(fail)),
-            Self::Error(err) => Self::Error(err),
-        }
-    }
-
-    /// Unwraps this Result as if it's a [`Result::Ok`].
-    ///
-    /// # Returns
-    /// A tuple with a span describing the unparsed source, and the parsed object, respectively.
-    ///
-    /// # Panics
-    /// This function panics if this Result is not [`Result::Ok`].
-    #[inline]
-    #[track_caller]
-    pub fn unwrap(self) -> (Span<F, S>, R) {
-        if let Self::Ok(rem, res) = self {
-            (rem, res)
-        } else {
-            panic!("Cannot unwrap a Result::{} as a Result::Ok", self.variant());
-        }
-    }
-
-    /// Returns if this Result is [`Result::Ok`].
-    ///
-    /// # Returns
-    /// True if so or false otherwise.
-    #[inline]
-    pub fn is_ok(&self) -> bool { matches!(self, Self::Ok(_, _)) }
-
-    /// Returns if this Result is [`Result::Fail`].
-    ///
-    /// # Returns
-    /// True if so or false otherwise.
-    #[inline]
-    pub fn is_fail(&self) -> bool { matches!(self, Self::Fail(_)) }
-
-    /// Returns if this Result is [`Result::Error`].
-    ///
-    /// # Returns
-    /// True if so or false otherwise.
-    #[inline]
-    pub fn is_err(&self) -> bool { matches!(self, Self::Error(_)) }
-
-    /// Returns if this Result is either [`Result::Fail`] or [`Result::Error`].
-    ///
-    /// # Returns
-    /// True if so or false otherwise.
-    #[inline]
-    pub fn is_not_ok(&self) -> bool { !self.is_ok() }
 }
