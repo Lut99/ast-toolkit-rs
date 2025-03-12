@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:15:43
 //  Last edited:
-//    07 Mar 2025, 17:18:24
+//    12 Mar 2025, 13:33:50
 //  Auto updated?
 //    Yes
 //
@@ -13,102 +13,15 @@
 //
 
 use std::convert::Infallible;
-use std::error;
-use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use better_derive::{Debug, Eq, PartialEq};
-use snack::combinator::recognize;
-use snack::result::{Result as SResult, SnackError};
-use snack::{Combinator, ExpectsFormatter as _};
-use span::{Span, Spanning};
+use ast_toolkit_snack::Combinator;
+use ast_toolkit_snack::combinator::remember;
+pub use ast_toolkit_snack::multi::separated_most0::{ExpectsFormatter, Fatal};
+use ast_toolkit_snack::result::{Result as SResult, SnackError};
+use ast_toolkit_span::Span;
 
 use crate::Punctuated;
-
-
-/***** ERRORS *****/
-/// Defines the fatal errors thrown by [`PunctuatedMost0`].
-#[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<E1, E2, F, S> {
-    /// The element-combinator failed fatally.
-    Comb(E1),
-    /// The separator-combinator failed fatally.
-    Separator(E2),
-    /// Lint that will explain the user they added an incorrect trailing separator.
-    TrailingSeparator { span: Span<F, S> },
-}
-impl<E1: Display, E2: Display, F, S> Display for Fatal<E1, E2, F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        match self {
-            Self::Comb(err) => err.fmt(f),
-            Self::Separator(err) => err.fmt(f),
-            Self::TrailingSeparator { span: _ } => write!(f, "Encountered trailing separator"),
-        }
-    }
-}
-impl<E1: error::Error, E2: error::Error, F, S> error::Error for Fatal<E1, E2, F, S> {
-    #[inline]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Self::Comb(err) => err.source(),
-            Self::Separator(err) => err.source(),
-            Self::TrailingSeparator { span: _ } => None,
-        }
-    }
-}
-impl<E1: Spanning<F, S>, E2: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Fatal<E1, E2, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> {
-        match self {
-            Self::Comb(err) => err.span(),
-            Self::Separator(err) => err.span(),
-            Self::TrailingSeparator { span } => span.clone(),
-        }
-    }
-
-    #[inline]
-    fn into_span(self) -> Span<F, S> {
-        match self {
-            Self::Comb(err) => err.into_span(),
-            Self::Separator(err) => err.into_span(),
-            Self::TrailingSeparator { span } => span,
-        }
-    }
-}
-
-
-
-
-
-/***** FORMATTERS *****/
-/// ExpectsFormatter for the [`PunctuatedMost0`] combinator.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<O1, O2> {
-    /// The thing we expect multiple times.
-    pub fmt: O1,
-    /// The thing interleaving the thing we expected multiple times.
-    pub sep: O2,
-}
-impl<O1: snack::ExpectsFormatter, O2: snack::ExpectsFormatter> Display for ExpectsFormatter<O1, O2> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl<O1: snack::ExpectsFormatter, O2: snack::ExpectsFormatter> snack::ExpectsFormatter for ExpectsFormatter<O1, O2> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
-        write!(f, "multiple repetitions of ")?;
-        self.fmt.expects_fmt(f, indent)?;
-        write!(f, " interleaved with ")?;
-        self.sep.expects_fmt(f, indent)
-    }
-}
-
-
-
 
 
 /***** COMBINATORS *****/
@@ -154,7 +67,7 @@ where
         // Then parse as long as there are commas
         loop {
             // Try the comma first
-            let sep: Span<F, S> = match recognize(&mut self.sep).parse(rem.clone()) {
+            let (sep, span): (C2::Output, Span<F, S>) = match remember(&mut self.sep).parse(rem.clone()) {
                 Ok((rem2, sep)) => {
                     rem = rem2;
                     sep
@@ -170,10 +83,10 @@ where
                     if res.len() >= res.capacity() {
                         res.reserve(1 + res.len())
                     }
-                    res.push(elem);
+                    res.push(sep, elem);
                     rem = rem2;
                 },
-                Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span: sep })),
+                Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span })),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
                 Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
@@ -190,14 +103,14 @@ where
 /// greedily parsing multiple instances of the same input.
 ///
 /// Note that this combinator is OK with matching no input, and can therefore itself not fail.
-/// If you want at least one, see [`separated_many1()`](super::separated_many1()) instead.
+/// If you want at least one, see [`punctuated_most1()`](super::punctuated_most1()) instead.
 ///
 /// # Streaming
 /// The punctuated_most0-combinator's streamingness comes from using a streamed version of the
 /// nested combinator or not. Being greedy, if no input is left after a successful parse of `comb`,
 /// this will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop
 /// parsing in such a scenario instead, consider using
-/// [`separated_few0()`](super::separated_few0()) instead.
+/// [`punctuated_many0()`](super::punctuated_many0()) instead.
 ///
 /// As a rule of thumb, use the `most`-combinators when the user indicates the end of the
 /// repetitions by something concrete (e.g., expressions wrapped in parenthesis).
@@ -208,7 +121,7 @@ where
 /// # Returns
 /// A combinator [`PunctuatedMost0`] that applies the given `comb`inator until it fails.
 ///
-/// It will return the input as a [`Vec`].
+/// It will return the input as a [`Punctuated`].
 ///
 /// # Fails
 /// The returned combinator cannot fail recoverably. However, if the given `comb`inator fails
@@ -216,8 +129,9 @@ where
 ///
 /// # Examples
 /// ```rust
+/// use ast_toolkit_punctuated::punct;
+/// use ast_toolkit_punctuated::snack::punctuated_most0;
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::multi::punctuated_most0;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
@@ -231,11 +145,17 @@ where
 /// let mut comb = punctuated_most0(tag("hello"), tag(","));
 /// assert_eq!(
 ///     comb.parse(span1),
-///     Ok((span1.slice(17..), vec![span1.slice(..5), span1.slice(6..11), span1.slice(12..17)]))
+///     Ok((span1.slice(17..), punct![
+///         v => span1.slice(..5),
+///         p => span1.slice(5..6),
+///         v => span1.slice(6..11),
+///         p => span1.slice(11..12),
+///         v => span1.slice(12..17)
+///     ]))
 /// );
-/// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), vec![span2.slice(..5)])));
-/// assert_eq!(comb.parse(span3), Ok((span3, vec![])));
-/// assert_eq!(comb.parse(span4), Ok((span4, vec![])));
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), punct![v => span2.slice(..5)])));
+/// assert_eq!(comb.parse(span3), Ok((span3, punct![])));
+/// assert_eq!(comb.parse(span4), Ok((span4, punct![])));
 /// assert_eq!(
 ///     comb.parse(span5),
 ///     Err(SnackError::Fatal(punctuated_most0::Fatal::TrailingSeparator {
@@ -246,8 +166,8 @@ where
 ///
 /// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
 /// ```rust
+/// use ast_toolkit_punctuated::snack::punctuated_most0;
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::multi::punctuated_most0;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;

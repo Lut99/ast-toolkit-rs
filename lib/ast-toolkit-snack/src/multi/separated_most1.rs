@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 11:58:12
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    12 Mar 2025, 13:41:42
 //  Auto updated?
 //    Yes
 //
@@ -141,7 +141,7 @@ where
 /// greedily parsing multiple instances of the same input.
 ///
 /// Note that this combinator requires at least 1 occurrence of the chosen combinator. If you want
-/// a version that also accepts parsing none, see [`separated_most1()`](super::separated_most1())
+/// a version that also accepts parsing none, see [`separated_most0()`](super::separated_most0())
 /// instead.
 ///
 /// # Streaming
