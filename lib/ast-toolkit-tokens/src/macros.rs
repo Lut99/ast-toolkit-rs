@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    11 Sep 2024, 14:07:46
+//    13 Mar 2025, 21:24:09
 //  Auto updated?
 //    Yes
 //
@@ -28,7 +28,7 @@
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{utf8_token, Utf8Token as _};
+/// use ast_toolkit_tokens::{Utf8Token as _, utf8_token};
 ///
 /// // The implementation
 /// utf8_token!(Dot, ".");
@@ -80,6 +80,57 @@ macro_rules! utf8_token {
             const TOKEN: &'static str = $token;
         }
 
+        // Snack impls (if enabled)
+        #[cfg(feature = "snack")]
+        impl<F, S> $name<F, S> {
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
+            ///   used to ensure that we're not accidentally detecting a keyword within a larger
+            ///   identifier.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_token()`-combinator for more information.
+            #[inline]
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::complete::utf8_token::utf8_token(comb)
+            }
+
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// This specific function returns a streaming version of the parser. See `parser()` for
+            /// a normal version.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
+            ///   used to ensure that we're not accidentally detecting a keyword within a larger
+            ///   identifier.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_token()`-combinator for more information.
+            #[inline]
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::streaming::utf8_token::utf8_token(comb)
+            }
+        }
+
         // Railroad impls (if enabled)
         #[cfg(feature = "railroad")]
         impl<F, S> ::ast_toolkit_railroad::ToNode for $name<F, S> {
@@ -117,10 +168,10 @@ macro_rules! utf8_token {
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{utf8_delimiter, Utf8Delimiter as _};
+/// use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
 ///
 /// // The implementation
-/// utf8_delimiter!(Parens, "(", ")");
+/// utf8_delim!(Parens, "(", ")");
 ///
 /// // Now this struct exists
 /// let span1 = Span::new("<example1>", "(foo)");
@@ -138,7 +189,7 @@ macro_rules! utf8_token {
 /// assert_eq!(Parens::<(), ()>::OPEN_TOKEN, "(");
 /// ```
 #[macro_export]
-macro_rules! utf8_delimiter {
+macro_rules! utf8_delim {
     ($name:ident, $open:literal, $close:literal) => {
         #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
         #[derive(::core::clone::Clone, ::core::marker::Copy, ::std::fmt::Debug)]
@@ -169,6 +220,53 @@ macro_rules! utf8_delimiter {
         impl<F, S> ::ast_toolkit_tokens::Utf8Delimiter<F, S> for $name<F, S> {
             const OPEN_TOKEN: &'static str = $open;
             const CLOSE_TOKEN: &'static str = $close;
+        }
+
+        // Snack impls (if enabled)
+        #[cfg(feature = "snack")]
+        impl<F, S> $name<F, S> {
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_delim()`-combinator for more information.
+            #[inline]
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::complete::utf8_delim::utf8_delim(comb)
+            }
+
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// This specific function returns a streaming version of the parser. See `parser()` for
+            /// a normal version.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_delim()`-combinator for more information.
+            #[inline]
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::streaming::utf8_delim::utf8_delim(comb)
+            }
         }
 
         // Railroad impls (if enabled)

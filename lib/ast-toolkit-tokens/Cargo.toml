@@ -8,6 +8,8 @@ description = "Provides tools for defining tokens (i.e., nodes in an AST that re
 
 
 [dependencies]
+better-derive = { git = "https://github.com/Lut99/better-derive-rs", optional = true }
+
 ast-toolkit-railroad = { path = "../ast-toolkit-railroad", optional = true }
 ast-toolkit-snack = { path = "../ast-toolkit-snack", optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span" }
@@ -18,4 +20,4 @@ default = ["macros"]
 
 macros = []
 railroad = ["dep:ast-toolkit-railroad"]
-snack = ["dep:ast-toolkit-snack"]
+snack = ["dep:ast-toolkit-snack", "dep:better-derive"]
