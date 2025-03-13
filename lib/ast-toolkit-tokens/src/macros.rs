@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    13 Mar 2025, 21:24:09
+//    13 Mar 2025, 22:10:00
 //  Auto updated?
 //    Yes
 //
@@ -115,8 +115,44 @@ macro_rules! utf8_token {
             const TOKEN: &'static str = $token;
         }
 
-        // Snack impls (if enabled)
-        #[cfg(feature = "snack")]
+        // Spanning impl
+        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        where
+            F: ::std::clone::Clone,
+            S: ::std::clone::Clone + $crate::__private::Spannable,
+        {
+            #[inline]
+            fn span(&self) -> $crate::__private::Span<F, S> { self.span.clone() }
+
+            #[inline]
+            fn into_span(self) -> $crate::__private::Span<F, S> { self.span }
+        }
+
+        // Convertion impls
+        impl<F, S> ::std::convert::From<$crate::__private::Span<F, S>> for $name<F, S> {
+            #[inline]
+            fn from(value: $crate::__private::Span<F, S>) -> Self {
+                Self { span: value }
+            }
+        }
+    };
+}
+
+/// Generates an ast-toolkit-snack shortcut for creating this token's parser.
+///
+/// # Arguments
+/// - `$name:ident`: The identifier of the type to implement the parser shortcut for.
+///
+/// # Generates
+/// This macro generates an impl for a type with the given `$name` that implements `parser()` and
+/// `parser_streaming()`.
+///
+/// # Example
+/// For an example, see [`utf8_token()`](crate::snack::complete::utf8_token()).
+#[macro_export]
+#[cfg(feature = "snack")]
+macro_rules! utf8_token_snack {
+    ($name:ident) => {
         impl<F, S> $name<F, S> {
             /// Returns a snack combinator for parsing this token.
             ///
@@ -165,31 +201,10 @@ macro_rules! utf8_token {
                 $crate::snack::streaming::utf8_token::utf8_token(comb)
             }
         }
-
-        // Spanning impl
-        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
-        where
-            F: ::std::clone::Clone,
-            S: ::std::clone::Clone + $crate::__private::Spannable,
-        {
-            #[inline]
-            fn span(&self) -> $crate::__private::Span<F, S> { self.span.clone() }
-
-            #[inline]
-            fn into_span(self) -> $crate::__private::Span<F, S> { self.span }
-        }
-
-        // Convertion impls
-        impl<F, S> ::std::convert::From<$crate::__private::Span<F, S>> for $name<F, S> {
-            #[inline]
-            fn from(value: $crate::__private::Span<F, S>) -> Self {
-                Self { span: value }
-            }
-        }
     };
 }
 
-/// Generates a ast-toolkit-railroad `ToNode` implementation for a Token that parses UTF-8 text.
+/// Generates an ast-toolkit-railroad `ToNode` implementation for a Token that parses UTF-8 text.
 ///
 /// # Arguments
 /// This macro accepts a comma-separated list of:
@@ -336,8 +351,42 @@ macro_rules! utf8_delim {
             const CLOSE_TOKEN: &'static str = $close;
         }
 
-        // Snack impls (if enabled)
-        #[cfg(feature = "snack")]
+        // Spanning impl
+        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        where
+            F: ::std::clone::Clone,
+            S: ::std::clone::Clone + $crate::__private::Spannable,
+        {
+            #[inline]
+            #[track_caller]
+            fn span(&self) -> $crate::__private::Span<F, S> { self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files")) }
+        }
+
+        // Convertion impls
+        impl<F, S> ::std::convert::From<($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)> for $name<F, S> {
+            #[inline]
+            fn from((open, close): ($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)) -> Self {
+                Self { open, close }
+            }
+        }
+    };
+}
+
+/// Generates an ast-toolkit-snack shortcut for creating this delimiter's parser.
+///
+/// # Arguments
+/// - `$name:ident`: The identifier of the type to implement the parser shortcut for.
+///
+/// # Generates
+/// This macro generates an impl for a type with the given `$name` that implements `parser()` and
+/// `parser_streaming()`.
+///
+/// # Example
+/// For an example, see [`utf8_delim()`](crate::snack::complete::utf8_delim()).
+#[macro_export]
+#[cfg(feature = "snack")]
+macro_rules! utf8_delim_snack {
+    ($name:ident) => {
         impl<F, S> $name<F, S> {
             /// Returns a snack combinator for parsing this token.
             ///
@@ -380,25 +429,6 @@ macro_rules! utf8_delim {
                 S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
             {
                 $crate::snack::streaming::utf8_delim::utf8_delim(comb)
-            }
-        }
-
-        // Spanning impl
-        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
-        where
-            F: ::std::clone::Clone,
-            S: ::std::clone::Clone + $crate::__private::Spannable,
-        {
-            #[inline]
-            #[track_caller]
-            fn span(&self) -> $crate::__private::Span<F, S> { self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files")) }
-        }
-
-        // Convertion impls
-        impl<F, S> ::std::convert::From<($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)> for $name<F, S> {
-            #[inline]
-            fn from((open, close): ($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)) -> Self {
-                Self { open, close }
             }
         }
     };

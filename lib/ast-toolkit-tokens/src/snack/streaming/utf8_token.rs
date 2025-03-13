@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:21
 //  Last edited:
-//    13 Mar 2025, 21:21:21
+//    13 Mar 2025, 22:06:33
 //  Auto updated?
 //    Yes
 //
@@ -101,11 +101,13 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 /// use ast_toolkit_tokens::snack::streaming::utf8_token;
-/// use ast_toolkit_tokens::utf8_token;
+/// use ast_toolkit_tokens::{utf8_token, utf8_token_snack};
 ///
 /// // Define the tokens
 /// utf8_token!(Dot, ".");
+/// utf8_token_snack!(Dot);
 /// utf8_token!(Foo, "foo");
+/// utf8_token_snack!(Foo);
 ///
 /// // Let's test some inputs
 /// let span1 = Span::new("<example>", ".,");

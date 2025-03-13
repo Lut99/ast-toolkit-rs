@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:24
 //  Last edited:
-//    13 Mar 2025, 21:24:29
+//    13 Mar 2025, 22:06:17
 //  Auto updated?
 //    Yes
 //
@@ -112,10 +112,11 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 /// use ast_toolkit_tokens::snack::streaming::utf8_delim;
-/// use ast_toolkit_tokens::utf8_delim;
+/// use ast_toolkit_tokens::{utf8_delim, utf8_delim_snack};
 ///
 /// // Define the tokens
 /// utf8_delim!(Parens, "(", ")");
+/// utf8_delim_snack!(Parens);
 ///
 /// // Let's test some inputs
 /// let span1 = Span::new("<example>", "(foo)");

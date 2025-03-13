@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 12:54:18
 //  Last edited:
-//    28 Nov 2024, 12:57:22
+//    13 Mar 2025, 22:04:45
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,8 @@ use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
 
 /***** AST *****/
 utf8_delim!(Parens, "(", ")");
+#[cfg(feature = "snack")]
+ast_toolkit_tokens::utf8_delim_snack!(Parens);
 #[cfg(feature = "railroad")]
 ast_toolkit_tokens::utf8_delim_railroad!(Parens, "(", ")");
 
@@ -38,6 +40,18 @@ fn main() {
     );
     assert_eq!(paren1, paren2);
     assert_eq!(Parens::<(), ()>::OPEN_TOKEN, "(");
+
+    // Also parse some string
+    #[cfg(feature = "snack")]
+    use ast_toolkit_snack::Combinator as _;
+    #[cfg(feature = "snack")]
+    let parens = Parens::parser(ast_toolkit_snack::utf8::complete::tag("foo")).parse(Span::new("<example>", "(foo)")).unwrap().1.1;
+    #[cfg(feature = "snack")]
+    assert_eq!(
+        format!("{parens:?}"),
+        "Parens { open: Span<&str, &str> { from: .., source: .., range: OpenClosed(1) }, close: Span<&str, &str> { from: .., source: .., range: \
+         ClosedOpen(4) } }"
+    );
 
     // Also generate railroad diagram nodes
     #[cfg(feature = "railroad")]
