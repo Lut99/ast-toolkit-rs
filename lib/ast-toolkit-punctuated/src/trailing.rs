@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 14:08:18
 //  Last edited:
-//    26 Mar 2024, 18:05:42
+//    03 Dec 2024, 15:26:54
 //  Auto updated?
 //    Yes
 //
@@ -59,18 +59,18 @@ macro_rules! punct_trail {
     // Pop values
     (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_value($value);
-        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::punct_trail!(__recursion $list $($($items)+)?);
     };
     // Pop punctuation
     (__recursion $list:ident p => $punct:expr $(, $($items:tt)+)?) => {
         $list.push_punct($punct);
-        ::ast_toolkit_punctuated::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::punct_trail!(__recursion $list $($($items)+)?);
     };
 
     [$($items:tt)*] => {{
         // Call the macro
-        let mut punct = ::ast_toolkit_punctuated::trailing::PunctuatedTrailing::new();
-        ::ast_toolkit_punctuated::punct_trail!(__recursion punct $($items)*);
+        let mut punct = $crate::trailing::PunctuatedTrailing::new();
+        $crate::punct_trail!(__recursion punct $($items)*);
         punct
     }};
 }
@@ -860,5 +860,35 @@ impl<V: PartialEq, P> PartialEq for PunctuatedTrailing<V, P> {
             }
         }
         true
+    }
+}
+
+impl<V, P, I> From<I> for PunctuatedTrailing<V, P>
+where
+    P: Default,
+    I: IntoIterator<Item = V>,
+{
+    #[inline]
+    fn from(value: I) -> Self { Self::from_iter(value) }
+}
+impl<V, P> FromIterator<V> for PunctuatedTrailing<V, P>
+where
+    P: Default,
+{
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        // Turn the into-iterator into an iterator
+        let mut iter = iter.into_iter();
+        let size_hint: (usize, Option<usize>) = iter.size_hint();
+        let size_hint: usize = size_hint.1.unwrap_or(size_hint.0);
+
+        // Loop through it to find the values. The puncts we default.
+        let first: Option<Box<V>> = iter.next().map(Box::new);
+        let mut data: Vec<(P, V)> = Vec::with_capacity(size_hint);
+        for value in iter {
+            data.push((P::default(), value));
+        }
+
+        // Done
+        Self { first, data, trail: None }
     }
 }

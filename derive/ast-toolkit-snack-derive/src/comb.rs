@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    07 Mar 2025, 18:41:36
+//    13 Mar 2025, 21:37:34
 //  Auto updated?
 //    Yes
 //
@@ -227,6 +227,10 @@ fn generate_combinator_impl(attrs: &CombinatorAttributes, func: &CombinatorFunc)
     }
     std::mem::swap(&mut prm, &mut sig.generics.params);
     std::mem::swap(&mut whr, &mut sig.generics.where_clause);
+
+    // Prepare the combinator path
+    let mut comb = attrs.prefix.clone();
+    comb.segments.push(PathSegment { ident: Ident::new("Combinator", Span::call_site()), arguments: PathArguments::None });
 
     // Write the impl
     let module: &Ident = attrs.module.as_ref().unwrap();

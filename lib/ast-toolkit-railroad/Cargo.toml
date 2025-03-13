@@ -7,9 +7,26 @@ repository.workspace = true
 description = "Provides traits for recursively generating [railroad](https://crates.io/crates/railroad/0.2.0) diagrams. Comes with a derive macro for convenience."
 
 
+[[example]]
+name = "railroad"
+path = "examples/railroad.rs"
+required-features = []
+
+[[example]]
+name = "railroad_derive"
+path = "examples/railroad_derive.rs"
+required-features = ["derive"]
+
+
+[[test]]
+name = "derive_generics"
+path = "tests/derive_generics.rs"
+required-features = ["derive"]
+
+
 [dependencies]
-parking_lot = { version = "0.12", optional = true }
-railroad = "0.2"
+parking_lot = { version = "0.12.3", optional = true }
+railroad = "0.3.2"
 
 ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", optional = true }
 ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive", optional = true }
@@ -18,6 +35,6 @@ ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive
 [features]
 default = []
 derive = [ "dep:ast-toolkit-railroad-derive" ]
-parking_lot = [ "dep:parking_lot" ]
+parking-lot = [ "dep:parking_lot" ]
 punctuated-normal = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/normal" ]
 punctuated-trailing = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/trailing" ]

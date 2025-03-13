@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    09 Jan 2025, 00:58:01
+//    13 Mar 2025, 21:41:18
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements a [`Span`], which abstracts over some input to track a particular location in it.
 //
 
+use std::cmp::Ordering;
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
@@ -21,7 +22,6 @@ use std::rc::Rc;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::SpannableAsBytes;
 use crate::as_str::{SpannableAsStr, SpannableTryAsStr};
 use crate::display::SpannableDisplay;
 use crate::eq::SpannableEq;
@@ -30,6 +30,7 @@ use crate::lines::SpannableLines;
 use crate::locate::SpannableLocate;
 use crate::range::SpanRange;
 use crate::spannable::Spannable;
+use crate::{SpannableAsBytes, SpannableOrd};
 
 
 /***** AUXILLARY *****/
@@ -432,9 +433,20 @@ impl<F: Hash, S: SpannableHash> Hash for Span<F, S> {
         self.source.slice_hash(self.range, state)
     }
 }
+impl<F: Eq, S: SpannableEq + SpannableOrd> Ord for Span<F, S> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        // SAFETY: This is OK because [`Span::partial_cmp()`] always returns `Some` (see below)
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
 impl<F: PartialEq, S: SpannableEq> PartialEq for Span<F, S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.from == other.from && self.source.slice_eq(self.range, &other.source, other.range) }
+}
+impl<F: PartialEq, S: SpannableEq + SpannableOrd> PartialOrd for Span<F, S> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.source.slice_ord(self.range, &other.source, other.range)) }
 }
 impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
     #[inline]

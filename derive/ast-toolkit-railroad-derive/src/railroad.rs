@@ -4,7 +4,7 @@
 //  Created:
 //    22 Feb 2024, 11:36:17
 //  Last edited:
-//    26 Feb 2024, 13:55:38
+//    13 Feb 2025, 15:48:06
 //  Auto updated?
 //    Yes
 //
@@ -12,15 +12,21 @@
 //!   Implements the `#[derive(ToNode)]`-macro.
 //
 
+use std::collections::HashSet;
+
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_error::{Diagnostic, Level};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseBuffer};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, PathSep};
-use syn::{Attribute, Data, Expr, ExprLit, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments, PathSegment, Type, Visibility};
+use syn::visit::Visit;
+use syn::{
+    Attribute, Data, Expr, ExprLit, Field, GenericParam, Generics, Ident, Lit, LitInt, LitStr, Meta, Path, PathArguments, PathSegment, PredicateType,
+    TraitBound, TraitBoundModifier, Type, TypeParam, TypeParamBound, Visibility, WherePredicate,
+};
 
 
 /***** MACRO RULES *****/
@@ -28,25 +34,22 @@ use syn::{Attribute, Data, Expr, ExprLit, Generics, Ident, Lit, LitInt, LitStr, 
 macro_rules! path {
     // With leading colon
     (:: $($path:tt)*) => {
-        Path {
-            leading_colon: Some(PathSep::default()),
-            segments: {
-                let mut punc: Punctuated<PathSegment,PathSep> = Punctuated::new();
-                _path_segments!(punc, $($path)*);
-                punc
-            },
+        {
+            let mut path = Path {
+                leading_colon: Some(PathSep::default()),
+                segments: Punctuated::new(),
+            };
+            _path_segments!(path, $($path)*);
+            path
         }
     };
 
     // W/o leading colon
-    ($($path:tt)*) => {
-        Path {
-            leading_colon: None,
-            segments: {
-                let mut punc: Punctuated = Punctuated::new();
-                _path_segments!(punc, $($path)*)
-                punc
-            },
+    ($prefix:expr, $($path:tt)*) => {
+        {
+            let mut path = $prefix.clone();
+            _path_segments!(path, $($path)*);
+            path
         }
     };
 }
@@ -54,12 +57,12 @@ macro_rules! _path_segments {
     ($punc:ident,) => {};
 
     ($punc:ident, $seg:ident $($t:tt)*) => {
-        $punc.push(PathSegment { ident: Ident::new(stringify!($seg), Span::call_site()), arguments: PathArguments::None });
+        $punc.segments.push(PathSegment { ident: Ident::new(stringify!($seg), Span::call_site()), arguments: PathArguments::None });
         _path_segments!($punc, $($t)*);
     };
 
     ($punc:ident, :: $($t:tt)*) => {
-        $punc.push_punct(PathSep::default());
+        $punc.segments.push_punct(PathSep::default());
         _path_segments!($punc, $($t)*);
     };
 
@@ -88,68 +91,68 @@ macro_rules! std_vec {
 }
 /// The path used to access `ast-toolkit`'s `ToNode`.
 macro_rules! ast_to_node {
-    () => {
-        path!(::ast_toolkit_railroad::ToNode)
+    ($prefix:expr) => {
+        path!($prefix, ToNode)
     };
 }
 /// The path used to access `ast-toolkit`'s `ToNonTerm`.
 macro_rules! ast_to_non_term {
-    () => {
-        path!(::ast_toolkit_railroad::ToNonTerm)
+    ($prefix:expr) => {
+        path!($prefix, ToNonTerm)
     };
 }
 /// The path used to access `ast-toolkit`'s `ToDelimNode`.
 macro_rules! ast_to_delim_node {
-    () => {
-        path!(::ast_toolkit_railroad::ToDelimNode)
+    ($prefix:expr) => {
+        path!($prefix, ToDelimNode)
     };
 }
 /// The path used to access `railroad`'s `Node`.
 macro_rules! rr_node {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Node)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Node)
     };
 }
 /// The path used to access `railroad`'s `NonTerminal`.
 macro_rules! rr_non_terminal {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::NonTerminal)
+    ($prefix:expr) => {
+        path!($prefix, railroad::NonTerminal)
     };
 }
 /// The path used to access `railroad`'s `Sequence`.
 macro_rules! rr_sequence {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Sequence)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Sequence)
     };
 }
 /// The path used to access `railroad`'s `Choice`.
 macro_rules! rr_choice {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Choice)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Choice)
     };
 }
 /// The path used to access `railroad`'s `Optional`.
 macro_rules! rr_optional {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Optional)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Optional)
     };
 }
 /// The path used to access `railroad`'s `LabeledBox`.
 macro_rules! rr_labeled_box {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::LabeledBox)
+    ($prefix:expr) => {
+        path!($prefix, railroad::LabeledBox)
     };
 }
 /// The path used to access `railroad`'s `Terminal`.
 macro_rules! rr_terminal {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Terminal)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Terminal)
     };
 }
 /// The path used to access `railroad`'s `Comment`.
 macro_rules! rr_comment {
-    () => {
-        path!(::ast_toolkit_railroad::railroad::Comment)
+    ($prefix:expr) => {
+        path!($prefix, railroad::Comment)
     };
 }
 
@@ -217,6 +220,8 @@ enum FieldKind {
 
 /// Represents things we parse from the toplevel for `ToNode`-macros.
 struct ToplevelToNodeAttributes {
+    /// The crate path prefix to use.
+    path: Path,
     /// The specialized kind of node.
     kind: NodeKind,
 }
@@ -234,6 +239,11 @@ impl ToplevelToNodeAttributes {
     /// This function may error if the given `attrs` were not understood.
     fn parse(what: &'static str, attrs: &[Attribute]) -> Result<Self, Diagnostic> {
         // Set out to collect what we want
+        let mut path: Path = {
+            let mut segments = Punctuated::new();
+            segments.push(PathSegment { ident: Ident::new("ast_toolkit_railroad", Span::call_site()), arguments: PathArguments::None });
+            Path { leading_colon: Some(PathSep::default()), segments }
+        };
         let mut kind: NodeKind = NodeKind::Derived;
         for attr in attrs {
             // Match on the meta to find `#[railroad(...)]`
@@ -317,7 +327,12 @@ impl ToplevelToNodeAttributes {
                                 },
 
                                 Meta::List(l) => {
-                                    if l.path.is_ident("one-of") || l.path.is_ident("one_of") {
+                                    if l.path.is_ident("prefix") {
+                                        path = match l.parse_args() {
+                                            Ok(path) => path,
+                                            Err(_) => return Err(Diagnostic::new(Level::Error, "Prefix must be a valid (absolute) path".into())),
+                                        };
+                                    } else if l.path.is_ident("one-of") || l.path.is_ident("one_of") {
                                         // Parse as a list of string literals
                                         let args: Vec<NodeTermKind> = match l.parse_args_with(|buffer: &ParseBuffer| {
                                             // Repeatedly parsed metas separated by commands
@@ -379,12 +394,14 @@ impl ToplevelToNodeAttributes {
         }
 
         // Build ourselves
-        Ok(Self { kind })
+        Ok(Self { path, kind })
     }
 }
 
 /// Represents things we parse the from the toplevel for the `ToDelimNode`-macro.
 struct ToplevelDelimAttributes {
+    /// The crate path prefix to use.
+    path:  Path,
     /// The opening delimiter.
     open:  LitStr,
     /// The closing delimiter.
@@ -403,6 +420,11 @@ impl ToplevelDelimAttributes {
     /// This function may error if the given `attrs` were not understood.
     fn parse(attrs: &[Attribute]) -> Result<Self, Diagnostic> {
         // Set out to collect what we want
+        let mut path: Path = {
+            let mut segments = Punctuated::new();
+            segments.push(PathSegment { ident: Ident::new("ast_toolkit_railroad", Span::call_site()), arguments: PathArguments::None });
+            Path { leading_colon: Some(PathSep::default()), segments }
+        };
         let mut open: Option<LitStr> = None;
         let mut close: Option<LitStr> = None;
         let mut span: Span = Span::call_site();
@@ -490,14 +512,21 @@ impl ToplevelDelimAttributes {
                                     ));
                                 },
                                 Meta::List(l) => {
-                                    return Err(Diagnostic::spanned(
-                                        l.path.span(),
-                                        Level::Error,
-                                        format!(
-                                            "Unknown ToDelimNode-attribute '{}' in '#[railroad(...)]'",
-                                            l.path.span().source_text().unwrap_or_else(String::new)
-                                        ),
-                                    ));
+                                    if l.path.is_ident("prefix") {
+                                        path = match l.parse_args() {
+                                            Ok(path) => path,
+                                            Err(_) => return Err(Diagnostic::new(Level::Error, "Prefix must be a valid (absolute) path".into())),
+                                        };
+                                    } else {
+                                        return Err(Diagnostic::spanned(
+                                            l.path.span(),
+                                            Level::Error,
+                                            format!(
+                                                "Unknown ToDelimNode-attribute '{}' in '#[railroad(...)]'",
+                                                l.path.span().source_text().unwrap_or_else(String::new)
+                                            ),
+                                        ));
+                                    }
                                 },
                             }
                         }
@@ -524,7 +553,7 @@ impl ToplevelDelimAttributes {
         };
 
         // Build ourselves
-        Ok(Self { open, close })
+        Ok(Self { path, open, close })
     }
 }
 
@@ -687,9 +716,80 @@ impl FieldAttributes {
 
 
 
+/// Mods the given generics to include necessary bounds on the type.
+///
+/// # Arguments
+/// - `path`: The bound to set to all the field's types.
+/// - `data`: The [`Data`] to mod for.
+/// - `generics`: The [`Generics`] to mod.
+pub fn update_generics(path: &Path, data: &Data, generics: &mut Generics) {
+    struct HasGenericsVisitor<'g> {
+        generics: &'g Generics,
+        should_add_bound: bool,
+    }
+    impl<'g, 'ast> Visit<'ast> for HasGenericsVisitor<'g> {
+        fn visit_type(&mut self, ty: &'ast Type) {
+            // Check if it is a generic, by accident
+            if self.generics.params.iter().any(|p| {
+                if let (Type::Path(ty_path), GenericParam::Type(TypeParam { ident, .. })) = (ty, p) {
+                    if let Some(ty_ident) = ty_path.path.get_ident() { ty_ident == ident } else { false }
+                } else {
+                    false
+                }
+            }) {
+                self.should_add_bound = true;
+            }
+
+            // Continue as we were
+            syn::visit::visit_type(self, ty)
+        }
+    }
+
+
+    // Go through all the fields in the structure to collect the necessary (unique) types
+    let fields = match data {
+        Data::Enum(e) => Box::new(e.variants.iter().flat_map(|e| e.fields.iter())) as Box<dyn Iterator<Item = &Field>>,
+        Data::Struct(s) => Box::new(s.fields.iter()),
+        Data::Union(u) => Box::new(u.fields.named.iter()),
+    };
+    let size_hint: (usize, Option<usize>) = fields.size_hint();
+    let mut tys: HashSet<&Type> = HashSet::with_capacity(size_hint.1.unwrap_or(size_hint.0));
+    for field in fields {
+        tys.insert(&field.ty);
+    }
+
+    // Add where clauses for each of them
+    for ty in tys {
+        // First, filter out any types not using generics (to prevent needless self-recursion where not relevant)
+        let mut visitor = HasGenericsVisitor { generics, should_add_bound: false };
+        visitor.visit_type(ty);
+        if !visitor.should_add_bound {
+            continue;
+        }
+
+        // Otherwise, add it
+        generics.make_where_clause().predicates.push(WherePredicate::Type(PredicateType {
+            lifetimes:   None,
+            bounded_ty:  ty.clone(),
+            colon_token: Default::default(),
+            bounds:      {
+                let mut bounds = Punctuated::new();
+                bounds.push(TypeParamBound::Trait(TraitBound {
+                    paren_token: None,
+                    modifier: TraitBoundModifier::None,
+                    lifetimes: None,
+                    path: path.clone(),
+                }));
+                bounds
+            },
+        }))
+    }
+}
+
 /// Derives the expression that generates a type's `railroad::Node`.
 ///
 /// # Arguments
+/// - `path`: The [`Path`] that we use to find the crate path prefix.
 /// - `what`: The trait we're parsing for.
 /// - `ident`: The identifier of the parsed struct/enum.
 /// - `data`: The contents of the parsed struct/enum.
@@ -699,19 +799,19 @@ impl FieldAttributes {
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> Result<(TokenStream2, TokenStream2), Diagnostic> {
+pub fn derive_railroad_expr(path: &Path, what: &'static str, ident: &Ident, data: &Data) -> Result<(TokenStream2, TokenStream2), Diagnostic> {
     // Serialize the chosen paths
     let (std_box, std_vec, ast_to_node, ast_to_delim_node, rr_node, rr_sequence, rr_choice, rr_optional, rr_labeled_box, rr_comment) = (
         std_box!(),
         std_vec!(),
-        ast_to_node!(),
-        ast_to_delim_node!(),
-        rr_node!(),
-        rr_sequence!(),
-        rr_choice!(),
-        rr_optional!(),
-        rr_labeled_box!(),
-        rr_comment!(),
+        ast_to_node!(path),
+        ast_to_delim_node!(path),
+        rr_node!(path),
+        rr_sequence!(path),
+        rr_choice!(path),
+        rr_optional!(path),
+        rr_labeled_box!(path),
+        rr_comment!(path),
     );
 
     // Match on the type of data to find the railroad diagram elements
@@ -898,22 +998,33 @@ pub fn derive_railroad_expr(what: &'static str, ident: &Ident, data: &Data) -> R
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
-    // Serialize the chosen paths
-    let (std_box, std_vec, ast_to_node, rr_choice, rr_sequence, rr_terminal, rr_comment, rr_node) =
-        (std_box!(), std_vec!(), ast_to_node!(), rr_choice!(), rr_sequence!(), rr_terminal!(), rr_comment!(), rr_node!());
-
+pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, mut generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
     // Parse the toplevel attributes
     let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNode", &attrs)?;
 
+    // Serialize the chosen paths
+    let (std_box, std_vec, ast_to_node, rr_choice, rr_sequence, rr_terminal, rr_comment, rr_node) = (
+        std_box!(),
+        std_vec!(),
+        ast_to_node!(&toplevel.path),
+        rr_choice!(&toplevel.path),
+        rr_sequence!(&toplevel.path),
+        rr_terminal!(&toplevel.path),
+        rr_comment!(&toplevel.path),
+        rr_node!(&toplevel.path),
+    );
+
     // Match on what to do
-    let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
     match toplevel.kind {
         NodeKind::Derived => {
             // Generate the type & expression for the impl
-            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNode", &ident, &data)?;
+            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr(&toplevel.path, "ToNode", &ident, &data)?;
+
+            // Update the generics
+            update_generics(&ast_to_node, &data, &mut generics);
 
             // Use those to build the full impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #node_ty;
@@ -929,6 +1040,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 
         NodeKind::Terminal(NodeTermKind::Value(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_terminal;
@@ -942,6 +1054,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 
         NodeKind::Terminal(NodeTermKind::Regex(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_sequence<#std_box<dyn #rr_node>>;
@@ -979,6 +1092,7 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
             }
 
             // Generate the impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_choice<#std_box<dyn #rr_node>>;
@@ -1009,32 +1123,41 @@ pub fn derive_to_node(ident: Ident, data: Data, attrs: Vec<Attribute>, generics:
 ///
 /// # Errors
 /// This function may error if any of the attributes were ill-formed.
-pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, generics: Generics, _vis: Visibility) -> Result<TokenStream, Diagnostic> {
+pub fn derive_to_non_term(
+    ident: Ident,
+    data: Data,
+    attrs: Vec<Attribute>,
+    mut generics: Generics,
+    _vis: Visibility,
+) -> Result<TokenStream, Diagnostic> {
+    // Parse the toplevel attributes
+    let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNonTerm", &attrs)?;
+
     // Serialize the chosen paths
     let (std_box, std_vec, ast_to_node, ast_to_non_termm, rr_choice, rr_sequence, rr_terminal, rr_non_terminal, rr_comment, rr_node) = (
         std_box!(),
         std_vec!(),
-        ast_to_node!(),
-        ast_to_non_term!(),
-        rr_choice!(),
-        rr_sequence!(),
-        rr_terminal!(),
-        rr_non_terminal!(),
-        rr_comment!(),
-        rr_node!(),
+        ast_to_node!(&toplevel.path),
+        ast_to_non_term!(&toplevel.path),
+        rr_choice!(&toplevel.path),
+        rr_sequence!(&toplevel.path),
+        rr_terminal!(&toplevel.path),
+        rr_non_terminal!(&toplevel.path),
+        rr_comment!(&toplevel.path),
+        rr_node!(&toplevel.path),
     );
 
-    // Parse the toplevel attributes
-    let toplevel: ToplevelToNodeAttributes = ToplevelToNodeAttributes::parse("ToNonTerm", &attrs)?;
-
     let name: String = ident.to_string();
-    let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
     match toplevel.kind {
         NodeKind::Derived => {
             // Generate the type & expression for the impl
-            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr("ToNonTerm", &ident, &data)?;
+            let (node_ty, node_expr): (TokenStream2, TokenStream2) = derive_railroad_expr(&toplevel.path, "ToNonTerm", &ident, &data)?;
+
+            // Update the generics
+            update_generics(&ast_to_node, &data, &mut generics);
 
             // Use those to build the full impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1059,6 +1182,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
 
         NodeKind::Terminal(NodeTermKind::Value(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1081,6 +1205,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
 
         NodeKind::Terminal(NodeTermKind::Regex(term)) => {
             // Simply generate a straightforward impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1127,6 +1252,7 @@ pub fn derive_to_non_term(ident: Ident, data: Data, attrs: Vec<Attribute>, gener
             }
 
             // Generate the impl
+            let (impl_gen, ty_gen, where_gen) = generics.split_for_impl();
             Ok(quote! {
                 impl #impl_gen #ast_to_node for #ident #ty_gen #where_gen {
                     type Node = #rr_non_terminal;
@@ -1173,12 +1299,12 @@ pub fn derive_to_delim_node(
     generics: Generics,
     _vis: Visibility,
 ) -> Result<TokenStream, Diagnostic> {
-    // Serialize the chosen paths
-    let (std_vec, ast_to_node, ast_to_delim_node, rr_sequence, rr_terminal) =
-        (std_vec!(), ast_to_node!(), ast_to_delim_node!(), rr_sequence!(), rr_terminal!());
-
     // Parse the toplevel attributes
     let toplevel: ToplevelDelimAttributes = ToplevelDelimAttributes::parse(&attrs)?;
+
+    // Serialize the chosen paths
+    let (std_vec, ast_to_node, ast_to_delim_node, rr_sequence, rr_terminal) =
+        (std_vec!(), ast_to_node!(&toplevel.path), ast_to_delim_node!(&toplevel.path), rr_sequence!(&toplevel.path), rr_terminal!(&toplevel.path));
 
     // Use those to build the full impls
     let (open, close): (LitStr, LitStr) = (toplevel.open, toplevel.close);

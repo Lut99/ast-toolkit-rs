@@ -4,7 +4,7 @@
 //  Created:
 //    26 Feb 2024, 16:00:14
 //  Last edited:
-//    18 Jan 2025, 18:48:17
+//    13 Mar 2025, 21:42:24
 //  Auto updated?
 //    Yes
 //
@@ -52,18 +52,18 @@ macro_rules! punct {
     // Pop first value
     (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_first($value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+        $crate::punct!(__recursion $list $($($items)+)?);
     };
     // Pop punctuation, value pairs
     (__recursion $list:ident p => $punct:expr, v => $value:expr $(, $($items:tt)+)?) => {
         $list.push($punct, $value);
-        ::ast_toolkit_punctuated::punct!(__recursion $list $($($items)+)?);
+        $crate::punct!(__recursion $list $($($items)+)?);
     };
 
     [$($items:tt)*] => {{
         // Call the macro
-        let mut punct = ::ast_toolkit_punctuated::normal::Punctuated::new();
-        ::ast_toolkit_punctuated::punct!(__recursion punct $($items)*);
+        let mut punct = $crate::normal::Punctuated::new();
+        $crate::punct!(__recursion punct $($items)*);
         punct
     }};
 }
@@ -730,5 +730,35 @@ impl<V: PartialEq, P> PartialEq for Punctuated<V, P> {
             }
         }
         true
+    }
+}
+
+impl<V, P, I> From<I> for Punctuated<V, P>
+where
+    P: Default,
+    I: IntoIterator<Item = V>,
+{
+    #[inline]
+    fn from(value: I) -> Self { Self::from_iter(value) }
+}
+impl<V, P> FromIterator<V> for Punctuated<V, P>
+where
+    P: Default,
+{
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        // Turn the into-iterator into an iterator
+        let mut iter = iter.into_iter();
+        let size_hint: (usize, Option<usize>) = iter.size_hint();
+        let size_hint: usize = size_hint.1.unwrap_or(size_hint.0);
+
+        // Loop through it to find the values. The puncts we default.
+        let first: Option<Box<V>> = iter.next().map(Box::new);
+        let mut data: Vec<(P, V)> = Vec::with_capacity(size_hint);
+        for value in iter {
+            data.push((P::default(), value));
+        }
+
+        // Done
+        Self { first, data }
     }
 }

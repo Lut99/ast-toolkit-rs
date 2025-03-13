@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:37:40
 //  Last edited:
-//    11 Sep 2024, 14:02:03
+//    28 Nov 2024, 16:07:43
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,13 @@ pub mod snack;
 
 // Imports
 use ast_toolkit_span::Span;
+
+// Re-exports
+pub mod __private {
+    #[cfg(feature = "railroad")]
+    pub use ast_toolkit_railroad as railroad;
+    pub use ast_toolkit_span::{Span, Spannable, Spanning};
+}
 
 
 /***** LIBRARY *****/

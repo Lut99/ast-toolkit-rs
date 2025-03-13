@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:05:34
 //  Last edited:
-//    26 Feb 2024, 17:10:40
+//    28 Nov 2024, 13:45:57
 //  Auto updated?
 //    Yes
 //
@@ -120,9 +120,9 @@ macro_rules! propagate_impl {
 macro_rules! diagram {
     ($($nodes:ty $(as $names:literal)?),+ $(,)?) => {
         {
-            let mut items: ::std::vec::Vec<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>> = ::std::vec::Vec::new();
-            ::ast_toolkit_railroad::_diagram!(items, $($nodes $(as $names)?),+);
-            ::ast_toolkit_railroad::railroad::Diagram::new(::ast_toolkit_railroad::railroad::VerticalGrid::new(items))
+            let mut items: ::std::vec::Vec<::std::boxed::Box<dyn $crate::railroad::Node>> = ::std::vec::Vec::new();
+            $crate::_diagram!(items, $($nodes $(as $names)?),+);
+            $crate::railroad::Diagram::new($crate::railroad::VerticalGrid::new(items))
         }
     };
 }
@@ -133,24 +133,24 @@ macro_rules! diagram {
 #[macro_export]
 macro_rules! _diagram {
     ($list:ident, $node:ty as $name:literal) => {
-        $list.push(::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Sequence::<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>>::new(::std::vec! [
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Comment::new($name.into())),
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Start),
-            ::std::boxed::Box::new(<$node as ::ast_toolkit_railroad::ToNonTerm>::railroad_nonterm()),
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::End),
+        $list.push(::std::boxed::Box::new($crate::railroad::Sequence::<::std::boxed::Box<dyn $crate::railroad::Node>>::new(::std::vec! [
+            ::std::boxed::Box::new($crate::railroad::Comment::new($name.into())),
+            ::std::boxed::Box::new($crate::railroad::Start),
+            ::std::boxed::Box::new(<$node as $crate::ToNonTerm>::railroad_nonterm()),
+            ::std::boxed::Box::new($crate::railroad::End),
         ])))
     };
     ($list:ident, $node:ty) => {
-        $list.push(::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Sequence::<::std::boxed::Box<dyn ::ast_toolkit_railroad::railroad::Node>>::new(::std::vec! [
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Comment::new(::std::stringify!($node).into())),
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::Start),
-            ::std::boxed::Box::new(<$node as ::ast_toolkit_railroad::ToNonTerm>::railroad_nonterm()),
-            ::std::boxed::Box::new(::ast_toolkit_railroad::railroad::End),
+        $list.push(::std::boxed::Box::new($crate::railroad::Sequence::<::std::boxed::Box<dyn $crate::railroad::Node>>::new(::std::vec! [
+            ::std::boxed::Box::new($crate::railroad::Comment::new(::std::stringify!($node).into())),
+            ::std::boxed::Box::new($crate::railroad::Start),
+            ::std::boxed::Box::new(<$node as $crate::ToNonTerm>::railroad_nonterm()),
+            ::std::boxed::Box::new($crate::railroad::End),
         ])))
     };
     ($list:ident, $node:ty $(as $name:literal)?, $($nodes:ty $(as $names:literal)?),+) => {
-        ::ast_toolkit_railroad::_diagram!($list, $node $(as $name)?);
-        ::ast_toolkit_railroad::_diagram!($list, $($nodes $(as $names)?),+);
+        $crate::_diagram!($list, $node $(as $name)?);
+        $crate::_diagram!($list, $($nodes $(as $names)?),+);
     };
 }
 
@@ -190,8 +190,8 @@ macro_rules! _diagram {
 macro_rules! diagram_svg {
     ($($nodes:tt)+) => {
         {
-            let mut diag = ::ast_toolkit_railroad::diagram!($($nodes)+);
-            diag.add_element(::ast_toolkit_railroad::railroad::svg::Element::new("style").set("type", "text/css").text(::ast_toolkit_railroad::railroad::DEFAULT_CSS));
+            let mut diag = $crate::diagram!($($nodes)+);
+            diag.add_element($crate::railroad::svg::Element::new("style").set("type", "text/css").text($crate::railroad::DEFAULT_CSS));
             diag
         }
     };
@@ -234,7 +234,7 @@ macro_rules! diagram_svg {
 macro_rules! diagram_svg_file {
     ($path:expr, $($nodes:tt)+) => {
         {
-            let diag = ::ast_toolkit_railroad::diagram_svg!($($nodes)+);
+            let diag = $crate::diagram_svg!($($nodes)+);
             ::std::fs::write($path, diag.to_string())
         }
     };
@@ -337,11 +337,11 @@ propagate_impl!(Arc<T>);
 propagate_impl!(lifetime MutexGuard<'a, T>);
 propagate_impl!(lifetime RwLockReadGuard<'a, T>);
 propagate_impl!(lifetime RwLockWriteGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::MutexGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::RwLockReadGuard<'a, T>);
-#[cfg(feature = "parking_lot")]
+#[cfg(feature = "parking-lot")]
 propagate_impl!(lifetime parking_lot::RwLockWriteGuard<'a, T>);
 
 // Propagation for `Option`, but with optional tracks around it.

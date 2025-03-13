@@ -17,6 +17,7 @@ ast-toolkit-span = { path = "../ast-toolkit-span", default-features = false, opt
 
 [features]
 default = [ "normal" ]
+
 normal = [ "dep:enum-debug" ]
 snack = ["dep:better-derive", "dep:ast-toolkit-snack", "dep:ast-toolkit-span"]
 trailing = []

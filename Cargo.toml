@@ -11,18 +11,33 @@ description = "Provides various tools that are useful when working with ASTs as 
 ast-toolkit-diagnostic = { path = "./lib/ast-toolkit-diagnostic", optional = true }
 ast-toolkit-punctuated = { path = "./lib/ast-toolkit-punctuated", optional = true }
 ast-toolkit-railroad = { path = "./lib/ast-toolkit-railroad", optional = true }
+ast-toolkit-snack = { path = "./lib/ast-toolkit-snack", optional = true }
 ast-toolkit-span = { path = "./lib/ast-toolkit-span", optional = true }
+ast-toolkit-tokens = { path = "./lib/ast-toolkit-tokens", optional = true }
 
 
 [features]
 default = []
-derive = [ "ast-toolkit-railroad/derive" ]
-diagnostic = [ "dep:ast-toolkit-diagnostic" ]
-punctuated = [ "dep:ast-toolkit-punctuated" ]
-punctuated-normal = [ "punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal" ]
-punctuated-trailing = [ "punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing" ]
-railroad = [ "dep:ast-toolkit-railroad" ]
-span = [ "dep:ast-toolkit-span" ]
+
+derive = ["ast-toolkit-railroad/derive", "ast-toolkit-snack/derive"]
+serde = ["ast-toolkit-span/serde"]
+
+diagnostic = ["dep:ast-toolkit-diagnostic"]
+
+punctuated = ["dep:ast-toolkit-punctuated"]
+punctuated-normal = ["punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal"]
+punctuated-trailing = ["punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing"]
+
+railroad = ["dep:ast-toolkit-railroad", "ast-toolkit-tokens/railroad"]
+railroad-parking-lot = ["railroad", "ast-toolkit-railroad/parking-lot"]
+
+snack = ["dep:ast-toolkit-snack", "ast-toolkit-punctuated/snack", "ast-toolkit-tokens/snack"]
+snack-extra = ["snack", "ast-toolkit-snack/extra"]
+snack-c = ["snack", "ast-toolkit-snack/c"]
+
+span = ["dep:ast-toolkit-span"]
+
+tokens = ["dep:ast-toolkit-tokens"]
 
 
 [workspace]
@@ -39,10 +54,7 @@ members = [
     # Derive
     # "derive/ast-toolkit-diagnostic-derive",
     "derive/ast-toolkit-railroad-derive",
-    # "derive/ast-toolkit-snack-derive",
-
-    # Temp
-    "test",
+    "derive/ast-toolkit-snack-derive",
 ]
 
 
