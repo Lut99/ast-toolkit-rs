@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    13 Feb 2025, 11:07:52
+//    13 Mar 2025, 21:41:18
 //  Auto updated?
 //    Yes
 //
@@ -425,22 +425,28 @@ impl<F, S: SpannableDisplay> Display for Span<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.source.slice_fmt(self.range, f) }
 }
-impl<F, S: SpannableEq> Eq for Span<F, S> {}
-impl<F, S: SpannableHash> Hash for Span<F, S> {
+impl<F: Eq, S: SpannableEq> Eq for Span<F, S> {}
+impl<F: Hash, S: SpannableHash> Hash for Span<F, S> {
     #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) { self.source.slice_hash(self.range, state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.from.hash(state);
+        self.source.slice_hash(self.range, state)
+    }
 }
-impl<F, S: SpannableEq + SpannableOrd> Ord for Span<F, S> {
+impl<F: Eq, S: SpannableEq + SpannableOrd> Ord for Span<F, S> {
     #[inline]
-    fn cmp(&self, other: &Self) -> Ordering { self.source.slice_ord(self.range, &other.source, other.range) }
+    fn cmp(&self, other: &Self) -> Ordering {
+        // SAFETY: This is OK because [`Span::partial_cmp()`] always returns `Some` (see below)
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
 }
-impl<F, S: SpannableEq> PartialEq for Span<F, S> {
+impl<F: PartialEq, S: SpannableEq> PartialEq for Span<F, S> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool { self.source.slice_eq(self.range, &other.source, other.range) }
+    fn eq(&self, other: &Self) -> bool { self.from == other.from && self.source.slice_eq(self.range, &other.source, other.range) }
 }
-impl<F, S: SpannableEq + SpannableOrd> PartialOrd for Span<F, S> {
+impl<F: PartialEq, S: SpannableEq + SpannableOrd> PartialOrd for Span<F, S> {
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.source.slice_ord(self.range, &other.source, other.range)) }
 }
 impl<F: Clone, S: Clone> Spanning<F, S> for Span<F, S> {
     #[inline]

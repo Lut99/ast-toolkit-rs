@@ -1,25 +1,24 @@
-//  ADD.rs
-//    by Lut99
+//  //  ADD.rs
+//    by John Smith
 //
 //  Created:
-//    07 Aug 2024, 22:04:09
+//    07 Mar 2025, 15:10:20
 //  Last edited:
-//    23 Aug 2024, 11:57:47
+//    07 Mar 2025, 15:10:20
 //  Auto updated?
-//    Yes
+//    No
 //
 //  Description:
-//!   Defines an example parser for a language that consists of arbitrary
-//!   additions.
+//!   Example showing the usage of the `#[comb(...)]`-macro.
 //
 
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_snack::error::{Common as SCommon, Error as SError};
+use ast_toolkit_snack::result::SnackError;
 use ast_toolkit_snack::span::{MatchBytes, WhileUtf8};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{comb, Combinator as _, Result as SResult};
+use ast_toolkit_snack::{Combinator as _, comb};
 use ast_toolkit_span::{Span, SpannableAsBytes};
 
 
@@ -97,25 +96,31 @@ impl Expr {
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
-#[comb(Combinator = ExprComb, expected = ("An {}", EXPRESSION_NAME), Output = Expr, Error = ParseError)]
+#[comb(
+    // Note: needed because we access the library directly. Usually we'd do it through
+    // `ast_toolkit::snack`.
+    prefix = ast_toolkit_snack,
+    expected = ("An {}", EXPRESSION_NAME),
+    Combinator = ExprComb,
+    Output = Expr,
+    Recoverable = digit1::Recoverable<F, S>,
+    Fatal = ParseError
+)]
 fn expr<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
     S: Clone + MatchBytes + SpannableAsBytes + WhileUtf8,
 {
     // Always parse a number first
-    let (rem, val) = match lit().parse(input) {
-        SResult::Ok(rem, val) => (rem, Expr::Lit(val)),
-        SResult::Fail(fail) => return SResult::Fail(fail),
-        SResult::Error(err) => return SResult::Error(err),
-    };
+    let (rem, val) = lit().parse(input)?;
 
     // Then recursively parse the rest if there's an addition
     match tag("+").parse(rem.clone()) {
-        SResult::Ok(rem, _) => expr().parse(rem).map(|expr| Expr::Add(Box::new(val), Box::new(expr))),
+        Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, Expr::Add(Box::new(Expr::Lit(val)), Box::new(expr)))),
         // If there's no addition, we are still OK
-        SResult::Fail(_) => SResult::Ok(rem, val),
-        SResult::Error(err) => SResult::Error(err.transmute()),
+        Err(SnackError::Recoverable(_)) => Ok((rem, Expr::Lit(val))),
+        Err(SnackError::Fatal(err)) => unreachable!(),
+        Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
     }
 }
 
@@ -140,7 +145,15 @@ where
 /// integer.
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
-#[comb(expected = "A literal number", Output = u64, Error = ParseError)]
+#[comb(
+    // Note: needed because we access the library directly. Usually we'd do it through
+    // `ast_toolkit::snack`.
+    prefix = ast_toolkit_snack,
+    expected = "A literal number",
+    Output = u64,
+    Recoverable = digit1::Recoverable<F, S>,
+    Fatal = ParseError
+)]
 fn lit<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
@@ -148,9 +161,10 @@ where
 {
     // Parse the characters
     let (rem, val): (Span<F, S>, Span<F, S>) = match digit1().parse(input) {
-        SResult::Ok(rem, val) => (rem, val),
-        SResult::Fail(fail) => return SResult::Fail(fail.transmute()),
-        SResult::Error(err) => return SResult::Error(err.transmute()),
+        Ok(res) => res,
+        Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err)),
+        Err(SnackError::Fatal(err)) => unreachable!(),
+        Err(SnackError::NotEnough { needed, span }) => todo!(),
     };
 
     // Convert to an integer
@@ -159,7 +173,7 @@ where
         if *b >= b'0' && *b <= b'9' {
             let i: u64 = (*b - b'0') as u64;
             if value > (u64::MAX - i) / 10 {
-                return SResult::Error(SError::Common(SCommon::Custom(ParseError::Overflow)));
+                return Err(SnackError::Fatal(ParseError::Overflow));
             }
             value *= 10;
             value += i;
@@ -169,7 +183,7 @@ where
     }
 
     // Ok!
-    SResult::Ok(rem, value)
+    Ok((rem, value))
 }
 
 

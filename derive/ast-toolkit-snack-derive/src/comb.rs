@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    28 Nov 2024, 14:47:01
+//    13 Mar 2025, 21:37:34
 //  Auto updated?
 //    Yes
 //
@@ -13,20 +13,17 @@
 //!   factories.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
-
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
-use syn::token::{And, Comma, Gt, Lt, Mut, Paren, PathSep, RArrow, SelfValue};
+use syn::token::{And, Comma, Gt, Lt, Mut, PathSep, RArrow, SelfValue};
 use syn::{
-    parse2, AngleBracketedGenericArguments, Attribute, Block, Error, Expr, ExprLit, ExprTuple, FnArg, GenericArgument, GenericParam, Ident, Item,
-    ItemFn, Lifetime, Lit, LitStr, Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference,
-    TypeTuple, Visibility, WhereClause,
+    AngleBracketedGenericArguments, Attribute, Block, Error, Expr, FnArg, GenericArgument, GenericParam, Ident, Item, ItemFn, LitStr, Path,
+    PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type, TypePath, TypeReference, VisRestricted, Visibility, WhereClause,
+    parenthesized, parse2,
 };
-use unicode_segmentation::UnicodeSegmentation;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -41,8 +38,9 @@ use unicode_segmentation::UnicodeSegmentation;
 fn default_return_type(attrs: &CombinatorAttributes) -> Type {
     // Build the generic arguments
     let mut args: Punctuated<GenericArgument, Comma> = Punctuated::new();
-    args.push(GenericArgument::Lifetime(Lifetime::new("'static", Span::mixed_site())));
     args.push(GenericArgument::Type(attrs.output.clone()));
+    args.push(GenericArgument::Type(attrs.recoverable.clone()));
+    args.push(GenericArgument::Type(attrs.fatal.clone()));
     {
         let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
         segs.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
@@ -53,10 +51,10 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
         segs.push(PathSegment { ident: Ident::new("S", Span::mixed_site()), arguments: PathArguments::None });
         args.push(GenericArgument::Type(Type::Path(TypePath { qself: None, path: Path { leading_colon: None, segments: segs } })));
     }
-    args.push(GenericArgument::Type(attrs.error.clone()));
 
     // Build the type path itself
-    let mut path: Path = attrs.prefix.clone();
+    let mut path = attrs.prefix.clone();
+    path.segments.push(PathSegment { ident: Ident::new("result", Span::mixed_site()), arguments: PathArguments::None });
     path.segments.push(PathSegment {
         ident:     Ident::new("Result", Span::mixed_site()),
         arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
@@ -71,7 +69,83 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
     Type::Path(TypePath { qself: None, path })
 }
 
+/// Returns a clone of the given visibility, but with one additional layer added to it.
+///
+/// The use-case is: we generate a module but want to copy the visibility of the function defined
+/// above it. For absolute paths, this is not a worry (child modules inherit that of parent
+/// modules). However, for relative paths up, we need to bump it by one to account for the
+/// additional module.
+///
+/// # Arguments
+/// - `vis`: Some [`Visibility`] to copy and optionally bump.
+///
+/// # Returns
+/// A new [`Visibility`] that has an additional level up if it's relative.
+fn get_vis_plus_one(vis: &Visibility) -> Visibility {
+    match vis {
+        Visibility::Inherited => Visibility::Restricted(VisRestricted {
+            pub_token: Default::default(),
+            paren_token: Default::default(),
+            in_token: None,
+            path: Box::new(Path {
+                leading_colon: None,
+                segments:      {
+                    let mut segments = Punctuated::new();
+                    segments.push(PathSegment { ident: Ident::new("super", Span::mixed_site()), arguments: PathArguments::None });
+                    segments
+                },
+            }),
+        }),
+        Visibility::Public(_) => vis.clone(),
+        Visibility::Restricted(VisRestricted { pub_token, paren_token, in_token, path }) => {
+            let mut new_path = path.clone();
+            for seg in &path.segments {
+                // If it starts with super, prepend one to account for the additional module
+                if seg.ident == "super" {
+                    new_path.segments.push(PathSegment { ident: seg.ident.clone(), arguments: PathArguments::None });
+                } else if seg.ident == "self" {
+                    // Basically the `.` of paths
+                    continue;
+                } else {
+                    // It's absolute, no need to preprend.
+                    break;
+                }
+            }
+            Visibility::Restricted(VisRestricted { pub_token: *pub_token, paren_token: *paren_token, in_token: *in_token, path: new_path })
+        },
+    }
+}
 
+
+
+/// Generates the expected formatter.
+///
+/// # Arguments
+/// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
+/// - `func`: The main combinator function parsed from the input.
+///
+/// # Returns
+/// A [`TokenStream2`] with the generated `ExpectsFormatter` implementation.
+fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> TokenStream2 {
+    let prefix: &Path = &attrs.prefix;
+    let vis: Visibility = get_vis_plus_one(&func.vis);
+    let sname: String = func.sig.ident.to_string();
+    let fname: &Ident = &attrs.fmt;
+    quote! {
+        #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`]-combinator.")]
+        #[automatically_derived]
+        #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug, ::std::cmp::Eq, ::std::cmp::PartialEq)]
+        #vis struct #fname;
+        #[automatically_derived]
+        impl ::std::fmt::Display for #fname {
+            #[inline]
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                write!(f, "Expected ")?;
+                <Self as #prefix::ExpectsFormatter>::expects_fmt(self, f, 0)
+            }
+        }
+    }
+}
 
 /// Generates the expected formatter implementation.
 ///
@@ -81,28 +155,14 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
 ///
 /// # Returns
 /// A [`TokenStream2`] with the generated `ExpectsFormatter` implementation.
-fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> TokenStream2 {
-    let mut exp_fmt: Path = attrs.prefix.clone();
-    exp_fmt.segments.push(PathSegment { ident: Ident::new("ExpectsFormatter", Span::call_site()), arguments: PathArguments::None });
-    let sname: String = func.sig.ident.to_string();
-    let vis: &Visibility = &func.vis;
-    let fname: &Ident = attrs.fmt.as_ref().unwrap();
+fn generate_formatter_impl(attrs: &CombinatorAttributes) -> TokenStream2 {
+    let prefix: &Path = &attrs.prefix;
+    let module: &Ident = attrs.module.as_ref().unwrap();
+    let fname: &Ident = &attrs.fmt;
     let exps: &ExpectedString = &attrs.expected;
     quote! {
-        #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`]-combinator.")]
         #[automatically_derived]
-        #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug)]
-        #vis struct #fname;
-        #[automatically_derived]
-        impl ::std::fmt::Display for #fname {
-            #[inline]
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                write!(f, "Expected ")?;
-                <Self as #exp_fmt>::expects_fmt(self, f, 0)
-            }
-        }
-        #[automatically_derived]
-        impl #exp_fmt for #fname {
+        impl #prefix::ExpectsFormatter for #module::#fname {
             #[inline]
             fn expects_fmt(&self, f: &mut ::std::fmt::Formatter, _ident: usize) -> ::std::fmt::Result { ::std::write!(f, #exps) }
         }
@@ -118,42 +178,16 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
 /// # Returns
 /// A [`TokenStream2`] with the generated `ExpectsFormatter` implementation.
 fn generate_combinator(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> TokenStream2 {
+    let vis: Visibility = get_vis_plus_one(&func.vis);
     let sname: String = func.sig.ident.to_string();
-    let vis: &Visibility = &func.vis;
-    let cname: &Ident = attrs.comb.as_ref().unwrap();
+    let cname: &Ident = &attrs.comb;
     quote! {
         #[doc = ::std::concat!("Combinator returned by the [`", #sname, "()`]-combinator.")]
         #[automatically_derived]
         #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug)]
         #vis struct #cname<F, S> {
-            _f: ::std::marker::PhantomData<F>,
-            _s: ::std::marker::PhantomData<S>,
-        }
-    }
-}
-
-/// Generates the expects implementation.
-///
-/// # Arguments
-/// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
-///
-/// # Returns
-/// A [`TokenStream2`] with the generated `Expects` implementation.
-fn generate_expects_impl(attrs: &CombinatorAttributes) -> TokenStream2 {
-    // Prepare the trait path
-    let mut exp: Path = attrs.prefix.clone();
-    exp.segments.push(PathSegment { ident: Ident::new("Expects", Span::call_site()), arguments: PathArguments::None });
-
-    // Generate the impl
-    let fname: &Ident = attrs.fmt.as_ref().unwrap();
-    let cname: &Ident = attrs.comb.as_ref().unwrap();
-    quote! {
-        #[automatically_derived]
-        impl<F, S> #exp<'static> for #cname<F, S> {
-            type Formatter = #fname;
-
-            #[inline]
-            fn expects(&self) -> Self::Formatter { #fname }
+            pub(super) _f: ::std::marker::PhantomData<F>,
+            pub(super) _s: ::std::marker::PhantomData<S>,
         }
     }
 }
@@ -199,14 +233,22 @@ fn generate_combinator_impl(attrs: &CombinatorAttributes, func: &CombinatorFunc)
     comb.segments.push(PathSegment { ident: Ident::new("Combinator", Span::call_site()), arguments: PathArguments::None });
 
     // Write the impl
-    let cname: &Ident = attrs.comb.as_ref().unwrap();
-    let (out, err): (&Type, &Type) = (&attrs.output, &attrs.error);
+    let module: &Ident = attrs.module.as_ref().unwrap();
+    let prefix: &Path = &attrs.prefix;
+    let fname: &Ident = &attrs.fmt;
+    let cname: &Ident = &attrs.comb;
+    let (out, recoverable, fatal): (&Type, &Type, &Type) = (&attrs.output, &attrs.recoverable, &attrs.fatal);
     let body: &Block = &func.body;
     quote! {
         #[automatically_derived]
-        impl<#prm> #comb<'static, F, S> for #cname<F, S> #whr {
+        impl<#prm> #prefix::Combinator<'static, F, S> for #module::#cname<F, S> #whr {
+            type ExpectsFormatter = #module::#fname;
             type Output = #out;
-            type Error = #err;
+            type Recoverable = #recoverable;
+            type Fatal = #fatal;
+
+            #[inline]
+            fn expects(&self) -> Self::ExpectsFormatter { #module::#fname }
 
             #sig #body
         }
@@ -222,16 +264,17 @@ fn generate_combinator_impl(attrs: &CombinatorAttributes, func: &CombinatorFunc)
 /// # Returns
 /// A [`TokenStream2`] with the generated factory method implementation.
 fn generate_factory(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> TokenStream2 {
+    let module: &Ident = attrs.module.as_ref().unwrap();
     let ars: &[Attribute] = &func.attrs;
     let vis: &Visibility = &func.vis;
     let name: &Ident = &func.sig.ident;
-    let cname: &Ident = attrs.comb.as_ref().unwrap();
+    let cname: &Ident = &attrs.comb;
     let (impl_gen, ty_gen, where_gen) = func.sig.generics.split_for_impl();
     quote! {
         #(#ars)*
         #[inline]
-        #vis const fn #name #impl_gen() -> #cname #ty_gen #where_gen {
-            #cname {
+        #vis const fn #name #impl_gen() -> #module::#cname #ty_gen #where_gen {
+            #module::#cname {
                 _f: ::std::marker::PhantomData,
                 _s: ::std::marker::PhantomData,
             }
@@ -244,70 +287,49 @@ fn generate_factory(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> Toke
 
 
 /***** HELPERS *****/
-/// [`Display`]s a string but with a capital first letter.
-struct CamelCaseifyer<S>(S);
-impl<S: AsRef<str>> Display for CamelCaseifyer<S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut capital: bool = true;
-        for c in self.0.as_ref().graphemes(true) {
-            // Consider snake cases
-            if c == "_" {
-                capital = true;
-                continue;
-            }
-
-            // Capitalize as necessary
-            if capital {
-                write!(f, "{}", c.to_uppercase())?;
-                capital = false;
-            } else {
-                write!(f, "{c}")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-
-
 /// Represents the parsed information from the attribute.
 #[derive(Clone, Debug)]
 struct CombinatorAttributes {
-    /// The path to prefix to paths referring to the `ast_toolkit_snack` crate.
+    /// The prefix path to prefix before all modules. Will default to `::ast_toolkit::snack`.
     prefix: Path,
-    /// The name of the combinator to generate. If omitted, equals the camelcase version of the function name.
-    comb:   Option<Ident>,
-    /// The name of the formatter to generate. If omitted, equals the combinator's name + `ExpectsFormatter`.
-    fmt:    Option<Ident>,
+
+    /// The name of the module to generate. If omitted, equals the camelcase version of the function name.
+    module: Option<Ident>,
+    /// The name of the combinator to generate within the module. If omitted, equals `Combinator`.
+    comb:   Ident,
+    /// The name of the expects formatter to generate within the module. If omitted, equals `ExpectsFormatter`.
+    fmt:    Ident,
 
     /// The string describing what to expect.
     expected: ExpectedString,
     /// Any output type. Defaults to `()`.
-    output:   Type,
-    /// Any error type. Defaults to `::std::convert::Infallible`.
-    error:    Type,
+    output: Type,
+    /// Any (recoverable) error type. Defaults to `::std::convert::Infallible`.
+    recoverable: Type,
+    /// Any (fatal) error type. Defaults to `::std::convert::Infallible`.
+    fatal: Type,
 }
 impl Parse for CombinatorAttributes {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let total: Span = input.span();
 
         // Parse the input as a list of metas
-        let mut prefix = {
-            let mut segments = Punctuated::new();
-            segments.push(PathSegment { ident: Ident::new("ast_toolkit_snack", Span::call_site()), arguments: PathArguments::None });
-            Path { leading_colon: Some(PathSep::default()), segments }
-        };
+        let mut prefix: Option<Path> = None;
+        let mut module: Option<Ident> = None;
         let mut comb: Option<Ident> = None;
         let mut fmt: Option<Ident> = None;
         let mut expected: Option<ExpectedString> = None;
         let mut output: Option<Type> = None;
-        let mut error: Option<Type> = None;
+        let mut recoverable: Option<Type> = None;
+        let mut fatal: Option<Type> = None;
         let attrs: Punctuated<AttrNameValue, Token![,]> = Punctuated::parse_terminated(input)?;
         for attr in attrs {
             match attr {
-                AttrNameValue::Snack(v) => {
-                    prefix = v;
+                AttrNameValue::Prefix(v) => {
+                    prefix = Some(v);
+                },
+                AttrNameValue::Module(v) => {
+                    module = Some(v);
                 },
                 AttrNameValue::Combinator(v) => {
                     comb = Some(v);
@@ -321,22 +343,92 @@ impl Parse for CombinatorAttributes {
                 AttrNameValue::Output(v) => {
                     output = Some(v);
                 },
-                AttrNameValue::Error(v) => {
-                    error = Some(v);
+                AttrNameValue::Recoverable(v) => {
+                    recoverable = Some(v);
+                },
+                AttrNameValue::Fatal(v) => {
+                    fatal = Some(v);
                 },
             }
         }
 
         // Unwrap the options
+        let prefix: Path = match prefix {
+            Some(ident) => ident,
+            None => Path {
+                leading_colon: Some(Default::default()),
+                segments:      {
+                    let mut segments = Punctuated::new();
+                    segments.push(PathSegment { ident: Ident::new("ast_toolkit", Span::mixed_site()), arguments: PathArguments::None });
+                    segments.push(PathSegment { ident: Ident::new("snack", Span::mixed_site()), arguments: PathArguments::None });
+                    segments
+                },
+            },
+        };
+        let comb: Ident = match comb {
+            Some(ident) => ident,
+            None => Ident::new("Combinator", Span::mixed_site()),
+        };
+        let fmt: Ident = match fmt {
+            Some(ident) => ident,
+            None => Ident::new("ExpectsFormatter", Span::mixed_site()),
+        };
         let expected: ExpectedString = match expected {
             Some(exp) => exp,
             None => return Err(Error::new(total, "Missing 'expected = \"...\"' attribute")),
         };
         let output: Type = match output {
             Some(out) => out,
-            None => Type::Tuple(TypeTuple { paren_token: Paren::default(), elems: Punctuated::new() }),
+            None => {
+                let mut path: Path = prefix.clone();
+                path.segments.push(PathSegment {
+                    ident:     Ident::new("Span", Span::mixed_site()),
+                    arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        colon2_token: None,
+                        lt_token: Default::default(),
+                        gt_token: Default::default(),
+                        args: {
+                            let mut args = Punctuated::new();
+                            args.push(GenericArgument::Type(Type::Path(TypePath {
+                                qself: None,
+                                path:  Path {
+                                    leading_colon: None,
+                                    segments:      {
+                                        let mut segments = Punctuated::new();
+                                        segments.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
+                                        segments
+                                    },
+                                },
+                            })));
+                            args.push(GenericArgument::Type(Type::Path(TypePath {
+                                qself: None,
+                                path:  Path {
+                                    leading_colon: None,
+                                    segments:      {
+                                        let mut segments = Punctuated::new();
+                                        segments.push(PathSegment { ident: Ident::new("S", Span::mixed_site()), arguments: PathArguments::None });
+                                        segments
+                                    },
+                                },
+                            })));
+                            args
+                        },
+                    }),
+                });
+                Type::Path(TypePath { qself: None, path })
+            },
         };
-        let error: Type = match error {
+        let recoverable: Type = match recoverable {
+            Some(out) => out,
+            None => {
+                let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
+                segs.push(PathSegment { ident: Ident::new("std", Span::mixed_site()), arguments: PathArguments::None });
+                segs.push(PathSegment { ident: Ident::new("convert", Span::mixed_site()), arguments: PathArguments::None });
+                segs.push(PathSegment { ident: Ident::new("Infallible", Span::mixed_site()), arguments: PathArguments::None });
+                Type::Path(TypePath { qself: None, path: Path { leading_colon: Some(PathSep::default()), segments: segs } })
+            },
+        };
+        let fatal: Type = match fatal {
             Some(out) => out,
             None => {
                 let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
@@ -348,44 +440,53 @@ impl Parse for CombinatorAttributes {
         };
 
         // OK, construct self
-        Ok(Self { prefix, comb, fmt, expected, output, error })
+        Ok(Self { prefix, module, comb, fmt, expected, output, recoverable, fatal })
     }
 }
 
 /// Represents a name/value pair for the attributes.
 #[derive(Clone, Debug)]
 enum AttrNameValue {
-    /// The root path prefix.
-    Snack(Path),
-    /// It's the name of the combinator class.
+    /// It's the start of a path to find the snack stuff in.
+    Prefix(Path),
+
+    /// It's the name of the generated module.
+    Module(Ident),
+    /// It's the name of the generated combinator.
     Combinator(Ident),
-    /// It's the name of the formatter class.
+    /// It's the name of the generated expects formatter.
     Formatter(Ident),
 
     /// It's the expected string.
     Expected(ExpectedString),
     /// It's the output type.
     Output(Type),
-    /// It's the error type.
-    Error(Type),
+    /// It's the recoverable error type.
+    Recoverable(Type),
+    /// It's the fatal error type.
+    Fatal(Type),
 }
 impl Parse for AttrNameValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse the identifier first, and  then always expected an equals
         let ident: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
-        if ident == "snack" || ident == "crate" || ident == "prefix" {
-            Ok(Self::Snack(input.parse::<Path>()?))
-        } else if ident == "comb" || ident == "combinator" || ident == "Combinator" {
+        if ident == "prefix" || ident == "snack" {
+            Ok(Self::Prefix(input.parse::<Path>()?))
+        } else if ident == "mod" || ident == "module" || ident == "Mod" || ident == "Module" {
+            Ok(Self::Module(input.parse::<Ident>()?))
+        } else if ident == "comb" || ident == "combinator" || ident == "Comb" || ident == "Combinator" {
             Ok(Self::Combinator(input.parse::<Ident>()?))
-        } else if ident == "fmt" || ident == "formatter" || ident == "Formatter" {
+        } else if ident == "fmt" || ident == "formatter" || ident == "Fmt" || ident == "Formatter" {
             Ok(Self::Formatter(input.parse::<Ident>()?))
         } else if ident == "expected" || ident == "Expected" {
             Ok(Self::Expected(input.parse::<ExpectedString>()?))
         } else if ident == "output" || ident == "Output" {
             Ok(Self::Output(input.parse::<Type>()?))
-        } else if ident == "error" || ident == "Error" {
-            Ok(Self::Error(input.parse::<Type>()?))
+        } else if ident == "recoverable" || ident == "Recoverable" {
+            Ok(Self::Recoverable(input.parse::<Type>()?))
+        } else if ident == "fatal" || ident == "Fatal" {
+            Ok(Self::Fatal(input.parse::<Type>()?))
         } else {
             Err(Error::new(ident.span(), format!("Unknown attribute '{ident}'")))
         }
@@ -408,26 +509,13 @@ impl Parse for ExpectedString {
             return Ok(ExpectedString::Lit(lit));
         }
 
-        // Otherwise, parse as a formatter string tuple
-        match input.parse::<ExprTuple>() {
-            Ok(ExprTuple { elems, .. }) => {
-                // The first element should be a literal, always
-                let mut iter = elems.into_pairs();
-                if let Some(fmt) = iter.next() {
-                    // Extract the string literal
-                    let fmt: Expr = fmt.into_value();
-                    if let Expr::Lit(ExprLit { lit: Lit::Str(fmt), .. }) = fmt {
-                        // The rest are arguments to the formatter
-                        Ok(ExpectedString::Fmt(fmt, iter.collect()))
-                    } else {
-                        Err(Error::new(fmt.span(), "Expected a string literal"))
-                    }
-                } else {
-                    Err(input.error("Expected at least a formatter string literal"))
-                }
-            },
-            Err(err) => Err(Error::new(err.span(), "Expected a string literal or a tuple with format string arguments")),
-        }
+        // Else, check if there are parenthesis.
+        let content;
+        parenthesized!(content in input);
+        let fmt: LitStr = content.parse()?;
+        let args: Punctuated<Expr, Token![,]> =
+            if content.parse::<Token![,]>().is_ok() { Punctuated::parse_terminated(&content)? } else { Punctuated::new() };
+        Ok(ExpectedString::Fmt(fmt, args))
     }
 }
 impl ToTokens for ExpectedString {
@@ -490,11 +578,8 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
     let mut func: CombinatorFunc = parse2(input)?;
 
     // Populate defaults for the attributes
-    if attrs.comb.is_none() {
-        attrs.comb = Some(Ident::new(&CamelCaseifyer(&func.sig.ident.to_string()).to_string(), func.sig.ident.span()));
-    }
-    if attrs.fmt.is_none() {
-        attrs.fmt = Some(Ident::new(&format!("{}ExpectsFormatter", attrs.comb.as_ref().unwrap()), func.sig.ident.span()));
+    if attrs.module.is_none() {
+        attrs.module = Some(func.sig.ident.clone());
     }
 
     // And for the function
@@ -510,16 +595,21 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
 
     // Generate the parts of the combinator implementation
     let fmt: TokenStream2 = generate_formatter(&attrs, &func);
+    let fmt_impl: TokenStream2 = generate_formatter_impl(&attrs);
     let comb: TokenStream2 = generate_combinator(&attrs, &func);
-    let exp_impl: TokenStream2 = generate_expects_impl(&attrs);
     let comb_impl: TokenStream2 = generate_combinator_impl(&attrs, &func);
     let factory: TokenStream2 = generate_factory(&attrs, &func);
 
     // OK, return that
+    let module: &Ident = attrs.module.as_ref().unwrap();
+    let vis = func.vis;
     Ok(quote! {
-        #fmt
-        #comb
-        #exp_impl
+        #vis mod #module {
+            use super::*;
+            #fmt
+            #comb
+        }
+        #fmt_impl
         #comb_impl
         #factory
     })

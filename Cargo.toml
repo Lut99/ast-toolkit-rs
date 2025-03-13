@@ -24,14 +24,14 @@ serde = ["ast-toolkit-span/serde"]
 
 diagnostic = ["dep:ast-toolkit-diagnostic"]
 
-punctuated = ["dep:ast-toolkit-punctuated", "ast-toolkit-snack/punctuated"]
+punctuated = ["dep:ast-toolkit-punctuated"]
 punctuated-normal = ["punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal"]
 punctuated-trailing = ["punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing"]
 
 railroad = ["dep:ast-toolkit-railroad", "ast-toolkit-tokens/railroad"]
 railroad-parking-lot = ["railroad", "ast-toolkit-railroad/parking-lot"]
 
-snack = ["dep:ast-toolkit-snack", "ast-toolkit-tokens/snack"]
+snack = ["dep:ast-toolkit-snack", "ast-toolkit-punctuated/snack", "ast-toolkit-tokens/snack"]
 snack-extra = ["snack", "ast-toolkit-snack/extra"]
 snack-c = ["snack", "ast-toolkit-snack/c"]
 

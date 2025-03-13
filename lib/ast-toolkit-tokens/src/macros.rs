@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    04 Feb 2025, 17:25:09
+//    13 Mar 2025, 21:24:09
 //  Auto updated?
 //    Yes
 //
@@ -114,13 +114,67 @@ macro_rules! utf8_token {
         impl<F, S> $crate::Utf8Token<F, S> for $name<F, S> {
             const TOKEN: &'static str = $token;
         }
+
+        // Snack impls (if enabled)
+        #[cfg(feature = "snack")]
+        impl<F, S> $name<F, S> {
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
+            ///   used to ensure that we're not accidentally detecting a keyword within a larger
+            ///   identifier.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_token()`-combinator for more information.
+            #[inline]
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::complete::utf8_token::utf8_token(comb)
+            }
+
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// This specific function returns a streaming version of the parser. See `parser()` for
+            /// a normal version.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
+            ///   used to ensure that we're not accidentally detecting a keyword within a larger
+            ///   identifier.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_token()`-combinator for more information.
+            #[inline]
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::streaming::utf8_token::utf8_token(comb)
+            }
+        }
+
+        // Spanning impl
         impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
         where
-            F: ::core::clone::Clone,
-            S: ::core::clone::Clone,
+            F: ::std::clone::Clone,
+            S: ::std::clone::Clone + $crate::__private::Spannable,
         {
             #[inline]
             fn span(&self) -> $crate::__private::Span<F, S> { self.span.clone() }
+
             #[inline]
             fn into_span(self) -> $crate::__private::Span<F, S> { self.span }
         }
@@ -189,10 +243,10 @@ macro_rules! utf8_token_railroad {
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delimiter};
+/// use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
 ///
 /// // The implementation
-/// utf8_delimiter!(Parens, "(", ")");
+/// utf8_delim!(Parens, "(", ")");
 ///
 /// // Now this struct exists
 /// let span1 = Span::new("<example1>", "(foo)");
@@ -210,7 +264,7 @@ macro_rules! utf8_token_railroad {
 /// assert_eq!(Parens::<(), ()>::OPEN_TOKEN, "(");
 /// ```
 #[macro_export]
-macro_rules! utf8_delimiter {
+macro_rules! utf8_delim {
     ($name:ident, $open:literal, $close:literal) => {
         #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
         pub struct $name<F, S> {
@@ -281,10 +335,59 @@ macro_rules! utf8_delimiter {
             const OPEN_TOKEN: &'static str = $open;
             const CLOSE_TOKEN: &'static str = $close;
         }
+
+        // Snack impls (if enabled)
+        #[cfg(feature = "snack")]
+        impl<F, S> $name<F, S> {
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_delim()`-combinator for more information.
+            #[inline]
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::complete::utf8_delim::utf8_delim(comb)
+            }
+
+            /// Returns a snack combinator for parsing this token.
+            ///
+            /// This specific function returns a streaming version of the parser. See `parser()` for
+            /// a normal version.
+            ///
+            /// # Arguments
+            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
+            ///
+            /// # Returns
+            /// A new combinator that can parse this keyword.
+            ///
+            /// # Examples
+            /// See the `utf8_delim()`-combinator for more information.
+            #[inline]
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, F, S>
+            where
+                C: $crate::snack::Combinator<'t, F, S>,
+                F: ::std::clone::Clone,
+                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+            {
+                $crate::snack::streaming::utf8_delim::utf8_delim(comb)
+            }
+        }
+
+        // Spanning impl
         impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
         where
-            F: ::core::clone::Clone,
-            S: ::core::clone::Clone + $crate::__private::Spannable,
+            F: ::std::clone::Clone,
+            S: ::std::clone::Clone + $crate::__private::Spannable,
         {
             #[inline]
             #[track_caller]
@@ -319,11 +422,11 @@ macro_rules! utf8_delimiter {
 /// ```rust
 /// use ast_toolkit_railroad::ToDelimNode as _;
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{utf8_delimiter, utf8_delimiter_railroad};
+/// use ast_toolkit_tokens::{utf8_delim, utf8_delim_railroad};
 ///
 /// // The implementation
-/// utf8_delimiter!(Parens, "(", ")");
-/// utf8_delimiter_railroad!(Parens, "(", ")");
+/// utf8_delim!(Parens, "(", ")");
+/// utf8_delim_railroad!(Parens, "(", ")");
 ///
 /// // Now you can call this!
 /// let node1 = Parens::<(), ()>::railroad_open();
@@ -331,7 +434,7 @@ macro_rules! utf8_delimiter {
 /// ```
 #[macro_export]
 #[cfg(feature = "railroad")]
-macro_rules! utf8_delimiter_railroad {
+macro_rules! utf8_delim_railroad {
     ($name:ident, $open:literal, $close:literal) => {
         // Railroad impls
         impl<F, S> $crate::__private::railroad::ToNode for $name<F, S> {

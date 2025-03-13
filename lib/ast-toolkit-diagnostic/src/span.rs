@@ -4,7 +4,7 @@
 //  Created:
 //    27 May 2024, 13:29:47
 //  Last edited:
-//    27 May 2024, 14:32:53
+//    12 Sep 2024, 17:12:35
 //  Auto updated?
 //    Yes
 //
@@ -16,11 +16,21 @@
 use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
+use std::fmt::Debug;
 use std::rc::Rc;
 use std::sync::Arc;
 
 
 /***** LIBRARY *****/
+/// Allows something to act as a highlight.
+///
+/// This means that it can be converted -or insterted- into a snippet of source text.
+pub trait Highlight: Debug {
+    // TODO: Find a way of merging highlights together but only if applicable (i.e., same snippet type (e.g., hexgrid or utf-8) and within distance, say)
+}
+
+
+
 /// Allows something to be converted to an UTF-8 string.
 pub trait AsUtf8 {
     /// The error emitted when the conversion fails.

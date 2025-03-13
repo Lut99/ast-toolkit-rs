@@ -59,18 +59,18 @@ macro_rules! punct_trail {
     // Pop values
     (__recursion $list:ident v => $value:expr $(, $($items:tt)+)?) => {
         $list.push_value($value);
-        $crate::::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::punct_trail!(__recursion $list $($($items)+)?);
     };
     // Pop punctuation
     (__recursion $list:ident p => $punct:expr $(, $($items:tt)+)?) => {
         $list.push_punct($punct);
-        $crate::::punct_trail!(__recursion $list $($($items)+)?);
+        $crate::punct_trail!(__recursion $list $($($items)+)?);
     };
 
     [$($items:tt)*] => {{
         // Call the macro
-        let mut punct = $crate::::trailing::PunctuatedTrailing::new();
-        $crate::::punct_trail!(__recursion punct $($items)*);
+        let mut punct = $crate::trailing::PunctuatedTrailing::new();
+        $crate::punct_trail!(__recursion punct $($items)*);
         punct
     }};
 }

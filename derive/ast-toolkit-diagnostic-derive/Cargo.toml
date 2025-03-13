@@ -13,12 +13,11 @@ proc-macro = true
 
 [dependencies]
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
-lazy_static = "1.4"
-proc-macro2 = "1.0"
-proc-macro-error = "1.0"
-rand = "0.8"
-quote = "1.0"
-syn   = { version = "2.0", features = ["derive"] }
+lazy_static = "1.5.0"
+proc-macro2 = "1.0.92"
+rand = "0.8.5"
+quote = "1.0.38"
+syn   = { version = "2.0.95", features = ["derive"] }
 
 
 [features]

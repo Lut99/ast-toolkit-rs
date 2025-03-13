@@ -4,7 +4,7 @@
 //  Created:
 //    24 May 2024, 17:38:35
 //  Last edited:
-//    11 Sep 2024, 16:45:51
+//    12 Sep 2024, 17:07:12
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,8 @@
 use std::fmt::Debug;
 
 use ast_toolkit_span::{Span, Spanning};
+
+use crate::span::Highlight;
 
 
 /***** AUXILLARY *****/
@@ -38,77 +40,50 @@ pub enum Severity {
 
 /***** LIBRARY *****/
 /// Defines annotations that can be given in a snippet.
-#[derive(Clone, Debug)]
-pub enum Annotation<F, S> {
+#[derive(Debug)]
+pub enum Annotation {
     /// Highlights a text, potentially with a message.
-    Highlight(AnnotationHighlight<F, S>),
+    Highlight(AnnotationHighlight),
     /// Renders a piece of source text replaced with another.
-    Suggestion(AnnotationSuggestion<F, S>),
+    Suggestion(AnnotationSuggestion),
 }
 
 /// Defines annotations that highlight a particular source text with a message.
-#[derive(Clone, Debug)]
-pub struct AnnotationHighlight<F, S> {
-    /// The [`Span`] that represents the highlighted area.
-    pub span:     Span<F, S>,
+#[derive(Debug)]
+pub struct AnnotationHighlight {
     /// The severity level to use for this highlight.
-    pub severity: Severity,
-    /// Some error code that users might recognize elsewhere.
-    pub code:     Option<String>,
+    pub severity:  Severity,
     /// Any message to show, if any.
-    pub message:  Option<String>,
-    /// Any notes to attach to the message.
-    pub notes:    Vec<String>,
+    pub message:   Option<String>,
+    /// The [`Highlight`] that represents the highlighted area. If omitted, will translate into a
+    /// message at the end of the thing instead.
+    pub highlight: Box<dyn Highlight>,
 }
 
 // Constructors
-impl<F, S> AnnotationHighlight<F, S> {
-    /// Constructor for the AnnotationHighlight that creates a highlight with a message.
-    ///
-    /// # Arguments
-    /// - `span`: The [`Span`] describing which part of the source text to highlight.
-    /// - `severity`: The [`Severity`] of the problem that we're highlighting.
-    /// - `message`: Some message to show accompanying the highlight.
-    ///
-    /// # Returns
-    /// A new AnnotationHighlight with the given `message`.
-    #[inline]
-    pub fn new(span: Span<F, S>, severity: Severity, message: impl Into<String>) -> Self {
-        Self { span, severity, code: None, message: Some(message.into()), notes: Vec::new() }
-    }
-
-    /// Constructor for the AnnotationHighlight that creates a highlight _without_ a message.
-    ///
-    /// # Arguments
-    /// - `span`: The [`Span`] describing which part of the source text to highlight.
-    /// - `severity`: The [`Severity`] of the problem that we're highlighting.
-    ///
-    /// # Returns
-    /// A new AnnotationHighlight that only highlights.
-    #[inline]
-    pub fn plain(span: Span<F, S>, severity: Severity) -> Self { Self { span, severity, code: None, message: None, notes: Vec::new() } }
-}
+impl AnnotationHighlight {}
 
 // Factory methods
-impl<F, S> AnnotationHighlight<F, S> {}
+impl AnnotationHighlight {}
 
 // Convertions
-impl<F, S> From<AnnotationHighlight<F, S>> for Annotation<F, S> {
+impl From<AnnotationHighlight> for Annotation {
     #[inline]
-    fn from(value: AnnotationHighlight<F, S>) -> Self { Self::Highlight(value) }
+    fn from(value: AnnotationHighlight) -> Self { Self::Highlight(value) }
 }
 
 /// Defines annotations that suggest a replacement (or insert) in the source text.
-#[derive(Clone, Debug)]
-pub struct AnnotationSuggestion<F, S> {
-    /// The [`Span`] that represents the highlighted area.
-    pub span: Span<F, S>,
+#[derive(Debug)]
+pub struct AnnotationSuggestion {
     /// The replacement to insert.
     pub replacement: String,
     /// Any message to show, if any.
-    pub message: Option<String>,
+    pub message:     Option<String>,
+    /// The [`Highlight`] that represents the highlighted area. If omitted, will translate into a
+    /// message at the end of the thing instead.
+    pub highlight:   Box<dyn Highlight>,
 }
-impl<F, S> From<AnnotationSuggestion<F, S>> for Annotation<F, S> {
+impl From<AnnotationSuggestion> for Annotation {
     #[inline]
-    fn from(value: AnnotationSuggestion<F, S>) -> Self { Self::Suggestion(value) }
+    fn from(value: AnnotationSuggestion) -> Self { Self::Suggestion(value) }
 }

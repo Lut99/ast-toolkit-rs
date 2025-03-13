@@ -14,13 +14,13 @@
 //
 
 use ast_toolkit_span::Span;
-use ast_toolkit_tokens::{utf8_delimiter, Utf8Delimiter as _};
+use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
 
 
 /***** AST *****/
-utf8_delimiter!(Parens, "(", ")");
+utf8_delim!(Parens, "(", ")");
 #[cfg(feature = "railroad")]
-ast_toolkit_tokens::utf8_delimiter_railroad!(Parens, "(", ")");
+ast_toolkit_tokens::utf8_delim_railroad!(Parens, "(", ")");
 
 
 /***** ENTRYPOINT *****/

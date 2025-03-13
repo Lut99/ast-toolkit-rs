@@ -2,15 +2,16 @@
 //    by Lut99
 //
 //  Created:
-//    28 Jun 2024, 15:21:50
+//    30 Nov 2024, 14:30:51
 //  Last edited:
-//    28 Jun 2024, 15:22:57
+//    30 Nov 2024, 14:31:17
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Defines combinators that are useful for languages with C-style syntax.
+//!   Defines combinators that are often used in C-like languages.
 //
 
 // Declare modules
 pub mod complete;
+pub mod streaming;
