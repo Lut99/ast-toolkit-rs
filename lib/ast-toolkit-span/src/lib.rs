@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    13 Feb 2025, 11:00:34
+//    14 Mar 2025, 16:58:05
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,9 @@ mod lines;
 mod locate;
 mod ord;
 pub mod range;
+pub mod range2;
 mod span;
+mod span2;
 mod spannable;
 
 // Flatten them all in this namespace
