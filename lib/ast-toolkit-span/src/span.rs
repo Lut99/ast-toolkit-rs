@@ -4,7 +4,7 @@
 //  Created:
 //    15 Dec 2023, 19:05:00
 //  Last edited:
-//    13 Mar 2025, 21:41:18
+//    15 Mar 2025, 16:31:11
 //  Auto updated?
 //    Yes
 //
@@ -78,8 +78,8 @@ impl<F, S> Spanning<F, S> for Infallible {
 /// Built to be [`nom`](https://github.com/rust-bakery/nom)-compatible; see the `nom`-feature.
 ///
 /// # Example
-/// ```rust
-/// todo!() 
+/// ```ignore
+/// todo!()
 /// ````
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
