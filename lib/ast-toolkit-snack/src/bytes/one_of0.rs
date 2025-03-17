@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    07 Mar 2025, 14:22:07
+//    17 Mar 2025, 15:05:08
 //  Auto updated?
 //    Yes
 //
@@ -17,10 +17,9 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
-use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
-use crate::span::OneOfBytes;
+use crate::span::{BytesParsable, Parsable as _};
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -63,21 +62,18 @@ impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`one_of0()`]-combinator.
-pub struct OneOf0<'b, F, S> {
+pub struct OneOf0<'b, S> {
     /// The set of bytes to one of.
     byteset: &'b [u8],
-    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
-    _f:      PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, F, S> Combinator<'static, F, S> for OneOf0<'b, F, S>
+impl<'b, S> Combinator<'static, S> for OneOf0<'b, S>
 where
-    F: Clone,
-    S: Clone + OneOfBytes,
+    S: Clone + BytesParsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'b>;
-    type Output = Span<F, S>;
+    type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
@@ -85,9 +81,21 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        let match_point: usize = input.one_of_bytes(SpanRange::Open, self.byteset);
-        Ok((input.slice(match_point..), input.slice(..match_point)))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        for byte in input.head() {
+            // Check if it's in the set
+            if self.byteset.contains(byte) {
+                i += 1;
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        // Return the found set
+        Ok((input.slice(i..), input.slice(..i)))
     }
 }
 
@@ -120,25 +128,24 @@ where
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::<&str, &[u8]>::new("<example>", b"abcdefg");
-/// let span2 = Span::<&str, &[u8]>::new("<example>", b"cdefghi");
-/// let span3 = Span::<&str, &[u8]>::new("<example>", "abÿcdef".as_bytes());
-/// let span4 = Span::<&str, &[u8]>::new("<example>", b"hijklmn");
-/// let span5 = Span::<&str, &[u8]>::new("<example>", b"");
+/// let span1 = Span::new(b"abcdefg".as_slice());
+/// let span2 = Span::new(b"cdefghi".as_slice());
+/// let span3 = Span::new("abÿcdef".as_bytes());
+/// let span4 = Span::new(b"hijklmn".as_slice());
+/// let span5 = Span::new(b"".as_slice());
 ///
 /// // Note: the magic numbers below are the two bytes made up by "ÿ"
 /// let mut comb = one_of0(&[b'a', b'b', b'c', 191, 195]);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
-/// assert_eq!(comb.parse(span4), Ok((span4, span4.slice(..0))));
-/// assert_eq!(comb.parse(span5), Ok((span5, span5.slice(..0))));
+/// assert_eq!(comb.parse(span4), Ok((span4.slice(0..), span4.slice(..0))));
+/// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn one_of0<'b, F, S>(byteset: &'b [u8]) -> OneOf0<'b, F, S>
+pub const fn one_of0<'b, S>(byteset: &'b [u8]) -> OneOf0<'b, S>
 where
-    F: Clone,
-    S: Clone + OneOfBytes,
+    S: Clone + BytesParsable,
 {
-    OneOf0 { byteset, _f: PhantomData, _s: PhantomData }
+    OneOf0 { byteset, _s: PhantomData }
 }

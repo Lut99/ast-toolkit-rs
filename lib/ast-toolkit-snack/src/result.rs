@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    07 Mar 2025, 14:41:23
+//    17 Mar 2025, 13:39:31
 //  Auto updated?
 //    Yes
 //
@@ -13,10 +13,11 @@
 //!   including the error types.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::{Span, SpannableEq, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::ExpectsFormatter;
@@ -26,7 +27,7 @@ use crate::ExpectsFormatter;
 /// The return type of all snack [`Combinator`](crate::Combinator)s.
 ///
 /// It is essentially a three-way return type but separated in two levels to use the stock [`Result`] (so that `?` works).
-pub type Result<T, E1, E2, F, S> = std::result::Result<(Span<F, S>, T), SnackError<E1, E2, F, S>>;
+pub type Result<T, E1, E2, S> = std::result::Result<(Span<S>, T), SnackError<E1, E2, S>>;
 
 /// The main snack error type.
 ///
@@ -38,7 +39,7 @@ pub type Result<T, E1, E2, F, S> = std::result::Result<(Span<F, S>, T), SnackErr
 ///    case, it signals that the branch _looks_ incorrect/incomplete, but that additional things
 ///    can be given after the current end-of-file that collapses the correctness one way or another.
 #[derive(Debug)]
-pub enum SnackError<E1, E2, F, S> {
+pub enum SnackError<E1, E2, S> {
     /// It's a recoverable error.
     ///
     /// This means that any [branch::alt](crate::branch::alt) combinator should try another branch
@@ -61,23 +62,21 @@ pub enum SnackError<E1, E2, F, S> {
         /// Note the size is given in _bytes_.
         needed: Option<usize>,
         /// The span pointing to the end of the input stream.
-        span:   Span<F, S>,
+        span:   Span<S>,
     },
 }
-impl<E1, E2, F, S> Eq for SnackError<E1, E2, F, S>
+impl<E1, E2, S> Eq for SnackError<E1, E2, S>
 where
     E1: Eq,
     E2: Eq,
-    F: Eq,
-    S: SpannableEq,
+    S: Spannable,
 {
 }
-impl<E1, E2, F, S> PartialEq for SnackError<E1, E2, F, S>
+impl<E1, E2, S> PartialEq for SnackError<E1, E2, S>
 where
     E1: PartialEq,
     E2: PartialEq,
-    F: PartialEq,
-    S: SpannableEq,
+    S: Spannable,
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
@@ -98,26 +97,23 @@ where
 /// Defines a common [recoverable](SnackError::Recoverable) error type that simply describes what
 /// was expected.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Expected<O, F, S> {
+pub struct Expected<O, S> {
     /// The formatter that will tell us what was expected.
     pub fmt:  O,
     /// The span that tells us where we expected it.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<O: ExpectsFormatter, F, S> Display for Expected<O, F, S> {
+impl<O: ExpectsFormatter, S> Display for Expected<O, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <O as Display>::fmt(&self.fmt, f) }
 }
-impl<O: ExpectsFormatter, F, S> Error for Expected<O, F, S> {}
-impl<O, F, S> Spanning<F, S> for Expected<O, F, S>
-where
-    Span<F, S>: Clone,
-{
+impl<O: ExpectsFormatter, S: Spannable> Error for Expected<O, S> {}
+impl<O, S: Clone> Spanning<S> for Expected<O, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S>
+    fn into_span(self) -> Span<S>
     where
         Self: Sized,
     {

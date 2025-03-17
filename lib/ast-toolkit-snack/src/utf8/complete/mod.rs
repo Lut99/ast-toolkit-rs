@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:21:07
 //  Last edited:
-//    02 Nov 2024, 12:31:36
+//    17 Mar 2025, 15:22:02
 //  Auto updated?
 //    Yes
 //
@@ -19,15 +19,15 @@
 //
 
 // Declare modules
-pub mod digit1;
-pub mod one_of1;
+// pub mod digit1;
+// pub mod one_of1;
 pub mod tag;
 pub mod while1;
-pub mod whitespace1;
+// pub mod whitespace1;
 
 // Use 'em
-pub use digit1::digit1;
-pub use one_of1::one_of1;
+// pub use digit1::digit1;
+// pub use one_of1::one_of1;
 pub use tag::tag;
 pub use while1::while1;
-pub use whitespace1::whitespace1;
+// pub use whitespace1::whitespace1;

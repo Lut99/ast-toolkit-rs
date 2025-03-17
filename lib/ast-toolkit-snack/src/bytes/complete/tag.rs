@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    18 Jan 2025, 17:40:56
+//    17 Mar 2025, 14:14:51
 //  Auto updated?
 //    Yes
 //
@@ -12,40 +12,40 @@
 //!   Implements the (binary) [`tag()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::MatchBytes;
+use crate::span::{BytesParsable, Parsable as _};
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 // Recoverable error for the [`Tag`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, F, S> {
+pub struct Recoverable<'t, S> {
     /// What we expected
     pub tag:  &'t [u8],
     /// Where we expected it
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<'t, F, S> Display for Recoverable<'t, F, S> {
+impl<'t, S> Display for Recoverable<'t, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", ExpectsFormatter { tag: self.tag }) }
 }
-impl<'t, F, S> Error for Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
+impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 
@@ -77,42 +77,51 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`tag()`].
-pub struct Tag<'t, F, S> {
+pub struct Tag<'t, S> {
     /// The actual tag that is being matched for.
     tag: &'t [u8],
-    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
-    _f:  PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'t`.
-impl<'c, 't, F, S> Combinator<'c, F, S> for Tag<'t, F, S>
+impl<'c, 't, S> Combinator<'c, S> for Tag<'t, S>
 where
     't: 'c,
-    F: Clone,
-    S: Clone + MatchBytes,
+    S: Clone + BytesParsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'t, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        // See if we can parse the input
-        let match_point: usize = input.match_bytes(SpanRange::Open, self.tag);
-        if match_point >= self.tag.len() {
-            // Matched the entire tag
-            #[cfg(debug_assertions)]
-            assert!(match_point == self.tag.len());
-            Ok((input.slice(match_point..), input.slice(..match_point)))
-        } else {
-            // Didn't match the entire tag
-            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input.start_onwards() }))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        let mut head = input.head();
+        for byte in self.tag {
+            // Attempt to get the next byte
+            match head.next() {
+                Some(head) if byte == head => {
+                    i += 1;
+                    continue;
+                },
+                Some(_) | None => {
+                    // Note: required, or else Rust will think the iterator will be destructed at
+                    // the end of the loop
+                    drop(head);
+                    return Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }));
+                },
+            }
         }
+        #[cfg(debug_assertions)]
+        assert_eq!(i, self.tag.len());
+
+        // We parsed it!
+        Ok((input.slice(i..), input.slice(..i)))
     }
 }
 
@@ -141,25 +150,24 @@ where
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::<&str, &[u8]>::new("<example>", b"Hello, world!");
-/// let span2 = Span::<&str, &[u8]>::new("<example>", b"Goodbye, world!");
-/// let span3 = Span::<&str, &[u8]>::new("<example>", b"Hell");
+/// let span1 = Span::new(b"Hello, world!".as_slice());
+/// let span2 = Span::new(b"Goodbye, world!".as_slice());
+/// let span3 = Span::new(b"Hell".as_slice());
 ///
 /// let mut comb = tag(b"Hello");
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2.slice(..) }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span3.slice(0..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span3.slice(..) }))
 /// );
 /// ```
-pub const fn tag<'t, F, S>(tag: &'t [u8]) -> Tag<'t, F, S>
+pub const fn tag<'t, S>(tag: &'t [u8]) -> Tag<'t, S>
 where
-    F: Clone,
-    S: Clone + MatchBytes,
+    S: Clone + BytesParsable,
 {
-    Tag { tag, _f: PhantomData, _s: PhantomData }
+    Tag { tag, _s: PhantomData }
 }

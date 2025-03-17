@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    18 Jan 2025, 18:18:01
+//    17 Mar 2025, 15:24:01
 //  Auto updated?
 //    Yes
 //
@@ -12,17 +12,17 @@
 //!   Implements the [`while1()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::WhileUtf8;
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -30,23 +30,23 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, F, S> {
+pub struct Recoverable<'t, S> {
     /// Some string describing what we were matching.
     pub what: &'t str,
     /// The location where no characters were found.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<'t, F, S> Display for Recoverable<'t, F, S> {
+impl<'t, S> Display for Recoverable<'t, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
 }
-impl<'t, F, S> Error for Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
+impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 

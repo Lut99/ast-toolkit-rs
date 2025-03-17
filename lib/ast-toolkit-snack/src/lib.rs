@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    07 Mar 2025, 18:16:06
+//    17 Mar 2025, 15:04:03
 //  Auto updated?
 //    Yes
 //
@@ -20,20 +20,21 @@
 // Re-exports
 #[cfg(feature = "derive")]
 pub use ast_toolkit_snack_derive::comb;
+use span::Parsable;
 
 // Declare submodules
 pub mod branch;
 pub mod bytes;
-#[cfg(feature = "c")]
-pub mod c;
-pub mod combinator;
-pub mod debug;
-pub mod error;
-pub mod multi;
-#[cfg(feature = "derive")]
-pub mod procedural;
+// #[cfg(feature = "c")]
+// pub mod c;
+// pub mod combinator;
+// pub mod debug;
+// pub mod error;
+// pub mod multi;
+// #[cfg(feature = "derive")]
+// pub mod procedural;
 pub mod result;
-pub mod sequence;
+// pub mod sequence;
 pub mod span;
 pub mod utf8;
 
@@ -120,7 +121,7 @@ impl ExpectsFormatter for String {
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait Combinator<'t, F, S> {
+pub trait Combinator<'t, S: Parsable> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
@@ -170,22 +171,22 @@ pub trait Combinator<'t, F, S> {
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S>;
+    fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S>;
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, F, S, T: Combinator<'t, F, S>> Combinator<'t, F, S> for &'a mut T {
+impl<'a, 't, S: Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'a mut T {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, F, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, S>>::expects(self) }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        <T as Combinator<'t, F, S>>::parse(self, input)
+    fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        <T as Combinator<'t, S>>::parse(self, input)
     }
 }
 
@@ -206,7 +207,7 @@ impl<'a, 't, F, S, T: Combinator<'t, F, S>> Combinator<'t, F, S> for &'a mut T {
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait BranchingCombinator<'t, F, S> {
+pub trait BranchingCombinator<'t, S: Parsable> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for all paths of this Combinator.
@@ -256,21 +257,21 @@ pub trait BranchingCombinator<'t, F, S> {
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S>;
+    fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S>;
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, F, S, T: BranchingCombinator<'t, F, S>> BranchingCombinator<'t, F, S> for &'a mut T {
+impl<'a, 't, S: Parsable, T: BranchingCombinator<'t, S>> BranchingCombinator<'t, S> for &'a mut T {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, F, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, S>>::expects(self) }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        <T as BranchingCombinator<'t, F, S>>::parse(self, input)
+    fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        <T as BranchingCombinator<'t, S>>::parse(self, input)
     }
 }

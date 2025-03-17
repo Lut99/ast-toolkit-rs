@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    07 Mar 2025, 14:42:41
+//    17 Mar 2025, 15:04:37
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,16 @@
 //!   Experimental test for branching using the new error type.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{BranchingCombinator, Combinator, ExpectsFormatter};
 
 
@@ -57,15 +59,15 @@ macro_rules! tuple_branching_comb_impl {
             /***** ERRORS *****/
             #[doc = concat!("The recoverable error returned by an [`alt()`] of ", stringify!($li), " branches.\n\nThis error type contains the recoverable error of every branch, as it only occurs when all branches fail.")]
             #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
-            pub struct [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S> {
+            pub struct [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> {
                 /// The formatter built to describe what we expected.
                 pub fmt: [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*>,
                 /// The nested failures of all branches.
                 pub fails: ([<E $fi>], $([<E $i>]),*),
                 /// The span where the failure occurred.
-                pub span: Span<F, S>,
+                pub span: Span<S>,
             }
-            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S> Display for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S>
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> Display for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
                 [<F $fi>]: ExpectsFormatter,
                 $([<F $i>]: ExpectsFormatter,)*
@@ -73,17 +75,16 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.fmt) }
             }
-            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S> Spanning<F, S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S>
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> Spanning<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
-                F: Clone,
                 S: Clone,
             {
                 #[inline]
-                fn span(&self) -> Span<F, S> { self.span.clone() }
+                fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
                 #[inline]
-                fn into_span(self) -> Span<F, S> { self.span }
+                fn into_span(self) -> Span<S> { self.span }
             }
-            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, F, S>
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S: Spannable> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
                 [<F $fi>]: ExpectsFormatter,
                 $([<F $i>]: ExpectsFormatter,)*
@@ -112,16 +113,16 @@ macro_rules! tuple_branching_comb_impl {
                     }
                 }
             }
-            impl<[<E $fi>]: Spanning<F, S> $(, [<E $i>]: Spanning<F, S>)*, F, S> Spanning<F, S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<[<E $fi>]: Spanning<S> $(, [<E $i>]: Spanning<S>)*, S: Clone> Spanning<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
-                fn span(&self) -> Span<F, S> {
+                fn span(&self) -> Cow<Span<S>> {
                     match self {
                         Self::[<Branch $fi>](err) => err.span(),
                         $(Self::[<Branch $i>](err) => err.span(),)*
                     }
                 }
                 #[inline]
-                fn into_span(self) -> Span<F, S> {
+                fn into_span(self) -> Span<S> {
                     match self {
                         Self::[<Branch $fi>](err) => err.into_span(),
                         $(Self::[<Branch $i>](err) => err.into_span(),)*
@@ -172,10 +173,10 @@ macro_rules! tuple_branching_comb_impl {
             /***** IMPL *****/
             // Then implement Branchable for the tuple
             paste::paste!(
-                impl<'t, F: Clone, S: Clone, O, [<C $fi>]: Combinator<'t, F, S, Output = O> $(, [<C $i>]: Combinator<'t, F, S, Output = O>)*> BranchingCombinator<'t, F, S> for ([<C $fi>], $([<C $i>],)*) {
+                impl<'t, S: Clone + Parsable, O, [<C $fi>]: Combinator<'t, S, Output = O> $(, [<C $i>]: Combinator<'t, S, Output = O>)*> BranchingCombinator<'t, S> for ([<C $fi>], $([<C $i>],)*) {
                     type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
-                    type Recoverable = [<Recoverable $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*, F, S>;
+                    type Recoverable = [<Recoverable $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*, S>;
                     type Fatal = [<Fatal $li>]<[<C $fi>]::Fatal $(, [<C $i>]::Fatal)*>;
 
                     #[inline]
@@ -186,7 +187,7 @@ macro_rules! tuple_branching_comb_impl {
                     }
 
                     #[inline]
-                    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+                    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
                         // We attempt to parse first, collecting errors as they occur
                         let mut fails: (MaybeUninit<[<C $fi>]::Recoverable>, $(MaybeUninit<[<C $i>]::Recoverable>),*) = (MaybeUninit::<[<C $fi>]::Recoverable>::uninit(), $(MaybeUninit::<[<C $i>]::Recoverable>::uninit()),*);
                         match self.$fi.parse(input.clone()) {
@@ -268,12 +269,15 @@ macro_rules! tuple_branching_comb_impls {
 tuple_branching_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8), (10, 9), (11, 10), (12, 11));
 
 /// Actual implementation of [`alt()`].
-pub struct Alt<B, F, S> {
+pub struct Alt<B, S> {
     branches: B,
-    _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator<'t, F, S> for Alt<B, F, S> {
+impl<'t, B, S> Combinator<'t, S> for Alt<B, S>
+where
+    B: BranchingCombinator<'t, S>,
+    S: Parsable,
+{
     type ExpectsFormatter = B::ExpectsFormatter;
     type Output = B::Output;
     type Recoverable = B::Recoverable;
@@ -282,7 +286,7 @@ impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator<'t, F, S> for Alt<B,
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { self.branches.expects() }
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> { self.branches.parse(input) }
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> { self.branches.parse(input) }
 }
 
 
@@ -322,9 +326,9 @@ impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator<'t, F, S> for Alt<B,
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
-/// let span3 = Span::new("<example>", "World!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
+/// let span3 = Span::new("World!");
 ///
 /// let mut comb = alt((tag("Hello"), tag("Goodbye")));
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
@@ -332,4 +336,10 @@ impl<'t, B: BranchingCombinator<'t, F, S>, F, S> Combinator<'t, F, S> for Alt<B,
 /// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(alt::Recoverable2 { .. }))));
 /// ```
 #[inline]
-pub const fn alt<B, F, S>(branches: B) -> Alt<B, F, S> { Alt { branches, _f: PhantomData, _s: PhantomData } }
+pub const fn alt<'t, B, S>(branches: B) -> Alt<B, S>
+where
+    B: BranchingCombinator<'t, S>,
+    S: Parsable,
+{
+    Alt { branches, _s: PhantomData }
+}
