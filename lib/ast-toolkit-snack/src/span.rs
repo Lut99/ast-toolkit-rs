@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    17 Mar 2025, 15:20:44
+//    17 Mar 2025, 19:32:36
 //  Auto updated?
 //    Yes
 //
@@ -31,9 +31,11 @@ use unicode_segmentation::{GraphemeIndices, Graphemes, UnicodeSegmentation as _}
 #[derive(Debug)]
 pub struct GraphemesIndicesIter<I> {
     /// The wrapped iterator of the source.
-    iter:   I,
-    /// The offset to skip past upon first iter.
-    offset: usize,
+    iter:  I,
+    /// The offset to skip past upon first iter (inclusive).
+    start: usize,
+    /// The offset up to which point to iterate (exclusive).
+    end:   usize,
 }
 impl<'a, I: Iterator<Item = (usize, &'a str)>> Iterator for GraphemesIndicesIter<I> {
     type Item = (usize, &'a str);
@@ -45,7 +47,9 @@ impl<'a, I: Iterator<Item = (usize, &'a str)>> Iterator for GraphemesIndicesIter
             let (i, c): (usize, &'a str) = self.iter.next()?;
 
             // Check if we're still skipping
-            if i < self.offset {
+            println!("({i}, {c:?})");
+            println!("{} < {i} || {i} >= {}", self.start, self.end);
+            if i < self.start || i >= self.end {
                 continue;
             }
             return Some((i, c));
@@ -310,11 +314,15 @@ impl<S: Clone + Utf8Parsable> Utf8Parsable for Span<S> {
     #[inline]
     fn head_grapheme_indices<'s>(&'s self) -> Self::GraphemeIndicesIter<'s> {
         // Do some wizardry to find up to where to cut the input
-        let offset: usize = match self.range().start_resolved(self.len()) {
+        let start: usize = match self.range().start_resolved(self.len()) {
             Some(idx) => idx,
             None => self.len(),
         };
-        GraphemesIndicesIter { iter: self.source().head_grapheme_indices(), offset }
+        let end: usize = match self.range().end_resolved(self.len()) {
+            Some(idx) => idx,
+            None => self.len(),
+        };
+        GraphemesIndicesIter { iter: self.source().head_grapheme_indices(), start, end }
     }
 }
 

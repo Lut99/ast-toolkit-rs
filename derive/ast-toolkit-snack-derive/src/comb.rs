@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    13 Mar 2025, 21:37:34
+//    17 Mar 2025, 19:18:32
 //  Auto updated?
 //    Yes
 //
@@ -41,11 +41,6 @@ fn default_return_type(attrs: &CombinatorAttributes) -> Type {
     args.push(GenericArgument::Type(attrs.output.clone()));
     args.push(GenericArgument::Type(attrs.recoverable.clone()));
     args.push(GenericArgument::Type(attrs.fatal.clone()));
-    {
-        let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
-        segs.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
-        args.push(GenericArgument::Type(Type::Path(TypePath { qself: None, path: Path { leading_colon: None, segments: segs } })));
-    }
     {
         let mut segs: Punctuated<PathSegment, PathSep> = Punctuated::new();
         segs.push(PathSegment { ident: Ident::new("S", Span::mixed_site()), arguments: PathArguments::None });
@@ -185,8 +180,7 @@ fn generate_combinator(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> T
         #[doc = ::std::concat!("Combinator returned by the [`", #sname, "()`]-combinator.")]
         #[automatically_derived]
         #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug)]
-        #vis struct #cname<F, S> {
-            pub(super) _f: ::std::marker::PhantomData<F>,
+        #vis struct #cname<S> {
             pub(super) _s: ::std::marker::PhantomData<S>,
         }
     }
@@ -241,7 +235,7 @@ fn generate_combinator_impl(attrs: &CombinatorAttributes, func: &CombinatorFunc)
     let body: &Block = &func.body;
     quote! {
         #[automatically_derived]
-        impl<#prm> #prefix::Combinator<'static, F, S> for #module::#cname<F, S> #whr {
+        impl<#prm> #prefix::Combinator<'static, S> for #module::#cname<S> #whr {
             type ExpectsFormatter = #module::#fname;
             type Output = #out;
             type Recoverable = #recoverable;
@@ -275,7 +269,6 @@ fn generate_factory(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> Toke
         #[inline]
         #vis const fn #name #impl_gen() -> #module::#cname #ty_gen #where_gen {
             #module::#cname {
-                _f: ::std::marker::PhantomData,
                 _s: ::std::marker::PhantomData,
             }
         }
@@ -389,17 +382,6 @@ impl Parse for CombinatorAttributes {
                         gt_token: Default::default(),
                         args: {
                             let mut args = Punctuated::new();
-                            args.push(GenericArgument::Type(Type::Path(TypePath {
-                                qself: None,
-                                path:  Path {
-                                    leading_colon: None,
-                                    segments:      {
-                                        let mut segments = Punctuated::new();
-                                        segments.push(PathSegment { ident: Ident::new("F", Span::mixed_site()), arguments: PathArguments::None });
-                                        segments
-                                    },
-                                },
-                            })));
                             args.push(GenericArgument::Type(Type::Path(TypePath {
                                 qself: None,
                                 path:  Path {

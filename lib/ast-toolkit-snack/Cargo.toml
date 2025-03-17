@@ -7,10 +7,10 @@ repository.workspace = true
 description = "Provides a parser-combinator framework heavily inspired by [nom](https://github.com/rust-bakery/nom), except that it gives up a little bit of performance over a much more human-friendly error experience."
 
 
-# [[example]]
-# name = "add"
-# path = "examples/add.rs"
-# required-features = ["derive"]
+[[example]]
+name = "add"
+path = "examples/add.rs"
+required-features = ["derive"]
 
 
 [dependencies]

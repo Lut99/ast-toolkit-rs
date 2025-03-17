@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    18 Jan 2025, 18:10:37
+//    17 Mar 2025, 19:25:31
 //  Auto updated?
 //    Yes
 //
@@ -20,13 +20,13 @@ use ast_toolkit_span::{Span, Spanning};
 
 use super::while1;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::WhileUtf8;
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** TYPE ALIASES *****/
 /// The recoverable error returned by [`Digit1`].
-pub type Recoverable<F, S> = Expected<ExpectsFormatter, F, S>;
+pub type Recoverable<S> = Expected<ExpectsFormatter, S>;
 
 
 
@@ -55,25 +55,23 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`digit1()`].
 #[derive(Debug)]
-pub struct Digit1<F, S> {
-    _f: PhantomData<F>,
+pub struct Digit1<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for Digit1<F, S>
+impl<S> Combinator<'static, S> for Digit1<S>
 where
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match while1("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
@@ -113,9 +111,10 @@ where
 /// use ast_toolkit_snack::utf8::complete::digit1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "12345six");
-/// let span2 = Span::new("<example>", "one23456");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("12345six");
+/// let span2 = Span::new("one23456");
+/// let span3 = Span::new("5+5");
+/// let span4 = Span::new("");
 ///
 /// let mut comb = digit1();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
@@ -126,19 +125,19 @@ where
 ///         span: span2,
 ///     }))
 /// );
+/// assert_eq!(comb.parse(span3), Ok((span3.slice(1..), span3.slice(..1))));
 /// assert_eq!(
-///     comb.parse(span3),
+///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(digit1::Recoverable {
 ///         fmt:  digit1::ExpectsFormatter,
-///         span: span3,
+///         span: span4,
 ///     }))
 /// );
 /// ```
 #[inline]
-pub const fn digit1<F, S>() -> Digit1<F, S>
+pub const fn digit1<S>() -> Digit1<S>
 where
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
-    Digit1 { _f: PhantomData, _s: PhantomData }
+    Digit1 { _s: PhantomData }
 }

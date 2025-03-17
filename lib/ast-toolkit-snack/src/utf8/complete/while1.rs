@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    17 Mar 2025, 15:24:01
+//    17 Mar 2025, 19:16:21
 //  Auto updated?
 //    Yes
 //
@@ -79,34 +79,40 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`While1()`].
 #[derive(Debug)]
-pub struct While1<'t, P, F, S> {
+pub struct While1<'t, P, S> {
     predicate: P,
     what: &'t str,
-    _f: PhantomData<F>,
     _s: PhantomData<S>,
 }
-impl<'t, P, F, S> Combinator<'t, F, S> for While1<'t, P, F, S>
+impl<'t, P, S> Combinator<'t, S> for While1<'t, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'t, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        let match_point: usize = input.while_utf8(SpanRange::Open, &mut self.predicate);
-        if match_point > 0 {
-            Ok((input.slice(match_point..), input.slice(..match_point)))
-        } else {
-            Err(SnackError::Recoverable(Recoverable { what: self.what, span: input.start_onwards() }))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        for (start_i, c) in input.head_grapheme_indices() {
+            // Check if it's in the set
+            if (self.predicate)(c) {
+                i = start_i + c.len();
+                continue;
+            } else {
+                break;
+            }
         }
+
+        // Return if there's at least one
+        if i > 0 { Ok((input.slice(i..), input.slice(..i))) } else { Err(SnackError::Recoverable(Recoverable { what: self.what, span: input })) }
     }
 }
 
@@ -142,11 +148,11 @@ where
 /// use ast_toolkit_snack::utf8::complete::while1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "abcdefg");
-/// let span2 = Span::new("<example>", "cdefghi");
-/// let span3 = Span::new("<example>", "abÿcdef");
-/// let span4 = Span::new("<example>", "hijklmn");
-/// let span5 = Span::new("<example>", "");
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |c: &str| -> bool {
 ///     c == "a" || c == "b" || c == "c" || c == "ÿ"
@@ -170,11 +176,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn while1<'t, P, F, S>(what: &'t str, predicate: P) -> While1<'t, P, F, S>
+pub const fn while1<'t, P, S>(what: &'t str, predicate: P) -> While1<'t, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
-    While1 { predicate, what, _f: PhantomData, _s: PhantomData }
+    While1 { predicate, what, _s: PhantomData }
 }

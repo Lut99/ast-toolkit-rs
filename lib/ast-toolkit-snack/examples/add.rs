@@ -16,10 +16,10 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_snack::result::SnackError;
-use ast_toolkit_snack::span::{MatchBytes, WhileUtf8};
+use ast_toolkit_snack::span::{Parsable as _, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
 use ast_toolkit_snack::{Combinator as _, comb};
-use ast_toolkit_span::{Span, SpannableAsBytes};
+use ast_toolkit_span::Span;
 
 
 /***** CONSTANTS *****/
@@ -100,16 +100,15 @@ impl Expr {
     // Note: needed because we access the library directly. Usually we'd do it through
     // `ast_toolkit::snack`.
     prefix = ast_toolkit_snack,
-    expected = ("An {}", EXPRESSION_NAME),
+    expected = ("An {EXPRESSION_NAME}"),
     Combinator = ExprComb,
     Output = Expr,
-    Recoverable = digit1::Recoverable<F, S>,
+    Recoverable = digit1::Recoverable<S>,
     Fatal = ParseError
 )]
-fn expr<F, S>(input: Span<F, S>) -> _
+fn expr<S>(input: Span<S>) -> _
 where
-    F: Clone,
-    S: Clone + MatchBytes + SpannableAsBytes + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     // Always parse a number first
     let (rem, val) = lit().parse(input)?;
@@ -151,25 +150,23 @@ where
     prefix = ast_toolkit_snack,
     expected = "A literal number",
     Output = u64,
-    Recoverable = digit1::Recoverable<F, S>,
+    Recoverable = digit1::Recoverable<S>,
     Fatal = ParseError
 )]
-fn lit<F, S>(input: Span<F, S>) -> _
+fn lit<S>(input: Span<S>) -> _
 where
-    F: Clone,
-    S: Clone + SpannableAsBytes + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     // Parse the characters
-    let (rem, val): (Span<F, S>, Span<F, S>) = match digit1().parse(input) {
+    let (rem, val): (Span<S>, Span<S>) = match digit1().parse(input) {
         Ok(res) => res,
         Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err)),
-        Err(SnackError::Fatal(err)) => unreachable!(),
-        Err(SnackError::NotEnough { needed, span }) => todo!(),
+        Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
     };
 
     // Convert to an integer
     let mut value: u64 = 0;
-    for b in val.as_bytes() {
+    for b in val.head() {
         if *b >= b'0' && *b <= b'9' {
             let i: u64 = (*b - b'0') as u64;
             if value > (u64::MAX - i) / 10 {
@@ -192,15 +189,15 @@ where
 
 /***** ENTRYPOINT *****/
 fn main() {
-    let span1 = Span::new("<example>", "5");
+    let span1 = Span::new("5");
     let (_, exp) = expr().parse(span1).unwrap();
     assert_eq!(exp.compute(), 5);
 
-    let span2 = Span::new("<example>", "5+5");
+    let span2 = Span::new("5+5");
     let (_, exp) = expr().parse(span2).unwrap();
     assert_eq!(exp.compute(), 10);
 
-    let span3 = Span::new("<example>", "42+0+33+5");
+    let span3 = Span::new("42+0+33+5");
     let (_, exp) = expr().parse(span3).unwrap();
     assert_eq!(exp.compute(), 80);
 }
