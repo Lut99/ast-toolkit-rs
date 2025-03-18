@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    18 Mar 2025, 11:06:25
+//    18 Mar 2025, 11:12:11
 //  Auto updated?
 //    Yes
 //
@@ -55,7 +55,7 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While1`]-combinator.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ExpectsFormatter<'t> {
     /// Some string describing what we were matching.
     pub what: &'t str,

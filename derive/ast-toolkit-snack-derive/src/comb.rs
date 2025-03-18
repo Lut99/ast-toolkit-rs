@@ -4,7 +4,7 @@
 //  Created:
 //    06 Aug 2024, 15:23:00
 //  Last edited:
-//    17 Mar 2025, 19:18:32
+//    18 Mar 2025, 16:07:14
 //  Auto updated?
 //    Yes
 //
@@ -113,6 +113,35 @@ fn get_vis_plus_one(vis: &Visibility) -> Visibility {
 
 
 
+/// Generates a type alias for the used error.
+///
+/// # Arguments
+/// - `attrs`: The [`CombinatorAttributes`] parsed from the main attribute.
+/// - `func`: The main combinator function parsed from the input.
+/// - `kind`: The [`ErrorKind`] to generate for.
+///
+/// # Returns
+/// A [`TokenStream2`] with the generated type alias.
+fn generate_error_alias(attrs: &CombinatorAttributes, func: &CombinatorFunc, kind: ErrorKind) -> TokenStream2 {
+    let vis: Visibility = get_vis_plus_one(&func.vis);
+    let sname: String = func.sig.ident.to_string();
+    let skind: &'static str = match kind {
+        ErrorKind::Recoverable => "recoverable",
+        ErrorKind::Fatal => "fatal",
+    };
+    let ty: &Type = match kind {
+        ErrorKind::Recoverable => &attrs.recoverable,
+        ErrorKind::Fatal => &attrs.fatal,
+    };
+    let (impl_gen, _, _) = func.sig.generics.split_for_impl();
+
+    // Write it
+    quote! {
+        #[doc = ::std::concat!("Defines ", #skind, " errors for the [`", #sname, "()`](super::", #sname, ")-combinator.")]
+        #vis type #kind #impl_gen = super::#ty;
+    }
+}
+
 /// Generates the expected formatter.
 ///
 /// # Arguments
@@ -127,7 +156,7 @@ fn generate_formatter(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> To
     let sname: String = func.sig.ident.to_string();
     let fname: &Ident = &attrs.fmt;
     quote! {
-        #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`]-combinator.")]
+        #[doc = ::std::concat!("Expects strings formatter for the [`", #sname, "()`](super::", #sname, ")-combinator.")]
         #[automatically_derived]
         #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug, ::std::cmp::Eq, ::std::cmp::PartialEq)]
         #vis struct #fname;
@@ -177,7 +206,7 @@ fn generate_combinator(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> T
     let sname: String = func.sig.ident.to_string();
     let cname: &Ident = &attrs.comb;
     quote! {
-        #[doc = ::std::concat!("Combinator returned by the [`", #sname, "()`]-combinator.")]
+        #[doc = ::std::concat!("Combinator returned by the [`", #sname, "()`](super::", #sname, ")-combinator.")]
         #[automatically_derived]
         #[derive(::std::clone::Clone, ::std::marker::Copy, ::std::fmt::Debug)]
         #vis struct #cname<S> {
@@ -280,6 +309,24 @@ fn generate_factory(attrs: &CombinatorAttributes, func: &CombinatorFunc) -> Toke
 
 
 /***** HELPERS *****/
+/// Denotes possible error types.
+enum ErrorKind {
+    Recoverable,
+    Fatal,
+}
+impl ToTokens for ErrorKind {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let ident: Ident = match self {
+            Self::Recoverable => Ident::new("Recoverable", Span::mixed_site()),
+            Self::Fatal => Ident::new("Fatal", Span::mixed_site()),
+        };
+        ident.to_tokens(tokens);
+    }
+}
+
+
+
 /// Represents the parsed information from the attribute.
 #[derive(Clone, Debug)]
 struct CombinatorAttributes {
@@ -559,12 +606,12 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
     let mut attrs: CombinatorAttributes = parse2(attrs)?;
     let mut func: CombinatorFunc = parse2(input)?;
 
-    // Populate defaults for the attributes
+    // Populate defaults for the attributes & error types
     if attrs.module.is_none() {
         attrs.module = Some(func.sig.ident.clone());
     }
 
-    // And for the function
+    // Resolve the type if it's inferred
     if let ReturnType::Type(_, ty) = &mut func.sig.output {
         if matches!(**ty, Type::Infer(_)) {
             // Generate a default type instead
@@ -575,7 +622,9 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
         func.sig.output = ReturnType::Type(RArrow::default(), Box::new(default_return_type(&attrs)));
     }
 
-    // Generate the parts of the combinator implementation
+    // Now generate all the components
+    let rec_alias: TokenStream2 = generate_error_alias(&attrs, &func, ErrorKind::Recoverable);
+    let fat_alias: TokenStream2 = generate_error_alias(&attrs, &func, ErrorKind::Fatal);
     let fmt: TokenStream2 = generate_formatter(&attrs, &func);
     let fmt_impl: TokenStream2 = generate_formatter_impl(&attrs);
     let comb: TokenStream2 = generate_combinator(&attrs, &func);
@@ -588,6 +637,8 @@ pub fn call(attrs: TokenStream2, input: TokenStream2) -> Result<TokenStream2, Er
     Ok(quote! {
         #vis mod #module {
             use super::*;
+            #rec_alias
+            #fat_alias
             #fmt
             #comb
         }

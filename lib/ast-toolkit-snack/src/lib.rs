@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    17 Mar 2025, 15:04:03
+//    18 Mar 2025, 17:23:17
 //  Auto updated?
 //    Yes
 //
@@ -17,11 +17,6 @@
 //!   little bit of performance over a more human-friendly debug experience.
 //
 
-// Re-exports
-#[cfg(feature = "derive")]
-pub use ast_toolkit_snack_derive::comb;
-use span::Parsable;
-
 // Declare submodules
 pub mod branch;
 pub mod bytes;
@@ -33,6 +28,7 @@ pub mod bytes;
 // pub mod multi;
 // #[cfg(feature = "derive")]
 // pub mod procedural;
+pub mod closure;
 pub mod result;
 // pub mod sequence;
 pub mod span;
@@ -40,10 +36,15 @@ pub mod utf8;
 
 // Imports
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-// We re-export the span, both for macro purposes and convenience.
-pub use ast_toolkit_span::Span;
+// Re-exports
+#[cfg(feature = "derive")]
+pub use ast_toolkit_snack_derive::comb;
+pub use ast_toolkit_span::{Span, Spanning};
+pub use closure::closure;
+use span::Parsable;
 
 
 /***** CONSTANTS *****/
@@ -56,6 +57,33 @@ const EXPECTS_INDENT_SIZE: usize = 4;
 
 
 /***** LIBRARY *****/
+/// A trait implemented by errors that are returned by snack [`Combinator`]s.
+pub trait ParseError<S: Clone>: Error + Spanning<S> {}
+impl<T: Error + Spanning<S>, S: Clone> ParseError<S> for T {}
+
+#[derive(Debug)]
+pub struct BoxedParseError<'e, S: Clone>(Box<dyn 'e + ParseError<S>>);
+impl<'e, S: Clone> BoxedParseError<'e, S> {
+    #[inline]
+    pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
+}
+impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
+}
+impl<'e, S: Debug + Clone> Error for BoxedParseError<'e, S> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
+}
+impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { self.0.span() }
+    #[inline]
+    fn into_span(self) -> Span<S> { self.0.into_span() }
+}
+
+
+
 /// A trait implemented by [`Expects::Formatter`]s.
 ///
 /// This trait actually produces expect-strings.
@@ -89,15 +117,24 @@ impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
 // Default impls for string-like types
 impl ExpectsFormatter for str {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <str as Display>::fmt(self, f) }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        // If it begins with `Expected`, cut that off
+        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
+    }
 }
 impl<'a> ExpectsFormatter for Cow<'a, str> {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <Cow<str> as Display>::fmt(self, f) }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        // If it begins with `Expected`, cut that off
+        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
+    }
 }
 impl ExpectsFormatter for String {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { <String as Display>::fmt(self, f) }
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
+        // If it begins with `Expected`, cut that off
+        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
+    }
 }
 
 
@@ -121,7 +158,7 @@ impl ExpectsFormatter for String {
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait Combinator<'t, S: Parsable> {
+pub trait Combinator<'t, S: Clone + Parsable> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
@@ -129,12 +166,12 @@ pub trait Combinator<'t, S: Parsable> {
     /// Some error type that is thrown when the combinator fails but in a recoverable way.
     ///
     /// This means that any wrapping [`alt()`](branch::alt()) should still try another branch.
-    type Recoverable;
+    type Recoverable: ParseError<S>;
     /// Some error type that is thrown when the combinator fails unrecoverably.
     ///
     /// This means that there is no point for any wrapping [`alt()`](branch::alt()) to still try
     /// another branch.
-    type Fatal;
+    type Fatal: ParseError<S>;
 
 
     /// Returns some [`ExpectsFormatter`] that can write a string describing what
@@ -175,7 +212,7 @@ pub trait Combinator<'t, S: Parsable> {
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, S: Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'a mut T {
+impl<'a, 't, S: Clone + Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'a mut T {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
@@ -207,7 +244,7 @@ impl<'a, 't, S: Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'a mut T 
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait BranchingCombinator<'t, S: Parsable> {
+pub trait BranchingCombinator<'t, S: Clone + Parsable> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for all paths of this Combinator.
@@ -215,12 +252,12 @@ pub trait BranchingCombinator<'t, S: Parsable> {
     /// Some error type that is thrown when a combinator fails but in a recoverable way.
     ///
     /// This means that any wrapping [`alt()`](branch::alt()) should still try another branch.
-    type Recoverable;
+    type Recoverable: ParseError<S>;
     /// Some error type that is thrown when a combinator fails unrecoverably.
     ///
     /// This means that there is no point for any wrapping [`alt()`](branch::alt()) to still try
     /// another branch.
-    type Fatal;
+    type Fatal: ParseError<S>;
 
 
     /// Returns some [`ExpectsFormatter`] that can write a string describing what
@@ -261,7 +298,7 @@ pub trait BranchingCombinator<'t, S: Parsable> {
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, S: Parsable, T: BranchingCombinator<'t, S>> BranchingCombinator<'t, S> for &'a mut T {
+impl<'a, 't, S: Clone + Parsable, T: BranchingCombinator<'t, S>> BranchingCombinator<'t, S> for &'a mut T {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;

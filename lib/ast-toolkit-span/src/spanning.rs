@@ -4,7 +4,7 @@
 //  Created:
 //    17 Mar 2025, 10:19:29
 //  Last edited:
-//    17 Mar 2025, 14:04:55
+//    18 Mar 2025, 17:16:22
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,10 @@
 //
 
 use std::borrow::Cow;
+use std::cell::{Ref, RefMut};
+use std::convert::Infallible;
+use std::rc::Rc;
+use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::span::Span;
 
@@ -39,10 +43,87 @@ pub trait Spanning<S: Clone> {
 }
 
 // Default impls
+impl<S: Clone> Spanning<S> for Infallible {
+    /// NOTE: This implementation will always fail. However, since [`Infallible`] cannot be
+    /// constructed, this is fine.
+    ///
+    /// It exists in order for it to implement `ParseError` in `ast-toolkit-snack`.
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { unreachable!() }
+
+    /// NOTE: This implementation will always fail. However, since [`Infallible`] cannot be
+    /// constructed, this is fine.
+    ///
+    /// It exists in order for it to implement `ParseError` in `ast-toolkit-snack`.
+    #[inline]
+    fn into_span(self) -> Span<S> { unreachable!() }
+}
 impl<S: Clone> Spanning<S> for Span<S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(self) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self }
+}
+
+// Pointer-like impls
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for &'a T {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for &'a mut T {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for Box<T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for Rc<T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for Arc<T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for MutexGuard<'a, T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for RwLockReadGuard<'a, T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for RwLockWriteGuard<'a, T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for Ref<'a, T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
+}
+impl<'a, T: ?Sized + Spanning<S>, S: Clone> Spanning<S> for RefMut<'a, T> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { <T as Spanning<S>>::span(self) }
+    #[inline]
+    fn into_span(self) -> Span<S> { <T as Spanning<S>>::span(&self).into_owned() }
 }

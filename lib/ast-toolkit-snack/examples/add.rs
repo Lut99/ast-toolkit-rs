@@ -12,14 +12,16 @@
 //!   Example showing the usage of the `#[comb(...)]`-macro.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit_snack::result::SnackError;
+use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::span::{BytesParsable as _, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{Combinator as _, comb};
-use ast_toolkit_span::Span;
+use ast_toolkit_snack::{Combinator, ParseError, branch, closure, comb};
+use ast_toolkit_span::{Span, Spannable};
+use better_derive::{Debug, Eq, PartialEq};
 
 
 /***** CONSTANTS *****/
@@ -32,25 +34,33 @@ const EXPRESSION_NAME: &str = "expression";
 
 /***** ERRORS *****/
 /// Defines custom errors during parsing.
-#[derive(Debug)]
-enum ParseError {
+#[derive(Debug, Eq, PartialEq)]
+enum Fatal<S> {
     /// Integer overflow!
-    Overflow,
+    Overflow { span: Span<S> },
 }
-impl Display for ParseError {
+impl<S> Display for Fatal<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::Overflow => write!(f, "Integer overflow"),
+            Self::Overflow { .. } => write!(f, "Integer overflow"),
         }
     }
 }
-impl Error for ParseError {}
-impl ast_toolkit_span::Spanning<&'static str> for ParseError {
+impl<S: Spannable> Error for Fatal<S> {}
+impl<S: Clone> ast_toolkit_span::Spanning<S> for Fatal<S> {
     #[inline]
-    fn span(&self) -> std::borrow::Cow<Span<&'static str>> { todo!() }
+    fn span(&self) -> std::borrow::Cow<Span<S>> {
+        match self {
+            Self::Overflow { span } => Cow::Borrowed(span),
+        }
+    }
     #[inline]
-    fn into_span(self) -> Span<&'static str> { todo!() }
+    fn into_span(self) -> Span<S> {
+        match self {
+            Self::Overflow { span } => span,
+        }
+    }
 }
 
 
@@ -61,7 +71,7 @@ impl ast_toolkit_span::Spanning<&'static str> for ParseError {
 #[derive(Debug)]
 enum Expr {
     Add(Box<Self>, Box<Self>),
-    Lit(u64),
+    Lit(Lit),
 }
 impl Expr {
     /// Computes the result of the expression.
@@ -72,7 +82,24 @@ impl Expr {
     fn compute(&self) -> u64 {
         match self {
             Self::Add(lhs, rhs) => lhs.compute() + rhs.compute(),
-            Self::Lit(v) => *v,
+            Self::Lit(v) => v.compute(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Lit {
+    Int(u64),
+}
+impl Lit {
+    /// Computes the value of the literal.
+    ///
+    /// # Returns
+    /// A number carrying this literal's value.
+    #[inline]
+    fn compute(&self) -> u64 {
+        match self {
+            Self::Int(val) => *val,
         }
     }
 }
@@ -82,6 +109,53 @@ impl Expr {
 
 
 /***** PARSERS *****/
+// The [`expr()`] is rather complicated due to recursion, so we'll create a fully-fledged
+// combinator out of it.
+mod expr {
+    use std::marker::PhantomData;
+
+    use ast_toolkit_snack::BoxedParseError;
+    use ast_toolkit_snack::result::Result as SResult;
+
+    use super::*;
+
+    /// The combinator implementation itself.
+    pub struct Expr<S> {
+        pub(super) _s: PhantomData<S>,
+    }
+    impl<S> Combinator<'static, S> for Expr<S>
+    where
+        S: Clone + std::fmt::Debug + Utf8Parsable,
+    {
+        type ExpectsFormatter = &'static str;
+        type Output = super::Expr;
+        type Recoverable = BoxedParseError<'static, S>;
+        type Fatal = BoxedParseError<'static, S>;
+
+        #[inline]
+        fn expects(&self) -> Self::ExpectsFormatter { "Expected an expression" }
+
+        #[inline]
+        fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+            // Always parse a number first
+            let (rem, val) = match lit().parse(input) {
+                Ok(res) => res,
+                Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(BoxedParseError::new(err))),
+                Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(BoxedParseError::new(err))),
+                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
+            };
+
+            // Then recursively parse the rest if there's an addition
+            match tag("+").parse(input.clone()) {
+                Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, super::Expr::Add(Box::new(super::Expr::Lit(val)), Box::new(expr)))),
+                // If there's no addition, we are still OK
+                Err(SnackError::Recoverable(_)) => Ok((input, super::Expr::Lit(val))),
+                Err(SnackError::Fatal(err)) => unreachable!(),
+                Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
+            }
+        }
+    }
+}
 /// Parses an arbitrary expression.
 ///
 /// Luckily for us, our combinator needn't deal with precedence and associativity and all that
@@ -102,32 +176,31 @@ impl Expr {
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
-#[comb(
-    // Note: needed because we access the library directly. Usually we'd do it through
-    // `ast_toolkit::snack`.
-    prefix = ast_toolkit_snack,
-    expected = ("An {EXPRESSION_NAME}"),
-    Combinator = ExprComb,
-    Output = Expr,
-    Recoverable = digit1::Recoverable<S>,
-    Fatal = ParseError
-)]
-fn expr<S>(input: Span<S>) -> _
+const fn expr<S>() -> expr::Expr<S>
 where
     S: Clone + Utf8Parsable,
-    for<'a> S::Slice<'a>: Debug,
 {
-    // Always parse a number first
-    let (rem, val) = lit().parse(input)?;
+    expr::Expr { _s: std::marker::PhantomData }
+}
 
-    // Then recursively parse the rest if there's an addition
-    match tag("+").parse(rem.clone()) {
-        Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, Expr::Add(Box::new(Expr::Lit(val)), Box::new(expr)))),
-        // If there's no addition, we are still OK
-        Err(SnackError::Recoverable(_)) => Ok((rem, Expr::Lit(val))),
-        Err(SnackError::Fatal(err)) => unreachable!(),
-        Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
-    }
+/// Parses any literal.
+///
+/// For now, only [numbers](LitInt) are supported.
+///
+/// # Returns
+/// A combinator capable of parsing literals.
+///
+/// # Fails
+/// The combinator will fail recoverably if the input does not start with a literal (i.e., at least
+/// one digit).
+///
+/// It fails fatally if it _did_ start with a digit, but it overflows for our internal
+/// representation.
+const fn lit<S>() -> impl Combinator<'static, S, Output = Lit>
+where
+    S: Clone + Utf8Parsable,
+{
+    closure("A literal", |input| branch::alt((lit_int(),)).parse(input))
 }
 
 /// Parses a literal number.
@@ -151,44 +224,36 @@ where
 /// integer.
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
-#[comb(
-    // Note: needed because we access the library directly. Usually we'd do it through
-    // `ast_toolkit::snack`.
-    prefix = ast_toolkit_snack,
-    expected = "A literal number",
-    Output = u64,
-    Recoverable = digit1::Recoverable<S>,
-    Fatal = ParseError
-)]
-fn lit<S>(input: Span<S>) -> _
+const fn lit_int<S>() -> impl Combinator<'static, S, Output = Lit>
 where
     S: Clone + Utf8Parsable,
-    for<'a> S::Slice<'a>: Debug,
 {
-    // Parse the characters
-    let (rem, val): (Span<S>, Span<S>) = match digit1().parse(input) {
-        Ok(res) => res,
-        Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err)),
-        Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
-    };
+    closure("An integer literal", |input: Span<S>| {
+        // Parse the characters
+        let (rem, val): (Span<S>, Span<S>) = match digit1().parse(input) {
+            Ok(res) => res,
+            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err)),
+            Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
+        };
 
-    // Convert to an integer
-    let mut value: u64 = 0;
-    for b in val.bytes() {
-        if *b >= b'0' && *b <= b'9' {
-            let i: u64 = (*b - b'0') as u64;
-            if value > (u64::MAX - i) / 10 {
-                return Err(SnackError::Fatal(ParseError::Overflow));
+        // Convert to an integer
+        let mut value: u64 = 0;
+        for b in val.bytes() {
+            if *b >= b'0' && *b <= b'9' {
+                let i: u64 = (*b - b'0') as u64;
+                if value > (u64::MAX - i) / 10 {
+                    return Err(SnackError::Fatal(Fatal::Overflow { span: val.clone() }));
+                }
+                value *= 10;
+                value += i;
+            } else {
+                unreachable!();
             }
-            value *= 10;
-            value += i;
-        } else {
-            unreachable!();
         }
-    }
 
-    // Ok!
-    Ok((rem, value))
+        // Ok!
+        Ok((rem, Lit::Int(value)))
+    })
 }
 
 
@@ -198,14 +263,14 @@ where
 /***** ENTRYPOINT *****/
 fn main() {
     let span1 = Span::new("5");
-    let (_, exp) = expr().parse(span1).unwrap();
+    let (_, exp): (_, Expr) = expr().parse(span1).unwrap();
     assert_eq!(exp.compute(), 5);
 
     let span2 = Span::new("5+5");
-    let (_, exp) = expr().parse(span2).unwrap();
+    let (_, exp): (_, Expr) = expr().parse(span2).unwrap();
     assert_eq!(exp.compute(), 10);
 
     let span3 = Span::new("42+0+33+5");
-    let (_, exp) = expr().parse(span3).unwrap();
+    let (_, exp): (_, Expr) = expr().parse(span3).unwrap();
     assert_eq!(exp.compute(), 80);
 }

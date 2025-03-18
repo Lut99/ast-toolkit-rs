@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    17 Mar 2025, 15:04:37
+//    18 Mar 2025, 11:10:44
 //  Auto updated?
 //    Yes
 //
@@ -276,7 +276,7 @@ pub struct Alt<B, S> {
 impl<'t, B, S> Combinator<'t, S> for Alt<B, S>
 where
     B: BranchingCombinator<'t, S>,
-    S: Parsable,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = B::ExpectsFormatter;
     type Output = B::Output;
@@ -339,7 +339,7 @@ where
 pub const fn alt<'t, B, S>(branches: B) -> Alt<B, S>
 where
     B: BranchingCombinator<'t, S>,
-    S: Parsable,
+    S: Clone + Parsable,
 {
     Alt { branches, _s: PhantomData }
 }
