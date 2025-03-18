@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:58:17
 //  Last edited:
-//    17 Mar 2025, 10:05:53
+//    18 Mar 2025, 11:06:11
 //  Auto updated?
 //    Yes
 //
@@ -129,9 +129,107 @@ impl Display for Range {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Self as Debug>::fmt(self, f) }
 }
+impl PartialEq<std::ops::Range<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::Range<usize>) -> bool {
+        match self.inner {
+            RangeInner::Bounded(start, end) => start == other.start && end == other.end,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeFrom<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::RangeFrom<usize>) -> bool {
+        match self.inner {
+            RangeInner::Onwards(start) => start == other.start,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeTo<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::RangeTo<usize>) -> bool {
+        match self.inner {
+            RangeInner::Until(end) => end == other.end,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeFull> for Range {
+    #[inline]
+    fn eq(&self, _other: &std::ops::RangeFull) -> bool {
+        match self.inner {
+            RangeInner::Full => true,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<()> for Range {
+    #[inline]
+    fn eq(&self, _other: &()) -> bool {
+        match self.inner {
+            RangeInner::Empty => true,
+            _ => false,
+        }
+    }
+}
 
 // Range
 impl Range {
+    /// Returns a new Range which is a slice of this one.
+    ///
+    /// # Arguments
+    /// - `range`: Some other range to slice ourselves with.
+    ///
+    /// # Returns
+    /// A new Range that is the given `range` contextualized within this one.
+    #[inline]
+    pub fn slice(&self, range: impl Into<Self>) -> Self {
+        let range: Self = range.into();
+        match (self.inner, range.inner) {
+            // Bounded cases
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range { inner: RangeInner::Onwards(lstart + rstart) },
+            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, end)) => {
+                let start: usize = lstart + rstart;
+                let end: usize = lstart + end;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Onwards(start), RangeInner::Until(end)) => {
+                let end: usize = start + end;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(lstart, end), RangeInner::Onwards(rstart)) => {
+                let start: usize = lstart + rstart;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
+                let start: usize = lstart + rstart;
+                let end: usize = std::cmp::min(lend, lstart + rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(start, lend), RangeInner::Until(rend)) => {
+                let end: usize = std::cmp::min(lend, start + rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(end), RangeInner::Onwards(start)) => {
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(lend), RangeInner::Bounded(start, rend)) => {
+                let end: usize = std::cmp::min(lend, rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range { inner: RangeInner::Until(std::cmp::min(lend, rend)) },
+
+            // The full cases
+            (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
+            // Any empty resolves to empty
+            (RangeInner::Empty, _) | (_, RangeInner::Empty) => Self { inner: RangeInner::Empty },
+        }
+    }
+
+
+
     /// Gets the lefthand-side of the range.
     ///
     /// # Returns
@@ -216,55 +314,6 @@ impl Range {
         }
     }
 
-    /// Returns a new Range which is a slice of this one.
-    ///
-    /// # Arguments
-    /// - `range`: Some other range to slice ourselves with.
-    ///
-    /// # Returns
-    /// A new Range that is the given `range` contextualized within this one.
-    #[inline]
-    pub fn slice(&self, range: impl Into<Self>) -> Self {
-        let range: Self = range.into();
-        match (self.inner, range.inner) {
-            // Bounded cases
-            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range { inner: RangeInner::Onwards(std::cmp::max(lstart, rstart)) },
-            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, end)) => {
-                let start: usize = std::cmp::max(lstart, rstart);
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Onwards(start), RangeInner::Until(end)) => {
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Bounded(lstart, end), RangeInner::Onwards(rstart)) => {
-                let start: usize = std::cmp::max(lstart, rstart);
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
-                let start: usize = std::cmp::max(lstart, rstart);
-                let end: usize = std::cmp::min(lend, rend);
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Bounded(start, lend), RangeInner::Until(rend)) => {
-                let end: usize = std::cmp::min(lend, rend);
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Until(end), RangeInner::Onwards(start)) => {
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Until(lend), RangeInner::Bounded(start, rend)) => {
-                let end: usize = std::cmp::min(lend, rend);
-                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
-            },
-            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range { inner: RangeInner::Until(std::cmp::min(lend, rend)) },
-
-            // The full cases
-            (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
-            // Any empty resolves to empty
-            (RangeInner::Empty, _) | (_, RangeInner::Empty) => Self { inner: RangeInner::Empty },
-        }
-    }
-
     /// Returns the length of this slice.
     ///
     /// The length is always compared to the total length of the given parent slice.
@@ -324,14 +373,26 @@ mod tests {
     #[test]
     fn test_slice() {
         // Some testcases; extend when more are known!
-        assert_eq!(Range::from(0..10).slice(0..5), Range::from(0..5));
-        assert_eq!(Range::from(..10).slice(0..5), Range::from(0..5));
-        assert_eq!(Range::from(..10).slice(..5), Range::from(..5));
-        assert_eq!(Range::from(5..10).slice(..5), Range::from(()));
-        assert_eq!(Range::from(10..5), Range::from(()));
-        assert_eq!(Range::from(5..).slice(..5), Range::from(()));
-        assert_eq!(Range::from(5..).slice(..10), Range::from(5..10));
-        assert_eq!(Range::from(..).slice(5..10), Range::from(5..10));
-        assert_eq!(Range::from(()).slice(1..10), Range::from(()));
+        assert_eq!(Range::from(0..10).slice(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice(..5), ..5);
+        assert_eq!(Range::from(5..10).slice(..5), 5..10);
+        assert_eq!(Range::from(10..5), ());
+        assert_eq!(Range::from(5..).slice(..5), 5..10);
+        assert_eq!(Range::from(5..).slice(..10), 5..15);
+        assert_eq!(Range::from(..).slice(5..10), 5..10);
+        assert_eq!(Range::from(()).slice(1..10), ());
+
+        // Remember, we're slicing _in_ the left slice
+        assert_eq!(Range::from(1..).slice(1..), 2..);
+        assert_eq!(Range::from(1..).slice(1..3), 2..4);
+        assert_eq!(Range::from(1..).slice(1..1), ());
+        assert_eq!(Range::from(1..3).slice(1..), 2..3);
+        assert_eq!(Range::from(1..4).slice(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice(1..7), 2..4);
+        assert_eq!(Range::from(1..8).slice(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice(..2), 1..3);
+
+        assert_eq!(Range::from(2..).slice(..1), 2..3);
     }
 }

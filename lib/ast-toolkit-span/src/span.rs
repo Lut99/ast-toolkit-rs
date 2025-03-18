@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:51:07
 //  Last edited:
-//    17 Mar 2025, 14:00:23
+//    18 Mar 2025, 10:51:20
 //  Auto updated?
 //    Yes
 //
@@ -50,8 +50,8 @@ use crate::spannable::Spannable;
 ///
 /// let span2 = Span::ranged(("<example>", "Hello, world!"), ..5);
 /// assert_eq!(span2.value(), "Hello");
-/// assert_eq!(span2.source(), "Hello, world!");
-/// assert_eq!(span2.source_id(), "<example>");
+/// assert_eq!(span2.source(), &("<example>", "Hello, world!"));
+/// assert_eq!(span2.source_id(), &"<example>");
 /// ```
 #[derive(Clone, Copy)]
 pub struct Span<S> {
@@ -264,4 +264,21 @@ impl<S: Clone + Spannable> Spannable for Span<S> {
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_span_slice() {
+        let span = Span::ranged("5+5", 1..);
+        let slice = span.slice(1..);
+        assert_eq!(*slice.range(), 2..);
+    }
 }

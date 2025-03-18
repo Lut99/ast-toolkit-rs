@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    17 Mar 2025, 15:05:01
+//    18 Mar 2025, 10:24:46
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::Result as SResult;
-use crate::span::{BytesParsable, Parsable as _};
+use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -73,7 +73,7 @@ where
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Try to iterate over the head to find the match
         let mut i: usize = 0;
-        for byte in input.head() {
+        for byte in input.bytes() {
             // Check if it's in the set
             if (self.predicate)(*byte) {
                 i += 1;

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    17 Mar 2025, 19:16:21
+//    18 Mar 2025, 11:06:25
 //  Auto updated?
 //    Yes
 //
@@ -101,10 +101,10 @@ where
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Try to iterate over the head to find the match
         let mut i: usize = 0;
-        for (start_i, c) in input.head_grapheme_indices() {
+        for c in input.graphs() {
             // Check if it's in the set
             if (self.predicate)(c) {
-                i = start_i + c.len();
+                i += c.len();
                 continue;
             } else {
                 break;
@@ -182,4 +182,21 @@ where
     S: Clone + Utf8Parsable,
 {
     While1 { predicate, what, _s: PhantomData }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_while1() {
+        let span = Span::ranged("5+5", 2..);
+        let res = while1("digits", |c| c.len() == 1 && c.chars().next().unwrap() >= '0' && c.chars().next().unwrap() <= '9').parse(span);
+        assert_eq!(res, Ok((span.slice(1..), span.slice(..1))));
+    }
 }

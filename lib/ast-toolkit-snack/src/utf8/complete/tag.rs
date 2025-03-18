@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    17 Mar 2025, 15:21:37
+//    18 Mar 2025, 10:58:32
 //  Auto updated?
 //    Yes
 //
@@ -101,12 +101,12 @@ where
     fn parse(&mut self, input: Span<S>) -> Result<(Span<S>, Self::Output), SnackError<Self::Recoverable, Self::Fatal, S>> {
         // Try to iterate over the head to find the match
         let mut i: usize = 0;
-        let mut head = input.head_grapheme_indices();
+        let mut head = input.graphs();
         for c in self.tag.graphemes(true) {
             // Attempt to get the next byte
             match head.next() {
-                Some((start_i, head)) if c == head => {
-                    i = start_i + head.len();
+                Some(head) if c == head => {
+                    i += head.len();
                     continue;
                 },
                 Some(_) | None => {

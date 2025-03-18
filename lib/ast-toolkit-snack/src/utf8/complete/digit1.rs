@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    17 Mar 2025, 19:25:31
+//    18 Mar 2025, 11:03:56
 //  Auto updated?
 //    Yes
 //
@@ -82,8 +82,7 @@ where
         {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable { fmt: ExpectsFormatter, span: err.into_span() })),
-            Err(SnackError::Fatal(_)) => unreachable!(),
-            Err(SnackError::NotEnough { .. }) => unreachable!(),
+            Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
         }
     }
 }

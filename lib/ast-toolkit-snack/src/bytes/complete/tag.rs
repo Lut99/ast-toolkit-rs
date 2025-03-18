@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    17 Mar 2025, 14:14:51
+//    18 Mar 2025, 10:24:13
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,7 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::{BytesParsable, Parsable as _};
+use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -101,10 +101,10 @@ where
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Try to iterate over the head to find the match
         let mut i: usize = 0;
-        let mut head = input.head();
+        let mut bytes = input.bytes();
         for byte in self.tag {
             // Attempt to get the next byte
-            match head.next() {
+            match bytes.next() {
                 Some(head) if byte == head => {
                     i += 1;
                     continue;
@@ -112,7 +112,7 @@ where
                 Some(_) | None => {
                     // Note: required, or else Rust will think the iterator will be destructed at
                     // the end of the loop
-                    drop(head);
+                    drop(bytes);
                     return Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }));
                 },
             }

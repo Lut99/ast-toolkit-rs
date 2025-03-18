@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    17 Mar 2025, 13:39:31
+//    18 Mar 2025, 10:38:19
 //  Auto updated?
 //    Yes
 //
@@ -65,6 +65,26 @@ pub enum SnackError<E1, E2, S> {
         span:   Span<S>,
     },
 }
+impl<E1, E2, S> Display for SnackError<E1, E2, S>
+where
+    E1: Display,
+    E2: Display,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Recoverable(err) => err.fmt(f),
+            Self::Fatal(err) => err.fmt(f),
+            Self::NotEnough { needed, .. } => {
+                write!(f, "Unexpected end-of-file")?;
+                if let Some(needed) = needed {
+                    write!(f, " (expected {needed} more input tokens)")?;
+                }
+                Ok(())
+            },
+        }
+    }
+}
 impl<E1, E2, S> Eq for SnackError<E1, E2, S>
 where
     E1: Eq,
@@ -90,6 +110,30 @@ where
 
             // Anything else never equals
             _ => false,
+        }
+    }
+}
+impl<E1, E2, S> Spanning<S> for SnackError<E1, E2, S>
+where
+    E1: Spanning<S>,
+    E2: Spanning<S>,
+    S: Clone,
+{
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> {
+        match self {
+            Self::Recoverable(err) => err.span(),
+            Self::Fatal(err) => err.span(),
+            Self::NotEnough { span, .. } => Cow::Borrowed(span),
+        }
+    }
+
+    #[inline]
+    fn into_span(self) -> Span<S> {
+        match self {
+            Self::Recoverable(err) => err.into_span(),
+            Self::Fatal(err) => err.into_span(),
+            Self::NotEnough { span, .. } => span,
         }
     }
 }

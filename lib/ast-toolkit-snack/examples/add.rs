@@ -16,7 +16,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_snack::result::SnackError;
-use ast_toolkit_snack::span::{Parsable as _, Utf8Parsable};
+use ast_toolkit_snack::span::{BytesParsable as _, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
 use ast_toolkit_snack::{Combinator as _, comb};
 use ast_toolkit_span::Span;
@@ -46,6 +46,12 @@ impl Display for ParseError {
     }
 }
 impl Error for ParseError {}
+impl ast_toolkit_span::Spanning<&'static str> for ParseError {
+    #[inline]
+    fn span(&self) -> std::borrow::Cow<Span<&'static str>> { todo!() }
+    #[inline]
+    fn into_span(self) -> Span<&'static str> { todo!() }
+}
 
 
 
@@ -109,6 +115,7 @@ impl Expr {
 fn expr<S>(input: Span<S>) -> _
 where
     S: Clone + Utf8Parsable,
+    for<'a> S::Slice<'a>: Debug,
 {
     // Always parse a number first
     let (rem, val) = lit().parse(input)?;
@@ -156,6 +163,7 @@ where
 fn lit<S>(input: Span<S>) -> _
 where
     S: Clone + Utf8Parsable,
+    for<'a> S::Slice<'a>: Debug,
 {
     // Parse the characters
     let (rem, val): (Span<S>, Span<S>) = match digit1().parse(input) {
@@ -166,7 +174,7 @@ where
 
     // Convert to an integer
     let mut value: u64 = 0;
-    for b in val.head() {
+    for b in val.bytes() {
         if *b >= b'0' && *b <= b'9' {
             let i: u64 = (*b - b'0') as u64;
             if value > (u64::MAX - i) / 10 {
