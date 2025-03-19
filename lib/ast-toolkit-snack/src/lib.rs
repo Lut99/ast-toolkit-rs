@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    18 Mar 2025, 17:23:17
+//    19 Mar 2025, 09:25:53
 //  Auto updated?
 //    Yes
 //
@@ -58,20 +58,28 @@ const EXPECTS_INDENT_SIZE: usize = 4;
 
 /***** LIBRARY *****/
 /// A trait implemented by errors that are returned by snack [`Combinator`]s.
-pub trait ParseError<S: Clone>: Error + Spanning<S> {}
+pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {}
 impl<T: Error + Spanning<S>, S: Clone> ParseError<S> for T {}
 
-#[derive(Debug)]
 pub struct BoxedParseError<'e, S: Clone>(Box<dyn 'e + ParseError<S>>);
 impl<'e, S: Clone> BoxedParseError<'e, S> {
     #[inline]
     pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
 }
+impl<'e, S: Clone> Debug for BoxedParseError<'e, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let Self(err) = self;
+        let mut fmt = f.debug_tuple("BoxedParseError");
+        fmt.field(err);
+        fmt.finish()
+    }
+}
 impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
 }
-impl<'e, S: Debug + Clone> Error for BoxedParseError<'e, S> {
+impl<'e, S: Clone> Error for BoxedParseError<'e, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
 }

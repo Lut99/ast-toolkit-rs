@@ -4,7 +4,7 @@
 //  Created:
 //    18 Mar 2025, 16:14:07
 //  Last edited:
-//    18 Mar 2025, 16:43:22
+//    19 Mar 2025, 09:19:15
 //  Auto updated?
 //    Yes
 //
@@ -77,12 +77,12 @@ pub struct Closure<F, C, O, E1, E2, S> {
     _fatal: PhantomData<E2>,
     _s: PhantomData<S>,
 }
-impl<F, C, O, E1, E2, S> Combinator<'static, S> for Closure<F, C, O, E1, E2, S>
+impl<'t, F, C, O, E1, E2, S> Combinator<'t, S> for Closure<F, C, O, E1, E2, S>
 where
-    F: Clone + Debug + Display + Eq + PartialEq,
+    F: 't + Clone + Debug + Display + Eq + PartialEq,
     C: FnMut(Span<S>) -> SResult<O, E1, E2, S>,
-    E1: ParseError<S>,
-    E2: ParseError<S>,
+    E1: 't + ParseError<S>,
+    E2: 't + ParseError<S>,
     S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<F>;

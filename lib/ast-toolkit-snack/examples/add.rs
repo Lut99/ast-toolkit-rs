@@ -16,20 +16,12 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit_snack::result::{Result as SResult, SnackError};
+use ast_toolkit_snack::result::SnackError;
 use ast_toolkit_snack::span::{BytesParsable as _, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{Combinator, ParseError, branch, closure, comb};
+use ast_toolkit_snack::{Combinator, branch, closure};
 use ast_toolkit_span::{Span, Spannable};
 use better_derive::{Debug, Eq, PartialEq};
-
-
-/***** CONSTANTS *****/
-/// Whatever we call "an expression"
-const EXPRESSION_NAME: &str = "expression";
-
-
-
 
 
 /***** ERRORS *****/
@@ -120,17 +112,18 @@ mod expr {
     use super::*;
 
     /// The combinator implementation itself.
-    pub struct Expr<S> {
+    pub(super) struct Expr<S> {
         pub(super) _s: PhantomData<S>,
     }
-    impl<S> Combinator<'static, S> for Expr<S>
+    impl<'s, 't, S> Combinator<'t, S> for Expr<S>
     where
-        S: Clone + std::fmt::Debug + Utf8Parsable,
+        's: 't,
+        S: 's + Clone + Utf8Parsable,
     {
         type ExpectsFormatter = &'static str;
         type Output = super::Expr;
-        type Recoverable = BoxedParseError<'static, S>;
-        type Fatal = BoxedParseError<'static, S>;
+        type Recoverable = BoxedParseError<'t, S>;
+        type Fatal = BoxedParseError<'t, S>;
 
         #[inline]
         fn expects(&self) -> Self::ExpectsFormatter { "Expected an expression" }
@@ -146,11 +139,11 @@ mod expr {
             };
 
             // Then recursively parse the rest if there's an addition
-            match tag("+").parse(input.clone()) {
+            match tag("+").parse(rem.clone()) {
                 Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, super::Expr::Add(Box::new(super::Expr::Lit(val)), Box::new(expr)))),
                 // If there's no addition, we are still OK
-                Err(SnackError::Recoverable(_)) => Ok((input, super::Expr::Lit(val))),
-                Err(SnackError::Fatal(err)) => unreachable!(),
+                Err(SnackError::Recoverable(_)) => Ok((rem, super::Expr::Lit(val))),
+                Err(SnackError::Fatal(_)) => unreachable!(),
                 Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
             }
         }
@@ -196,9 +189,9 @@ where
 ///
 /// It fails fatally if it _did_ start with a digit, but it overflows for our internal
 /// representation.
-const fn lit<S>() -> impl Combinator<'static, S, Output = Lit>
+const fn lit<'s, S>() -> impl Combinator<'s, S, Output = Lit>
 where
-    S: Clone + Utf8Parsable,
+    S: 's + Clone + Utf8Parsable,
 {
     closure("A literal", |input| branch::alt((lit_int(),)).parse(input))
 }
@@ -224,9 +217,9 @@ where
 /// integer.
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
-const fn lit_int<S>() -> impl Combinator<'static, S, Output = Lit>
+const fn lit_int<'s, S>() -> impl Combinator<'s, S, Output = Lit>
 where
-    S: Clone + Utf8Parsable,
+    S: 's + Clone + Utf8Parsable,
 {
     closure("An integer literal", |input: Span<S>| {
         // Parse the characters
@@ -262,7 +255,8 @@ where
 
 /***** ENTRYPOINT *****/
 fn main() {
-    let span1 = Span::new("5");
+    let source: String = "5".into();
+    let span1 = Span::new(source.as_str());
     let (_, exp): (_, Expr) = expr().parse(span1).unwrap();
     assert_eq!(exp.compute(), 5);
 

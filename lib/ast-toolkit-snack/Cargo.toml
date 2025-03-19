@@ -10,7 +10,7 @@ description = "Provides a parser-combinator framework heavily inspired by [nom](
 [[example]]
 name = "add"
 path = "examples/add.rs"
-required-features = ["derive"]
+required-features = []
 
 
 [dependencies]

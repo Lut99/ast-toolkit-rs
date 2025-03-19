@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    18 Mar 2025, 11:10:44
+//    19 Mar 2025, 09:20:03
 //  Auto updated?
 //    Yes
 //
@@ -173,7 +173,7 @@ macro_rules! tuple_branching_comb_impl {
             /***** IMPL *****/
             // Then implement Branchable for the tuple
             paste::paste!(
-                impl<'t, S: Clone + Parsable, O, [<C $fi>]: Combinator<'t, S, Output = O> $(, [<C $i>]: Combinator<'t, S, Output = O>)*> BranchingCombinator<'t, S> for ([<C $fi>], $([<C $i>],)*) {
+                impl<'t, 's: 't, S: 's + Clone + Parsable, O, [<C $fi>]: Combinator<'t, S, Output = O> $(, [<C $i>]: Combinator<'t, S, Output = O>)*> BranchingCombinator<'t, S> for ([<C $fi>], $([<C $i>],)*) {
                     type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
                     type Recoverable = [<Recoverable $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*, S>;
