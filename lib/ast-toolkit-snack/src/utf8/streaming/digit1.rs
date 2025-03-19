@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    18 Jan 2025, 18:11:02
+//    19 Mar 2025, 09:43:38
 //  Auto updated?
 //    Yes
 //
@@ -21,31 +21,29 @@ pub use super::super::complete::digit1::{ExpectsFormatter, Recoverable};
 use super::while1;
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::{LenBytes, WhileUtf8};
+use crate::span::Utf8Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`digit1()`].
 #[derive(Debug)]
-pub struct Digit1<F, S> {
-    _f: PhantomData<F>,
+pub struct Digit1<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for Digit1<F, S>
+impl<S> Combinator<'static, S> for Digit1<S>
 where
-    F: Clone,
-    S: Clone + LenBytes + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match while1("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
@@ -86,9 +84,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::digit1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "12345six");
-/// let span2 = Span::new("<example>", "one23456");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("12345six");
+/// let span2 = Span::new("one23456");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = digit1();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
@@ -102,10 +100,9 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```
 #[inline]
-pub const fn digit1<F, S>() -> Digit1<F, S>
+pub const fn digit1<S>() -> Digit1<S>
 where
-    F: Clone,
-    S: Clone + LenBytes + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
-    Digit1 { _f: PhantomData, _s: PhantomData }
+    Digit1 { _s: PhantomData }
 }

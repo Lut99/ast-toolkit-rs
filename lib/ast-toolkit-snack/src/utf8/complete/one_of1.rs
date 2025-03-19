@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    18 Jan 2025, 18:15:10
+//    19 Mar 2025, 09:39:36
 //  Auto updated?
 //    Yes
 //
@@ -12,17 +12,17 @@
 //!   Implemens the [`one_of1()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::OneOfUtf8;
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -30,23 +30,23 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, F, S> {
+pub struct Recoverable<'t, S> {
     /// The set of characters to one of.
     pub charset: &'t [&'t str],
     /// The location where no characters were found.
-    pub span:    Span<F, S>,
+    pub span:    Span<S>,
 }
-impl<'t, F, S> Display for Recoverable<'t, F, S> {
+impl<'t, S> Display for Recoverable<'t, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { charset: self.charset }) }
 }
-impl<'t, F, S> Error for Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
+impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 
@@ -94,34 +94,44 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of1()`].
 #[derive(Debug)]
-pub struct OneOf1<'t, F, S> {
+pub struct OneOf1<'t, S> {
     charset: &'t [&'t str],
-    _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'t`.
-impl<'c, 't, F, S> Combinator<'c, F, S> for OneOf1<'t, F, S>
+impl<'c, 't, S> Combinator<'c, S> for OneOf1<'t, S>
 where
     't: 'c,
-    F: Clone,
-    S: Clone + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'t, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { charset: self.charset } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
-        if match_point > 0 {
-            Ok((input.slice(match_point..), input.slice(..match_point)))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        for c in input.graphs() {
+            // Check if it's in the set
+            if self.charset.contains(&c) {
+                i += c.len();
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        // Return if there's at least one
+        if i > 0 {
+            Ok((input.slice(i..), input.slice(..i)))
         } else {
-            Err(SnackError::Recoverable(Recoverable { charset: self.charset, span: input.start_onwards() }))
+            Err(SnackError::Recoverable(Recoverable { charset: self.charset, span: input }))
         }
     }
 }
@@ -154,11 +164,11 @@ where
 /// use ast_toolkit_snack::utf8::complete::one_of1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "abcdefg");
-/// let span2 = Span::new("<example>", "cdefghi");
-/// let span3 = Span::new("<example>", "abÿcdef");
-/// let span4 = Span::new("<example>", "hijklmn");
-/// let span5 = Span::new("<example>", "");
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// let mut comb = one_of1(&["a", "b", "c", "ÿ"]);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
@@ -180,10 +190,9 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
+pub const fn one_of1<'t, S>(charset: &'t [&'t str]) -> OneOf1<'t, S>
 where
-    F: Clone,
-    S: Clone + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
-    OneOf1 { charset, _f: PhantomData, _s: PhantomData }
+    OneOf1 { charset, _s: PhantomData }
 }

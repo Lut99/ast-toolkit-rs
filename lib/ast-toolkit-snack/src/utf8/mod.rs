@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 13:37:29
 //  Last edited:
-//    17 Mar 2025, 14:42:16
+//    19 Mar 2025, 09:41:25
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@
 pub mod complete;
 // pub mod digit0;
 // pub mod one_of0;
-// pub mod streaming;
+pub mod streaming;
 // pub mod while0;
 // pub mod whitespace0;
 
