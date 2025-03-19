@@ -16,10 +16,11 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
+use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
 use ast_toolkit_snack::span::{BytesParsable as _, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{Combinator, branch, closure};
+use ast_toolkit_snack::{Combinator, branch};
 use ast_toolkit_span::{Span, Spannable};
 use better_derive::{Debug, Eq, PartialEq};
 
@@ -106,8 +107,7 @@ impl Lit {
 mod expr {
     use std::marker::PhantomData;
 
-    use ast_toolkit_snack::BoxedParseError;
-    use ast_toolkit_snack::result::Result as SResult;
+    use ast_toolkit_snack::result::{BoxedParseError, Result as SResult};
 
     use super::*;
 

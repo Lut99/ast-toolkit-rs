@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    03 Nov 2024, 19:27:58
+//    19 Mar 2025, 14:58:39
 //  Auto updated?
 //    Yes
 //
@@ -14,24 +14,27 @@
 
 use std::marker::PhantomData;
 
+use ast_toolkit_span::Span;
+
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`map()`]-combinator.
-pub struct Map<C, P, F, S> {
+pub struct Map<C, P, S> {
     /// The nested combinator who's result we're mapping.
     comb: C,
     /// The predicate that does the mapping.
     pred: P,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, O1, O2, F, S> Combinator<'t, F, S> for Map<C, P, F, S>
+impl<'t, C, P, O1, O2, S> Combinator<'t, S> for Map<C, P, S>
 where
-    C: Combinator<'t, F, S, Output = O1>,
+    C: Combinator<'t, S, Output = O1>,
     P: FnMut(O1) -> O2,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
@@ -42,7 +45,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input) {
             Ok((rem, res)) => Ok((rem, (self.pred)(res))),
             Err(err) => Err(err),
@@ -77,11 +80,11 @@ where
 ///
 /// #[derive(Debug, PartialEq)]
 /// struct Hello {
-///     span: Span<&'static str, &'static str>,
+///     span: Span<&'static str>,
 /// };
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = map(tag("Hello"), |parsed| Hello { span: parsed });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), Hello { span: span1.slice(..5) })));
@@ -91,10 +94,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn map<'t, C, P, O1, O2, F, S>(comb: C, pred: P) -> Map<C, P, F, S>
+pub const fn map<'t, C, P, O1, O2, S>(comb: C, pred: P) -> Map<C, P, S>
 where
-    C: Combinator<'t, F, S, Output = O1>,
+    C: Combinator<'t, S, Output = O1>,
     P: FnMut(O1) -> O2,
+    S: Clone + Parsable,
 {
-    Map { comb, pred, _f: PhantomData, _s: PhantomData }
+    Map { comb, pred, _s: PhantomData }
 }

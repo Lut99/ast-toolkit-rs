@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    18 Mar 2025, 16:46:04
+//    19 Mar 2025, 14:57:21
 //  Auto updated?
 //    Yes
 //
@@ -15,12 +15,12 @@
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{self, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
-use crate::ExpectsFormatter;
+use crate::{ExpectsFormatter, ParseError};
 
 
 /***** LIBRARY *****/
@@ -28,6 +28,8 @@ use crate::ExpectsFormatter;
 ///
 /// It is essentially a three-way return type but separated in two levels to use the stock [`Result`] (so that `?` works).
 pub type Result<T, E1, E2, S> = std::result::Result<(Span<S>, T), SnackError<E1, E2, S>>;
+
+
 
 /// The main snack error type.
 ///
@@ -138,6 +140,8 @@ where
     }
 }
 
+
+
 /// Defines a common [recoverable](SnackError::Recoverable) error type that simply describes what
 /// was expected.
 #[derive(Debug, Eq, PartialEq)]
@@ -163,4 +167,94 @@ impl<O, S: Clone> Spanning<S> for Expected<O, S> {
     {
         self.span
     }
+}
+
+
+
+/// Defines a wrapper around a normal [`Error`] to extend it with a source location.
+///
+/// I.e., turns an [`Error`] into a [`ParseError`](super::ParseError).
+///
+/// # Examples
+/// The following code would not run:
+/// ```compile_fail
+/// use std::num::ParseIntError;
+/// use std::str::FromStr as _;
+/// use ast_toolkit_snack::ParseError;
+///
+/// fn is_parse_error<T: ParseError<S>, S: Clone>(err: T) {}
+///
+/// is_parse_error(u32::from_str("a").unwrap_err());
+/// ```
+///
+/// We can use [`SpanningError`] to patch it:
+/// ```rust
+/// use std::num::ParseIntError;
+/// use std::str::FromStr as _;
+///
+/// use ast_toolkit_snack::ParseError;
+/// use ast_toolkit_snack::result::SpanningError;
+/// use ast_toolkit_span::Span;
+///
+/// fn is_parse_error<T: ParseError<S>, S: Clone>(err: T) {}
+///
+/// is_parse_error(SpanningError { err: u32::from_str("a").unwrap_err(), span: Span::new("a") });
+/// ```
+#[derive(Debug, Eq, PartialEq)]
+pub struct SpanningError<E, S> {
+    /// The error wrapped.
+    pub err:  E,
+    /// The span that points to where it occurs.
+    pub span: Span<S>,
+}
+impl<E: Display, S> Display for SpanningError<E, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.err.fmt(f) }
+}
+impl<E: Error, S: Spannable> Error for SpanningError<E, S> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> { self.err.source() }
+}
+impl<E, S: Clone> Spanning<S> for SpanningError<E, S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+
+    #[inline]
+    fn into_span(self) -> Span<S> { self.span }
+}
+
+/// Implements a [`ParseError`] that is [`Box`]ed.
+///
+/// This is a separate type because [`Box`] does not implement [`Error`] unless the wrapped type is
+/// [`Sized`] (see <https://users.rust-lang.org/t/why-box-dyn-error-is-not-sized/61642/4>).
+///
+/// We fix it by defining this custom type ourselves which _does_ implement [`Error`] and,
+/// therefore, [`ParseError`].
+pub struct BoxedParseError<'e, S: Clone>(pub Box<dyn 'e + ParseError<S>>);
+impl<'e, S: Clone> BoxedParseError<'e, S> {
+    #[inline]
+    pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
+}
+impl<'e, S: Clone> fmt::Debug for BoxedParseError<'e, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let Self(err) = self;
+        let mut fmt = f.debug_tuple("BoxedParseError");
+        fmt.field(err);
+        fmt.finish()
+    }
+}
+impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
+}
+impl<'e, S: Clone> Error for BoxedParseError<'e, S> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
+}
+impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { self.0.span() }
+    #[inline]
+    fn into_span(self) -> Span<S> { self.0.into_span() }
 }

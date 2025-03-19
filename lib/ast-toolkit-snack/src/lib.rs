@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    19 Mar 2025, 09:25:53
+//    19 Mar 2025, 10:54:25
 //  Auto updated?
 //    Yes
 //
@@ -22,13 +22,12 @@ pub mod branch;
 pub mod bytes;
 // #[cfg(feature = "c")]
 // pub mod c;
-// pub mod combinator;
+pub mod combinator;
 // pub mod debug;
 // pub mod error;
 // pub mod multi;
 // #[cfg(feature = "derive")]
 // pub mod procedural;
-pub mod closure;
 pub mod result;
 // pub mod sequence;
 pub mod span;
@@ -43,7 +42,6 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 #[cfg(feature = "derive")]
 pub use ast_toolkit_snack_derive::comb;
 pub use ast_toolkit_span::{Span, Spanning};
-pub use closure::closure;
 use span::Parsable;
 
 
@@ -60,35 +58,6 @@ const EXPECTS_INDENT_SIZE: usize = 4;
 /// A trait implemented by errors that are returned by snack [`Combinator`]s.
 pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {}
 impl<T: Error + Spanning<S>, S: Clone> ParseError<S> for T {}
-
-pub struct BoxedParseError<'e, S: Clone>(Box<dyn 'e + ParseError<S>>);
-impl<'e, S: Clone> BoxedParseError<'e, S> {
-    #[inline]
-    pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
-}
-impl<'e, S: Clone> Debug for BoxedParseError<'e, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let Self(err) = self;
-        let mut fmt = f.debug_tuple("BoxedParseError");
-        fmt.field(err);
-        fmt.finish()
-    }
-}
-impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
-}
-impl<'e, S: Clone> Error for BoxedParseError<'e, S> {
-    #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
-}
-impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
-    #[inline]
-    fn span(&self) -> Cow<Span<S>> { self.0.span() }
-    #[inline]
-    fn into_span(self) -> Span<S> { self.0.into_span() }
-}
 
 
 
