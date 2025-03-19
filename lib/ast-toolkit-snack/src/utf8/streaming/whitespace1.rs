@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    18 Jan 2025, 18:20:20
+//    19 Mar 2025, 10:34:00
 //  Auto updated?
 //    Yes
 //
@@ -21,31 +21,29 @@ pub use super::super::complete::whitespace1::{ExpectsFormatter, Recoverable};
 use super::one_of1;
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::{LenBytes, OneOfUtf8};
+use crate::span::Utf8Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`whitespace1()`].
 #[derive(Debug)]
-pub struct Whitespace1<F, S> {
-    _f: PhantomData<F>,
+pub struct Whitespace1<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for Whitespace1<F, S>
+impl<S> Combinator<'static, S> for Whitespace1<S>
 where
-    F: Clone,
-    S: Clone + LenBytes + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match one_of1(&[" ", "\t", "\n", "\r", "\r\n"]).parse(input) {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), span: err.into_span() })),
@@ -85,9 +83,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::whitespace1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "   \t\n  awesome");
-/// let span2 = Span::new("<example>", "cool \n dope");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("   \t\n  awesome");
+/// let span2 = Span::new("cool \n dope");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = whitespace1();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(7..), span1.slice(..7))));
@@ -101,10 +99,9 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```
 #[inline]
-pub const fn whitespace1<F, S>() -> Whitespace1<F, S>
+pub const fn whitespace1<S>() -> Whitespace1<S>
 where
-    F: Clone,
-    S: Clone + LenBytes + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
-    Whitespace1 { _f: PhantomData, _s: PhantomData }
+    Whitespace1 { _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    07 Mar 2025, 14:42:37
+//    19 Mar 2025, 10:37:08
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,7 @@ use ast_toolkit_span::Span;
 
 use super::while0;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::WhileUtf8;
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -47,17 +47,15 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`digit0()`].
 #[derive(Debug)]
-pub struct Digit0<F, S> {
-    _f: PhantomData<F>,
+pub struct Digit0<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for Digit0<F, S>
+impl<S> Combinator<'static, S> for Digit0<S>
 where
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter;
-    type Output = Span<F, S>;
+    type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
@@ -65,7 +63,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match while0("", |c: &str| -> bool {
             c.len() == 1 && {
                 let c: char = c.chars().next().unwrap();
@@ -103,20 +101,19 @@ where
 /// use ast_toolkit_snack::utf8::digit0;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "12345six");
-/// let span2 = Span::new("<example>", "one23456");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("12345six");
+/// let span2 = Span::new("one23456");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = digit0();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
-/// assert_eq!(comb.parse(span2), Ok((span2, span2.slice(..0))));
-/// assert_eq!(comb.parse(span3), Ok((span3, span3.slice(..0))));
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(0..), span2.slice(..0))));
+/// assert_eq!(comb.parse(span3), Ok((span3.slice(0..), span3.slice(..0))));
 /// ```
 #[inline]
-pub const fn digit0<F, S>() -> Digit0<F, S>
+pub const fn digit0<S>() -> Digit0<S>
 where
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
-    Digit0 { _f: PhantomData, _s: PhantomData }
+    Digit0 { _s: PhantomData }
 }
