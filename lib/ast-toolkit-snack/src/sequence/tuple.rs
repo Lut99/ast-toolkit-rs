@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    07 Mar 2025, 17:29:10
+//    20 Mar 2025, 12:13:33
 //  Auto updated?
 //    Yes
 //
@@ -12,13 +12,15 @@
 //!   Implements the [`tuple()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::mem::MaybeUninit;
 
 use ast_toolkit_span::{Span, Spanning};
 
-use crate::result::SnackError;
+use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter};
 
 
@@ -54,18 +56,10 @@ macro_rules! tuple_comb_impl {
                     }
                 }
             }
-            impl<[<E $fi>]: 'static + Error $(, [<E $i>]: 'static + Error)*> Error for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
+            impl<[<E $fi>]: Debug + Display $(, [<E $i>]: Debug + Display)*> Error for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {}
+            impl<[<E $fi>]: Spanning<S> $(, [<E $i>]: Spanning<S>)*, S: Clone> Spanning<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
-                fn source(&self) -> Option<&(dyn 'static + Error)> {
-                    match self {
-                        Self::[<Comb $fi>](err) => Some(err),
-                        $(Self::[<Comb $i>](err) => Some(err),)*
-                    }
-                }
-            }
-            impl<F: Clone, S: Clone, [<E $fi>]: Spanning<F, S> $(, [<E $i>]: Spanning<F, S>)*> Spanning<F, S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
-                #[inline]
-                fn span(&self) -> Span<F, S> {
+                fn span(&self) -> Cow<Span<S>> {
                     match self {
                         Self::[<Comb $fi>](err) => err.span(),
                         $(Self::[<Comb $i>](err) => err.span(),)*
@@ -73,7 +67,7 @@ macro_rules! tuple_comb_impl {
                 }
 
                 #[inline]
-                fn into_span(self) -> Span<F, S> {
+                fn into_span(self) -> Span<S> {
                     match self {
                         Self::[<Comb $fi>](err) => err.into_span(),
                         $(Self::[<Comb $i>](err) => err.into_span(),)*
@@ -112,10 +106,11 @@ macro_rules! tuple_comb_impl {
 
 
             /* COMBINATORS */
-            impl<'t, [<C $fi>] $(, [<C $i>])*, F, S> Combinator<'t, F, S> for ([<C $fi>], $([<C $i>],)*)
+            impl<'t, [<C $fi>] $(, [<C $i>])*, S> Combinator<'t, S> for ([<C $fi>], $([<C $i>],)*)
             where
-                [<C $fi>]: Combinator<'t, F, S>,
-                $([<C $i>]: Combinator<'t, F, S>,)*
+                [<C $fi>]: Combinator<'t, S>,
+                $([<C $i>]: Combinator<'t, S>,)*
+                S: Clone + Parsable,
             {
                 type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                 type Output = ([<C $fi>]::Output, $([<C $i>]::Output),*);
@@ -127,10 +122,10 @@ macro_rules! tuple_comb_impl {
                     [<ExpectsFormatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects(),)*) }
                 }
 
-                fn parse(&mut self, input: Span<F, S>) -> Result<(Span<F, S>, Self::Output), SnackError<Self::Recoverable, Self::Fatal, F, S>> {
+                fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
                     // We collect the results as we find them
                     let mut results: (MaybeUninit<[<C $fi>]::Output>, $(MaybeUninit<[<C $i>]::Output>,)*) = (MaybeUninit::<[<C $fi>]::Output>::uninit(), $(MaybeUninit::<[<C $i>]::Output>::uninit(),)*);
-                    let rem: Span<F, S> = match self.$fi.parse(input) {
+                    let rem: Span<S> = match self.$fi.parse(input) {
                         Ok((rem, res)) => {
                             results.$fi.write(res);
                             rem
@@ -140,7 +135,7 @@ macro_rules! tuple_comb_impl {
                         Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                     };
                     $(
-                        let rem: Span<F, S> = match self.$i.parse(rem) {
+                        let rem: Span<S> = match self.$i.parse(rem) {
                             Ok((rem, res)) => {
                                 results.$i.write(res);
                                 rem
@@ -237,9 +232,9 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 /// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello123");
-/// let span2 = Span::new("<example>", "123");
-/// let span3 = Span::new("<example>", "HelloWorld");
+/// let span1 = Span::new("Hello123");
+/// let span2 = Span::new("123");
+/// let span3 = Span::new("HelloWorld");
 ///
 /// let mut comb = tuple((tag("Hello"), digit1()));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))));

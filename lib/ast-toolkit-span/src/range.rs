@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:58:17
 //  Last edited:
-//    18 Mar 2025, 11:06:11
+//    20 Mar 2025, 12:03:31
 //  Auto updated?
 //    Yes
 //
@@ -74,7 +74,7 @@ impl Range {
     /// A new Range, which is either bounded by `start` and `end` or, when `start > end`, empty.
     #[inline]
     pub const fn bounded(start: usize, end: usize) -> Self {
-        Self { inner: if start <= end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+        Self { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
     }
 
     /// Constructor for a range that is only bounded on the left side.
@@ -89,13 +89,15 @@ impl Range {
 
     /// Constructor for a range that is only bounded on the right side.
     ///
+    /// Note that, if `end` is 0, this will default to [`Range::empty()`] instead.
+    ///
     /// # Arguments
     /// - `end`: The end point of the range in the larger slice.
     ///
     /// # Returns
     /// A new Range, which is until the given `end` point.
     #[inline]
-    pub const fn until(end: usize) -> Self { Self { inner: RangeInner::Until(end) } }
+    pub const fn until(end: usize) -> Self { Self { inner: if end > 0 { RangeInner::Until(end) } else { RangeInner::Empty } } }
 
     /// Constructor for a range that covers the whole parent slice.
     ///
@@ -225,6 +227,97 @@ impl Range {
             (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
             // Any empty resolves to empty
             (RangeInner::Empty, _) | (_, RangeInner::Empty) => Self { inner: RangeInner::Empty },
+        }
+    }
+
+    /// Returns a Range which represents the part of this Range until another Range.
+    ///
+    /// This sounds very abstract. Imagine that there are two ranges, overlapping like so:
+    /// ```plain
+    /// < 1 ............ >
+    ///             < 2 .......... >
+    /// ^^^^^^^^^^^^
+    /// ```
+    ///
+    /// This function will simply return the underlined part.
+    ///
+    /// However, it returns [`None`] in the following cases:
+    /// ```plain
+    /// < 1 ............ >
+    ///                          < 2 .......... >
+    /// ```
+    /// ```plain
+    ///                        < 1 ............ >
+    /// < 2 .......... >
+    /// ```
+    /// ```plain
+    ///          < 1 ............ >
+    /// < 2 .......... >
+    /// ```
+    ///
+    /// # Arguments
+    /// - `other`: Some other Range that represents the second, overlapping range.
+    ///
+    /// # Returns
+    /// A new Range that represents the relative complement of `self` with respect to `other`.
+    ///
+    /// If the two ranges are not overlapping at all, or the start of 2 precedes 1, [`None`] is returned.
+    #[inline]
+    pub fn relative_complement(&self, other: &Range) -> Option<Range> {
+        // Let's just match all cases for clarity's sake.
+        match (self.inner, other.inner) {
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if lstart <= rstart {
+                    Some(Range::bounded(lstart, rstart))
+                } else {
+                    // `self` is after `other`
+                    None
+                }
+            },
+            (RangeInner::Onwards(start), RangeInner::Until(_) | RangeInner::Full) => {
+                // Return empty is the starts overlap (starts at 0). Otherwise, `self` is always
+                // after `other`
+                if start == 0 { Some(Range::empty()) } else { None }
+            },
+
+            (RangeInner::Bounded(lstart, end), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if lstart <= rstart && rstart < end {
+                    Some(Range::bounded(lstart, rstart))
+                } else {
+                    // `self` is after `other`, or `other` is beyond `self`'s end
+                    None
+                }
+            },
+            (RangeInner::Bounded(start, _), RangeInner::Until(_) | RangeInner::Full) => {
+                // Return empty is the starts overlap (starts at 0). Otherwise, `self` is always
+                // after `other`
+                if start == 0 { Some(Range::empty()) } else { None }
+            },
+
+            (RangeInner::Until(end), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if rstart < end {
+                    Some(Range::until(rstart))
+                } else {
+                    // `other` is beyond `self`'s end
+                    None
+                }
+            },
+            (RangeInner::Until(_), RangeInner::Until(_) | RangeInner::Full) => {
+                // Always empty, because their starts collide
+                Some(Range::empty())
+            },
+
+            (RangeInner::Full, RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                // Cannot go out of `self`'s end; always something!
+                Some(Range::until(rstart))
+            },
+            (RangeInner::Full, RangeInner::Until(_) | RangeInner::Full) => {
+                // They have the same start; always empty
+                Some(Range::empty())
+            },
+
+            // Empty catch-alls
+            (RangeInner::Empty, _) | (_, RangeInner::Empty) => None,
         }
     }
 

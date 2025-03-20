@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:05:08
 //  Last edited:
-//    19 Mar 2025, 14:58:53
+//    20 Mar 2025, 11:33:25
 //  Auto updated?
 //    Yes
 //
@@ -80,8 +80,21 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
+/// // Some error type. Note that it has to be `ParseError`-compatible, either by itself
+/// // (implements `Spanning`) or through `SpanningError`.
 /// #[derive(Debug, PartialEq)]
 /// struct Hidden;
+/// impl std::fmt::Display for Hidden {
+///     /* ... */
+/// #   #[inline]
+/// #   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "REDACTED") }
+/// }
+/// impl std::error::Error for Hidden {}
+/// impl<S: Clone> ast_toolkit_span::Spanning<S> for Hidden {
+///     /* ... */
+/// #   fn span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
+/// #   fn into_span(self) -> Span<S> { unreachable!() }
+/// }
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");

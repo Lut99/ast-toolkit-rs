@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:51:07
 //  Last edited:
-//    18 Mar 2025, 10:51:20
+//    20 Mar 2025, 12:04:38
 //  Auto updated?
 //    Yes
 //
@@ -212,9 +212,19 @@ impl<S: Spannable> Span<S> {
     /// see [`Span::value()`].
     ///
     /// # Returns
-    /// The internal source wrapped by this Span.
+    /// A reference to the internal source wrapped by this Span.
     #[inline]
     pub const fn source(&self) -> &S { &self.source }
+
+    /// Returns the source behind this Spannable.
+    ///
+    /// Note that this is always the **whole** source. For the **spanned** slice of the source,
+    /// see [`Span::value()`].
+    ///
+    /// # Returns
+    /// The internal source wrapped by this Span.
+    #[inline]
+    pub fn into_source(self) -> S { self.source }
 
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:56:52
 //  Last edited:
-//    18 Jan 2025, 17:51:27
+//    20 Mar 2025, 12:14:48
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -50,16 +51,14 @@ impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F>
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`opt()`]-combinator.
-pub struct Opt<C, F, S> {
+pub struct Opt<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Opt<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Opt<C, S>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Option<C::Output>;
@@ -70,7 +69,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input.clone()) {
             Ok((rem, res)) => Ok((rem, Some(res))),
             Err(SnackError::Recoverable(_)) => Ok((input, None)),
@@ -108,19 +107,18 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = opt(tag("Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), Some(span1.slice(..5)))));
 /// assert_eq!(comb.parse(span2), Ok((span2, None)));
 /// ```
 #[inline]
-pub const fn opt<'t, C, F, S>(comb: C) -> Opt<C, F, S>
+pub const fn opt<'t, C, S>(comb: C) -> Opt<C, S>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Opt { comb, _f: PhantomData, _s: PhantomData }
+    Opt { comb, _s: PhantomData }
 }

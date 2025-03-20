@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:33:56
 //  Last edited:
-//    18 Jan 2025, 17:50:40
+//    20 Mar 2025, 11:37:52
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -44,11 +45,13 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`nop()`]-combinator (insofar there is any).
-pub struct Nop<F, S> {
-    _f: PhantomData<F>,
+pub struct Nop<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
+impl<S> Combinator<'static, S> for Nop<S>
+where
+    S: Clone + Parsable,
+{
     type ExpectsFormatter = ExpectsFormatter;
     type Output = ();
     type Recoverable = Infallible;
@@ -58,7 +61,7 @@ impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> { Ok((input, ())) }
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> { Ok((input, ())) }
 }
 
 
@@ -83,12 +86,12 @@ impl<F, S> Combinator<'static, F, S> for Nop<F, S> {
 /// use ast_toolkit_snack::combinator::nop;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = nop();
 /// assert_eq!(comb.parse(span1), Ok((span1, ())));
 /// assert_eq!(comb.parse(span2), Ok((span2, ())));
 /// ```
 #[inline]
-pub const fn nop<F, S>() -> Nop<F, S> { Nop { _f: PhantomData, _s: PhantomData } }
+pub const fn nop<S>() -> Nop<S> { Nop { _s: PhantomData } }

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    19 Mar 2025, 10:54:25
+//    20 Mar 2025, 12:09:03
 //  Auto updated?
 //    Yes
 //
@@ -24,12 +24,12 @@ pub mod bytes;
 // pub mod c;
 pub mod combinator;
 // pub mod debug;
-// pub mod error;
+pub mod error;
 // pub mod multi;
 // #[cfg(feature = "derive")]
 // pub mod procedural;
 pub mod result;
-// pub mod sequence;
+pub mod sequence;
 pub mod span;
 pub mod utf8;
 

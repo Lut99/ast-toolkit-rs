@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:19:33
 //  Last edited:
-//    07 Mar 2025, 17:26:27
+//    20 Mar 2025, 12:15:33
 //  Auto updated?
 //    Yes
 //
@@ -18,20 +18,19 @@ use ast_toolkit_span::Span;
 
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`peek()`]-combinator.
-pub struct Peek<C, F, S> {
+pub struct Peek<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Peek<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Peek<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -42,7 +41,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Call the combinator with the input
         let (_, res): (_, C::Output) = self.comb.parse(input.clone())?;
         // Return with the original input, obfuscating anything was consumed.
@@ -76,7 +75,7 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
+/// let span1 = Span::new("Hello, world!");
 ///
 /// let mut comb = peek(tag("Hello"));
 /// assert_eq!(
@@ -86,11 +85,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn peek<'t, C, F, S>(comb: C) -> Peek<C, F, S>
+pub const fn peek<'t, C, S>(comb: C) -> Peek<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Peek { comb, _f: PhantomData, _s: PhantomData }
+    Peek { comb, _s: PhantomData }
 }

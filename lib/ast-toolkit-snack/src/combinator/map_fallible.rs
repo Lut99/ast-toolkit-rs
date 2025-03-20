@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    19 Mar 2025, 10:50:33
+//    20 Mar 2025, 11:37:18
 //  Auto updated?
 //    Yes
 //
@@ -155,7 +155,7 @@ where
 ///
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::map_fallible;
-/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::result::{SnackError, SpanningError};
 /// use ast_toolkit_snack::utf8::complete::digit1;
 /// use ast_toolkit_span::Span;
 ///
@@ -164,8 +164,9 @@ where
 /// let span3 = Span::new("256");
 ///
 /// let mut comb = map_fallible(digit1(), |parsed| {
-///     u8::from_str_radix(parsed.value(), 10)
-///         .map_err(|err| SnackError::<Infallible, ParseIntError, _, _>::Fatal(err))
+///     u8::from_str_radix(parsed.value(), 10).map_err(|err| {
+///         SnackError::<Infallible, _, _>::Fatal(SpanningError { err, span: parsed })
+///     })
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
@@ -177,7 +178,10 @@ where
 /// );
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     Err(SnackError::Fatal(map_fallible::Error::Map(ParseIntError { .. })))
+///     Err(SnackError::Fatal(map_fallible::Error::Map(SpanningError {
+///         err:  ParseIntError { .. },
+///         span: span3,
+///     })))
 /// ));
 /// ```
 #[inline]
