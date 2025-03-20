@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    18 Mar 2025, 10:58:32
+//    20 Mar 2025, 15:55:15
 //  Auto updated?
 //    Yes
 //
@@ -153,6 +153,7 @@ where
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 /// let span3 = Span::new("Hell");
+/// let span4 = Span::new("");
 ///
 /// let mut comb = tag("Hello");
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
@@ -163,6 +164,10 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span3.slice(..) }))
+/// );
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span4.slice(..) }))
 /// );
 /// ```
 #[inline]

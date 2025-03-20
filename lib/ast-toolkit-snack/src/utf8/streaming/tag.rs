@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    19 Mar 2025, 09:46:35
+//    20 Mar 2025, 16:34:39
 //  Auto updated?
 //    Yes
 //
@@ -105,6 +105,7 @@ where
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 /// let span3 = Span::new("Hell");
+/// let span4 = Span::new("");
 ///
 /// let mut comb = tag("Hello");
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
@@ -116,6 +117,10 @@ where
 ///     comb.parse(span3),
 ///     Err(SnackError::NotEnough { needed: Some(1), span: span3.slice(4..) })
 /// );
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::NotEnough { needed: Some(5), span: span4.slice(0..) })
+/// );
 /// ```
 #[inline]
 pub const fn tag<'t, S>(tag: &'t str) -> Tag<'t, S>
@@ -123,4 +128,22 @@ where
     S: Clone + Utf8Parsable,
 {
     Tag { tag, _s: PhantomData }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_utf8_streaming_tag() {
+        let span = Span::new("hellohello");
+        let (rem, _) = tag("hello").parse(span).unwrap_or_else(|err| panic!("Unexpected err: {err}"));
+        let (rem, _) = tag("hello").parse(rem).unwrap_or_else(|err| panic!("Unexpected err: {err}"));
+        assert_eq!(tag("hello").parse(rem), Err(SnackError::NotEnough { needed: Some(5), span: rem }));
+    }
 }

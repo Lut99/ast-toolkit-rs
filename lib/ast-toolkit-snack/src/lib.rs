@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    20 Mar 2025, 12:52:34
+//    20 Mar 2025, 15:48:13
 //  Auto updated?
 //    Yes
 //
@@ -25,7 +25,7 @@ pub mod c;
 pub mod combinator;
 pub mod debug;
 pub mod error;
-// pub mod multi;
+pub mod multi;
 // #[cfg(feature = "derive")]
 // pub mod procedural;
 pub mod result;
