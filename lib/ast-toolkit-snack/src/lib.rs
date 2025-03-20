@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    20 Mar 2025, 12:09:03
+//    20 Mar 2025, 12:52:34
 //  Auto updated?
 //    Yes
 //
@@ -20,10 +20,10 @@
 // Declare submodules
 pub mod branch;
 pub mod bytes;
-// #[cfg(feature = "c")]
-// pub mod c;
+#[cfg(feature = "c")]
+pub mod c;
 pub mod combinator;
-// pub mod debug;
+pub mod debug;
 pub mod error;
 // pub mod multi;
 // #[cfg(feature = "derive")]

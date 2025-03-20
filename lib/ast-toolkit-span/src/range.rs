@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:58:17
 //  Last edited:
-//    20 Mar 2025, 12:03:31
+//    20 Mar 2025, 13:19:09
 //  Auto updated?
 //    Yes
 //
@@ -318,6 +318,43 @@ impl Range {
 
             // Empty catch-alls
             (RangeInner::Empty, _) | (_, RangeInner::Empty) => None,
+        }
+    }
+
+    /// Joins two Ranges.
+    ///
+    /// The result will encompass both spans; e.g.,
+    /// ```plain
+    /// < 1 ............ >
+    ///                          < 2 .......... >
+    /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /// ```
+    /// (The underlined is what is returned)
+    ///
+    /// # Arguments
+    /// - `other`: Some other Range to join this one with.
+    ///
+    /// # Returns
+    /// A new Range that is the union of the given two ranges.
+    #[inline]
+    pub fn join(&self, other: &Range) -> Range {
+        match (self.inner, other.inner) {
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, _)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Onwards(_), RangeInner::Until(_)) => Range::full(),
+            (RangeInner::Bounded(lstart, _), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
+                Range::bounded(std::cmp::min(lstart, rstart), std::cmp::max(lend, rend))
+            },
+            (RangeInner::Bounded(_, lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Until(_), RangeInner::Onwards(_)) => Range::full(),
+            (RangeInner::Until(lend), RangeInner::Bounded(_, rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
+
+            // Full- and empty catch-alls
+            (RangeInner::Full, _) | (_, RangeInner::Full) => Range::full(),
+            (RangeInner::Empty, _) => *other,
+            (_, RangeInner::Empty) => *self,
         }
     }
 

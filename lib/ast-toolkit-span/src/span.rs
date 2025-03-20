@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:51:07
 //  Last edited:
-//    20 Mar 2025, 12:04:38
+//    20 Mar 2025, 13:20:25
 //  Auto updated?
 //    Yes
 //
@@ -178,6 +178,24 @@ impl<S: Clone + Spannable> Span<S> {
         slice.shrink(range);
         slice
     }
+
+    /// Creates a Span that encompass this plus the given one.
+    ///
+    /// This is like [`Span::extend()`], but not in-place.
+    ///
+    /// # Arguments
+    /// - `other`: The [`Span`] to encompass.
+    ///
+    /// # Returns
+    /// A new Span that encompasses both `self` and `other`.
+    ///
+    /// If the `other` Span is not spanning the same source, this function returns [`None`].
+    #[inline]
+    pub fn join(&self, other: &Self) -> Option<Self> {
+        let mut span = self.clone();
+        span.extend(other)?;
+        Some(span)
+    }
 }
 impl<S: Spannable> Span<S> {
     /// Shrinks this the spanned area by this span.
@@ -193,6 +211,27 @@ impl<S: Spannable> Span<S> {
     pub fn shrink(&mut self, range: impl Into<Range>) -> &mut Self {
         self.range = self.range.slice(range);
         self
+    }
+
+    /// Extends this Span to encompass itself plus the given one.
+    ///
+    /// This is like [`Span::join()`], but in-place.
+    ///
+    /// # Arguments
+    /// - `other`: The [`Span`] to encompass.
+    ///
+    /// # Returns
+    /// A mutable reference to Self for chaining.
+    ///
+    /// If the `other` Span is not spanning the same source, this function returns [`None`].
+    #[inline]
+    pub fn extend(&mut self, other: &Self) -> Option<&mut Self> {
+        if self.source_id() == other.source_id() {
+            self.range = self.range.join(&other.range);
+            Some(self)
+        } else {
+            None
+        }
     }
 
 
