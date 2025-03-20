@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    13 Mar 2025, 21:33:17
+//    20 Mar 2025, 13:24:38
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,6 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 pub use super::super::complete::escaped::{EscapedString, ExpectsFormatter, Fatal, Recoverable};
