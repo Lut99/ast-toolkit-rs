@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:15:43
 //  Last edited:
-//    12 Mar 2025, 13:33:50
+//    24 Mar 2025, 11:55:51
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@ use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::remember;
 pub use ast_toolkit_snack::multi::separated_most0::{ExpectsFormatter, Fatal};
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
+use ast_toolkit_snack::span::Parsable;
 use ast_toolkit_span::Span;
 
 use crate::Punctuated;
@@ -26,32 +27,30 @@ use crate::Punctuated;
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`punctuated_most0()`]-combinator.
-pub struct PunctuatedMost0<C1, C2, F, S> {
+pub struct PunctuatedMost0<C1, C2, S> {
     comb: C1,
     sep:  C2,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, F, S> Combinator<'t, F, S> for PunctuatedMost0<C1, C2, F, S>
+impl<'t, C1, C2, S> Combinator<'t, S> for PunctuatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C1: Combinator<'t, S>,
+    C2: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Punctuated<C1::Output, C2::Output>;
     type Recoverable = Infallible;
-    type Fatal = Fatal<C1::Fatal, C2::Fatal, F, S>;
+    type Fatal = Fatal<C1::Fatal, C2::Fatal, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects(), sep: self.sep.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Parse the first element
         let mut res: Punctuated<C1::Output, C2::Output> = Punctuated::new();
-        let mut rem: Span<F, S> = match self.comb.parse(input.clone()) {
+        let mut rem: Span<S> = match self.comb.parse(input.clone()) {
             Ok((rem, elem)) => {
                 if res.len() >= res.capacity() {
                     res.reserve(1 + res.len())
@@ -67,7 +66,7 @@ where
         // Then parse as long as there are commas
         loop {
             // Try the comma first
-            let (sep, span): (C2::Output, Span<F, S>) = match remember(&mut self.sep).parse(rem.clone()) {
+            let (sep, span): (C2::Output, Span<S>) = match remember(&mut self.sep).parse(rem.clone()) {
                 Ok((rem2, sep)) => {
                     rem = rem2;
                     sep
@@ -136,11 +135,11 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hello,hello,hellogoodbye");
-/// let span2 = Span::new("<example>", "hellogoodbye");
-/// let span3 = Span::new("<example>", "goodbye");
-/// let span4 = Span::new("<example>", ",hello");
-/// let span5 = Span::new("<example>", "hello,helgoodbye");
+/// let span1 = Span::new("hello,hello,hellogoodbye");
+/// let span2 = Span::new("hellogoodbye");
+/// let span3 = Span::new("goodbye");
+/// let span4 = Span::new(",hello");
+/// let span5 = Span::new("hello,helgoodbye");
 ///
 /// let mut comb = punctuated_most0(tag("hello"), tag(","));
 /// assert_eq!(
@@ -172,9 +171,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hello,hello");
-/// let span2 = Span::new("<example>", "hello,hel");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("hello,hello");
+/// let span2 = Span::new("hello,hel");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = punctuated_most0(tag("hello"), tag(","));
 /// assert_eq!(
@@ -185,15 +184,17 @@ where
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(9..) })
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::NotEnough { needed: Some(5), span: span3.slice(0..) })
+/// );
 /// ```
 #[inline]
-pub const fn punctuated_most0<'t, C1, C2, F, S>(comb: C1, sep: C2) -> PunctuatedMost0<C1, C2, F, S>
+pub const fn punctuated_most0<'t, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C1: Combinator<'t, S>,
+    C2: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    PunctuatedMost0 { comb, sep, _f: PhantomData, _s: PhantomData }
+    PunctuatedMost0 { comb, sep, _s: PhantomData }
 }

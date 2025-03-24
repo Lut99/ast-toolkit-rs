@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    20 Mar 2025, 15:48:13
+//    24 Mar 2025, 11:53:59
 //  Auto updated?
 //    Yes
 //
@@ -26,8 +26,6 @@ pub mod combinator;
 pub mod debug;
 pub mod error;
 pub mod multi;
-// #[cfg(feature = "derive")]
-// pub mod procedural;
 pub mod result;
 pub mod sequence;
 pub mod span;
@@ -39,8 +37,6 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 // Re-exports
-#[cfg(feature = "derive")]
-pub use ast_toolkit_snack_derive::comb;
 pub use ast_toolkit_span::{Span, Spanning};
 use span::Parsable;
 

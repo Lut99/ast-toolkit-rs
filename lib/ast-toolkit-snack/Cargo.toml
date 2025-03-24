@@ -19,7 +19,7 @@ better-derive = { git = "https://github.com/Lut99/better-derive-rs" }
 paste = "1.0"
 unicode-segmentation = "1.11"
 
-ast-toolkit-snack-derive = { path = "../../derive/ast-toolkit-snack-derive", optional = true }
+# ast-toolkit-snack-derive = { path = "../../derive/ast-toolkit-snack-derive", optional = true }
 
 
 [dev-dependencies]
@@ -31,5 +31,5 @@ default = ["extra"]
 extra = ["c"]
 c = []
 
-derive = ["dep:ast-toolkit-snack-derive"]
+# derive = ["dep:ast-toolkit-snack-derive"]
 streaming = []
