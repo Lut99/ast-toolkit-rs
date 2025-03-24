@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    20 Mar 2025, 15:49:26
+//    24 Mar 2025, 11:44:06
 //  Auto updated?
 //    Yes
 //
@@ -162,7 +162,10 @@ where
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(8..) })
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::NotEnough { needed: Some(5), span: span3.slice(0..) })
+/// );
 /// ```
 #[inline]
 pub const fn most0<'t, C, S>(comb: C) -> Most0<C, S>

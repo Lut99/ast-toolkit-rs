@@ -4,7 +4,7 @@
 //  Created:
 //    18 Jan 2025, 18:56:39
 //  Last edited:
-//    07 Mar 2025, 14:23:22
+//    24 Mar 2025, 11:48:20
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements the [`separated_most0()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
@@ -22,21 +23,22 @@ use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the fatal errors thrown by [`SeparatedMost0`].
 #[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<E1, E2, F, S> {
+pub enum Fatal<E1, E2, S> {
     /// The element-combinator failed fatally.
     Comb(E1),
     /// The separator-combinator failed fatally.
     Separator(E2),
     /// Lint that will explain the user they added an incorrect trailing separator.
-    TrailingSeparator { span: Span<F, S> },
+    TrailingSeparator { span: Span<S> },
 }
-impl<E1: Display, E2: Display, F, S> Display for Fatal<E1, E2, F, S> {
+impl<E1: Display, E2: Display, S> Display for Fatal<E1, E2, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -46,7 +48,7 @@ impl<E1: Display, E2: Display, F, S> Display for Fatal<E1, E2, F, S> {
         }
     }
 }
-impl<E1: error::Error, E2: error::Error, F, S> error::Error for Fatal<E1, E2, F, S> {
+impl<E1: error::Error, E2: error::Error, S: Parsable> error::Error for Fatal<E1, E2, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
@@ -56,18 +58,18 @@ impl<E1: error::Error, E2: error::Error, F, S> error::Error for Fatal<E1, E2, F,
         }
     }
 }
-impl<E1: Spanning<F, S>, E2: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Fatal<E1, E2, F, S> {
+impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Fatal<E1, E2, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
             Self::Separator(err) => err.span(),
-            Self::TrailingSeparator { span } => span.clone(),
+            Self::TrailingSeparator { span } => Cow::Borrowed(span),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Separator(err) => err.into_span(),
@@ -112,32 +114,30 @@ impl<O1: crate::ExpectsFormatter, O2: crate::ExpectsFormatter> crate::ExpectsFor
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`separated_most0()`]-combinator.
-pub struct SeparatedMost0<C1, C2, F, S> {
+pub struct SeparatedMost0<C1, C2, S> {
     comb: C1,
     sep:  C2,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, F, S> Combinator<'t, F, S> for SeparatedMost0<C1, C2, F, S>
+impl<'t, C1, C2, S> Combinator<'t, S> for SeparatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C1: Combinator<'t, S>,
+    C2: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
     type Recoverable = Infallible;
-    type Fatal = Fatal<C1::Fatal, C2::Fatal, F, S>;
+    type Fatal = Fatal<C1::Fatal, C2::Fatal, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects(), sep: self.sep.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Parse the first element
         let mut res: Vec<C1::Output> = Vec::new();
-        let mut rem: Span<F, S> = match self.comb.parse(input.clone()) {
+        let mut rem: Span<S> = match self.comb.parse(input.clone()) {
             Ok((rem, elem)) => {
                 if res.len() >= res.capacity() {
                     res.reserve(1 + res.len())
@@ -153,7 +153,7 @@ where
         // Then parse as long as there are commas
         loop {
             // Try the comma first
-            let sep: Span<F, S> = match recognize(&mut self.sep).parse(rem.clone()) {
+            let sep: Span<S> = match recognize(&mut self.sep).parse(rem.clone()) {
                 Ok((rem2, sep)) => {
                     rem = rem2;
                     sep
@@ -221,11 +221,11 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hello,hello,hellogoodbye");
-/// let span2 = Span::new("<example>", "hellogoodbye");
-/// let span3 = Span::new("<example>", "goodbye");
-/// let span4 = Span::new("<example>", ",hello");
-/// let span5 = Span::new("<example>", "hello,helgoodbye");
+/// let span1 = Span::new("hello,hello,hellogoodbye");
+/// let span2 = Span::new("hellogoodbye");
+/// let span3 = Span::new("goodbye");
+/// let span4 = Span::new(",hello");
+/// let span5 = Span::new("hello,helgoodbye");
 ///
 /// let mut comb = separated_most0(tag("hello"), tag(","));
 /// assert_eq!(
@@ -251,9 +251,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hello,hello");
-/// let span2 = Span::new("<example>", "hello,hel");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("hello,hello");
+/// let span2 = Span::new("hello,hel");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = separated_most0(tag("hello"), tag(","));
 /// assert_eq!(
@@ -264,15 +264,17 @@ where
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(9..) })
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::NotEnough { needed: Some(5), span: span3.slice(0..) })
+/// );
 /// ```
 #[inline]
-pub const fn separated_most0<'t, C1, C2, F, S>(comb: C1, sep: C2) -> SeparatedMost0<C1, C2, F, S>
+pub const fn separated_most0<'t, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C1: Combinator<'t, S>,
+    C2: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    SeparatedMost0 { comb, sep, _f: PhantomData, _s: PhantomData }
+    SeparatedMost0 { comb, sep, _s: PhantomData }
 }

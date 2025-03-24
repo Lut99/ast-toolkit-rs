@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:58:17
 //  Last edited:
-//    20 Mar 2025, 13:19:09
+//    24 Mar 2025, 11:42:13
 //  Auto updated?
 //    Yes
 //
@@ -189,7 +189,7 @@ impl Range {
     #[inline]
     pub fn slice(&self, range: impl Into<Self>) -> Self {
         let range: Self = range.into();
-        match (self.inner, range.inner) {
+        let res = match (self.inner, range.inner) {
             // Bounded cases
             (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range { inner: RangeInner::Onwards(lstart + rstart) },
             (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, end)) => {
@@ -227,7 +227,8 @@ impl Range {
             (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
             // Any empty resolves to empty
             (RangeInner::Empty, _) | (_, RangeInner::Empty) => Self { inner: RangeInner::Empty },
-        }
+        };
+        res
     }
 
     /// Returns a Range which represents the part of this Range until another Range.
@@ -386,7 +387,7 @@ impl Range {
         match self.inner {
             RangeInner::Bounded(start, _) | RangeInner::Onwards(start) => {
                 if len > 0 {
-                    Some(std::cmp::min(start, len - 1))
+                    Some(std::cmp::min(start, len))
                 } else {
                     None
                 }
