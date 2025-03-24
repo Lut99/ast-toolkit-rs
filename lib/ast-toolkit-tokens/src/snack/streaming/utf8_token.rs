@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:21
 //  Last edited:
-//    13 Mar 2025, 22:06:33
+//    24 Mar 2025, 12:22:42
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::recognize;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
-use ast_toolkit_snack::span::MatchBytes;
+use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::streaming::tag;
 use ast_toolkit_span::{Span, Spanning};
 
@@ -26,33 +26,31 @@ pub use super::super::complete::utf8_token::{ExpectsFormatter, Recoverable};
 
 /***** COMBINATORS *****/
 /// Implements the [`utf8_token()`]-combinator.
-pub struct Utf8Token<T, C, F, S> {
+pub struct Utf8Token<T, C, S> {
     /// The token type to parse.
     _t:  PhantomData<T>,
     /// The combinator used to parse the end-of-token at the end.
     eot: C,
-    _f:  PhantomData<F>,
     _s:  PhantomData<S>,
 }
-impl<'t, T, C, F, S> Combinator<'t, F, S> for Utf8Token<T, C, F, S>
+impl<'t, T, C, S> Combinator<'t, S> for Utf8Token<T, C, S>
 where
-    T: crate::Utf8Token<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: crate::Utf8Token<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = T;
-    type Recoverable = Recoverable<C::Recoverable, F, S>;
+    type Recoverable = Recoverable<C::Recoverable, S>;
     type Fatal = C::Fatal;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: T::TOKEN } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Parse the keyword first
-        let (rem, token): (Span<F, S>, T) = match tag(T::TOKEN).parse(input) {
+        let (rem, token): (Span<S>, T) = match tag(T::TOKEN).parse(input) {
             Ok((rem, res)) => (rem, T::from(res)),
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Keyword { what: T::TOKEN, span: err.into_span() })),
             Err(SnackError::Fatal(_)) => unreachable!(),
@@ -110,12 +108,12 @@ where
 /// utf8_token_snack!(Foo);
 ///
 /// // Let's test some inputs
-/// let span1 = Span::new("<example>", ".,");
-/// let span2 = Span::new("<example>", "foo");
-/// let span3 = Span::new("<example>", "foobar");
-/// let span4 = Span::new("<example>", "fo");
+/// let span1 = Span::new(".,");
+/// let span2 = Span::new("foo");
+/// let span3 = Span::new("foobar");
+/// let span4 = Span::new("fo");
 ///
-/// let mut comb1 = utf8_token::<Dot<_, _>, _, _, _>(nop());
+/// let mut comb1 = utf8_token::<Dot<_>, _, _>(nop());
 /// assert_eq!(comb1.parse(span1), Ok((span1.slice(1..), Dot { span: span1.slice(..1) })));
 /// assert_eq!(
 ///     comb1.parse(span2),
@@ -146,7 +144,7 @@ where
 ///         what: "foo",
 ///         err:  not::Recoverable {
 ///             fmt:  not::ExpectsFormatter { fmt: tag::ExpectsFormatter { tag: "bar" } },
-///             span: span3.slice(3..),
+///             span: span3.slice(3..6),
 ///         },
 ///     }))
 /// );
@@ -156,12 +154,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_token<'t, T, C, F, S>(comb: C) -> Utf8Token<T, C, F, S>
+pub const fn utf8_token<'t, T, C, S>(comb: C) -> Utf8Token<T, C, S>
 where
-    T: crate::Utf8Token<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: crate::Utf8Token<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
-    Utf8Token { _t: PhantomData, eot: comb, _f: PhantomData, _s: PhantomData }
+    Utf8Token { _t: PhantomData, eot: comb, _s: PhantomData }
 }

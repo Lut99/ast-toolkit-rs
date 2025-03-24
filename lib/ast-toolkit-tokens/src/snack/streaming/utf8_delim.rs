@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:24
 //  Last edited:
-//    13 Mar 2025, 22:06:17
+//    24 Mar 2025, 12:17:22
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
-use ast_toolkit_snack::span::MatchBytes;
+use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::streaming::tag;
 use ast_toolkit_span::{Span, Spanning};
 
@@ -26,33 +26,31 @@ use crate::Utf8Delimiter;
 
 /***** COMBINATORS *****/
 /// Implements the [`utf8_delim()`]-combinator.
-pub struct Utf8Delim<T, C, F, S> {
+pub struct Utf8Delim<T, C, S> {
     /// The type of token to parse.
     _t:   PhantomData<T>,
     /// The combinator that parses in between the parenthesis.
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, T, C, F, S> Combinator<'t, F, S> for Utf8Delim<T, C, F, S>
+impl<'t, T, C, S> Combinator<'t, S> for Utf8Delim<T, C, S>
 where
-    T: Utf8Delimiter<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: Utf8Delimiter<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = (C::Output, T);
-    type Recoverable = Recoverable<C::Recoverable, F, S>;
-    type Fatal = Fatal<C::Fatal, F, S>;
+    type Recoverable = Recoverable<C::Recoverable, S>;
+    type Fatal = Fatal<C::Fatal, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { left: T::OPEN_TOKEN, inner: self.comb.expects(), right: T::CLOSE_TOKEN } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Attempt to parse the opening delimiter
-        let (rem, open): (Span<F, S>, Span<F, S>) = match tag(T::OPEN_TOKEN).parse(input) {
+        let (rem, open): (Span<S>, Span<S>) = match tag(T::OPEN_TOKEN).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
                 return Err(SnackError::Recoverable(Recoverable::OpenKeyword { what: T::OPEN_TOKEN, span: err.into_span() }));
@@ -62,7 +60,7 @@ where
         };
 
         // Attempt to parse the middle bit
-        let (rem, inner): (Span<F, S>, C::Output) = match self.comb.parse(rem) {
+        let (rem, inner): (Span<S>, C::Output) = match self.comb.parse(rem) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Inner { err })),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Inner { err })),
@@ -119,12 +117,12 @@ where
 /// utf8_delim_snack!(Parens);
 ///
 /// // Let's test some inputs
-/// let span1 = Span::new("<example>", "(foo)");
-/// let span2 = Span::new("<example>", "(bar)");
-/// let span3 = Span::new("<example>", "foo");
-/// let span4 = Span::new("<example>", "(foo");
+/// let span1 = Span::new("(foo)");
+/// let span2 = Span::new("(bar)");
+/// let span3 = Span::new("foo");
+/// let span4 = Span::new("(foo");
 ///
-/// let mut comb1 = utf8_delim::<Parens<_, _>, _, _, _>(tag("foo"));
+/// let mut comb1 = utf8_delim::<Parens<_>, _, _>(tag("foo"));
 /// assert_eq!(
 ///     comb1.parse(span1),
 ///     Ok((
@@ -154,12 +152,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_delim<'t, T, C, F, S>(comb: C) -> Utf8Delim<T, C, F, S>
+pub const fn utf8_delim<'t, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
 where
-    T: Utf8Delimiter<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: Utf8Delimiter<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
-    Utf8Delim { _t: PhantomData, comb, _f: PhantomData, _s: PhantomData }
+    Utf8Delim { _t: PhantomData, comb, _s: PhantomData }
 }
