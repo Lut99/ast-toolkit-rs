@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:05:08
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    20 Mar 2025, 11:33:25
 //  Auto updated?
 //    Yes
 //
@@ -14,24 +14,26 @@
 
 use std::marker::PhantomData;
 
-use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
+use crate::{Combinator, ParseError};
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`map_recoverable()`]-combinator.
-pub struct MapRecoverable<C, P, F, S> {
+pub struct MapRecoverable<C, P, S> {
     /// The nested combinator who's result we're mapping.
     comb: C,
     /// The predicate that does the mapping.
     pred: P,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, E1, E2, F, S> Combinator<'t, F, S> for MapRecoverable<C, P, F, S>
+impl<'t, C, P, E1, E2, S> Combinator<'t, S> for MapRecoverable<C, P, S>
 where
-    C: Combinator<'t, F, S, Recoverable = E1>,
+    C: Combinator<'t, S, Recoverable = E1>,
     P: FnMut(E1) -> E2,
+    E2: ParseError<S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -42,7 +44,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: ast_toolkit_span::Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input) {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable((self.pred)(err))),
@@ -78,21 +80,36 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
+/// // Some error type. Note that it has to be `ParseError`-compatible, either by itself
+/// // (implements `Spanning`) or through `SpanningError`.
 /// #[derive(Debug, PartialEq)]
 /// struct Hidden;
+/// impl std::fmt::Display for Hidden {
+///     /* ... */
+/// #   #[inline]
+/// #   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "REDACTED") }
+/// }
+/// impl std::error::Error for Hidden {}
+/// impl<S: Clone> ast_toolkit_span::Spanning<S> for Hidden {
+///     /* ... */
+/// #   fn span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
+/// #   fn into_span(self) -> Span<S> { unreachable!() }
+/// }
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = map_recoverable(tag("Hello"), |_err| Hidden);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(Hidden)));
 /// ```
 #[inline]
-pub const fn map_recoverable<'t, C, P, E1, E2, F, S>(comb: C, pred: P) -> MapRecoverable<C, P, F, S>
+pub const fn map_recoverable<'t, C, P, E1, E2, S>(comb: C, pred: P) -> MapRecoverable<C, P, S>
 where
-    C: Combinator<'t, F, S, Recoverable = E1>,
+    C: Combinator<'t, S, Recoverable = E1>,
     P: FnMut(E1) -> E2,
+    E2: ParseError<S>,
+    S: Clone + Parsable,
 {
-    MapRecoverable { comb, pred, _f: PhantomData, _s: PhantomData }
+    MapRecoverable { comb, pred, _s: PhantomData }
 }

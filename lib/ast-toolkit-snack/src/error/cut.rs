@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:34:30
 //  Last edited:
-//    18 Jan 2025, 17:53:35
+//    20 Mar 2025, 11:35:40
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements the [`cut()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
@@ -21,6 +22,7 @@ use ast_toolkit_span::{Span, Spanning};
 
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 
 
 /***** ERRORS *****/
@@ -50,9 +52,9 @@ impl<E1: Error, E2: Error> Error for Fatal<E1, E2> {
         }
     }
 }
-impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Fatal<E1, E2> {
+impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Fatal<E1, E2> {
     #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Recoverable(err) => err.span(),
             Self::Fatal(err) => err.span(),
@@ -60,7 +62,7 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Fatal<E1, 
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::Recoverable(err) => err.into_span(),
             Self::Fatal(err) => err.into_span(),
@@ -74,14 +76,14 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Fatal<E1, 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`cut()`]-operator.
-pub struct Cut<C, F, S> {
+pub struct Cut<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Cut<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Cut<C, S>
 where
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -92,7 +94,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input) {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(Fatal::Recoverable(err))),
@@ -134,8 +136,8 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = cut(tag("Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
@@ -143,14 +145,15 @@ where
 ///     comb.parse(span2),
 ///     Err(SnackError::Fatal(Fatal::Recoverable(tag::Recoverable {
 ///         tag:  "Hello",
-///         span: span2.slice(0..),
+///         span: span2.slice(..),
 ///     })))
 /// );
 /// ```
 #[inline]
-pub const fn cut<'t, C, F, S>(comb: C) -> Cut<C, F, S>
+pub const fn cut<'t, C, S>(comb: C) -> Cut<C, S>
 where
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Cut { comb, _f: PhantomData, _s: PhantomData }
+    Cut { comb, _s: PhantomData }
 }

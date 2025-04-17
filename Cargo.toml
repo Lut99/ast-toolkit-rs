@@ -19,7 +19,8 @@ ast-toolkit-tokens = { path = "./lib/ast-toolkit-tokens", optional = true }
 [features]
 default = []
 
-derive = ["ast-toolkit-railroad/derive", "ast-toolkit-snack/derive"]
+# derive = ["ast-toolkit-railroad/derive", "ast-toolkit-snack/derive"]
+derive = ["ast-toolkit-railroad/derive"]
 serde = ["ast-toolkit-span/serde"]
 
 diagnostic = ["dep:ast-toolkit-diagnostic"]
@@ -54,7 +55,7 @@ members = [
     # Derive
     # "derive/ast-toolkit-diagnostic-derive",
     "derive/ast-toolkit-railroad-derive",
-    "derive/ast-toolkit-snack-derive",
+    # "derive/ast-toolkit-snack-derive",
 ]
 
 

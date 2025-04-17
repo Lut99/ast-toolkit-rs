@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    19 Mar 2025, 10:44:24
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,7 @@
 //!   Implements the [`consume()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
@@ -20,19 +21,20 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the errors emitted by [`Consume`].
 #[derive(Debug, Eq, PartialEq)]
-pub enum Recoverable<E, F, S> {
+pub enum Recoverable<E, S> {
     /// The nested combinator failed.
     Comb(E),
     /// There was input left.
-    RemainingInput { span: Span<F, S> },
+    RemainingInput { span: Span<S> },
 }
-impl<E: Display, F, S> Display for Recoverable<E, F, S> {
+impl<E: Display, S> Display for Recoverable<E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -41,7 +43,7 @@ impl<E: Display, F, S> Display for Recoverable<E, F, S> {
         }
     }
 }
-impl<E: Error, F, S> Error for Recoverable<E, F, S> {
+impl<E: Error, S: Spannable> Error for Recoverable<E, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -50,17 +52,17 @@ impl<E: Error, F, S> Error for Recoverable<E, F, S> {
         }
     }
 }
-impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Recoverable<E, F, S> {
+impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
-            Self::RemainingInput { span } => span.clone(),
+            Self::RemainingInput { span } => Cow::Borrowed(span),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::Comb(err) => err.into_span(),
             Self::RemainingInput { span } => span,
@@ -100,28 +102,27 @@ impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F>
 /***** COMBINATORS *****/
 /// Actual implementation of the [`consume()`]-combinator.
 #[derive(Debug)]
-pub struct Consume<C, F, S> {
+pub struct Consume<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Consume<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Consume<C, S>
 where
-    C: Combinator<'t, F, S>,
-    S: Spannable,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = C::Output;
-    type Recoverable = Recoverable<C::Recoverable, F, S>;
+    type Recoverable = Recoverable<C::Recoverable, S>;
     type Fatal = C::Fatal;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // First, parse the combinator as usual
-        let (rem, res): (Span<F, S>, C::Output) = match self.comb.parse(input) {
+        let (rem, res): (Span<S>, C::Output) = match self.comb.parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Comb(err))),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
@@ -162,9 +163,9 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello");
-/// let span2 = Span::new("<example>", "Hello, world!");
-/// let span3 = Span::new("<example>", "Hey");
+/// let span1 = Span::new("Hello");
+/// let span2 = Span::new("Hello, world!");
+/// let span3 = Span::new("Hey");
 ///
 /// let mut comb = consume(tag("Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
@@ -183,10 +184,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn consume<'t, C, F, S>(comb: C) -> Consume<C, F, S>
+pub const fn consume<'t, C, S>(comb: C) -> Consume<C, S>
 where
-    C: Combinator<'t, F, S>,
-    S: Spannable,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Consume { comb, _f: PhantomData, _s: PhantomData }
+    Consume { comb, _s: PhantomData }
 }

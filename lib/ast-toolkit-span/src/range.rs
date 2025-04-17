@@ -1,319 +1,529 @@
-//  RANGE.rs
+//  RANGE 2.rs
 //    by Lut99
 //
 //  Created:
-//    06 May 2024, 16:17:54
+//    14 Mar 2025, 16:58:17
 //  Last edited:
-//    13 Jun 2024, 15:46:48
+//    24 Mar 2025, 11:42:13
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements a low-level range abstraction for Spans.
+//!   Implements [`Range`], an abstraction of a slice of an array.
 //
 
-use std::ops::{Bound, RangeBounds};
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 
-/***** HELPER MACROS *****/
-/// Converts from a [`RangeBound`] to a concrete bound.
-macro_rules! index_range_bound {
-    ($slice:expr, $range:expr) => {{
-        let slice = $slice;
-        match $range {
-            SpanRange::Closed(s, e) => &slice[s..e],
-            SpanRange::ClosedOpen(s) => &slice[s..],
-            SpanRange::OpenClosed(e) => &slice[..e],
-            SpanRange::Open => &slice[..],
-            SpanRange::Empty => &slice[0..0],
-        }
-    }};
+/***** HELPERS *****/
+/// Actual implementation of the [`Range`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum RangeInner {
+    // Fully bounded
+    /// Captures a specific slice of the source text.
+    ///
+    /// Given as `[inclusive, exclusive)`.
+    Bounded(usize, usize),
+
+    // Partially bounded
+    /// Captures everything of a source text from a specific point onwards.
+    ///
+    /// Given as `[inclusive, ...`.
+    Onwards(usize),
+    /// Captures everything of a source text up to a specific point.
+    ///
+    /// Given as `..., exclusive)`.
+    Until(usize),
+
+    // Special cases
+    /// Captures the WHOLE source (i.e., open on both ends).
+    Full,
+    /// Captures NO source.
+    Empty,
 }
-pub(crate) use index_range_bound;
-
-/// Converts from a [`SpanRange`] to two indices.
-macro_rules! resolve_range {
-    ($range:expr, $len:expr) => {{
-        let len: usize = $len;
-        match $range {
-            SpanRange::Closed(s, e) => {
-                if s >= len || e > len {
-                    panic!("Internal SpanRange::Closed({s}, {e}) is out-of-bounds for source string of {len} bytes");
-                }
-                if s < e { Some((s, e)) } else { None }
-            },
-            SpanRange::ClosedOpen(s) => {
-                if len > 0 && s >= len {
-                    panic!("Internal SpanRange::ClosedOpen({s}) is out-of-bounds for source string of {len} bytes");
-                }
-                if s < len { Some((s, len)) } else { None }
-            },
-            SpanRange::OpenClosed(e) => {
-                if len > 0 && e > len {
-                    panic!("Internal SpanRange::OpenClosed({e}) is out-of-bounds for source string of {len} bytes");
-                }
-                if e > 0 { Some((0, e)) } else { None }
-            },
-            SpanRange::Open => {
-                if len > 0 {
-                    Some((0, len))
-                } else {
-                    None
-                }
-            },
-            SpanRange::Empty => None,
-        }
-    }};
-}
-pub(crate) use resolve_range;
 
 
 
 
 
 /***** LIBRARY *****/
-/// Defines a range in some [`Span`]ned area.
+/// Implements an abstraction of a slice of an array.
 ///
-/// This range can either be open- or closed on either end. 'Open' means 'everything on that side', i.e., if the left is Open, it refers to the start of the source; and if the right is Open, it refers to the end.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize), serde(rename_all = "snake_case"))]
-pub enum SpanRange {
-    /// Closed on both ends.
-    ///
-    /// Given as: inclusive start, exclusive end.
-    Closed(usize, usize),
-    /// Closed on the left, open on the right.
-    ///
-    /// Left is inclusive.
-    ClosedOpen(usize),
-    /// Open on the left, closed on the right.
-    ///
-    /// Right is exclusive.
-    OpenClosed(usize),
-    /// Fully open on both ends.
-    ///
-    /// Spans the entire source.
-    Open,
-    /// Special case of a range that doesn't span anything.
-    Empty,
+/// This differs from [`std::ops::Range`] in the following ways:
+/// - It implements [`Copy`].
+/// - It can encode special states of the range, e.g. [`Empty`](Range::Empty) or open-ended ranges.
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct Range {
+    /// The actual range type, but hidden to avoid manual construction (and preserve properties).
+    inner: RangeInner,
 }
-impl SpanRange {
-    /// Creates a new SpanRange that is self further spanned by the given range.
-    ///
-    /// This means that the given range is assumed to be relative to this range, e.g.,
-    /// ```plain
-    /// (0..10).span(2..4) => 2..4
-    /// (5..10).span(2..4) => 7..9
-    /// (5..10).span(2..) => 7..10
-    /// ```
+
+// Constructors
+impl Default for Range {
+    #[inline]
+    fn default() -> Self { Self { inner: RangeInner::Full } }
+}
+impl Range {
+    /// Constructor for a Range that is bounded on both sides.
     ///
     /// # Arguments
-    /// - `span`: The other SpanRange that spans ourselves.
+    /// - `start`: The start point of the range in the larger slice.
+    /// - `end`: The end point of the range in the larger slice.
     ///
     /// # Returns
-    /// A new SpanRange that is `self` but spanned by `span`.
+    /// A new Range, which is either bounded by `start` and `end` or, when `start > end`, empty.
     #[inline]
-    pub fn span(&self, span: &Self) -> Self {
-        // Get the simplified range of self
-        let lhs: (Option<usize>, Option<usize>) = match self {
-            Self::Closed(s, e) => (Some(*s), Some(*e)),
-            Self::ClosedOpen(s) => (Some(*s), None),
-            Self::OpenClosed(e) => (None, Some(*e)),
-            Self::Open => (None, None),
-            // If we're empty, not a lot to span
-            Self::Empty => return Self::Empty,
-        };
-
-        // Get the simplified range of other
-        let rhs: (Option<usize>, Option<usize>) = match span {
-            Self::Closed(s, e) => (Some(*s), Some(*e)),
-            Self::ClosedOpen(s) => (Some(*s), None),
-            Self::OpenClosed(e) => (None, Some(*e)),
-            Self::Open => (None, None),
-            // If the other is empty, the span is quite empty too
-            Self::Empty => return Self::Empty,
-        };
-
-        // Attempt to combine the start & end separately
-        let start: Option<usize> = match (lhs.0, rhs.0) {
-            (Some(s1), Some(s2)) => Some(s1 + s2),
-            (Some(s1), None) => Some(s1),
-            (None, Some(s2)) => Some(s2),
-            (None, None) => None,
-        };
-        let end: Option<usize> = match (lhs.0, lhs.1, rhs.1) {
-            (Some(s), Some(_), Some(e2)) => Some(s + e2),
-            (Some(_), Some(e1), None) => Some(e1),
-            (Some(s), None, Some(e2)) => Some(s + e2),
-            (Some(_), None, None) => None,
-            (None, Some(_), Some(e2)) => Some(e2),
-            (None, Some(e1), None) => Some(e1),
-            (None, None, Some(e2)) => Some(e2),
-            (None, None, None) => None,
-        };
-
-        // Now create the self
-        match (start, end) {
-            (Some(s), Some(e)) => {
-                // Double-check the range isn't empty
-                if s < e {
-                    // Double-check that both s and e are before the old one
-                    if let Some(oe) = lhs.1 {
-                        if s < oe { if e <= oe { Self::Closed(s, e) } else { Self::Closed(s, oe) } } else { Self::Empty }
-                    } else {
-                        Self::Closed(s, e)
-                    }
-                } else {
-                    Self::Empty
-                }
-            },
-            (Some(s), None) => {
-                if let Some(oe) = lhs.1 {
-                    if s < oe { Self::ClosedOpen(s) } else { Self::Empty }
-                } else {
-                    Self::ClosedOpen(s)
-                }
-            },
-            (None, Some(e)) => {
-                if let Some(oe) = lhs.1 {
-                    if e <= oe { Self::OpenClosed(e) } else { Self::OpenClosed(oe) }
-                } else {
-                    Self::OpenClosed(e)
-                }
-            },
-            (None, None) => Self::Open,
-        }
+    pub const fn bounded(start: usize, end: usize) -> Self {
+        Self { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
     }
 
-    /// Creates a new SpanRange that is the merger of both self and the given one.
+    /// Constructor for a range that is only bounded on the left side.
     ///
     /// # Arguments
-    /// - `other`: The other SpanRange to join with this one.
+    /// - `start`: The start point of the range in the larger slice.
     ///
     /// # Returns
-    /// A new SpanRange that covers both ranges and everything in between, e.g.,
-    /// ```plain
-    /// self           other
-    /// <------>       <------------->
-    ///
-    /// result
-    /// <---------------------------->
-    /// ```
+    /// A new Range, which is onwards from the given `start` point.
     #[inline]
-    pub fn join(&self, other: &Self) -> Self {
-        let mut res: Self = *self;
-        res.join_mut(other);
+    pub const fn onwards(start: usize) -> Self { Self { inner: RangeInner::Onwards(start) } }
+
+    /// Constructor for a range that is only bounded on the right side.
+    ///
+    /// Note that, if `end` is 0, this will default to [`Range::empty()`] instead.
+    ///
+    /// # Arguments
+    /// - `end`: The end point of the range in the larger slice.
+    ///
+    /// # Returns
+    /// A new Range, which is until the given `end` point.
+    #[inline]
+    pub const fn until(end: usize) -> Self { Self { inner: if end > 0 { RangeInner::Until(end) } else { RangeInner::Empty } } }
+
+    /// Constructor for a range that covers the whole parent slice.
+    ///
+    /// # Returns
+    /// A new Range, which spans the full larger slice.
+    #[inline]
+    pub const fn full() -> Self { Self { inner: RangeInner::Full } }
+
+    /// Constructor for a range that covers none of the parent slice.
+    ///
+    /// # Returns
+    /// A new Range, which spans nothing.
+    #[inline]
+    pub const fn empty() -> Self { Self { inner: RangeInner::Empty } }
+}
+
+// Ops
+impl Debug for Range {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self.inner {
+            RangeInner::Bounded(start, end) => write!(f, "{start}..{end}"),
+            RangeInner::Onwards(start) => write!(f, "{start}.."),
+            RangeInner::Until(end) => write!(f, "..{end}"),
+            RangeInner::Full => write!(f, ".."),
+            RangeInner::Empty => write!(f, "!"),
+        }
+    }
+}
+impl Display for Range {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Self as Debug>::fmt(self, f) }
+}
+impl PartialEq<std::ops::Range<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::Range<usize>) -> bool {
+        match self.inner {
+            RangeInner::Bounded(start, end) => start == other.start && end == other.end,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeFrom<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::RangeFrom<usize>) -> bool {
+        match self.inner {
+            RangeInner::Onwards(start) => start == other.start,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeTo<usize>> for Range {
+    #[inline]
+    fn eq(&self, other: &std::ops::RangeTo<usize>) -> bool {
+        match self.inner {
+            RangeInner::Until(end) => end == other.end,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<std::ops::RangeFull> for Range {
+    #[inline]
+    fn eq(&self, _other: &std::ops::RangeFull) -> bool {
+        match self.inner {
+            RangeInner::Full => true,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<()> for Range {
+    #[inline]
+    fn eq(&self, _other: &()) -> bool {
+        match self.inner {
+            RangeInner::Empty => true,
+            _ => false,
+        }
+    }
+}
+
+// Range
+impl Range {
+    /// Returns a new Range which is a slice of this one.
+    ///
+    /// # Arguments
+    /// - `range`: Some other range to slice ourselves with.
+    ///
+    /// # Returns
+    /// A new Range that is the given `range` contextualized within this one.
+    #[inline]
+    pub fn slice(&self, range: impl Into<Self>) -> Self {
+        let range: Self = range.into();
+        let res = match (self.inner, range.inner) {
+            // Bounded cases
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range { inner: RangeInner::Onwards(lstart + rstart) },
+            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, end)) => {
+                let start: usize = lstart + rstart;
+                let end: usize = lstart + end;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Onwards(start), RangeInner::Until(end)) => {
+                let end: usize = start + end;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(lstart, end), RangeInner::Onwards(rstart)) => {
+                let start: usize = lstart + rstart;
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
+                let start: usize = lstart + rstart;
+                let end: usize = std::cmp::min(lend, lstart + rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Bounded(start, lend), RangeInner::Until(rend)) => {
+                let end: usize = std::cmp::min(lend, start + rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(end), RangeInner::Onwards(start)) => {
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(lend), RangeInner::Bounded(start, rend)) => {
+                let end: usize = std::cmp::min(lend, rend);
+                Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
+            },
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range { inner: RangeInner::Until(std::cmp::min(lend, rend)) },
+
+            // The full cases
+            (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
+            // Any empty resolves to empty
+            (RangeInner::Empty, _) | (_, RangeInner::Empty) => Self { inner: RangeInner::Empty },
+        };
         res
     }
 
-    /// Extends this SpanRange to also cover another.
+    /// Returns a Range which represents the part of this Range until another Range.
     ///
-    /// To illustrate:
+    /// This sounds very abstract. Imagine that there are two ranges, overlapping like so:
     /// ```plain
-    /// self           other
-    /// <------>       <------------->
+    /// < 1 ............ >
+    ///             < 2 .......... >
+    /// ^^^^^^^^^^^^
+    /// ```
     ///
-    /// self.join_mut(other)
-    /// <---------------------------->
+    /// This function will simply return the underlined part.
+    ///
+    /// However, it returns [`None`] in the following cases:
+    /// ```plain
+    /// < 1 ............ >
+    ///                          < 2 .......... >
+    /// ```
+    /// ```plain
+    ///                        < 1 ............ >
+    /// < 2 .......... >
+    /// ```
+    /// ```plain
+    ///          < 1 ............ >
+    /// < 2 .......... >
     /// ```
     ///
     /// # Arguments
-    /// - `other`: The other SpanRange to join with this one.
+    /// - `other`: Some other Range that represents the second, overlapping range.
+    ///
+    /// # Returns
+    /// A new Range that represents the relative complement of `self` with respect to `other`.
+    ///
+    /// If the two ranges are not overlapping at all, or the start of 2 precedes 1, [`None`] is returned.
     #[inline]
-    pub fn join_mut(&mut self, other: &Self) {
-        // Get the simplified range of self
-        let lhs: (Option<usize>, Option<usize>) = match self {
-            Self::Closed(s, e) => (Some(*s), Some(*e)),
-            Self::ClosedOpen(s) => (Some(*s), None),
-            Self::OpenClosed(e) => (None, Some(*e)),
-            Self::Open => (None, None),
-            // If we're empty, the other determines everything
-            Self::Empty => {
-                *self = *other;
-                return;
+    pub fn relative_complement(&self, other: &Range) -> Option<Range> {
+        // Let's just match all cases for clarity's sake.
+        match (self.inner, other.inner) {
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if lstart <= rstart {
+                    Some(Range::bounded(lstart, rstart))
+                } else {
+                    // `self` is after `other`
+                    None
+                }
             },
-        };
+            (RangeInner::Onwards(start), RangeInner::Until(_) | RangeInner::Full) => {
+                // Return empty is the starts overlap (starts at 0). Otherwise, `self` is always
+                // after `other`
+                if start == 0 { Some(Range::empty()) } else { None }
+            },
 
-        // Get the simplified range of other
-        let rhs: (Option<usize>, Option<usize>) = match other {
-            Self::Closed(s, e) => (Some(*s), Some(*e)),
-            Self::ClosedOpen(s) => (Some(*s), None),
-            Self::OpenClosed(e) => (None, Some(*e)),
-            Self::Open => (None, None),
-            // If the other is empty, nothing needs changing
-            Self::Empty => return,
-        };
+            (RangeInner::Bounded(lstart, end), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if lstart <= rstart && rstart < end {
+                    Some(Range::bounded(lstart, rstart))
+                } else {
+                    // `self` is after `other`, or `other` is beyond `self`'s end
+                    None
+                }
+            },
+            (RangeInner::Bounded(start, _), RangeInner::Until(_) | RangeInner::Full) => {
+                // Return empty is the starts overlap (starts at 0). Otherwise, `self` is always
+                // after `other`
+                if start == 0 { Some(Range::empty()) } else { None }
+            },
 
-        // Now compare those ones to make a proper start & end
-        let start: Option<usize> = match (lhs, rhs) {
-            // If they're both closed, we need the leftmost;
-            ((Some(s1), _), (Some(s2), _)) => Some(std::cmp::min(s1, s2)),
-            // Else, one of the lefties is open, so then so are we.
-            _ => None,
-        };
-        let end: Option<usize> = match (lhs, rhs) {
-            // If they're both closed, we need the rightmost;
-            ((_, Some(e1)), (_, Some(e2))) => Some(std::cmp::max(e1, e2)),
-            // Else, one of the righties is open, so then so are we.
-            _ => None,
-        };
+            (RangeInner::Until(end), RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                if rstart < end {
+                    Some(Range::until(rstart))
+                } else {
+                    // `other` is beyond `self`'s end
+                    None
+                }
+            },
+            (RangeInner::Until(_), RangeInner::Until(_) | RangeInner::Full) => {
+                // Always empty, because their starts collide
+                Some(Range::empty())
+            },
 
-        // OK, finally build a new self
-        *self = match (start, end) {
-            (Some(s), Some(e)) => Self::Closed(s, e),
-            (Some(s), None) => Self::ClosedOpen(s),
-            (None, Some(e)) => Self::OpenClosed(e),
-            (None, None) => Self::Open,
-        };
+            (RangeInner::Full, RangeInner::Onwards(rstart) | RangeInner::Bounded(rstart, _)) => {
+                // Cannot go out of `self`'s end; always something!
+                Some(Range::until(rstart))
+            },
+            (RangeInner::Full, RangeInner::Until(_) | RangeInner::Full) => {
+                // They have the same start; always empty
+                Some(Range::empty())
+            },
+
+            // Empty catch-alls
+            (RangeInner::Empty, _) | (_, RangeInner::Empty) => None,
+        }
     }
 
-    /// Applies this SpanRange to a given slice.
+    /// Joins two Ranges.
     ///
-    /// This slice can be anything, as long as it's a slice.
+    /// The result will encompass both spans; e.g.,
+    /// ```plain
+    /// < 1 ............ >
+    ///                          < 2 .......... >
+    /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /// ```
+    /// (The underlined is what is returned)
     ///
     /// # Arguments
-    /// - `slice`: The slice (of type [`&[T]`]) to apply this range to.
+    /// - `other`: Some other Range to join this one with.
     ///
     /// # Returns
-    /// A new slice of type `[T]` that is the sliced counterpart.
+    /// A new Range that is the union of the given two ranges.
     #[inline]
-    pub fn apply_to<'s, T>(&self, slice: &'s [T]) -> &'s [T] { index_range_bound!(slice, *self) }
+    pub fn join(&self, other: &Range) -> Range {
+        match (self.inner, other.inner) {
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, _)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Onwards(_), RangeInner::Until(_)) => Range::full(),
+            (RangeInner::Bounded(lstart, _), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
+                Range::bounded(std::cmp::min(lstart, rstart), std::cmp::max(lend, rend))
+            },
+            (RangeInner::Bounded(_, lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Until(_), RangeInner::Onwards(_)) => Range::full(),
+            (RangeInner::Until(lend), RangeInner::Bounded(_, rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
 
-    /// Applies this SpanRange to a given [`str`].
-    ///
-    /// This is the overload of [`Self::apply_to`](SpanRange::apply_to) but then to [`str`]s.
-    ///
-    /// # Arguments
-    /// - `string`: The string (of type [`&str`]) to apply this range to.
+            // Full- and empty catch-alls
+            (RangeInner::Full, _) | (_, RangeInner::Full) => Range::full(),
+            (RangeInner::Empty, _) => *other,
+            (_, RangeInner::Empty) => *self,
+        }
+    }
+
+
+
+    /// Gets the lefthand-side of the range.
     ///
     /// # Returns
-    /// A new slice of type `str` that is the sliced counterpart.
+    /// The start index (inclusive), or [`None`] if the range is unbounded on this side (or empty).
     #[inline]
-    pub fn apply_to_str<'s>(&self, string: &'s str) -> &'s str { index_range_bound!(string, *self) }
+    pub fn start(&self) -> Option<usize> {
+        match self.inner {
+            RangeInner::Bounded(start, _) | RangeInner::Onwards(start) => Some(start),
+            RangeInner::Until(_) | RangeInner::Full | RangeInner::Empty => None,
+        }
+    }
+    /// Gets the lefthand-side of the range, resolved to a slice starting at the given index.
+    ///
+    /// # Arguments
+    /// - `len`: The total size of the parent slice.
+    ///
+    /// # Returns
+    /// The start index (inclusive). Note that this is capped to `len` (i.e., it will never be
+    /// larger than that).
+    ///
+    /// Will still be [`None`] if this range is empty OR `len` is 0 (but only then).
+    #[inline]
+    pub fn start_resolved(&self, len: usize) -> Option<usize> {
+        match self.inner {
+            RangeInner::Bounded(start, _) | RangeInner::Onwards(start) => {
+                if len > 0 {
+                    Some(std::cmp::min(start, len))
+                } else {
+                    None
+                }
+            },
+            RangeInner::Until(_) | RangeInner::Full => {
+                if len > 0 {
+                    Some(0)
+                } else {
+                    None
+                }
+            },
+            RangeInner::Empty => None,
+        }
+    }
+
+    /// Gets the righthand-side of the range.
+    ///
+    /// # Returns
+    /// The end index (exclusive), or [`None`] if the range is unbounded on this side (or empty).
+    #[inline]
+    pub fn end(&self) -> Option<usize> {
+        match self.inner {
+            RangeInner::Bounded(_, end) | RangeInner::Until(end) => Some(end),
+            RangeInner::Onwards(_) | RangeInner::Full | RangeInner::Empty => None,
+        }
+    }
+    /// Gets the righthand-side of the range, resolved to a slice with the given endpoint.
+    ///
+    /// # Arguments
+    /// - `len`: The total size of the parent slice.
+    ///
+    /// # Returns
+    /// The end index (exclusive). Note that this is capped to `len` (i.e., it will never be
+    /// larger than that).
+    ///
+    /// Will still be [`None`] if this range is empty OR `len` is 0 (but only then).
+    #[inline]
+    pub fn end_resolved(&self, len: usize) -> Option<usize> {
+        match self.inner {
+            RangeInner::Bounded(_, end) | RangeInner::Until(end) => {
+                if len > 0 {
+                    Some(std::cmp::min(end, len))
+                } else {
+                    None
+                }
+            },
+            RangeInner::Onwards(_) | RangeInner::Full => {
+                if len > 0 {
+                    Some(len)
+                } else {
+                    None
+                }
+            },
+            RangeInner::Empty => None,
+        }
+    }
+
+    /// Returns the length of this slice.
+    ///
+    /// The length is always compared to the total length of the given parent slice.
+    ///
+    /// # Arguments
+    /// - `len`: The total length of the parent slice.
+    ///
+    /// # Returns
+    /// A [`usize`] describing how many elements are encompassed in this Range.
+    #[inline]
+    pub fn resolved_len(&self, len: usize) -> usize {
+        match self.inner {
+            RangeInner::Bounded(start, end) => {
+                let start: usize = if len > 0 { std::cmp::min(start, len - 1) } else { 0 };
+                let end: usize = std::cmp::min(end, len);
+                if start <= end { end - start } else { 0 }
+            },
+            RangeInner::Onwards(start) => len.saturating_sub(start),
+            RangeInner::Until(end) => std::cmp::min(end, len),
+            RangeInner::Full => len,
+            RangeInner::Empty => 0,
+        }
+    }
 }
-impl RangeBounds<usize> for SpanRange {
-    #[inline]
-    fn start_bound(&self) -> Bound<&usize> {
-        match self {
-            Self::Closed(s, _) => Bound::Included(s),
-            Self::ClosedOpen(s) => Bound::Included(s),
-            Self::OpenClosed(_) => Bound::Unbounded,
-            Self::Open => Bound::Unbounded,
-            Self::Empty => Bound::Excluded(&0),
-        }
-    }
 
+// Conversion
+impl From<std::ops::Range<usize>> for Range {
     #[inline]
-    fn end_bound(&self) -> std::ops::Bound<&usize> {
-        match self {
-            Self::Closed(_, e) => Bound::Excluded(e),
-            Self::ClosedOpen(_) => Bound::Unbounded,
-            Self::OpenClosed(e) => Bound::Excluded(e),
-            Self::Open => Bound::Unbounded,
-            Self::Empty => Bound::Excluded(&0),
-        }
+    fn from(value: std::ops::Range<usize>) -> Self { Self::bounded(value.start, value.end) }
+}
+impl From<std::ops::RangeFrom<usize>> for Range {
+    #[inline]
+    fn from(value: std::ops::RangeFrom<usize>) -> Self { Self { inner: RangeInner::Onwards(value.start) } }
+}
+impl From<std::ops::RangeTo<usize>> for Range {
+    #[inline]
+    fn from(value: std::ops::RangeTo<usize>) -> Self { Self { inner: RangeInner::Until(value.end) } }
+}
+impl From<std::ops::RangeFull> for Range {
+    #[inline]
+    fn from(_: std::ops::RangeFull) -> Self { Self { inner: RangeInner::Full } }
+}
+impl From<()> for Range {
+    #[inline]
+    fn from(_: ()) -> Self { Self { inner: RangeInner::Empty } }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slice() {
+        // Some testcases; extend when more are known!
+        assert_eq!(Range::from(0..10).slice(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice(..5), ..5);
+        assert_eq!(Range::from(5..10).slice(..5), 5..10);
+        assert_eq!(Range::from(10..5), ());
+        assert_eq!(Range::from(5..).slice(..5), 5..10);
+        assert_eq!(Range::from(5..).slice(..10), 5..15);
+        assert_eq!(Range::from(..).slice(5..10), 5..10);
+        assert_eq!(Range::from(()).slice(1..10), ());
+
+        // Remember, we're slicing _in_ the left slice
+        assert_eq!(Range::from(1..).slice(1..), 2..);
+        assert_eq!(Range::from(1..).slice(1..3), 2..4);
+        assert_eq!(Range::from(1..).slice(1..1), ());
+        assert_eq!(Range::from(1..3).slice(1..), 2..3);
+        assert_eq!(Range::from(1..4).slice(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice(1..7), 2..4);
+        assert_eq!(Range::from(1..8).slice(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice(..2), 1..3);
+
+        assert_eq!(Range::from(2..).slice(..1), 2..3);
     }
 }

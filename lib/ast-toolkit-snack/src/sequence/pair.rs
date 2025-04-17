@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:06:36
 //  Last edited:
-//    18 Jan 2025, 18:43:19
+//    20 Mar 2025, 12:13:59
 //  Auto updated?
 //    Yes
 //
@@ -14,6 +14,7 @@
 
 pub use super::tuple::{Error2 as Error, ExpectsFormatter2 as ExpectsFormatter};
 use crate::Combinator;
+use crate::span::Parsable;
 
 
 /***** TYPE ALIASES *****/
@@ -53,9 +54,9 @@ pub type Fatal<E1, E2> = Error<E1, E2>;
 /// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello123");
-/// let span2 = Span::new("<example>", "123");
-/// let span3 = Span::new("<example>", "HelloWorld");
+/// let span1 = Span::new("Hello123");
+/// let span2 = Span::new("123");
+/// let span3 = Span::new("HelloWorld");
 ///
 /// let mut comb = pair(tag("Hello"), digit1());
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))));
@@ -75,10 +76,11 @@ pub type Fatal<E1, E2> = Error<E1, E2>;
 /// );
 /// ```
 #[inline]
-pub const fn pair<'t, C1, C2, F, S>(first: C1, second: C2) -> Pair<C1, C2>
+pub const fn pair<'t, C1, C2, S>(first: C1, second: C2) -> Pair<C1, C2>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
+    C1: Combinator<'t, S>,
+    C2: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     (first, second)
 }

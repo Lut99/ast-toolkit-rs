@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    18 Jan 2025, 18:15:45
+//    19 Mar 2025, 10:32:42
 //  Auto updated?
 //    Yes
 //
@@ -22,34 +22,32 @@ use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::{LenBytes, OneOfUtf8};
+use crate::span::Utf8Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of1()`].
 #[derive(Debug)]
-pub struct OneOf1<'t, F, S> {
+pub struct OneOf1<'t, S> {
     charset: &'t [&'t str],
-    _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Combinator<'t, F, S> for OneOf1<'t, F, S>
+impl<'t, S> Combinator<'t, S> for OneOf1<'t, S>
 where
-    F: Clone,
-    S: Clone + LenBytes + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'t, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { charset: self.charset } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Check first if there's *any* input to parse.
-        if input.len() == 0 {
+        if input.is_empty() {
             return Err(SnackError::NotEnough { needed: Some(1), span: input });
         }
 
@@ -87,11 +85,11 @@ where
 /// use ast_toolkit_snack::utf8::streaming::one_of1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "abcdefg");
-/// let span2 = Span::new("<example>", "cdefghi");
-/// let span3 = Span::new("<example>", "abÿcdef");
-/// let span4 = Span::new("<example>", "hijklmn");
-/// let span5 = Span::new("<example>", "");
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// let mut comb = one_of1(&["a", "b", "c", "ÿ"]);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
@@ -107,10 +105,9 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn one_of1<'t, F, S>(charset: &'t [&'t str]) -> OneOf1<'t, F, S>
+pub const fn one_of1<'t, S>(charset: &'t [&'t str]) -> OneOf1<'t, S>
 where
-    F: Clone,
-    S: Clone + LenBytes + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
-    OneOf1 { charset, _f: PhantomData, _s: PhantomData }
+    OneOf1 { charset, _s: PhantomData }
 }

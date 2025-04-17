@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:58:07
 //  Last edited:
-//    07 Mar 2025, 17:43:48
+//    20 Mar 2025, 11:44:58
 //  Auto updated?
 //    Yes
 //
@@ -19,23 +19,22 @@ use ast_toolkit_span::Span;
 use super::remember;
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`recognize()`]-combinator.
-pub struct Recognize<C, F, S> {
+pub struct Recognize<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Recognize<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Recognize<C, S>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
-    type Output = Span<F, S>;
+    type Output = Span<S>;
     type Recoverable = C::Recoverable;
     type Fatal = C::Fatal;
 
@@ -43,7 +42,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // We simply use remember but discard the actual result
         remember(&mut self.comb).parse(input).map(|(rem, (_, span))| (rem, span))
     }
@@ -78,8 +77,8 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = recognize(pair(tag("Hello, "), tag("world!")));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(13..), span1.slice(..13))));
@@ -92,11 +91,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn recognize<'t, C, F, S>(comb: C) -> Recognize<C, F, S>
+pub const fn recognize<'t, C, S>(comb: C) -> Recognize<C, S>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Recognize { comb, _f: PhantomData, _s: PhantomData }
+    Recognize { comb, _s: PhantomData }
 }

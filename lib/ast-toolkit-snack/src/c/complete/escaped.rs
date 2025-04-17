@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    18 Jan 2025, 17:46:01
+//    20 Mar 2025, 15:39:50
 //  Auto updated?
 //    Yes
 //
@@ -17,12 +17,11 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
-use crate::result::{Result as SResult, SnackError};
-use crate::span::{MatchBytes, NextChar, ToStr, WhileUtf8};
+use crate::result::{Result as SResult, SnackError, SpanningError};
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _, utf8};
 
 
@@ -31,38 +30,38 @@ use crate::{Combinator, ExpectsFormatter as _, utf8};
 ///
 /// This error means that no opening delimiter was found.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, F, S> {
+pub struct Recoverable<'t, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
     pub delim:   &'t str,
     /// Some character acting as the escape character.
     pub escaper: &'t str,
     /// The span where the error occurred.
-    pub span:    Span<F, S>,
+    pub span:    Span<S>,
 }
-impl<'t, F, S> Display for Recoverable<'t, F, S> {
+impl<'t, S> Display for Recoverable<'t, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { delim: self.delim, escaper: self.escaper }) }
 }
-impl<'t, F, S> Error for Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
+impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 /// Defines the fatal errors of the [`Escaped`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<'t, E, F, S> {
+pub enum Fatal<'t, E, S> {
     /// Failed to find the matching closing delimiter.
-    DelimClose { delim: &'t str, escaper: &'t str, span: Span<F, S> },
+    DelimClose { delim: &'t str, escaper: &'t str, span: Span<S> },
     /// An escapee was illegal by the user's closure.
-    IllegalEscapee { err: E },
+    IllegalEscapee { err: SpanningError<E, S> },
     /// An escape-character (e.g., `\`) was given without an escapee.
-    OrphanEscaper { escaper: &'t str, span: Span<F, S> },
+    OrphanEscaper { escaper: &'t str, span: Span<S> },
 }
-impl<'t, E: Display, F, S> Display for Fatal<'t, E, F, S> {
+impl<'t, E: Display, S> Display for Fatal<'t, E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -72,7 +71,7 @@ impl<'t, E: Display, F, S> Display for Fatal<'t, E, F, S> {
         }
     }
 }
-impl<'t, E: Error, F, S> Error for Fatal<'t, E, F, S> {
+impl<'t, E: Error, S: Spannable> Error for Fatal<'t, E, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -81,18 +80,18 @@ impl<'t, E: Error, F, S> Error for Fatal<'t, E, F, S> {
         }
     }
 }
-impl<'t, E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Fatal<'t, E, F, S> {
+impl<'t, E, S: Clone> Spanning<S> for Fatal<'t, E, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
-            Self::DelimClose { span, .. } => span.clone(),
+            Self::DelimClose { span, .. } => Cow::Borrowed(span),
             Self::IllegalEscapee { err } => err.span(),
-            Self::OrphanEscaper { span, .. } => span.clone(),
+            Self::OrphanEscaper { span, .. } => Cow::Borrowed(span),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::DelimClose { span, .. } => span,
             Self::IllegalEscapee { err } => err.into_span(),
@@ -132,16 +131,47 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 
 
+/***** HELPERS *****/
+/// Lil' formalism for the parsing state machine states.
+enum State {
+    /// The main string body state
+    Body,
+    /// We found an escaper.
+    Escaped,
+}
+
+
+
+
+
 /***** AUXILLARY *****/
 /// Represents the result of the [`escaped`]-combinator.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EscapedString<F, S> {
+pub struct EscapedString<S> {
+    /// The value of the escaped string.
+    pub value: String,
     /// Represents the delimited quotes (opening and closing, respectively).
-    pub delim: (Span<F, S>, Span<F, S>),
+    pub delim: (Span<S>, Span<S>),
     /// Represents the span of the literal itself, _excluding_ the quotes.
-    pub span:  Span<F, S>,
-    /// If the literal includes escapes, then this is the resolved value after processing them.
-    pub value: Option<String>,
+    pub span:  Span<S>,
+}
+impl<S: Clone + Spannable> Spanning<S> for EscapedString<S> {
+    /// This returns the span of the ENTIRE object, not just the string literal value.
+    #[inline]
+    #[track_caller]
+    fn span(&self) -> Cow<Span<S>> {
+        Cow::Owned(self.delim.0.join(&self.delim.1).unwrap_or_else(|| {
+            panic!(
+                "Attempted to join left and right delimiters, but they are from different sources (left: {:?}, right: {:?})",
+                self.delim.0.source_id(),
+                self.delim.1.source_id()
+            )
+        }))
+    }
+
+    /// This returns the span of the ENTIRE object, not just the string literal value.
+    #[inline]
+    fn into_span(self) -> Span<S> { self.span().into_owned() }
 }
 
 
@@ -150,37 +180,34 @@ pub struct EscapedString<F, S> {
 
 /***** COMBINATORS *****/
 /// The combinator returned by [`escaped()`].
-pub struct Escaped<'t, P, F, S> {
+pub struct Escaped<'t, P, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
     delim: &'t str,
     /// Some character acting as the escape character.
     escaper: &'t str,
     /// Some closure that determines what to do with escaped characters.
     callback: P,
-    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
-    _f: PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, P, E, F, S> Combinator<'t, F, S> for Escaped<'t, P, F, S>
+impl<'t, P, E, S> Combinator<'t, S> for Escaped<'t, P, S>
 where
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
     E: 't + Error,
-    F: Clone,
-    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = EscapedString<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
-    type Fatal = Fatal<'t, E, F, S>;
+    type Output = EscapedString<S>;
+    type Recoverable = Recoverable<'t, S>;
+    type Fatal = Fatal<'t, E, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { delim: self.delim, escaper: self.escaper } }
 
     #[inline]
-    fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: ast_toolkit_span::Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Step 1: Match the opening delimiter
-        let (mut rem, open): (Span<F, S>, Span<F, S>) = match utf8::complete::tag(self.delim).parse(input) {
+        let (rem, open): (Span<S>, Span<S>) = match utf8::complete::tag(self.delim).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
                 return Err(SnackError::Recoverable(Recoverable { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
@@ -188,82 +215,64 @@ where
             Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
         };
 
-        // Step 2: Match the middle bit as anything _but_ any escaped string _and_ the delimiter
-        let mut span: Span<F, S> = Span::empty(open.from_ref().clone(), open.source_ref().clone());
-        let mut value: Option<String> = None;
-        loop {
-            // Parse anything in the middle
-            match utf8::while0("", |c: &str| -> bool { c != self.delim && c != self.escaper }).parse(rem) {
-                Ok((mrem, mres)) => {
-                    // Add whatever we've parsed to the middle bit
-                    if !span.join_mut(&mres) {
-                        panic!("Spans are not of the same source - unexpectedly??");
-                    }
-                    rem = mrem;
-
-                    // Also add it to the value string if we have one
-                    if let Some(value) = &mut value {
-                        value.push_str(mres.to_str(SpanRange::Open).as_ref());
+        // Step 2: Parse the middle bit using a lil' state maching
+        let mut state = State::Body;
+        let mut i: usize = 0;
+        let mut close: Option<Span<S>> = None;
+        let mut value = String::new();
+        for c in rem.graphs() {
+            match state {
+                State::Body => {
+                    // Either we parse a closing delim OR an escapee
+                    if c == self.delim {
+                        // OK! That's it folks!
+                        close = Some(rem.slice(i..i + c.len()));
+                        i += c.len();
+                        break;
+                    } else if c == self.escaper {
+                        // Switch to escaper mode
+                        i += c.len();
+                        state = State::Escaped;
+                        continue;
+                    } else {
+                        // As we are
+                        i += c.len();
+                        if 1 + value.len() >= value.capacity() {
+                            value.reserve(1 + value.len());
+                        }
+                        value.push_str(c);
+                        continue;
                     }
                 },
-                Err(SnackError::Recoverable(_) | SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
-            }
 
-            // Next, try to parse the delimiter
-            match utf8::complete::tag(self.delim).parse(rem.clone()) {
-                Ok((mrem, close)) => {
-                    return Ok((mrem, EscapedString { delim: (open, close), span, value }));
-                },
-                Err(SnackError::Recoverable(_)) => {},
-                Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
-            }
-
-            // If we didn't close, then we expect an escaped string
-            match utf8::complete::tag(self.escaper).parse(rem) {
-                Ok((mrem, mres)) => {
-                    // First, bring the value-string up-to-speed to what we parsed so far
-                    let value: &mut String = match &mut value {
-                        Some(value) => value,
-                        None => {
-                            value = Some(span.to_str(SpanRange::Open).into_owned());
-                            value.as_mut().unwrap()
-                        },
-                    };
-
-                    // Add it to the parsed span - but not the value
-                    if !span.join_mut(&mres) {
-                        panic!("Spans are not of the same source - unexpectedly??");
-                    }
-
-                    // Get the parsed character
-                    let c: &str = match mrem.next_char(SpanRange::Open) {
-                        Some(c) => c,
-                        None => return Err(SnackError::Fatal(Fatal::OrphanEscaper { escaper: self.escaper, span: mrem })),
-                    };
-
-                    // Run the closure to process the escaped character
+                State::Escaped => {
+                    // Process the character
                     match (self.callback)(c) {
-                        Ok(c) => value.push_str(c.as_ref()),
-                        Err(err) => return Err(SnackError::Fatal(Fatal::IllegalEscapee { err })),
+                        Ok(val) => {
+                            i += c.len();
+                            value.push_str(val.as_ref());
+                            state = State::Body;
+                            continue;
+                        },
+                        Err(err) => {
+                            return Err(SnackError::Fatal(Fatal::IllegalEscapee { err: SpanningError { err, span: rem.slice(i..i + c.len()) } }));
+                        },
                     }
-
-                    // Extend `middle` to match
-                    if !span.join_mut(&mrem.slice(..c.len())) {
-                        panic!("Spans are not of the same source - unexpectedly??");
-                    }
-                    rem = mrem.slice(c.len()..);
-
-                    // OK, continue
-                    continue;
                 },
-                Err(SnackError::Recoverable(err)) => {
-                    return Err(SnackError::Fatal(Fatal::DelimClose { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
-                },
-                Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
             }
-
-            // We parsed an escaped character. Try again to parse more.
         }
+
+        // Do some error catching
+        if !matches!(state, State::Body) {
+            return Err(SnackError::Fatal(Fatal::OrphanEscaper { escaper: self.escaper, span: rem.slice(i - self.escaper.len()..i) }));
+        }
+        let close: Span<S> = match close {
+            Some(close) => close,
+            None => return Err(SnackError::Fatal(Fatal::DelimClose { delim: self.delim, escaper: self.escaper, span: rem.slice(i..) })),
+        };
+
+        // Step 3: Enjoy
+        Ok((rem.slice(i..), EscapedString { value, delim: (open, close), span: rem.slice(..i - self.delim.len()) }))
     }
 }
 
@@ -316,7 +325,7 @@ where
 ///
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::c::complete::escaped;
-/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::result::{SnackError, SpanningError};
 /// use ast_toolkit_span::Span;
 ///
 /// #[derive(Debug, Eq, PartialEq)]
@@ -327,29 +336,29 @@ where
 /// }
 /// impl error::Error for IllegalEscapee {}
 ///
-/// let span1 = Span::new("<example>", r#""Hello, there!\n""#);
-/// let span2 = Span::new("<example>", r#""My my, don't I love my \"es""#);
-/// let span3 = Span::new("<example>", r#"Not a string :("#);
-/// let span4 = Span::new("<example>", r#""A string with no end"#);
-/// let span5 = Span::new("<example>", r#""An escaper without escapee\"#);
-/// let span6 = Span::new("<example>", r#""Illegal escaper\!"#);
+/// let span1 = Span::new(r#""Hello, there!\n""#);
+/// let span2 = Span::new(r#""My my, don't I love my \"es""#);
+/// let span3 = Span::new(r#"Not a string :("#);
+/// let span4 = Span::new(r#""A string with no end"#);
+/// let span5 = Span::new(r#""An escaper without escapee\"#);
+/// let span6 = Span::new(r#""Illegal escaper\!"#);
 ///
 /// let mut comb =
 ///     escaped("\"", "\\", |c: &str| if c != "!" { Ok(c.into()) } else { Err(IllegalEscapee) });
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(17..), escaped::EscapedString {
-///         delim: (span1.slice(0..1), span1.slice(16..17)),
+///         delim: (span1.slice(..1), span1.slice(16..17)),
 ///         span:  span1.slice(1..16),
-///         value: Some("Hello, there!n".into()),
+///         value: "Hello, there!n".into(),
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(29..), escaped::EscapedString {
-///         delim: (span2.slice(0..1), span2.slice(28..29)),
+///         delim: (span2.slice(..1), span2.slice(28..29)),
 ///         span:  span2.slice(1..28),
-///         value: Some("My my, don't I love my \"es".into()),
+///         value: "My my, don't I love my \"es".into(),
 ///     })
 /// );
 /// assert_eq!(
@@ -372,20 +381,21 @@ where
 ///     comb.parse(span5),
 ///     Err(SnackError::Fatal(escaped::Fatal::OrphanEscaper {
 ///         escaper: "\\",
-///         span:    span5.slice(28..),
+///         span:    span5.slice(27..28),
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span6),
-///     Err(SnackError::Fatal(escaped::Fatal::IllegalEscapee { err: IllegalEscapee }))
+///     Err(SnackError::Fatal(escaped::Fatal::IllegalEscapee {
+///         err: SpanningError { err: IllegalEscapee, span: span6.slice(17..18) },
+///     }))
 /// );
 /// ```
-pub const fn escaped<'t, P, E, F, S>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, P, F, S>
+pub const fn escaped<'t, P, E, S>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, P, S>
 where
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
     E: 't + Error,
-    F: Clone,
-    S: Clone + MatchBytes + NextChar + Spannable + ToStr + WhileUtf8,
+    S: Clone + Utf8Parsable,
 {
-    Escaped { delim, escaper, callback, _f: PhantomData, _s: PhantomData }
+    Escaped { delim, escaper, callback, _s: PhantomData }
 }

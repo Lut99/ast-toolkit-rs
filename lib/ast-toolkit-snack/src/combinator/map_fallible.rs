@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    07 Mar 2025, 17:33:48
+//    20 Mar 2025, 11:37:18
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,16 @@
 //!   Implements the [`map_fallible()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spanning};
 
-use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
+use crate::{Combinator, ParseError};
 
 
 /***** TYPE ALIASES *****/
@@ -60,9 +62,9 @@ impl<E1: error::Error, E2: error::Error> error::Error for Error<E1, E2> {
         }
     }
 }
-impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Error<E1, E2> {
+impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Error<E1, E2> {
     #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
             Self::Map(err) => err.span(),
@@ -70,7 +72,7 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Error<E1, 
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Map(err) => err.into_span(),
@@ -84,18 +86,20 @@ impl<F, S, E1: Spanning<F, S>, E2: Spanning<F, S>> Spanning<F, S> for Error<E1, 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`map_fallible()`]-combinator.
-pub struct MapFallible<C, P, F, S> {
+pub struct MapFallible<C, P, S> {
     /// The nested combinator who's result we're mapping.
     comb: C,
     /// The predicate that does the mapping.
     pred: P,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, O1, O2, E1, E2, F, S> Combinator<'t, F, S> for MapFallible<C, P, F, S>
+impl<'t, C, P, O1, O2, E1, E2, S> Combinator<'t, S> for MapFallible<C, P, S>
 where
-    C: Combinator<'t, F, S, Output = O1>,
-    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, F, S>>,
+    C: Combinator<'t, S, Output = O1>,
+    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
+    E1: ParseError<S>,
+    E2: ParseError<S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
@@ -106,7 +110,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: ast_toolkit_span::Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input) {
             Ok((rem, res)) => match (self.pred)(res) {
                 Ok(res) => Ok((rem, res)),
@@ -151,17 +155,18 @@ where
 ///
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::map_fallible;
-/// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::result::{SnackError, SpanningError};
 /// use ast_toolkit_snack::utf8::complete::digit1;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "128");
-/// let span2 = Span::new("<example>", "abc");
-/// let span3 = Span::new("<example>", "256");
+/// let span1 = Span::new("128");
+/// let span2 = Span::new("abc");
+/// let span3 = Span::new("256");
 ///
 /// let mut comb = map_fallible(digit1(), |parsed| {
-///     u8::from_str_radix(parsed.value(), 10)
-///         .map_err(|err| SnackError::<Infallible, ParseIntError, _, _>::Fatal(err))
+///     u8::from_str_radix(parsed.value(), 10).map_err(|err| {
+///         SnackError::<Infallible, _, _>::Fatal(SpanningError { err, span: parsed })
+///     })
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
@@ -173,14 +178,20 @@ where
 /// );
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     Err(SnackError::Fatal(map_fallible::Error::Map(ParseIntError { .. })))
+///     Err(SnackError::Fatal(map_fallible::Error::Map(SpanningError {
+///         err:  ParseIntError { .. },
+///         span: span3,
+///     })))
 /// ));
 /// ```
 #[inline]
-pub const fn map_fallible<'t, C, P, O1, O2, E1, E2, F, S>(comb: C, pred: P) -> MapFallible<C, P, F, S>
+pub const fn map_fallible<'t, C, P, O1, O2, E1, E2, S>(comb: C, pred: P) -> MapFallible<C, P, S>
 where
-    C: Combinator<'t, F, S, Output = O1>,
-    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, F, S>>,
+    C: Combinator<'t, S, Output = O1>,
+    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
+    E1: ParseError<S>,
+    E2: ParseError<S>,
+    S: Clone + Parsable,
 {
-    MapFallible { comb, pred, _f: PhantomData, _s: PhantomData }
+    MapFallible { comb, pred, _s: PhantomData }
 }

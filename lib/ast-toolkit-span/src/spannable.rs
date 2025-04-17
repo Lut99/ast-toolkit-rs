@@ -1,341 +1,405 @@
-//  SPANNABLE.rs
+//  SPANNABLE 2.rs
 //    by Lut99
 //
 //  Created:
-//    06 May 2024, 16:19:49
+//    17 Mar 2025, 10:14:05
 //  Last edited:
-//    27 May 2024, 13:24:09
+//    24 Mar 2025, 11:42:19
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements the [`Spannable`] trait, which abstracts over things that
-//!   we can put as `S`ource string in Spans.
+//!   Implements a trait abstracting over things that are sensible to put
+//!   in a [`Span`].
 //
 
-use std::borrow::Cow;
+use std::cell::{Ref, RefMut};
+use std::fmt::Debug;
+use std::hash::{DefaultHasher, Hash, Hasher as _};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::range::{index_range_bound, SpanRange};
+use crate::range::Range;
 
 
 /***** LIBRARY *****/
-/// A helper trait for the [`Span`] that can be implemented for anything used as input.
+/// Defines things that can be [`Span`]ned.
+///
+/// Remember that this always concerns a array of sorts.
 pub trait Spannable {
-    type Slice<'s>: 's
+    /// Describes the sliced version of this Spannable.
+    type Slice<'s>
+    where
+        Self: 's;
+    /// Describes the ID returned by [`Spannable::source_id()`].
+    type SourceId<'s>: Debug + Eq + PartialEq
     where
         Self: 's;
 
-    /// Checks if this Spannable is the same (for all intends and purposes) as another Spannable of the same type.
+
+    /// Returns some identifier of a source that is used to acertain uniqueness.
     ///
-    /// While it suffices to show that two [`Span`]s are the same semantically (e.g., using a simple byte-wise compare), it's also allowed to compare by pointer equality if possible for performance. Implementations for [`&[u8]`] and [`&str`] do this, for example.
+    /// # Returns
+    /// A formatter of type [`Spannable::SourceId`] that implements [`Display`].
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s>;
+
+    /// Returns a sliced version of this string.
     ///
     /// # Arguments
-    /// - `other`: Some other Spannable of type Self to check with.
+    /// - `range`: A [`Range`] that determines how to slice the Spannable.
     ///
     /// # Returns
-    /// True if these Spannables are the same, or false otherwise.
-    fn is_same(&self, other: &Self) -> bool;
+    /// A [`Spannable::Slice`] that representes the sliced part.
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s>;
 
-    /// Slices this Spannable by raw index.
-    ///
-    /// # Arguments
-    /// - `range`: The range that slices this Spannable. Can be anything implementing [`RangeBounds`].
+    /// Returns the total length of the thing.
     ///
     /// # Returns
-    /// A new instance of type `Self::Slice`, that is self but sliced.
-    ///
-    /// # Panics
-    /// This function panics if out-of-bounds.
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s>;
+    /// The total number of things in the spanned array.
+    fn len(&self) -> usize;
 
-    /// Returns the number of currently spanned "raw" items (e.g., bytes).
+    /// Checks whether there is anything in this Spannable.
+    ///
+    /// Convenience function for:
+    /// ```ignore
+    /// Spannable::len() == 0
+    /// ```
     ///
     /// # Returns
-    /// A [`usize`] with the total number of bytes or other elementary items as is stored on-disk.
-    fn byte_len(&self) -> usize;
+    /// True if no elements are in this array.
+    #[inline]
+    fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
-// Default binary impls for [`Spannable`]
-impl Spannable for [u8] {
-    type Slice<'s> = &'s [u8] where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = std::ptr::eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The &[u8]-implementation \
-                     for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
-    }
-
-    #[inline]
-    #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl<const LEN: usize> Spannable for [u8; LEN] {
-    type Slice<'s> = &'s [u8] where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = std::ptr::eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The &[u8; \
-                     LEN]-implementation for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
-    }
-
-    #[inline]
-    #[track_caller]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl<'b> Spannable for Cow<'b, [u8]> {
-    type Slice<'s> = Cow<'s, [u8]> where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        match (self, other) {
-            // Compare by pointer if possible
-            (Self::Borrowed(b1), Self::Borrowed(b2)) => {
-                let ptr_eq: bool = std::ptr::eq(*b1, *b2);
-                #[cfg(debug_assertions)]
-                {
-                    if !ptr_eq && self == other {
-                        eprintln!(
-                            "DEBUG ASSERTION WARNING: Two byte arrays do not share the same pointer but are semantically equal. The \
-                             Cow<u8>-implementation for Spannable assumes comparing them by pointer equality if they're both borrowed is sufficient."
-                        );
-                    }
-                }
-                ptr_eq
-            },
-            // Otherwise, fall back to equality testing
-            (o1, o2) => o1 == o2,
-        }
-    }
-
-    #[inline]
-    #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl Spannable for Vec<u8> {
-    type Slice<'s> = &'s [u8] where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool { self == other }
-
-    #[inline]
-    #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl Spannable for Rc<[u8]> {
-    type Slice<'s> = &'s [u8] where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = Rc::ptr_eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
-                     Rc<[u8]>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
-    }
-
-    #[inline]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl Spannable for Arc<[u8]> {
-    type Slice<'s> = &'s [u8] where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = Arc::ptr_eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
-                     Arc<[u8]>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
-    }
-
-    #[inline]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-
-// Default string impls for [`Spannable`]
+// Default impls
 impl Spannable for str {
-    type Slice<'s> = &'s str where Self: 's;
+    type Slice<'s> = &'s str;
+    type SourceId<'s>
+        = usize
+    where
+        Self: 's;
+
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = std::ptr::eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two string slices do not share the same pointer but are semantically equal. The &str-implementation \
-                     for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { (self as *const str).addr() }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> {
+        let start: usize = match range.start_resolved(self.len()) {
+            Some(pos) => pos,
+            None => return &"",
+        };
+        let end: usize = match range.end_resolved(self.len()) {
+            Some(pos) => pos,
+            None => return &"",
+        };
+        &self[start..end]
     }
 
     #[inline]
-    #[track_caller]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
+    fn len(&self) -> usize { <str>::len(self) }
 }
-impl<'s> Spannable for Cow<'s, str> {
-    type Slice<'s2> = Cow<'s2, str> where Self: 's2;
+impl<T> Spannable for [T] {
+    type Slice<'s>
+        = &'s [T]
+    where
+        Self: 's;
+    type SourceId<'s>
+        = usize
+    where
+        Self: 's;
+
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        match (self, other) {
-            // Compare by pointer if possible
-            (Self::Borrowed(b1), Self::Borrowed(b2)) => {
-                let ptr_eq: bool = std::ptr::eq(*b1, *b2);
-                #[cfg(debug_assertions)]
-                {
-                    if !ptr_eq && self == other {
-                        eprintln!(
-                            "DEBUG ASSERTION WARNING: Two string slices do not share the same pointer but are semantically equal. The \
-                             Cow<str>-implementation for Spannable assumes comparing them by pointer equality if they're both borrowed is \
-                             sufficient."
-                        );
-                    }
-                }
-                ptr_eq
-            },
-            // Otherwise, fall back to equality testing
-            (o1, o2) => o1 == o2,
-        }
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { (self as *const [T]).addr() }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> {
+        let start: usize = match range.start_resolved(self.len()) {
+            Some(pos) => pos,
+            None => return &[],
+        };
+        let end: usize = match range.end_resolved(self.len()) {
+            Some(pos) => pos,
+            None => return &[],
+        };
+        &self[start..end]
     }
 
     #[inline]
-    #[track_caller]
-    fn slice<'s2>(&'s2 self, range: SpanRange) -> Self::Slice<'s2> { Cow::Borrowed(index_range_bound!(self, range)) }
+    fn len(&self) -> usize { <[T]>::len(self) }
 
     #[inline]
-    fn byte_len(&self) -> usize { self.len() }
+    fn is_empty(&self) -> bool { <[T]>::is_empty(self) }
 }
-impl Spannable for String {
-    type Slice<'s> = &'s str where Self: 's;
+impl<const LEN: usize, T: Hash> Spannable for [T; LEN] {
+    type SourceId<'s>
+        = u64
+    where
+        Self: 's;
+    type Slice<'s>
+        = &'s [T]
+    where
+        Self: 's;
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool { self == other }
-
-    #[inline]
-    #[track_caller]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
-
-    #[inline]
-    fn byte_len(&self) -> usize { self.len() }
-}
-impl Spannable for Rc<str> {
-    type Slice<'s> = &'s str where Self: 's;
-
-    #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = Rc::ptr_eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
-                     Rc<str>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> {
+        let mut hasher = DefaultHasher::new();
+        for elem in self {
+            elem.hash(&mut hasher);
         }
-        ptr_eq
+        hasher.finish()
     }
 
     #[inline]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <[T]>::slice(self.as_slice(), range) }
 
     #[inline]
-    fn byte_len(&self) -> usize { self.len() }
+    fn len(&self) -> usize { <[T]>::len(self.as_slice()) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <[T]>::is_empty(self.as_slice()) }
 }
-impl Spannable for Arc<str> {
-    type Slice<'s> = &'s str where Self: 's;
+impl<T: Debug + Eq + PartialEq, U: Spannable> Spannable for (T, U) {
+    type Slice<'s>
+        = <U as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = &'s T
+    where
+        Self: 's;
+
 
     #[inline]
-    fn is_same(&self, other: &Self) -> bool {
-        let ptr_eq: bool = Arc::ptr_eq(self, other);
-        #[cfg(debug_assertions)]
-        {
-            if !ptr_eq && self == other {
-                eprintln!(
-                    "DEBUG ASSERTION WARNING: Two reference-counter byte arrays do not share the same pointer but are semantically equal. The \
-                     Arc<str>-implementation for Spannable assumes comparing them by pointer equality is sufficient."
-                );
-            }
-        }
-        ptr_eq
-    }
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { &self.0 }
 
     #[inline]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { index_range_bound!(self, range) }
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <U as Spannable>::slice(&self.1, range) }
 
     #[inline]
-    fn byte_len(&self) -> usize { self.len() }
+    fn len(&self) -> usize { self.1.len() }
 }
 
-// Default pointer-like impls
-impl<'t, T: ?Sized + Spannable> Spannable for &'t T {
-    type Slice<'s> = T::Slice<'s> where Self: 's;
+// Pointer-like impls
+impl<'a, T: ?Sized + Spannable> Spannable for &'a T {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
 
     #[inline]
-    #[track_caller]
-    fn is_same(&self, other: &Self) -> bool { T::is_same(self, other) }
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
 
     #[inline]
-    #[track_caller]
-    fn slice<'s>(&'s self, range: SpanRange) -> Self::Slice<'s> { T::slice(self, range) }
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
 
     #[inline]
-    #[track_caller]
-    fn byte_len(&self) -> usize { T::byte_len(self) }
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for &'a mut T {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<T: ?Sized + Spannable> Spannable for Box<T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<T: ?Sized + Spannable> Spannable for Rc<T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<T: ?Sized + Spannable> Spannable for Arc<T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for MutexGuard<'a, T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for RwLockReadGuard<'a, T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for RwLockWriteGuard<'a, T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for Ref<'a, T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+}
+impl<'a, T: ?Sized + Spannable> Spannable for RefMut<'a, T> {
+    type Slice<'s>
+        = <T as Spannable>::Slice<'s>
+    where
+        Self: 's;
+    type SourceId<'s>
+        = <T as Spannable>::SourceId<'s>
+    where
+        Self: 's;
+
+    #[inline]
+    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+
+    #[inline]
+    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+
+    #[inline]
+    fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+    #[inline]
+    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }

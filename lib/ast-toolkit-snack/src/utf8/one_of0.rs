@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    07 Mar 2025, 14:42:39
+//    19 Mar 2025, 10:39:44
 //  Auto updated?
 //    Yes
 //
@@ -17,10 +17,9 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::Span;
-use ast_toolkit_span::range::SpanRange;
 
 use crate::result::Result as SResult;
-use crate::span::OneOfUtf8;
+use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -65,18 +64,16 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of0()`].
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf0<'t, F, S> {
+pub struct OneOf0<'t, S> {
     charset: &'t [&'t str],
-    _f:      PhantomData<F>,
     _s:      PhantomData<S>,
 }
-impl<'t, F, S> Combinator<'t, F, S> for OneOf0<'t, F, S>
+impl<'t, S> Combinator<'t, S> for OneOf0<'t, S>
 where
-    F: Clone,
-    S: Clone + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
+    type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
@@ -84,9 +81,21 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { charset: self.charset } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        let match_point: usize = input.one_of_utf8(SpanRange::Open, self.charset);
-        Ok((input.slice(match_point..), input.slice(..match_point)))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        for c in input.graphs() {
+            // Check if it's in the set
+            if self.charset.contains(&c) {
+                i += c.len();
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        // Being `0`, this combinator always returns
+        Ok((input.slice(i..), input.slice(..i)))
     }
 }
 
@@ -119,24 +128,23 @@ where
 /// use ast_toolkit_snack::utf8::one_of0;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "abcdefg");
-/// let span2 = Span::new("<example>", "cdefghi");
-/// let span3 = Span::new("<example>", "abÿcdef");
-/// let span4 = Span::new("<example>", "hijklmn");
-/// let span5 = Span::new("<example>", "");
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// let mut comb = one_of0(&["a", "b", "c", "ÿ"]);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
-/// assert_eq!(comb.parse(span4), Ok((span4, span4.slice(..0))));
-/// assert_eq!(comb.parse(span5), Ok((span5, span5.slice(..0))));
+/// assert_eq!(comb.parse(span4), Ok((span4.slice(0..), span4.slice(..0))));
+/// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn one_of0<'t, F, S>(charset: &'t [&'t str]) -> OneOf0<'t, F, S>
+pub const fn one_of0<'t, S>(charset: &'t [&'t str]) -> OneOf0<'t, S>
 where
-    F: Clone,
-    S: Clone + OneOfUtf8,
+    S: Clone + Utf8Parsable,
 {
-    OneOf0 { charset, _f: PhantomData, _s: PhantomData }
+    OneOf0 { charset, _s: PhantomData }
 }

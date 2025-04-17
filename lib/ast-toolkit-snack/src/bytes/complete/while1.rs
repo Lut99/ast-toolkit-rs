@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    18 Jan 2025, 17:42:15
+//    18 Mar 2025, 10:24:20
 //  Auto updated?
 //    Yes
 //
@@ -12,17 +12,17 @@
 //!   Implements the [`while1()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::range::SpanRange;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::WhileBytes;
+use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -30,23 +30,23 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, F, S> {
+pub struct Recoverable<'t, S> {
     /// Some description of what was expected.
     pub what: &'t str,
     /// The location where no bytes were found.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<'t, F, S> Display for Recoverable<'t, F, S> {
+impl<'t, S> Display for Recoverable<'t, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
 }
-impl<'t, F, S> Error for Recoverable<'t, F, S> {}
-impl<'t, F: Clone, S: Clone> Spanning<F, S> for Recoverable<'t, F, S> {
+impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 
@@ -78,40 +78,43 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<'t, F, S, P> {
+pub struct While1<'t, S, P> {
     /// The predicate used for matching.
     predicate: P,
     /// A helper provided by the user to describe what is expected.
     what: &'t str,
-    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
-    _f: PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-// NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'b`.
-impl<'t, F, S, P> Combinator<'t, F, S> for While1<'t, F, S, P>
+impl<'t, S, P> Combinator<'t, S> for While1<'t, S, P>
 where
-    F: Clone,
-    S: Clone + WhileBytes,
+    S: Clone + BytesParsable,
     P: FnMut(u8) -> bool,
 {
     type ExpectsFormatter = ExpectsFormatter<'t>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'t, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'t, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        let match_point: usize = input.while_bytes(SpanRange::Open, &mut self.predicate);
-        if match_point > 0 {
-            Ok((input.slice(match_point..), input.slice(..match_point)))
-        } else {
-            Err(SnackError::Recoverable(Recoverable { what: self.what, span: input.start_onwards() }))
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Try to iterate over the head to find the match
+        let mut i: usize = 0;
+        for byte in input.bytes() {
+            // Check if it's in the set
+            if (self.predicate)(*byte) {
+                i += 1;
+                continue;
+            } else {
+                break;
+            }
         }
+
+        // Return if there's at least one
+        if i > 0 { Ok((input.slice(i..), input.slice(..i))) } else { Err(SnackError::Recoverable(Recoverable { what: self.what, span: input })) }
     }
 }
 
@@ -147,11 +150,11 @@ where
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::<&str, &[u8]>::new("<example>", b"abcdefg");
-/// let span2 = Span::<&str, &[u8]>::new("<example>", b"cdefghi");
-/// let span3 = Span::<&str, &[u8]>::new("<example>", "abÿcdef".as_bytes());
-/// let span4 = Span::<&str, &[u8]>::new("<example>", b"hijklmn");
-/// let span5 = Span::<&str, &[u8]>::new("<example>", b"");
+/// let span1 = Span::new(b"abcdefg".as_slice());
+/// let span2 = Span::new(b"cdefghi".as_slice());
+/// let span3 = Span::new("abÿcdef".as_bytes());
+/// let span4 = Span::new(b"hijklmn".as_slice());
+/// let span5 = Span::new(b"".as_slice());
 ///
 /// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |b: u8| -> bool {
 ///     b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195
@@ -175,11 +178,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn while1<'t, F, S, P>(what: &'t str, predicate: P) -> While1<'t, F, S, P>
+pub const fn while1<'t, S, P>(what: &'t str, predicate: P) -> While1<'t, S, P>
 where
-    F: Clone,
-    S: Clone + WhileBytes,
+    S: Clone + BytesParsable,
     P: FnMut(u8) -> bool,
 {
-    While1 { predicate, what, _f: PhantomData, _s: PhantomData }
+    While1 { predicate, what, _s: PhantomData }
 }

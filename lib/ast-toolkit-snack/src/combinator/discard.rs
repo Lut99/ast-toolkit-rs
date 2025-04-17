@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 18:55:10
 //  Last edited:
-//    07 Mar 2025, 14:23:22
+//    19 Mar 2025, 10:45:26
 //  Auto updated?
 //    Yes
 //
@@ -16,18 +16,19 @@ use std::marker::PhantomData;
 
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`discard()`]-combinator.
-pub struct Discard<C, F, S> {
+pub struct Discard<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Discard<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Discard<C, S>
 where
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = ();
@@ -38,7 +39,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: ast_toolkit_span::Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: ast_toolkit_span::Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match self.comb.parse(input) {
             Ok((rem, _)) => Ok((rem, ())),
             Err(err) => Err(err),
@@ -72,8 +73,8 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = discard(tag("Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), ())));
@@ -83,9 +84,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn discard<'t, C, F, S>(comb: C) -> Discard<C, F, S>
+pub const fn discard<'t, C, S>(comb: C) -> Discard<C, S>
 where
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Discard { comb, _f: PhantomData, _s: PhantomData }
+    Discard { comb, _s: PhantomData }
 }

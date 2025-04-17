@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    24 Mar 2025, 11:46:35
 //  Auto updated?
 //    Yes
 //
@@ -19,12 +19,12 @@ use ast_toolkit_span::Span;
 pub use super::most1::ExpectsFormatter;
 use crate::Combinator;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::LenBytes;
+use crate::span::Parsable;
 
 
 /***** TYPE ALIASES *****/
 /// The recoverable error returned by [`Many1`].
-pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
+pub type Recoverable<C, S> = Expected<ExpectsFormatter<C>, S>;
 
 
 
@@ -32,29 +32,27 @@ pub type Recoverable<C, F, S> = Expected<ExpectsFormatter<C>, F, S>;
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`many1()`]-combinator.
-pub struct Many1<C, F, S> {
+pub struct Many1<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Many1<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Many1<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + LenBytes,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Recoverable<C::ExpectsFormatter, F, S>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, S>;
     type Fatal = C::Fatal;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         let mut res: Vec<C::Output> = Vec::new();
-        let mut rem: Span<F, S> = input;
+        let mut rem: Span<S> = input;
         loop {
             // This is why it's lazy; if there's no input left, stop
             if rem.is_empty() {
@@ -130,9 +128,9 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hellohellohellogoodbye");
-/// let span2 = Span::new("<example>", "hellohelgoodbye");
-/// let span3 = Span::new("<example>", "goodbye");
+/// let span1 = Span::new("hellohellohellogoodbye");
+/// let span2 = Span::new("hellohelgoodbye");
+/// let span3 = Span::new("goodbye");
 ///
 /// let mut comb = many1(tag("hello"));
 /// assert_eq!(
@@ -157,9 +155,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hellohello");
-/// let span2 = Span::new("<example>", "hellohel");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("hellohello");
+/// let span2 = Span::new("hellohel");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = many1(tag("hello"));
 /// assert_eq!(
@@ -173,11 +171,10 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: None, span: span3 }));
 /// ```
 #[inline]
-pub const fn many1<'t, C, F, S>(comb: C) -> Many1<C, F, S>
+pub const fn many1<'t, C, S>(comb: C) -> Many1<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + LenBytes,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Many1 { comb, _f: PhantomData, _s: PhantomData }
+    Many1 { comb, _s: PhantomData }
 }

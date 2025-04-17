@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    13 Mar 2025, 22:10:00
+//    24 Mar 2025, 12:27:25
 //  Auto updated?
 //    Yes
 //
@@ -34,16 +34,14 @@
 /// utf8_token!(Dot, ".");
 ///
 /// // Now this struct exists
-/// let dot1 = Dot { span: Span::new("<example1>", ".") };
-/// let dot2 = Dot { span: Span::new("<example2>", ".") };
+/// let dot1 = Dot { span: Span::new(".") };
+/// let dot2 = Dot { span: Span::new(".") };
 ///
 /// // And you can do some stuff with it!
-/// assert_eq!(
-///     format!("{dot1:?}"),
-///     "Dot { span: Span<&str, &str> { from: .., source: .., range: Open } }"
-/// );
+/// assert!(format!("{dot1:?}").starts_with("Dot { span: Span<&str> { source: "),);
+/// assert!(format!("{dot1:?}").ends_with(", range: .. } }"));
 /// assert_eq!(dot1, dot2);
-/// assert_eq!(Dot::<(), ()>::TOKEN, ".");
+/// assert_eq!(Dot::<()>::TOKEN, ".");
 /// ```
 #[macro_export]
 macro_rules! utf8_token {
@@ -53,36 +51,36 @@ macro_rules! utf8_token {
 
     ($name:ident, $token:literal, $token_desc:literal) => {
         #[doc = concat!("Represents a '", $token_desc, "' token.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
-        pub struct $name<F, S> {
+        pub struct $name<S> {
             /// The span that locates this token in the source text.
-            pub span: $crate::__private::Span<F, S>,
+            pub span: $crate::__private::Span<S>,
         }
 
         // Default
-        impl ::std::default::Default for $name<&'static str, &'static str> {
+        impl ::std::default::Default for $name<&'static str> {
             #[inline]
             fn default() -> Self {
-                Self { span: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default()"), <Self as $crate::Utf8Token<&'static str, &'static str>>::TOKEN) }
+                Self { span: $crate::__private::Span::new(<Self as $crate::Utf8Token<&'static str>>::TOKEN) }
             }
         }
 
         // Standard impls
-        impl<F, S> ::std::clone::Clone for $name<F, S>
+        impl<S> ::std::clone::Clone for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::clone::Clone,
+            $crate::__private::Span<S>: ::std::clone::Clone,
         {
             #[inline]
             fn clone(&self) -> Self {
                 Self { span: self.span.clone() }
             }
         }
-        impl<F, S> ::std::marker::Copy for $name<F, S>
+        impl<S> ::std::marker::Copy for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::marker::Copy,
+            $crate::__private::Span<S>: ::std::marker::Copy,
         {}
-        impl<F, S> ::std::fmt::Debug for $name<F, S>
+        impl<S> ::std::fmt::Debug for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::fmt::Debug,
+            $crate::__private::Span<S>: ::std::fmt::Debug,
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -91,12 +89,12 @@ macro_rules! utf8_token {
                 fmt.finish()
             }
         }
-        impl<F, S> ::std::cmp::Eq for $name<F, S> {}
-        impl<F, S> ::std::hash::Hash for $name<F, S> {
+        impl<S> ::std::cmp::Eq for $name<S> {}
+        impl<S> ::std::hash::Hash for $name<S> {
             #[inline]
             fn hash<H: ::std::hash::Hasher>(&self, _hasher: &mut H) {}
         }
-        impl<F, S> ::std::cmp::PartialEq for $name<F, S> {
+        impl<S> ::std::cmp::PartialEq for $name<S> {
             /// Compares two tokens of the same type.
             ///
             /// This is always true, because there is nothing configurable about tokens.
@@ -111,27 +109,26 @@ macro_rules! utf8_token {
         }
 
         // Token impls
-        impl<F, S> $crate::Utf8Token<F, S> for $name<F, S> {
+        impl<S> $crate::Utf8Token<S> for $name<S> {
             const TOKEN: &'static str = $token;
         }
 
         // Spanning impl
-        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        impl<S> $crate::__private::Spanning<S> for $name<S>
         where
-            F: ::std::clone::Clone,
             S: ::std::clone::Clone + $crate::__private::Spannable,
         {
             #[inline]
-            fn span(&self) -> $crate::__private::Span<F, S> { self.span.clone() }
+            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Borrowed(&self.span) }
 
             #[inline]
-            fn into_span(self) -> $crate::__private::Span<F, S> { self.span }
+            fn into_span(self) -> $crate::__private::Span<S> { self.span }
         }
 
         // Convertion impls
-        impl<F, S> ::std::convert::From<$crate::__private::Span<F, S>> for $name<F, S> {
+        impl<S> ::std::convert::From<$crate::__private::Span<S>> for $name<S> {
             #[inline]
-            fn from(value: $crate::__private::Span<F, S>) -> Self {
+            fn from(value: $crate::__private::Span<S>) -> Self {
                 Self { span: value }
             }
         }
@@ -153,7 +150,7 @@ macro_rules! utf8_token {
 #[cfg(feature = "snack")]
 macro_rules! utf8_token_snack {
     ($name:ident) => {
-        impl<F, S> $name<F, S> {
+        impl<S> $name<S> {
             /// Returns a snack combinator for parsing this token.
             ///
             /// # Arguments
@@ -167,11 +164,10 @@ macro_rules! utf8_token_snack {
             /// # Examples
             /// See the `utf8_token()`-combinator for more information.
             #[inline]
-            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, F, S>
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, F, S>,
-                F: ::std::clone::Clone,
-                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+                C: $crate::snack::Combinator<'t, S>,
+                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
             {
                 $crate::snack::complete::utf8_token::utf8_token(comb)
             }
@@ -192,11 +188,10 @@ macro_rules! utf8_token_snack {
             /// # Examples
             /// See the `utf8_token()`-combinator for more information.
             #[inline]
-            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, F, S>
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, F, S>,
-                F: ::std::clone::Clone,
-                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+                C: $crate::snack::Combinator<'t, S>,
+                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
             {
                 $crate::snack::streaming::utf8_token::utf8_token(comb)
             }
@@ -226,14 +221,14 @@ macro_rules! utf8_token_snack {
 /// utf8_token_railroad!(Dot, ".");
 ///
 /// // Now you can call this!
-/// let node = Dot::<(), ()>::railroad();
+/// let node = Dot::<()>::railroad();
 /// ```
 #[macro_export]
 #[cfg(feature = "railroad")]
 macro_rules! utf8_token_railroad {
     ($name:ident, $desc:literal) => {
         // Railroad impl
-        impl<F, S> $crate::__private::railroad::ToNode for $name<F, S> {
+        impl<S> $crate::__private::railroad::ToNode for $name<S> {
             type Node = $crate::__private::railroad::railroad::Terminal;
 
             #[inline]
@@ -264,59 +259,55 @@ macro_rules! utf8_token_railroad {
 /// utf8_delim!(Parens, "(", ")");
 ///
 /// // Now this struct exists
-/// let span1 = Span::new("<example1>", "(foo)");
-/// let span2 = Span::new("<example2>", "(bar)");
+/// let span1 = Span::new("(foo)");
+/// let span2 = Span::new("(bar)");
 /// let paren1 = Parens { open: span1.slice(..1), close: span1.slice(4..) };
 /// let paren2 = Parens { open: span2.slice(..1), close: span2.slice(4..) };
 ///
 /// // And you can do some stuff with it!
-/// assert_eq!(
-///     format!("{paren1:?}"),
-///     "Parens { open: Span<&str, &str> { from: .., source: .., range: OpenClosed(1) }, close: \
-///      Span<&str, &str> { from: .., source: .., range: ClosedOpen(4) } }"
-/// );
+/// assert!(format!("{paren1:?}").starts_with("Parens { open: Span<&str> { source: "));
 /// assert_eq!(paren1, paren2);
-/// assert_eq!(Parens::<(), ()>::OPEN_TOKEN, "(");
+/// assert_eq!(Parens::<()>::OPEN_TOKEN, "(");
 /// ```
 #[macro_export]
 macro_rules! utf8_delim {
     ($name:ident, $open:literal, $close:literal) => {
         #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
-        pub struct $name<F, S> {
+        pub struct $name<S> {
             #[doc = concat!("The opening delimiter `", $open, "`.\n")]
-            pub open:  $crate::__private::Span<F, S>,
+            pub open:  $crate::__private::Span<S>,
             #[doc = concat!("The closing delimiter `", $close, "`.\n")]
-            pub close: $crate::__private::Span<F, S>,
+            pub close: $crate::__private::Span<S>,
         }
 
         // Default
-        impl ::std::default::Default for $name<&'static str, &'static str> {
+        impl ::std::default::Default for $name<&'static str> {
             #[inline]
             fn default() -> Self {
                 Self {
-                    open: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::open()"), <Self as $crate::Utf8Delimiter<&'static str, &'static str>>::OPEN_TOKEN),
-                    close: $crate::__private::Span::new(::std::concat!(::std::stringify!($name), "::default::close()"), <Self as $crate::Utf8Delimiter<&'static str, &'static str>>::CLOSE_TOKEN),
+                    open: $crate::__private::Span::new(<Self as $crate::Utf8Delimiter<&'static str>>::OPEN_TOKEN),
+                    close: $crate::__private::Span::new(<Self as $crate::Utf8Delimiter<&'static str>>::CLOSE_TOKEN),
                 }
             }
         }
 
         // Standard impls
-        impl<F, S> ::std::clone::Clone for $name<F, S>
+        impl<S> ::std::clone::Clone for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::clone::Clone,
+            $crate::__private::Span<S>: ::std::clone::Clone,
         {
             #[inline]
             fn clone(&self) -> Self {
                 Self { open: self.open.clone(), close: self.close.clone() }
             }
         }
-        impl<F, S> ::std::marker::Copy for $name<F, S>
+        impl<S> ::std::marker::Copy for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::marker::Copy,
+            $crate::__private::Span<S>: ::std::marker::Copy,
         {}
-        impl<F, S> ::std::fmt::Debug for $name<F, S>
+        impl<S> ::std::fmt::Debug for $name<S>
         where
-            $crate::__private::Span<F, S>: ::std::fmt::Debug,
+            $crate::__private::Span<S>: ::std::fmt::Debug,
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -326,12 +317,12 @@ macro_rules! utf8_delim {
                 fmt.finish()
             }
         }
-        impl<F, S> ::std::cmp::Eq for $name<F, S> {}
-        impl<F, S> ::std::hash::Hash for $name<F, S> {
+        impl<S> ::std::cmp::Eq for $name<S> {}
+        impl<S> ::std::hash::Hash for $name<S> {
             #[inline]
             fn hash<H: ::std::hash::Hasher>(&self, _hasher: &mut H) {}
         }
-        impl<F, S> ::std::cmp::PartialEq for $name<F, S> {
+        impl<S> ::std::cmp::PartialEq for $name<S> {
             /// Compares two tokens of the same type.
             ///
             /// This is always true, because there is nothing configurable about tokens.
@@ -346,26 +337,29 @@ macro_rules! utf8_delim {
         }
 
         // Token impls
-        impl<F, S> $crate::Utf8Delimiter<F, S> for $name<F, S> {
+        impl<S> $crate::Utf8Delimiter<S> for $name<S> {
             const OPEN_TOKEN: &'static str = $open;
             const CLOSE_TOKEN: &'static str = $close;
         }
 
         // Spanning impl
-        impl<F, S> $crate::__private::Spanning<F, S> for $name<F, S>
+        impl<S> $crate::__private::Spanning<S> for $name<S>
         where
-            F: ::std::clone::Clone,
             S: ::std::clone::Clone + $crate::__private::Spannable,
         {
             #[inline]
             #[track_caller]
-            fn span(&self) -> $crate::__private::Span<F, S> { self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files")) }
+            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Owned(self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files"))) }
+
+            #[inline]
+            #[track_caller]
+            fn into_span(self) -> $crate::__private::Span<S> { <::std::borrow::Cow<$crate::__private::Span<S>>>::into_owned(<Self as $crate::__private::Spanning<S>>::span(&self)) }
         }
 
         // Convertion impls
-        impl<F, S> ::std::convert::From<($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)> for $name<F, S> {
+        impl<S> ::std::convert::From<($crate::__private::Span<S>, $crate::__private::Span<S>)> for $name<S> {
             #[inline]
-            fn from((open, close): ($crate::__private::Span<F, S>, $crate::__private::Span<F, S>)) -> Self {
+            fn from((open, close): ($crate::__private::Span<S>, $crate::__private::Span<S>)) -> Self {
                 Self { open, close }
             }
         }
@@ -387,7 +381,7 @@ macro_rules! utf8_delim {
 #[cfg(feature = "snack")]
 macro_rules! utf8_delim_snack {
     ($name:ident) => {
-        impl<F, S> $name<F, S> {
+        impl<S> $name<S> {
             /// Returns a snack combinator for parsing this token.
             ///
             /// # Arguments
@@ -399,11 +393,10 @@ macro_rules! utf8_delim_snack {
             /// # Examples
             /// See the `utf8_delim()`-combinator for more information.
             #[inline]
-            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, F, S>
+            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, F, S>,
-                F: ::std::clone::Clone,
-                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+                C: $crate::snack::Combinator<'t, S>,
+                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
             {
                 $crate::snack::complete::utf8_delim::utf8_delim(comb)
             }
@@ -422,11 +415,10 @@ macro_rules! utf8_delim_snack {
             /// # Examples
             /// See the `utf8_delim()`-combinator for more information.
             #[inline]
-            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, F, S>
+            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, F, S>,
-                F: ::std::clone::Clone,
-                S: ::std::clone::Clone + $crate::snack::span::MatchBytes,
+                C: $crate::snack::Combinator<'t, S>,
+                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
             {
                 $crate::snack::streaming::utf8_delim::utf8_delim(comb)
             }
@@ -459,21 +451,21 @@ macro_rules! utf8_delim_snack {
 /// utf8_delim_railroad!(Parens, "(", ")");
 ///
 /// // Now you can call this!
-/// let node1 = Parens::<(), ()>::railroad_open();
-/// let node2 = Parens::<(), ()>::railroad_close();
+/// let node1 = Parens::<()>::railroad_open();
+/// let node2 = Parens::<()>::railroad_close();
 /// ```
 #[macro_export]
 #[cfg(feature = "railroad")]
 macro_rules! utf8_delim_railroad {
     ($name:ident, $open:literal, $close:literal) => {
         // Railroad impls
-        impl<F, S> $crate::__private::railroad::ToNode for $name<F, S> {
+        impl<S> $crate::__private::railroad::ToNode for $name<S> {
             type Node = $crate::__private::railroad::railroad::Terminal;
 
             #[inline]
             fn railroad() -> Self::Node { $crate::__private::railroad::railroad::Terminal::new(concat!($open, $close).into()) }
         }
-        impl<F, S> $crate::__private::railroad::ToDelimNode for $name<F, S> {
+        impl<S> $crate::__private::railroad::ToDelimNode for $name<S> {
             type NodeOpen = $crate::__private::railroad::railroad::Terminal;
             type NodeClose = $crate::__private::railroad::railroad::Terminal;
 

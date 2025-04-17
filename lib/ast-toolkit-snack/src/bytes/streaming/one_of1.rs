@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    18 Jan 2025, 17:40:18
+//    17 Mar 2025, 14:30:02
 //  Auto updated?
 //    Yes
 //
@@ -21,39 +21,36 @@ use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::{LenBytes, OneOfBytes};
+use crate::span::BytesParsable;
 
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`one_of1()`]-combinator.
-pub struct OneOf1<'b, F, S> {
+pub struct OneOf1<'b, S> {
     /// The set of bytes to one of.
     byteset: &'b [u8],
-    /// Store the target `F`rom string type in this struct in order to be much nicer to type deduction.
-    _f:      PhantomData<F>,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'b`.
-impl<'c, 'b, F, S> Combinator<'c, F, S> for OneOf1<'b, F, S>
+impl<'c, 'b, S> Combinator<'c, S> for OneOf1<'b, S>
 where
     'b: 'c,
-    F: Clone,
-    S: Clone + LenBytes + OneOfBytes,
+    S: Clone + BytesParsable,
 {
     type ExpectsFormatter = ExpectsFormatter<'b>;
-    type Output = Span<F, S>;
-    type Recoverable = Recoverable<'b, F, S>;
+    type Output = Span<S>;
+    type Recoverable = Recoverable<'b, S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Check first if there's *any* input to parse.
-        if input.len() == 0 {
+        if input.is_empty() {
             return Err(SnackError::NotEnough { needed: Some(1), span: input });
         }
 
@@ -91,11 +88,11 @@ where
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::<&str, &[u8]>::new("<example>", b"abcdefg");
-/// let span2 = Span::<&str, &[u8]>::new("<example>", b"cdefghi");
-/// let span3 = Span::<&str, &[u8]>::new("<example>", "abÿcdef".as_bytes());
-/// let span4 = Span::<&str, &[u8]>::new("<example>", b"hijklmn");
-/// let span5 = Span::<&str, &[u8]>::new("<example>", b"");
+/// let span1 = Span::new(b"abcdefg".as_slice());
+/// let span2 = Span::new(b"cdefghi".as_slice());
+/// let span3 = Span::new("abÿcdef".as_bytes());
+/// let span4 = Span::new(b"hijklmn".as_slice());
+/// let span5 = Span::new(b"".as_slice());
 ///
 /// // Note: the magic numbers below are the two bytes made up by "ÿ"
 /// let mut comb = one_of1(&[b'a', b'b', b'c', 191, 195]);
@@ -112,10 +109,9 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn one_of1<'b, F, S>(byteset: &'b [u8]) -> OneOf1<'b, F, S>
+pub const fn one_of1<'b, S>(byteset: &'b [u8]) -> OneOf1<'b, S>
 where
-    F: Clone,
-    S: Clone + LenBytes + OneOfBytes,
+    S: Clone + BytesParsable,
 {
-    OneOf1 { byteset, _f: PhantomData, _s: PhantomData }
+    OneOf1 { byteset, _s: PhantomData }
 }

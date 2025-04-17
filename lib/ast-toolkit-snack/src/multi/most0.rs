@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    07 Mar 2025, 14:23:23
+//    24 Mar 2025, 11:44:06
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Span;
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -50,16 +51,14 @@ impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F>
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`most0()`]-combinator.
-pub struct Most0<C, F, S> {
+pub struct Most0<C, S> {
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Most0<C, F, S>
+impl<'t, C, S> Combinator<'t, S> for Most0<C, S>
 where
-    F: Clone,
-    S: Clone,
-    C: Combinator<'t, F, S>,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -70,9 +69,9 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects() } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         let mut res: Vec<C::Output> = Vec::new();
-        let mut rem: Span<F, S> = input;
+        let mut rem: Span<S> = input;
         loop {
             match self.comb.parse(rem.clone()) {
                 Ok((rem2, res2)) => {
@@ -129,9 +128,9 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hellohellohellogoodbye");
-/// let span2 = Span::new("<example>", "hellohelgoodbye");
-/// let span3 = Span::new("<example>", "goodbye");
+/// let span1 = Span::new("hellohellohellogoodbye");
+/// let span2 = Span::new("hellohelgoodbye");
+/// let span3 = Span::new("goodbye");
 ///
 /// let mut comb = most0(tag("hello"));
 /// assert_eq!(
@@ -150,9 +149,9 @@ where
 /// use ast_toolkit_snack::utf8::streaming::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hellohello");
-/// let span2 = Span::new("<example>", "hellohel");
-/// let span3 = Span::new("<example>", "");
+/// let span1 = Span::new("hellohello");
+/// let span2 = Span::new("hellohel");
+/// let span3 = Span::new("");
 ///
 /// let mut comb = most0(tag("hello"));
 /// assert_eq!(
@@ -163,14 +162,16 @@ where
 ///     comb.parse(span2),
 ///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(8..) })
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(5), span: span3 }));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::NotEnough { needed: Some(5), span: span3.slice(0..) })
+/// );
 /// ```
 #[inline]
-pub const fn most0<'t, C, F, S>(comb: C) -> Most0<C, F, S>
+pub const fn most0<'t, C, S>(comb: C) -> Most0<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C: Combinator<'t, S>,
+    S: Clone + Parsable,
 {
-    Most0 { comb, _f: PhantomData, _s: PhantomData }
+    Most0 { comb, _s: PhantomData }
 }

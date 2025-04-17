@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 20:38:17
 //  Last edited:
-//    13 Mar 2025, 22:06:53
+//    24 Mar 2025, 12:18:28
 //  Auto updated?
 //    Yes
 //
@@ -12,15 +12,16 @@
 //!   Implements a parser for delimiting tokens.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{self, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
-use ast_toolkit_snack::span::MatchBytes;
+use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::complete::tag;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::Utf8Delimiter;
@@ -29,13 +30,13 @@ use crate::Utf8Delimiter;
 /***** ERRORS *****/
 /// Defines recoverable errors for the [`utf8_delim()`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum Recoverable<E, F, S> {
+pub enum Recoverable<E, S> {
     /// Failed to parse the opening delimiter.
-    OpenKeyword { what: &'static str, span: Span<F, S> },
+    OpenKeyword { what: &'static str, span: Span<S> },
     /// Failed to parse the bit in between the delimiters.
     Inner { err: E },
 }
-impl<E: Display, F, S> Display for Recoverable<E, F, S> {
+impl<E: Display, S> Display for Recoverable<E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -44,26 +45,18 @@ impl<E: Display, F, S> Display for Recoverable<E, F, S> {
         }
     }
 }
-impl<E: 'static + Error, F, S> Error for Recoverable<E, F, S> {
+impl<E: fmt::Debug + Display, S: Spannable> Error for Recoverable<E, S> {}
+impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
-            Self::OpenKeyword { .. } => None,
-            Self::Inner { err } => Some(err),
-        }
-    }
-}
-impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Recoverable<E, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> {
-        match self {
-            Self::OpenKeyword { span, .. } => span.clone(),
+            Self::OpenKeyword { span, .. } => Cow::Borrowed(span),
             Self::Inner { err } => err.span(),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> {
+    fn into_span(self) -> Span<S> {
         match self {
             Self::OpenKeyword { span, .. } => span,
             Self::Inner { err } => err.into_span(),
@@ -73,13 +66,13 @@ impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Recoverable<E, F,
 
 /// Defines fatal errors for the [`utf8_delim()`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<E, F, S> {
+pub enum Fatal<E, S> {
     /// The inner parser failed fatally.
     Inner { err: E },
     /// We failed to find the closing delimiter.
-    CloseKeyword { what: &'static str, span: Span<F, S> },
+    CloseKeyword { what: &'static str, span: Span<S> },
 }
-impl<E: Display, F, S> Display for Fatal<E, F, S> {
+impl<E: Display, S> Display for Fatal<E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -88,26 +81,18 @@ impl<E: Display, F, S> Display for Fatal<E, F, S> {
         }
     }
 }
-impl<E: 'static + Error, F, S> Error for Fatal<E, F, S> {
+impl<E: fmt::Debug + Display, S: Spannable> Error for Fatal<E, S> {}
+impl<E: Spanning<S>, S: Clone> Spanning<S> for Fatal<E, S> {
     #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Inner { err } => Some(err),
-            Self::CloseKeyword { .. } => None,
-        }
-    }
-}
-impl<E: Spanning<F, S>, F: Clone, S: Clone> Spanning<F, S> for Fatal<E, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> {
+    fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Inner { err } => err.span(),
-            Self::CloseKeyword { span, .. } => span.clone(),
+            Self::CloseKeyword { span, .. } => Cow::Borrowed(span),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<F, S>
+    fn into_span(self) -> Span<S>
     where
         Self: Sized,
     {
@@ -154,33 +139,31 @@ impl<O: ast_toolkit_snack::ExpectsFormatter> ast_toolkit_snack::ExpectsFormatter
 
 /***** COMBINATORS *****/
 /// Implements the [`utf8_delim()`]-combinator.
-pub struct Utf8Delim<T, C, F, S> {
+pub struct Utf8Delim<T, C, S> {
     /// The type of token to parse.
     _t:   PhantomData<T>,
     /// The combinator that parses in between the parenthesis.
     comb: C,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, T, C, F, S> Combinator<'t, F, S> for Utf8Delim<T, C, F, S>
+impl<'t, T, C, S> Combinator<'t, S> for Utf8Delim<T, C, S>
 where
-    T: Utf8Delimiter<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: Utf8Delimiter<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = (C::Output, T);
-    type Recoverable = Recoverable<C::Recoverable, F, S>;
-    type Fatal = Fatal<C::Fatal, F, S>;
+    type Recoverable = Recoverable<C::Recoverable, S>;
+    type Fatal = Fatal<C::Fatal, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { left: T::OPEN_TOKEN, inner: self.comb.expects(), right: T::CLOSE_TOKEN } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Attempt to parse the opening delimiter
-        let (rem, open): (Span<F, S>, Span<F, S>) = match tag(T::OPEN_TOKEN).parse(input) {
+        let (rem, open): (Span<S>, Span<S>) = match tag(T::OPEN_TOKEN).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
                 return Err(SnackError::Recoverable(Recoverable::OpenKeyword { what: T::OPEN_TOKEN, span: err.into_span() }));
@@ -189,7 +172,7 @@ where
         };
 
         // Attempt to parse the middle bit
-        let (rem, inner): (Span<F, S>, C::Output) = match self.comb.parse(rem) {
+        let (rem, inner): (Span<S>, C::Output) = match self.comb.parse(rem) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Inner { err })),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Inner { err })),
@@ -245,12 +228,12 @@ where
 /// utf8_delim_snack!(Parens);
 ///
 /// // Let's test some inputs
-/// let span1 = Span::new("<example>", "(foo)");
-/// let span2 = Span::new("<example>", "(bar)");
-/// let span3 = Span::new("<example>", "foo");
-/// let span4 = Span::new("<example>", "(foo");
+/// let span1 = Span::new("(foo)");
+/// let span2 = Span::new("(bar)");
+/// let span3 = Span::new("foo");
+/// let span4 = Span::new("(foo");
 ///
-/// let mut comb1 = utf8_delim::<Parens<_, _>, _, _, _>(tag("foo"));
+/// let mut comb1 = utf8_delim::<Parens<_>, _, _>(tag("foo"));
 /// assert_eq!(
 ///     comb1.parse(span1),
 ///     Ok((
@@ -283,12 +266,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_delim<'t, T, C, F, S>(comb: C) -> Utf8Delim<T, C, F, S>
+pub const fn utf8_delim<'t, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
 where
-    T: Utf8Delimiter<F, S>,
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone + MatchBytes,
+    T: Utf8Delimiter<S>,
+    C: Combinator<'t, S>,
+    S: Clone + Utf8Parsable,
 {
-    Utf8Delim { _t: PhantomData, comb, _f: PhantomData, _s: PhantomData }
+    Utf8Delim { _t: PhantomData, comb, _s: PhantomData }
 }

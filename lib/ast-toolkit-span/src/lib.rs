@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    13 Feb 2025, 11:00:34
+//    17 Mar 2025, 13:06:50
 //  Auto updated?
 //    Yes
 //
@@ -17,26 +17,12 @@
 //
 
 // Declare modules
-mod as_bytes;
-mod as_str;
-mod display;
-mod eq;
-mod hash;
-mod lines;
-mod locate;
-mod ord;
 pub mod range;
 mod span;
 mod spannable;
+mod spanning;
 
-// Flatten them all in this namespace
-pub use as_bytes::*;
-pub use as_str::*;
-pub use display::*;
-pub use eq::*;
-pub use hash::*;
-pub use lines::*;
-pub use locate::*;
-pub use ord::*;
-pub use span::*;
-pub use spannable::*;
+// Bring some of it into the parent namespace
+pub use span::Span;
+pub use spannable::Spannable;
+pub use spanning::Spanning;
