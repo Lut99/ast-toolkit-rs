@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    18 Mar 2025, 10:23:58
+//    22 Apr 2025, 13:30:26
 //  Auto updated?
 //    Yes
 //
@@ -30,18 +30,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'b, S> {
+pub struct Recoverable<'c, S> {
     /// The set of bytes to one of.
-    pub byteset: &'b [u8],
+    pub byteset: &'c [u8],
     /// The location where no characters were found.
     pub span:    Span<S>,
 }
-impl<'b, S> Display for Recoverable<'b, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { byteset: self.byteset }) }
 }
-impl<'b, S: Spannable> Error for Recoverable<'b, S> {}
-impl<'b, S: Clone> Spanning<S> for Recoverable<'b, S> {
+impl<'c, 'a, S: Spannable<'a>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -56,18 +56,18 @@ impl<'b, S: Clone> Spanning<S> for Recoverable<'b, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'b> {
+pub struct ExpectsFormatter<'c> {
     /// The set of bytes we expect one of.
-    pub byteset: &'b [u8],
+    pub byteset: &'c [u8],
 }
-impl<'b> Display for ExpectsFormatter<'b> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
         for i in 0..self.byteset.len() {
@@ -92,22 +92,23 @@ impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`one_of1()`]-combinator.
-pub struct OneOf1<'b, S> {
+pub struct OneOf1<'c, S> {
     /// The set of bytes to one of.
-    byteset: &'b [u8],
+    byteset: &'c [u8],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'b`.
-impl<'c, 'b, S> Combinator<'c, S> for OneOf1<'b, S>
+// any smaller lifetime than `'c`.
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
-    'b: 'c,
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'b, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -119,7 +120,7 @@ where
         let mut i: usize = 0;
         for byte in input.bytes() {
             // Check if it's in the set
-            if self.byteset.contains(byte) {
+            if self.byteset.contains(&byte) {
                 i += 1;
                 continue;
             } else {
@@ -191,9 +192,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn one_of1<'b, S>(byteset: &'b [u8]) -> OneOf1<'b, S>
+pub const fn one_of1<'c, 's, S>(byteset: &'c [u8]) -> OneOf1<'c, S>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
     OneOf1 { byteset, _s: PhantomData }
 }

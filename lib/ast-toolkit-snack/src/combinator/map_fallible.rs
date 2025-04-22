@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    20 Mar 2025, 11:37:18
+//    22 Apr 2025, 11:43:15
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -93,13 +93,14 @@ pub struct MapFallible<C, P, S> {
     pred: P,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, O1, O2, E1, E2, S> Combinator<'t, S> for MapFallible<C, P, S>
+impl<'c, 's, C, P, O1, O2, E1, E2, S> Combinator<'c, 's, S> for MapFallible<C, P, S>
 where
-    C: Combinator<'t, S, Output = O1>,
+    C: Combinator<'c, 's, S, Output = O1>,
     P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
     E1: ParseError<S>,
     E2: ParseError<S>,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
@@ -185,13 +186,14 @@ where
 /// ));
 /// ```
 #[inline]
-pub const fn map_fallible<'t, C, P, O1, O2, E1, E2, S>(comb: C, pred: P) -> MapFallible<C, P, S>
+pub const fn map_fallible<'c, 's, C, P, O1, O2, E1, E2, S>(comb: C, pred: P) -> MapFallible<C, P, S>
 where
-    C: Combinator<'t, S, Output = O1>,
+    C: Combinator<'c, 's, S, Output = O1>,
     P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
     E1: ParseError<S>,
     E2: ParseError<S>,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     MapFallible { comb, pred, _s: PhantomData }
 }

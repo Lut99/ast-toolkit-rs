@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:50:58
 //  Last edited:
-//    18 Jan 2025, 17:54:45
+//    22 Apr 2025, 13:26:34
 //  Auto updated?
 //    Yes
 //
@@ -12,36 +12,38 @@
 //!   Implements the [`fatal()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the fatal error thrown by the [`Fatal`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Fatal<F, S> {
+pub struct Fatal<S> {
     /// The place where the fatal error was thrown.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<F, S> Display for Fatal<F, S> {
+impl<S> Display for Fatal<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "A fatal error has occurred while parsing") }
 }
-impl<F, S> Error for Fatal<F, S> {}
-impl<F: Clone, S: Clone> Spanning<F, S> for Fatal<F, S> {
+impl<'s, S: Spannable<'s>> Error for Fatal<S> {}
+impl<S: Clone> Spanning<S> for Fatal<S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S>
+    fn into_span(self) -> Span<S>
     where
         Self: Sized,
     {
@@ -75,23 +77,24 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`fatal()`]-combinator.
-pub struct FatalComb<F, S> {
-    _f: PhantomData<F>,
+pub struct FatalComb<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for FatalComb<F, S> {
+impl<'s, S> Combinator<'static, 's, S> for FatalComb<S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Infallible;
     type Recoverable = Infallible;
-    type Fatal = Fatal<F, S>;
+    type Fatal = Fatal<S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
-        Err(SnackError::Fatal(Fatal { span: input }))
-    }
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> { Err(SnackError::Fatal(Fatal { span: input })) }
 }
 
 
@@ -113,16 +116,21 @@ impl<F, S> Combinator<'static, F, S> for FatalComb<F, S> {
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::error::fatal;
-/// use ast_toolkit_snack::error::fatal::Fatal;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = fatal();
-/// assert_eq!(comb.parse(span1), Err(SnackError::Fatal(Fatal { span: span1 })));
-/// assert_eq!(comb.parse(span2), Err(SnackError::Fatal(Fatal { span: span2 })));
+/// assert_eq!(comb.parse(span1), Err(SnackError::Fatal(fatal::Fatal { span: span1 })));
+/// assert_eq!(comb.parse(span2), Err(SnackError::Fatal(fatal::Fatal { span: span2 })));
 /// ```
 #[inline]
-pub const fn fatal<F, S>() -> FatalComb<F, S> { FatalComb { _f: PhantomData, _s: PhantomData } }
+pub const fn fatal<'s, S>() -> FatalComb<S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
+    FatalComb { _s: PhantomData }
+}

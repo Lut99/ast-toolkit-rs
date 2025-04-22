@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    19 Mar 2025, 14:58:39
+//    22 Apr 2025, 11:43:23
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
@@ -30,11 +30,12 @@ pub struct Map<C, P, S> {
     pred: P,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, O1, O2, S> Combinator<'t, S> for Map<C, P, S>
+impl<'c, 's, C, P, O1, O2, S> Combinator<'c, 's, S> for Map<C, P, S>
 where
-    C: Combinator<'t, S, Output = O1>,
+    C: Combinator<'c, 's, S, Output = O1>,
     P: FnMut(O1) -> O2,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
@@ -94,11 +95,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn map<'t, C, P, O1, O2, S>(comb: C, pred: P) -> Map<C, P, S>
+pub const fn map<'c, 's, C, P, O1, O2, S>(comb: C, pred: P) -> Map<C, P, S>
 where
-    C: Combinator<'t, S, Output = O1>,
+    C: Combinator<'c, 's, S, Output = O1>,
     P: FnMut(O1) -> O2,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Map { comb, pred, _s: PhantomData }
 }

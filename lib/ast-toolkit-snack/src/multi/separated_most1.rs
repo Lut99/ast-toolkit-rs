@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 11:58:12
 //  Last edited:
-//    24 Mar 2025, 11:49:26
+//    22 Apr 2025, 12:04:11
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
@@ -70,11 +70,12 @@ pub struct SeparatedMost1<C1, C2, S> {
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, S> Combinator<'t, S> for SeparatedMost1<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for SeparatedMost1<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
@@ -240,11 +241,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn separated_most1<'t, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMost1<C1, C2, S>
+pub const fn separated_most1<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMost1<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     SeparatedMost1 { comb, sep, _s: PhantomData }
 }

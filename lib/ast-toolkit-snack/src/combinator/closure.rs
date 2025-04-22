@@ -4,7 +4,7 @@
 //  Created:
 //    18 Mar 2025, 16:14:07
 //  Last edited:
-//    19 Mar 2025, 09:19:15
+//    22 Apr 2025, 11:48:28
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -77,13 +77,14 @@ pub struct Closure<F, C, O, E1, E2, S> {
     _fatal: PhantomData<E2>,
     _s: PhantomData<S>,
 }
-impl<'t, F, C, O, E1, E2, S> Combinator<'t, S> for Closure<F, C, O, E1, E2, S>
+impl<'c, 's, F, C, O, E1, E2, S> Combinator<'c, 's, S> for Closure<F, C, O, E1, E2, S>
 where
-    F: 't + Clone + Debug + Display + Eq + PartialEq,
-    C: FnMut(Span<S>) -> SResult<O, E1, E2, S>,
-    E1: 't + ParseError<S>,
-    E2: 't + ParseError<S>,
-    S: Clone + Parsable,
+    F: 'c + Clone + Debug + Display + Eq + PartialEq,
+    C: 'c + FnMut(Span<S>) -> SResult<O, E1, E2, S>,
+    E1: ParseError<S>,
+    E2: ParseError<S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<F>;
     type Output = O;
@@ -110,13 +111,14 @@ where
 
 /***** LIBRARY *****/
 #[inline]
-pub const fn closure<F, C, O, E1, E2, S>(expected: F, closure: C) -> Closure<F, C, O, E1, E2, S>
+pub const fn closure<'c, 's, F, C, O, E1, E2, S>(expected: F, closure: C) -> Closure<F, C, O, E1, E2, S>
 where
-    F: Clone + Debug + Display + Eq + PartialEq,
-    C: FnMut(Span<S>) -> SResult<O, E1, E2, S>,
+    F: 'c + Clone + Debug + Display + Eq + PartialEq,
+    C: 'c + FnMut(Span<S>) -> SResult<O, E1, E2, S>,
     E1: ParseError<S>,
     E2: ParseError<S>,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Closure { expected, closure, _output: PhantomData, _recoverable: PhantomData, _fatal: PhantomData, _s: PhantomData }
 }

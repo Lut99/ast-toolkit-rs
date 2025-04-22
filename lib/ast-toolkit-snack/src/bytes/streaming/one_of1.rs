@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    17 Mar 2025, 14:30:02
+//    22 Apr 2025, 10:55:17
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
@@ -26,22 +26,23 @@ use crate::span::BytesParsable;
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`one_of1()`]-combinator.
-pub struct OneOf1<'b, S> {
+pub struct OneOf1<'c, S> {
     /// The set of bytes to one of.
-    byteset: &'b [u8],
+    byteset: &'c [u8],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'b`.
-impl<'c, 'b, S> Combinator<'c, S> for OneOf1<'b, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
-    'b: 'c,
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'b, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -109,9 +110,10 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn one_of1<'b, S>(byteset: &'b [u8]) -> OneOf1<'b, S>
+pub const fn one_of1<'c, 's, S>(byteset: &'c [u8]) -> OneOf1<'c, S>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
     OneOf1 { byteset, _s: PhantomData }
 }

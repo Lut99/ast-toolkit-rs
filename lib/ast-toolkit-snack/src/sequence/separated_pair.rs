@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 19:43:22
 //  Last edited:
-//    18 Jan 2025, 18:47:28
+//    22 Apr 2025, 13:30:50
 //  Auto updated?
 //    Yes
 //
@@ -14,33 +14,35 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::tuple;
 pub use super::tuple::{Error3 as Error, ExpectsFormatter3 as ExpectsFormatter, Fatal3 as Fatal, Recoverable3 as Recoverable};
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** LIBRARY *****/
-// NOTE: Not a type alias, because this needs to change the interface (either introduce `'t` at the
+// NOTE: Not a type alias, because this needs to change the interface (either introduce `'c` at the
 // type level or else other arbitrary generics).
 /// Actually implements the [`separated_pair()`]-combinator.
-pub struct SeparatedPair<C1, C2, C3, F, S> {
+pub struct SeparatedPair<C1, C2, C3, S> {
     /// The left combinator, not to discard.
     left:   C1,
     /// The middle combinator, to discard.
     middle: C2,
     /// The right combinator, not to discard.
     right:  C3,
-    _f:     PhantomData<F>,
     _s:     PhantomData<S>,
 }
-impl<'t, C1, C2, C3, F, S> Combinator<'t, F, S> for SeparatedPair<C1, C2, C3, F, S>
+impl<'c, 's, C1, C2, C3, S> Combinator<'c, 's, S> for SeparatedPair<C1, C2, C3, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    C3: Combinator<'t, F, S>,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    C3: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter, C3::ExpectsFormatter>;
     type Output = (C1::Output, C3::Output);
@@ -51,7 +53,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmts: (self.left.expects(), self.middle.expects(), self.right.expects()) } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // We can rely on the `pair()`-combinator, we just discard as appropriate
         match tuple((&mut self.left, &mut self.middle, &mut self.right)).parse(input) {
             Ok((rem, (res1, _, res3))) => Ok((rem, (res1, res3))),
@@ -93,12 +95,12 @@ where
 /// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello123Goodbye");
-/// let span2 = Span::new("<example>", "123Goodbye");
-/// let span3 = Span::new("<example>", "HelloWorld");
+/// let span1 = Span::new("Hello123Goodbye");
+/// let span2 = Span::new("123Goodbye");
+/// let span3 = Span::new("HelloWorld");
 ///
 /// let mut comb = separated_pair(tag("Hello"), digit1(), tag("Goodbye"));
-/// assert_eq!(comb.parse(span1), Ok((span1.slice(15..), (span1.slice(..5), span1.slice(8..)))));
+/// assert_eq!(comb.parse(span1), Ok((span1.slice(15..), (span1.slice(..5), span1.slice(8..15)))));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(separated_pair::Recoverable::Comb0(tag::Recoverable {
@@ -115,11 +117,13 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn separated_pair<'t, C1, C2, C3, F, S>(first: C1, second: C2, third: C3) -> SeparatedPair<C1, C2, C3, F, S>
+pub const fn separated_pair<'c, 's, C1, C2, C3, S>(first: C1, second: C2, third: C3) -> SeparatedPair<C1, C2, C3, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
-    C3: Combinator<'t, F, S>,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    C3: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
-    SeparatedPair { left: first, middle: second, right: third, _f: PhantomData, _s: PhantomData }
+    SeparatedPair { left: first, middle: second, right: third, _s: PhantomData }
 }

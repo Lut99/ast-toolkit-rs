@@ -18,7 +18,7 @@ use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
-use ast_toolkit_snack::span::{BytesParsable as _, Utf8Parsable};
+use ast_toolkit_snack::span::{BytesParsable, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
 use ast_toolkit_snack::{Combinator, branch};
 use ast_toolkit_span::{Span, Spannable};
@@ -40,7 +40,7 @@ impl<S> Display for Fatal<S> {
         }
     }
 }
-impl<S: Spannable> Error for Fatal<S> {}
+impl<'s, S: Spannable<'s>> Error for Fatal<S> {}
 impl<S: Clone> ast_toolkit_span::Spanning<S> for Fatal<S> {
     #[inline]
     fn span(&self) -> std::borrow::Cow<Span<S>> {
@@ -115,15 +115,15 @@ mod expr {
     pub(super) struct Expr<S> {
         pub(super) _s: PhantomData<S>,
     }
-    impl<'s, 't, S> Combinator<'t, S> for Expr<S>
+    impl<'s, S> Combinator<'static, 's, S> for Expr<S>
     where
-        's: 't,
-        S: 's + Clone + Utf8Parsable,
+        S: 's + Clone + Spannable<'s>,
+        S::Slice: Utf8Parsable<'s>,
     {
         type ExpectsFormatter = &'static str;
         type Output = super::Expr;
-        type Recoverable = BoxedParseError<'t, S>;
-        type Fatal = BoxedParseError<'t, S>;
+        type Recoverable = BoxedParseError<'s, S>;
+        type Fatal = BoxedParseError<'s, S>;
 
         #[inline]
         fn expects(&self) -> Self::ExpectsFormatter { "Expected an expression" }
@@ -169,9 +169,10 @@ mod expr {
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
-const fn expr<S>() -> expr::Expr<S>
+const fn expr<'s, S>() -> expr::Expr<S>
 where
-    S: Clone + Utf8Parsable,
+    S: 's + Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     expr::Expr { _s: std::marker::PhantomData }
 }
@@ -189,9 +190,10 @@ where
 ///
 /// It fails fatally if it _did_ start with a digit, but it overflows for our internal
 /// representation.
-const fn lit<'s, S>() -> impl Combinator<'s, S, Output = Lit>
+const fn lit<'s, S>() -> impl Combinator<'static, 's, S, Output = Lit>
 where
-    S: 's + Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     closure("A literal", |input| branch::alt((lit_int(),)).parse(input))
 }
@@ -217,9 +219,10 @@ where
 /// integer.
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
-const fn lit_int<'s, S>() -> impl Combinator<'s, S, Output = Lit>
+const fn lit_int<'s, S>() -> impl Combinator<'static, 's, S, Output = Lit>
 where
-    S: 's + Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     closure("An integer literal", |input: Span<S>| {
         // Parse the characters
@@ -232,8 +235,8 @@ where
         // Convert to an integer
         let mut value: u64 = 0;
         for b in val.bytes() {
-            if *b >= b'0' && *b <= b'9' {
-                let i: u64 = (*b - b'0') as u64;
+            if b >= b'0' && b <= b'9' {
+                let i: u64 = (b - b'0') as u64;
                 if value > (u64::MAX - i) / 10 {
                     return Err(SnackError::Fatal(Fatal::Overflow { span: val.clone() }));
                 }

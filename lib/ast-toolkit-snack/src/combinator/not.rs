@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    20 Mar 2025, 12:08:53
+//    22 Apr 2025, 11:42:50
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::recognize;
 use crate::result::{Expected, Result as SResult, SnackError};
@@ -35,7 +35,7 @@ pub type Recoverable<C, S> = Expected<ExpectsFormatter<C>, S>;
 /// Expectsformatter for the [`Not`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExpectsFormatter<F> {
-    /// The nested formatter of the thing we _didn't_ expect.
+    /// The nested formatter of the thing we _didn'c_ expect.
     pub fmt: F,
 }
 impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
@@ -63,10 +63,11 @@ pub struct Not<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Not<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Not<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = ();
@@ -142,10 +143,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn not<'t, C, S>(comb: C) -> Not<C, S>
+pub const fn not<'c, 's, C, S>(comb: C) -> Not<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Not { comb, _s: PhantomData }
 }

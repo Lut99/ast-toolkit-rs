@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    24 Mar 2025, 11:53:59
+//    22 Apr 2025, 12:04:17
 //  Auto updated?
 //    Yes
 //
@@ -36,6 +36,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
+use ast_toolkit_span::Spannable;
 // Re-exports
 pub use ast_toolkit_span::{Span, Spanning};
 use span::Parsable;
@@ -126,12 +127,17 @@ impl ExpectsFormatter for String {
 /// result of parsing. In that case, all errors are collected instead.
 ///
 /// # Generics
-/// - `'t`: Some lifetime of something upon which the combinator depends. Typically, this is used
-///   to make the [`Combinator::ExpectsFormatter`] depend on it too and efficiently delay
-///   serialization of the expects-string until the last moment.
-/// - `F`: Some from-string that any input [`Span`] carries.
+/// - `'c`: Some lifetime of something upon which the _combinator_ depends. For example, this is
+///   the lifetime `'c` in the `&'c str` given as input to a [`tag()`](utf8::complete::tag)-
+///   combinator. This is used to delay serialization of the arguments to the last moment.
+/// - `'s`: Some lifetime of the _input_. Since the input tends to refer to a reference, we would
+///   like to abstract over the lifetime of anything containing that reference.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait Combinator<'t, S: Clone + Parsable> {
+pub trait Combinator<'t, 's, S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
@@ -185,18 +191,22 @@ pub trait Combinator<'t, S: Clone + Parsable> {
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, S: Clone + Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'a mut T {
+impl<'t, 's, 'a, S, T: Combinator<'t, 's, S>> Combinator<'t, 's, S> for &'a mut T
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, 's, S>>::expects(self) }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        <T as Combinator<'t, S>>::parse(self, input)
+        <T as Combinator<'t, 's, S>>::parse(self, input)
     }
 }
 
@@ -217,7 +227,11 @@ impl<'a, 't, S: Clone + Parsable, T: Combinator<'t, S>> Combinator<'t, S> for &'
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait BranchingCombinator<'t, S: Clone + Parsable> {
+pub trait BranchingCombinator<'t, 's, S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for all paths of this Combinator.
@@ -271,17 +285,21 @@ pub trait BranchingCombinator<'t, S: Clone + Parsable> {
 }
 
 // Default impl for pointer-like types
-impl<'a, 't, S: Clone + Parsable, T: BranchingCombinator<'t, S>> BranchingCombinator<'t, S> for &'a mut T {
+impl<'t, 's, 'a, S, T: BranchingCombinator<'t, 's, S>> BranchingCombinator<'t, 's, S> for &'a mut T
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
     type Recoverable = T::Recoverable;
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, 's, S>>::expects(self) }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        <T as BranchingCombinator<'t, S>>::parse(self, input)
+        <T as BranchingCombinator<'t, 's, S>>::parse(self, input)
     }
 }

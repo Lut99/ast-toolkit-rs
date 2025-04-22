@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    20 Mar 2025, 12:13:33
+//    22 Apr 2025, 12:05:25
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::mem::MaybeUninit;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -106,11 +106,12 @@ macro_rules! tuple_comb_impl {
 
 
             /* COMBINATORS */
-            impl<'t, [<C $fi>] $(, [<C $i>])*, S> Combinator<'t, S> for ([<C $fi>], $([<C $i>],)*)
+            impl<'c, 's, [<C $fi>] $(, [<C $i>])*, S> Combinator<'c, 's, S> for ([<C $fi>], $([<C $i>],)*)
             where
-                [<C $fi>]: Combinator<'t, S>,
-                $([<C $i>]: Combinator<'t, S>,)*
-                S: Clone + Parsable,
+                [<C $fi>]: Combinator<'c, 's, S>,
+                $([<C $i>]: Combinator<'c, 's, S>,)*
+                S: Clone + Spannable<'s>,
+                S::Slice: Parsable<'s>,
             {
                 type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                 type Output = ([<C $fi>]::Output, $([<C $i>]::Output),*);
@@ -169,7 +170,7 @@ macro_rules! tuple_comb_impl {
 
 /// Implements [`Combinator`] for various sizes of tuples for us.
 macro_rules! tuple_comb_impls {
-    // Base case; empty tuple implementation (we don't do that here)
+    // Base case; empty tuple implementation (we don'c do that here)
     (impl:) => {};
     // "Forward" run of all the arguments once reversed
     (impl: ($fli:tt, $fi:tt) $(, ($li:tt, $i:tt))*) => {

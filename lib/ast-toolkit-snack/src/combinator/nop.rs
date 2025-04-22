@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:33:56
 //  Last edited:
-//    20 Mar 2025, 11:37:52
+//    22 Apr 2025, 11:42:23
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
 use crate::span::Parsable;
@@ -48,9 +48,10 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 pub struct Nop<S> {
     _s: PhantomData<S>,
 }
-impl<S> Combinator<'static, S> for Nop<S>
+impl<'s, S> Combinator<'static, 's, S> for Nop<S>
 where
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = ();

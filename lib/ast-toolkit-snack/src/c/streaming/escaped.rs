@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    20 Mar 2025, 15:44:52
+//    22 Apr 2025, 11:29:44
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 pub use super::super::complete::escaped::{EscapedString, ExpectsFormatter, Fatal, Recoverable};
 use crate::result::{Result as SResult, SnackError, SpanningError};
@@ -39,26 +39,28 @@ enum State {
 
 /***** COMBINATORS *****/
 /// The combinator returned by [`escaped()`].
-pub struct Escaped<'t, P, S> {
+pub struct Escaped<'c, P, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
-    delim: &'t str,
+    delim: &'c str,
     /// Some character acting as the escape character.
-    escaper: &'t str,
+    escaper: &'c str,
     /// Some closure that determines what to do with escaped characters.
     callback: P,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, P, E, S> Combinator<'t, S> for Escaped<'t, P, S>
+impl<'c, 's, 'a, P, E, S> Combinator<'a, 's, S> for Escaped<'c, P, S>
 where
-    P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
-    E: 't + Error,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    P: for<'b> FnMut(&'b str) -> Result<Cow<'b, str>, E>,
+    E: 'c + Error,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = EscapedString<S>;
-    type Recoverable = Recoverable<'t, S>;
-    type Fatal = Fatal<'t, E, S>;
+    type Recoverable = Recoverable<'c, S>;
+    type Fatal = Fatal<'c, E, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { delim: self.delim, escaper: self.escaper } }
@@ -253,11 +255,12 @@ where
 ///     }))
 /// );
 /// ```
-pub const fn escaped<'t, P, E, S>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, P, S>
+pub const fn escaped<'c, 's, P, E, S>(delim: &'c str, escaper: &'c str, callback: P) -> Escaped<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
-    E: 't + Error,
-    S: Clone + Utf8Parsable,
+    E: 'c + Error,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Escaped { delim, escaper, callback, _s: PhantomData }
 }

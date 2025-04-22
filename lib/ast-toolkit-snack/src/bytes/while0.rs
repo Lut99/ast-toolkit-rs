@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    18 Mar 2025, 10:24:46
+//    22 Apr 2025, 11:15:04
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
 use crate::span::BytesParsable;
@@ -48,20 +48,22 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`while0()`]-combinator.
-pub struct While0<'t, S, P> {
+pub struct While0<'c, S, P> {
     /// The predicate used for matching.
     predicate: P,
     /// A description of what was while'd
-    what: &'t str,
+    what: &'c str,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, S, P> Combinator<'t, S> for While0<'t, S, P>
+impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While0<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    'c: 's,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
@@ -75,7 +77,7 @@ where
         let mut i: usize = 0;
         for byte in input.bytes() {
             // Check if it's in the set
-            if (self.predicate)(*byte) {
+            if (self.predicate)(byte) {
                 i += 1;
                 continue;
             } else {
@@ -138,9 +140,10 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn while0<'t, S, P>(what: &'t str, predicate: P) -> While0<'t, S, P>
+pub const fn while0<'c, 's, S, P>(what: &'c str, predicate: P) -> While0<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
     While0 { predicate, what, _s: PhantomData }

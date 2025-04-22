@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    19 Mar 2025, 10:34:00
+//    22 Apr 2025, 11:37:23
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 pub use super::super::complete::whitespace1::{ExpectsFormatter, Recoverable};
 use super::one_of1;
@@ -30,9 +30,10 @@ use crate::span::Utf8Parsable;
 pub struct Whitespace1<S> {
     _s: PhantomData<S>,
 }
-impl<S> Combinator<'static, S> for Whitespace1<S>
+impl<'s, S> Combinator<'static, 's, S> for Whitespace1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -99,9 +100,10 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```
 #[inline]
-pub const fn whitespace1<S>() -> Whitespace1<S>
+pub const fn whitespace1<'s, S>() -> Whitespace1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Whitespace1 { _s: PhantomData }
 }

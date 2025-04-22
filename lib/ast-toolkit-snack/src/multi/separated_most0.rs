@@ -4,7 +4,7 @@
 //  Created:
 //    18 Jan 2025, 18:56:39
 //  Last edited:
-//    24 Mar 2025, 11:48:20
+//    22 Apr 2025, 12:03:37
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
@@ -48,7 +48,7 @@ impl<E1: Display, E2: Display, S> Display for Fatal<E1, E2, S> {
         }
     }
 }
-impl<E1: error::Error, E2: error::Error, S: Parsable> error::Error for Fatal<E1, E2, S> {
+impl<'s, E1: error::Error, E2: error::Error, S: Spannable<'s>> error::Error for Fatal<E1, E2, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
@@ -119,11 +119,12 @@ pub struct SeparatedMost0<C1, C2, S> {
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, S> Combinator<'t, S> for SeparatedMost0<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for SeparatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
@@ -270,11 +271,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn separated_most0<'t, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMost0<C1, C2, S>
+pub const fn separated_most0<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     SeparatedMost0 { comb, sep, _s: PhantomData }
 }

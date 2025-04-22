@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    18 Mar 2025, 11:12:11
+//    22 Apr 2025, 11:34:40
 //  Auto updated?
 //    Yes
 //
@@ -30,18 +30,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, S> {
+pub struct Recoverable<'c, S> {
     /// Some string describing what we were matching.
-    pub what: &'t str,
+    pub what: &'c str,
     /// The location where no characters were found.
     pub span: Span<S>,
 }
-impl<'t, S> Display for Recoverable<'t, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
 }
-impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
-impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -56,18 +56,18 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While1`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'c> {
     /// Some string describing what we were matching.
-    pub what: &'t str,
+    pub what: &'c str,
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one {}", self.what) }
 }
@@ -79,19 +79,21 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`While1()`].
 #[derive(Debug)]
-pub struct While1<'t, P, S> {
+pub struct While1<'c, P, S> {
     predicate: P,
-    what: &'t str,
+    what: &'c str,
     _s: PhantomData<S>,
 }
-impl<'t, P, S> Combinator<'t, S> for While1<'t, P, S>
+impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
-    P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    P: for<'b> FnMut(&'b str) -> bool,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -176,10 +178,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn while1<'t, P, S>(what: &'t str, predicate: P) -> While1<'t, P, S>
+pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
-    P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Utf8Parsable,
+    P: for<'b> FnMut(&'b str) -> bool,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }

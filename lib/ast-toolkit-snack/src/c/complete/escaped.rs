@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    20 Mar 2025, 15:39:50
+//    22 Apr 2025, 11:28:47
 //  Auto updated?
 //    Yes
 //
@@ -30,20 +30,20 @@ use crate::{Combinator, ExpectsFormatter as _, utf8};
 ///
 /// This error means that no opening delimiter was found.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, S> {
+pub struct Recoverable<'c, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
-    pub delim:   &'t str,
+    pub delim:   &'c str,
     /// Some character acting as the escape character.
-    pub escaper: &'t str,
+    pub escaper: &'c str,
     /// The span where the error occurred.
     pub span:    Span<S>,
 }
-impl<'t, S> Display for Recoverable<'t, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { delim: self.delim, escaper: self.escaper }) }
 }
-impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
-impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -53,15 +53,15 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 
 /// Defines the fatal errors of the [`Escaped`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<'t, E, S> {
+pub enum Fatal<'c, E, S> {
     /// Failed to find the matching closing delimiter.
-    DelimClose { delim: &'t str, escaper: &'t str, span: Span<S> },
+    DelimClose { delim: &'c str, escaper: &'c str, span: Span<S> },
     /// An escapee was illegal by the user's closure.
     IllegalEscapee { err: SpanningError<E, S> },
     /// An escape-character (e.g., `\`) was given without an escapee.
-    OrphanEscaper { escaper: &'t str, span: Span<S> },
+    OrphanEscaper { escaper: &'c str, span: Span<S> },
 }
-impl<'t, E: Display, S> Display for Fatal<'t, E, S> {
+impl<'c, E: Display, S> Display for Fatal<'c, E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -71,7 +71,7 @@ impl<'t, E: Display, S> Display for Fatal<'t, E, S> {
         }
     }
 }
-impl<'t, E: Error, S: Spannable> Error for Fatal<'t, E, S> {
+impl<'c, 's, E: Error, S: Spannable<'s>> Error for Fatal<'c, E, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -80,7 +80,7 @@ impl<'t, E: Error, S: Spannable> Error for Fatal<'t, E, S> {
         }
     }
 }
-impl<'t, E, S: Clone> Spanning<S> for Fatal<'t, E, S> {
+impl<'c, E, S: Clone> Spanning<S> for Fatal<'c, E, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
@@ -107,20 +107,20 @@ impl<'t, E, S: Clone> Spanning<S> for Fatal<'t, E, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`Escaped`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'c> {
     /// The opening/closing character
-    pub delim:   &'t str,
+    pub delim:   &'c str,
     /// The character that escapes other characters.
-    pub escaper: &'t str,
+    pub escaper: &'c str,
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "a {}-string with {}-escaped characters", self.delim, self.escaper)
@@ -155,7 +155,7 @@ pub struct EscapedString<S> {
     /// Represents the span of the literal itself, _excluding_ the quotes.
     pub span:  Span<S>,
 }
-impl<S: Clone + Spannable> Spanning<S> for EscapedString<S> {
+impl<'s, S: Clone + Spannable<'s>> Spanning<S> for EscapedString<S> {
     /// This returns the span of the ENTIRE object, not just the string literal value.
     #[inline]
     #[track_caller]
@@ -180,26 +180,28 @@ impl<S: Clone + Spannable> Spanning<S> for EscapedString<S> {
 
 /***** COMBINATORS *****/
 /// The combinator returned by [`escaped()`].
-pub struct Escaped<'t, P, S> {
+pub struct Escaped<'c, P, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
-    delim: &'t str,
+    delim: &'c str,
     /// Some character acting as the escape character.
-    escaper: &'t str,
+    escaper: &'c str,
     /// Some closure that determines what to do with escaped characters.
     callback: P,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, P, E, S> Combinator<'t, S> for Escaped<'t, P, S>
+impl<'c, 's, 'a, P, E, S> Combinator<'a, 's, S> for Escaped<'c, P, S>
 where
-    P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
-    E: 't + Error,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    P: for<'b> FnMut(&'b str) -> Result<Cow<'b, str>, E>,
+    E: 'c + Error,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = EscapedString<S>;
-    type Recoverable = Recoverable<'t, S>;
-    type Fatal = Fatal<'t, E, S>;
+    type Recoverable = Recoverable<'c, S>;
+    type Fatal = Fatal<'c, E, S>;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { delim: self.delim, escaper: self.escaper } }
@@ -391,11 +393,12 @@ where
 ///     }))
 /// );
 /// ```
-pub const fn escaped<'t, P, E, S>(delim: &'t str, escaper: &'t str, callback: P) -> Escaped<'t, P, S>
+pub const fn escaped<'c, 's, P, E, S>(delim: &'c str, escaper: &'c str, callback: P) -> Escaped<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
-    E: 't + Error,
-    S: Clone + Utf8Parsable,
+    E: 'c + Error,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Escaped { delim, escaper, callback, _s: PhantomData }
 }

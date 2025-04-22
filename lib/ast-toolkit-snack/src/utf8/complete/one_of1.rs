@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    19 Mar 2025, 09:39:36
+//    22 Apr 2025, 11:32:19
 //  Auto updated?
 //    Yes
 //
@@ -30,18 +30,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// characters was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, S> {
+pub struct Recoverable<'c, S> {
     /// The set of characters to one of.
-    pub charset: &'t [&'t str],
+    pub charset: &'c [&'c str],
     /// The location where no characters were found.
     pub span:    Span<S>,
 }
-impl<'t, S> Display for Recoverable<'t, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { charset: self.charset }) }
 }
-impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
-impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -56,18 +56,18 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf1`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'c> {
     /// The charset that we expected one of.
-    pub charset: &'t [&'t str],
+    pub charset: &'c [&'c str],
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
@@ -94,20 +94,21 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of1()`].
 #[derive(Debug)]
-pub struct OneOf1<'t, S> {
-    charset: &'t [&'t str],
+pub struct OneOf1<'c, S> {
+    charset: &'c [&'c str],
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'t`.
-impl<'c, 't, S> Combinator<'c, S> for OneOf1<'t, S>
+// any smaller lifetime than `'c`.
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
-    't: 'c,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -190,9 +191,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn one_of1<'t, S>(charset: &'t [&'t str]) -> OneOf1<'t, S>
+pub const fn one_of1<'c, 's, S>(charset: &'c [&'c str]) -> OneOf1<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     OneOf1 { charset, _s: PhantomData }
 }

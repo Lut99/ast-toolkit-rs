@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    24 Mar 2025, 11:44:06
+//    22 Apr 2025, 12:01:53
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -55,10 +55,11 @@ pub struct Most0<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Most0<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Most0<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -168,10 +169,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn most0<'t, C, S>(comb: C) -> Most0<C, S>
+pub const fn most0<'c, 's, C, S>(comb: C) -> Most0<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Most0 { comb, _s: PhantomData }
 }

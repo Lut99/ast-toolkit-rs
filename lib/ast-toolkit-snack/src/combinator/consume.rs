@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    19 Mar 2025, 10:44:24
+//    22 Apr 2025, 11:43:10
 //  Auto updated?
 //    Yes
 //
@@ -43,7 +43,7 @@ impl<E: Display, S> Display for Recoverable<E, S> {
         }
     }
 }
-impl<E: Error, S: Spannable> Error for Recoverable<E, S> {
+impl<'s, E: Error, S: Spannable<'s>> Error for Recoverable<E, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -106,10 +106,11 @@ pub struct Consume<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Consume<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Consume<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = C::Output;
@@ -142,7 +143,7 @@ where
 /// Matches the full input text.
 ///
 /// Note that this version could be counted as part of the `complete`-suite. There is no streaming
-/// counterpart, though, because consuming all input while more may be expected doesn't make too
+/// counterpart, though, because consuming all input while more may be expected doesn'c make too
 /// much sense.
 ///
 /// # Arguments
@@ -184,10 +185,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn consume<'t, C, S>(comb: C) -> Consume<C, S>
+pub const fn consume<'c, 's, C, S>(comb: C) -> Consume<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Consume { comb, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 19:43:22
 //  Last edited:
-//    18 Jan 2025, 18:35:52
+//    22 Apr 2025, 13:27:13
 //  Auto updated?
 //    Yes
 //
@@ -14,30 +14,32 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::pair;
 pub use super::pair::{Error, ExpectsFormatter, Fatal, Recoverable};
 use crate::Combinator;
 use crate::result::Result as SResult;
+use crate::span::Parsable;
 
 
 /***** LIBRARY *****/
-// NOTE: Not a type alias, because this needs to change the interface (either introduce `'t` at the
+// NOTE: Not a type alias, because this needs to change the interface (either introduce `'c` at the
 // type level or else other arbitrary generics).
 /// Actually implements the [`terminated()`]-combinator.
-pub struct Terminated<C1, C2, F, S> {
+pub struct Terminated<C1, C2, S> {
     /// The left combinator, not to discard.
     left:  C1,
     /// The right combinator, to discard.
     right: C2,
-    _f:    PhantomData<F>,
     _s:    PhantomData<S>,
 }
-impl<'t, C1, C2, F, S> Combinator<'t, F, S> for Terminated<C1, C2, F, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for Terminated<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = C1::Output;
@@ -48,7 +50,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmts: (self.left.expects(), self.right.expects()) } }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // We can rely on the `pair()`-combinator, we just discard as appropriate
         match pair(&mut self.left, &mut self.right).parse(input) {
             Ok((rem, (res, _))) => Ok((rem, res)),
@@ -84,9 +86,9 @@ where
 /// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello123");
-/// let span2 = Span::new("<example>", "123");
-/// let span3 = Span::new("<example>", "HelloWorld");
+/// let span1 = Span::new("Hello123");
+/// let span2 = Span::new("123");
+/// let span3 = Span::new("HelloWorld");
 ///
 /// let mut comb = terminated(tag("Hello"), digit1());
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), span1.slice(..5))));
@@ -106,10 +108,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn terminated<'t, C1, C2, F, S>(first: C1, second: C2) -> Terminated<C1, C2, F, S>
+pub const fn terminated<'c, 's, C1, C2, S>(first: C1, second: C2) -> Terminated<C1, C2, S>
 where
-    C1: Combinator<'t, F, S>,
-    C2: Combinator<'t, F, S>,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
-    Terminated { left: first, right: second, _f: PhantomData, _s: PhantomData }
+    Terminated { left: first, right: second, _s: PhantomData }
 }

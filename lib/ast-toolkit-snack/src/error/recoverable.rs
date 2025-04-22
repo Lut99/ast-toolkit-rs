@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:01:07
 //  Last edited:
-//    18 Jan 2025, 17:55:30
+//    22 Apr 2025, 13:26:49
 //  Auto updated?
 //    Yes
 //
@@ -12,36 +12,38 @@
 //!   Implements the [`recoverable()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the recoverable error thrown by the [`Recoverable`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<F, S> {
+pub struct Recoverable<S> {
     /// The place where the recoverable error was thrown.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
 }
-impl<F, S> Display for Recoverable<F, S> {
+impl<S> Display for Recoverable<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "A recoverable error has occurred while parsing") }
 }
-impl<F, S> Error for Recoverable<F, S> {}
-impl<F: Clone, S: Clone> Spanning<F, S> for Recoverable<F, S> {
+impl<'s, S: Spannable<'s>> Error for Recoverable<S> {}
+impl<S: Clone> Spanning<S> for Recoverable<S> {
     #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S>
+    fn into_span(self) -> Span<S>
     where
         Self: Sized,
     {
@@ -75,21 +77,24 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`recoverable()`]-combinator.
-pub struct RecoverableComb<F, S> {
-    _f: PhantomData<F>,
+pub struct RecoverableComb<S> {
     _s: PhantomData<S>,
 }
-impl<F, S> Combinator<'static, F, S> for RecoverableComb<F, S> {
+impl<'s, S> Combinator<'static, 's, S> for RecoverableComb<S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Infallible;
-    type Recoverable = Recoverable<F, S>;
+    type Recoverable = Recoverable<S>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         Err(SnackError::Recoverable(Recoverable { span: input }))
     }
 }
@@ -113,16 +118,27 @@ impl<F, S> Combinator<'static, F, S> for RecoverableComb<F, S> {
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::error::recoverable;
-/// use ast_toolkit_snack::error::recoverable::Recoverable;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "Hello, world!");
-/// let span2 = Span::new("<example>", "Goodbye, world!");
+/// let span1 = Span::new("Hello, world!");
+/// let span2 = Span::new("Goodbye, world!");
 ///
 /// let mut comb = recoverable();
-/// assert_eq!(comb.parse(span1), Err(SnackError::Recoverable(Recoverable { span: span1 })));
-/// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(Recoverable { span: span2 })));
+/// assert_eq!(
+///     comb.parse(span1),
+///     Err(SnackError::Recoverable(recoverable::Recoverable { span: span1 }))
+/// );
+/// assert_eq!(
+///     comb.parse(span2),
+///     Err(SnackError::Recoverable(recoverable::Recoverable { span: span2 }))
+/// );
 /// ```
 #[inline]
-pub const fn recoverable<F, S>() -> RecoverableComb<F, S> { RecoverableComb { _f: PhantomData, _s: PhantomData } }
+pub const fn recoverable<'s, S>() -> RecoverableComb<S>
+where
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
+{
+    RecoverableComb { _s: PhantomData }
+}

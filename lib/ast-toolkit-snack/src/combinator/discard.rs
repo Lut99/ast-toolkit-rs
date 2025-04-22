@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 18:55:10
 //  Last edited:
-//    19 Mar 2025, 10:45:26
+//    22 Apr 2025, 11:43:13
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,8 @@
 //
 
 use std::marker::PhantomData;
+
+use ast_toolkit_span::Spannable;
 
 use crate::Combinator;
 use crate::result::Result as SResult;
@@ -25,10 +27,11 @@ pub struct Discard<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Discard<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Discard<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = ();
@@ -84,10 +87,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn discard<'t, C, S>(comb: C) -> Discard<C, S>
+pub const fn discard<'c, 's, C, S>(comb: C) -> Discard<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Discard { comb, _s: PhantomData }
 }

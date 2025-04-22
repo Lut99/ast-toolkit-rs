@@ -4,13 +4,15 @@
 //  Created:
 //    03 Nov 2024, 11:06:36
 //  Last edited:
-//    20 Mar 2025, 12:13:59
+//    22 Apr 2025, 12:04:57
 //  Auto updated?
 //    Yes
 //
 //  Description:
 //!   Implements the [`pair()`]-combinator.
 //
+
+use ast_toolkit_span::Spannable;
 
 pub use super::tuple::{Error2 as Error, ExpectsFormatter2 as ExpectsFormatter};
 use crate::Combinator;
@@ -76,11 +78,12 @@ pub type Fatal<E1, E2> = Error<E1, E2>;
 /// );
 /// ```
 #[inline]
-pub const fn pair<'t, C1, C2, S>(first: C1, second: C2) -> Pair<C1, C2>
+pub const fn pair<'c, 's, C1, C2, S>(first: C1, second: C2) -> Pair<C1, C2>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     (first, second)
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:14:44
 //  Last edited:
-//    18 Jan 2025, 18:04:53
+//    22 Apr 2025, 13:27:06
 //  Auto updated?
 //    Yes
 //
@@ -12,21 +12,23 @@
 //!   Implements the [`repeated()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
+use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
 /***** ERRORS *****/
 /// Defines the recoverable error thrown by [`Repeated`].
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<C, E, F, S> {
+pub struct Recoverable<C, E, S> {
     /// What we're expected.
     pub fmt:  C,
     /// How many times we've seen it.
@@ -34,24 +36,21 @@ pub struct Recoverable<C, E, F, S> {
     /// How many times we expect it.
     pub n:    usize,
     /// The span where we expected the problem.
-    pub span: Span<F, S>,
+    pub span: Span<S>,
     /// The nested error for trace purposes.
     pub err:  E,
 }
-impl<C: crate::ExpectsFormatter, E, F, S> Display for Recoverable<C, E, F, S> {
+impl<C: crate::ExpectsFormatter, E, S> Display for Recoverable<C, E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { fmt: &self.fmt, n: self.n }) }
 }
-impl<C: crate::ExpectsFormatter, E: 'static + Error, F, S> Error for Recoverable<C, E, F, S> {
+impl<'s, C: crate::ExpectsFormatter, E: Error, S: Spannable<'s>> Error for Recoverable<C, E, S> {}
+impl<C, E, S: Clone> Spanning<S> for Recoverable<C, E, S> {
     #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> { Some(&self.err) }
-}
-impl<C, E, F: Clone, S: Clone> Spanning<F, S> for Recoverable<C, E, F, S> {
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<F, S> { self.span }
+    fn into_span(self) -> Span<S> { self.span }
 }
 
 
@@ -88,30 +87,29 @@ impl<F: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<F>
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`repeated()`]-combinator.
-pub struct Repeated<C, F, S> {
+pub struct Repeated<C, S> {
     /// The nested combinator to repeat.
     comb: C,
     /// The number of times to apply it.
     n:    usize,
-    _f:   PhantomData<F>,
     _s:   PhantomData<S>,
 }
-impl<'t, C, F, S> Combinator<'t, F, S> for Repeated<C, F, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Repeated<C, S>
 where
-    C: Combinator<'t, F, S>,
-    F: Clone,
-    S: Clone,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
-    type Recoverable = Recoverable<C::ExpectsFormatter, C::Recoverable, F, S>;
+    type Recoverable = Recoverable<C::ExpectsFormatter, C::Recoverable, S>;
     type Fatal = C::Fatal;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { fmt: self.comb.expects(), n: self.n } }
 
     #[inline]
-    fn parse(&mut self, mut input: Span<F, S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, F, S> {
+    fn parse(&mut self, mut input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         let mut results: Vec<C::Output> = Vec::with_capacity(self.n);
         for i in 0..self.n {
             // Attempt to parse this try
@@ -164,10 +162,10 @@ where
 /// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new("<example>", "hellohellohello");
-/// let span2 = Span::new("<example>", "hellohellohellohello");
-/// let span3 = Span::new("<example>", "hellohello");
-/// let span4 = Span::new("<example>", "hellohellohel");
+/// let span1 = Span::new("hellohellohello");
+/// let span2 = Span::new("hellohellohellohello");
+/// let span3 = Span::new("hellohello");
+/// let span4 = Span::new("hellohellohel");
 ///
 /// let mut comb = repeated(3, tag("hello"));
 /// assert_eq!(
@@ -200,9 +198,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn repeated<'t, C, F, S>(n: usize, comb: C) -> Repeated<C, F, S>
+pub const fn repeated<'c, 's, C, S>(n: usize, comb: C) -> Repeated<C, S>
 where
-    C: Combinator<'t, F, S>,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
-    Repeated { comb, n, _f: PhantomData, _s: PhantomData }
+    Repeated { comb, n, _s: PhantomData }
 }

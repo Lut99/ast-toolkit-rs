@@ -4,7 +4,7 @@
 //  Created:
 //    12 Mar 2025, 13:52:52
 //  Last edited:
-//    24 Mar 2025, 12:25:03
+//    22 Apr 2025, 13:19:26
 //  Auto updated?
 //    Yes
 //
@@ -32,7 +32,7 @@ use better_derive::{Debug, Eq, PartialEq};
 pub enum Recoverable<E, S> {
     /// Not the token we expected.
     Keyword { what: &'static str, span: Span<S> },
-    /// We found a remainder we shouldn't have.
+    /// We found a remainder we shouldn'c have.
     EndOfToken { what: &'static str, err: E },
 }
 impl<E, S> Display for Recoverable<E, S> {
@@ -44,7 +44,7 @@ impl<E, S> Display for Recoverable<E, S> {
         }
     }
 }
-impl<E: fmt::Debug + Display, S: Spannable> Error for Recoverable<E, S> {}
+impl<'s, E: fmt::Debug + Display, S: Spannable<'s>> Error for Recoverable<E, S> {}
 impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> {
@@ -101,11 +101,12 @@ pub struct Utf8Token<T, C, S> {
     eot: C,
     _s:  PhantomData<S>,
 }
-impl<'t, T, C, S> Combinator<'t, S> for Utf8Token<T, C, S>
+impl<'c, 's, T, C, S> Combinator<'c, 's, S> for Utf8Token<T, C, S>
 where
     T: crate::Utf8Token<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = T;
@@ -218,11 +219,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_token<'t, T, C, S>(comb: C) -> Utf8Token<T, C, S>
+pub const fn utf8_token<'c, 's, T, C, S>(comb: C) -> Utf8Token<T, C, S>
 where
     T: crate::Utf8Token<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Utf8Token { _t: PhantomData, eot: comb, _s: PhantomData }
 }

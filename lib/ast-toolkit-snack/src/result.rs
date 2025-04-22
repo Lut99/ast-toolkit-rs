@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 16:52:42
 //  Last edited:
-//    19 Mar 2025, 14:57:21
+//    22 Apr 2025, 11:50:58
 //  Auto updated?
 //    Yes
 //
@@ -87,18 +87,18 @@ where
         }
     }
 }
-impl<E1, E2, S> Eq for SnackError<E1, E2, S>
+impl<'a, E1, E2, S> Eq for SnackError<E1, E2, S>
 where
     E1: Eq,
     E2: Eq,
-    S: Spannable,
+    S: Spannable<'a>,
 {
 }
-impl<E1, E2, S> PartialEq for SnackError<E1, E2, S>
+impl<'a, E1, E2, S> PartialEq for SnackError<E1, E2, S>
 where
     E1: PartialEq,
     E2: PartialEq,
-    S: Spannable,
+    S: Spannable<'a>,
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
@@ -155,7 +155,7 @@ impl<O: ExpectsFormatter, S> Display for Expected<O, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <O as Display>::fmt(&self.fmt, f) }
 }
-impl<O: ExpectsFormatter, S: Spannable> Error for Expected<O, S> {}
+impl<'a, O: ExpectsFormatter, S: Spannable<'a>> Error for Expected<O, S> {}
 impl<O, S: Clone> Spanning<S> for Expected<O, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
@@ -211,7 +211,7 @@ impl<E: Display, S> Display for SpanningError<E, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.err.fmt(f) }
 }
-impl<E: Error, S: Spannable> Error for SpanningError<E, S> {
+impl<'a, E: Error, S: Spannable<'a>> Error for SpanningError<E, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> { self.err.source() }
 }

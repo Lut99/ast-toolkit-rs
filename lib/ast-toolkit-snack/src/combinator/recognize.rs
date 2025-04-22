@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:58:07
 //  Last edited:
-//    20 Mar 2025, 11:44:58
+//    22 Apr 2025, 11:44:26
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::remember;
 use crate::Combinator;
@@ -28,10 +28,11 @@ pub struct Recognize<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Recognize<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Recognize<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = Span<S>;
@@ -91,10 +92,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn recognize<'t, C, S>(comb: C) -> Recognize<C, S>
+pub const fn recognize<'c, 's, C, S>(comb: C) -> Recognize<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Recognize { comb, _s: PhantomData }
 }

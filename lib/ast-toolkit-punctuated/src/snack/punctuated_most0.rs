@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:15:43
 //  Last edited:
-//    24 Mar 2025, 11:55:51
+//    22 Apr 2025, 13:17:14
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,7 @@ use ast_toolkit_snack::combinator::remember;
 pub use ast_toolkit_snack::multi::separated_most0::{ExpectsFormatter, Fatal};
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::span::Parsable;
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Punctuated;
 
@@ -32,11 +32,12 @@ pub struct PunctuatedMost0<C1, C2, S> {
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, S> Combinator<'t, S> for PunctuatedMost0<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for PunctuatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Punctuated<C1::Output, C2::Output>;
@@ -190,11 +191,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn punctuated_most0<'t, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMost0<C1, C2, S>
+pub const fn punctuated_most0<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMost0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     PunctuatedMost0 { comb, sep, _s: PhantomData }
 }

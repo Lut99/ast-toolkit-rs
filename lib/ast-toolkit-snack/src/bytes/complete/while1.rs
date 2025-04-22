@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    18 Mar 2025, 10:24:20
+//    22 Apr 2025, 11:26:31
 //  Auto updated?
 //    Yes
 //
@@ -30,18 +30,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, S> {
+pub struct Recoverable<'c, S> {
     /// Some description of what was expected.
-    pub what: &'t str,
+    pub what: &'c str,
     /// The location where no bytes were found.
     pub span: Span<S>,
 }
-impl<'t, S> Display for Recoverable<'t, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
 }
-impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
-impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -56,18 +56,18 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`While1`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'c> {
     /// Some description of what was expected.
-    pub what: &'t str,
+    pub what: &'c str,
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one {}", self.what) }
 }
@@ -78,22 +78,24 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<'t, S, P> {
+pub struct While1<'c, S, P> {
     /// The predicate used for matching.
     predicate: P,
     /// A helper provided by the user to describe what is expected.
-    what: &'t str,
+    what: &'c str,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'t, S, P> Combinator<'t, S> for While1<'t, S, P>
+impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While1<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -105,7 +107,7 @@ where
         let mut i: usize = 0;
         for byte in input.bytes() {
             // Check if it's in the set
-            if (self.predicate)(*byte) {
+            if (self.predicate)(byte) {
                 i += 1;
                 continue;
             } else {
@@ -178,9 +180,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn while1<'t, S, P>(what: &'t str, predicate: P) -> While1<'t, S, P>
+pub const fn while1<'c, 's, S, P>(what: &'c str, predicate: P) -> While1<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
     While1 { predicate, what, _s: PhantomData }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    19 Mar 2025, 10:39:44
+//    22 Apr 2025, 11:38:13
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
 use crate::span::Utf8Parsable;
@@ -26,18 +26,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf0`]-combinator.
 #[derive(Debug)]
-pub struct ExpectsFormatter<'t> {
+pub struct ExpectsFormatter<'c> {
     /// The charset that we expected one of.
-    pub charset: &'t [&'t str],
+    pub charset: &'c [&'c str],
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "one or more of ")?;
@@ -64,15 +64,17 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of0()`].
 #[derive(Debug, Eq, PartialEq)]
-pub struct OneOf0<'t, S> {
-    charset: &'t [&'t str],
+pub struct OneOf0<'c, S> {
+    charset: &'c [&'c str],
     _s:      PhantomData<S>,
 }
-impl<'t, S> Combinator<'t, S> for OneOf0<'t, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
@@ -142,9 +144,10 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn one_of0<'t, S>(charset: &'t [&'t str]) -> OneOf0<'t, S>
+pub const fn one_of0<'c, 's, S>(charset: &'c [&'c str]) -> OneOf0<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     OneOf0 { charset, _s: PhantomData }
 }

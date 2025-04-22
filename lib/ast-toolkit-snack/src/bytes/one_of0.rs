@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    18 Mar 2025, 10:24:39
+//    22 Apr 2025, 11:14:16
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
 use crate::span::BytesParsable;
@@ -62,17 +62,19 @@ impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`one_of0()`]-combinator.
-pub struct OneOf0<'b, S> {
+pub struct OneOf0<'c, S> {
     /// The set of bytes to one of.
-    byteset: &'b [u8],
+    byteset: &'c [u8],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:      PhantomData<S>,
 }
-impl<'b, S> Combinator<'static, S> for OneOf0<'b, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
 where
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'b>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
@@ -86,7 +88,7 @@ where
         let mut i: usize = 0;
         for byte in input.bytes() {
             // Check if it's in the set
-            if self.byteset.contains(byte) {
+            if self.byteset.contains(&byte) {
                 i += 1;
                 continue;
             } else {
@@ -143,9 +145,10 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn one_of0<'b, S>(byteset: &'b [u8]) -> OneOf0<'b, S>
+pub const fn one_of0<'c, 's, S>(byteset: &'c [u8]) -> OneOf0<'c, S>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
     OneOf0 { byteset, _s: PhantomData }
 }

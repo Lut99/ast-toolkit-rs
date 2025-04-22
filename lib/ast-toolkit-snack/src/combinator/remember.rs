@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:35:03
 //  Last edited:
-//    20 Mar 2025, 12:07:40
+//    22 Apr 2025, 11:44:56
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
@@ -27,10 +27,11 @@ pub struct Remember<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Remember<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Remember<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = (C::Output, Span<S>);
@@ -99,10 +100,11 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(7..), (Greeting::Goodbye, span2.slice(..7)))));
 /// ```
 #[inline]
-pub const fn remember<'t, C, S>(comb: C) -> Remember<C, S>
+pub const fn remember<'c, 's, C, S>(comb: C) -> Remember<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Remember { comb, _s: PhantomData }
 }

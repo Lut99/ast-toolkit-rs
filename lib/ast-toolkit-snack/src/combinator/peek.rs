@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:19:33
 //  Last edited:
-//    20 Mar 2025, 12:15:33
+//    22 Apr 2025, 11:44:07
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
@@ -27,10 +27,11 @@ pub struct Peek<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Peek<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Peek<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -85,10 +86,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn peek<'t, C, S>(comb: C) -> Peek<C, S>
+pub const fn peek<'c, 's, C, S>(comb: C) -> Peek<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Peek { comb, _s: PhantomData }
 }

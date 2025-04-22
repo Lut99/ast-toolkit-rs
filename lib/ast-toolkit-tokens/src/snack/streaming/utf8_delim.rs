@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:24
 //  Last edited:
-//    24 Mar 2025, 12:17:22
+//    22 Apr 2025, 13:19:48
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::streaming::tag;
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 pub use super::super::complete::utf8_delim::{ExpectsFormatter, Fatal, Recoverable};
 use crate::Utf8Delimiter;
@@ -33,11 +33,12 @@ pub struct Utf8Delim<T, C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, T, C, S> Combinator<'t, S> for Utf8Delim<T, C, S>
+impl<'c, 's, T, C, S> Combinator<'c, 's, S> for Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = (C::Output, T);
@@ -152,11 +153,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_delim<'t, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
+pub const fn utf8_delim<'c, 's, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Utf8Delim { _t: PhantomData, comb, _s: PhantomData }
 }

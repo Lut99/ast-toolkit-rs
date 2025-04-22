@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:34:30
 //  Last edited:
-//    20 Mar 2025, 11:35:40
+//    22 Apr 2025, 11:55:00
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
@@ -80,10 +80,11 @@ pub struct Cut<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Cut<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Cut<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -150,10 +151,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn cut<'t, C, S>(comb: C) -> Cut<C, S>
+pub const fn cut<'c, 's, C, S>(comb: C) -> Cut<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Cut { comb, _s: PhantomData }
 }

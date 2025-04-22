@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    19 Mar 2025, 09:43:38
+//    22 Apr 2025, 11:35:30
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning as _};
+use ast_toolkit_span::{Span, Spannable, Spanning as _};
 
 pub use super::super::complete::digit1::{ExpectsFormatter, Recoverable};
 use super::while1;
@@ -30,9 +30,10 @@ use crate::span::Utf8Parsable;
 pub struct Digit1<S> {
     _s: PhantomData<S>,
 }
-impl<S> Combinator<'static, S> for Digit1<S>
+impl<'s, S> Combinator<'static, 's, S> for Digit1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -100,9 +101,10 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
 /// ```
 #[inline]
-pub const fn digit1<S>() -> Digit1<S>
+pub const fn digit1<'s, S>() -> Digit1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Digit1 { _s: PhantomData }
 }

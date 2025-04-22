@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    19 Mar 2025, 10:37:08
+//    22 Apr 2025, 11:37:45
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::while0;
 use crate::result::{Result as SResult, SnackError};
@@ -50,9 +50,10 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 pub struct Digit0<S> {
     _s: PhantomData<S>,
 }
-impl<S> Combinator<'static, S> for Digit0<S>
+impl<'s, S> Combinator<'static, 's, S> for Digit0<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -111,9 +112,10 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(0..), span3.slice(..0))));
 /// ```
 #[inline]
-pub const fn digit0<S>() -> Digit0<S>
+pub const fn digit0<'s, S>() -> Digit0<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Digit0 { _s: PhantomData }
 }

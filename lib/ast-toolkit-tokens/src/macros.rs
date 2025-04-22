@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    24 Mar 2025, 12:27:25
+//    22 Apr 2025, 13:22:13
 //  Auto updated?
 //    Yes
 //
@@ -114,9 +114,9 @@ macro_rules! utf8_token {
         }
 
         // Spanning impl
-        impl<S> $crate::__private::Spanning<S> for $name<S>
+        impl<'s, S> $crate::__private::Spanning<S> for $name<S>
         where
-            S: ::std::clone::Clone + $crate::__private::Spannable,
+            S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
         {
             #[inline]
             fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Borrowed(&self.span) }
@@ -164,10 +164,11 @@ macro_rules! utf8_token_snack {
             /// # Examples
             /// See the `utf8_token()`-combinator for more information.
             #[inline]
-            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, S>
+            pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, S>,
-                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
+                C: $crate::snack::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
+                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
             {
                 $crate::snack::complete::utf8_token::utf8_token(comb)
             }
@@ -188,10 +189,11 @@ macro_rules! utf8_token_snack {
             /// # Examples
             /// See the `utf8_token()`-combinator for more information.
             #[inline]
-            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, S>
+            pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, S>,
-                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
+                C: $crate::snack::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
+                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
             {
                 $crate::snack::streaming::utf8_token::utf8_token(comb)
             }
@@ -343,9 +345,9 @@ macro_rules! utf8_delim {
         }
 
         // Spanning impl
-        impl<S> $crate::__private::Spanning<S> for $name<S>
+        impl<'s, S> $crate::__private::Spanning<S> for $name<S>
         where
-            S: ::std::clone::Clone + $crate::__private::Spannable,
+            S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
         {
             #[inline]
             #[track_caller]
@@ -393,10 +395,11 @@ macro_rules! utf8_delim_snack {
             /// # Examples
             /// See the `utf8_delim()`-combinator for more information.
             #[inline]
-            pub const fn parser<'t, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, S>
+            pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, S>,
-                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
+                C: $crate::snack::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
+                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
             {
                 $crate::snack::complete::utf8_delim::utf8_delim(comb)
             }
@@ -415,10 +418,11 @@ macro_rules! utf8_delim_snack {
             /// # Examples
             /// See the `utf8_delim()`-combinator for more information.
             #[inline]
-            pub const fn parser_streaming<'t, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, S>
+            pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'t, S>,
-                S: ::std::clone::Clone + $crate::snack::span::Utf8Parsable,
+                C: $crate::snack::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
+                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
             {
                 $crate::snack::streaming::utf8_delim::utf8_delim(comb)
             }

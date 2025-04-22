@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    17 Mar 2025, 14:33:08
+//    22 Apr 2025, 11:22:29
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::super::complete::while1 as while1_complete;
 pub use super::super::complete::while1::{ExpectsFormatter, Recoverable};
@@ -26,24 +26,26 @@ use crate::span::BytesParsable;
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<'t, S, P> {
+pub struct While1<'c, S, P> {
     /// The predicate used for matching.
     predicate: P,
     /// A helper provided by the user to describe what is expected.
-    what: &'t str,
+    what: &'c str,
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'b`.
-impl<'t, S, P> Combinator<'t, S> for While1<'t, S, P>
+// any smaller lifetime than `'c`.
+impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While1<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -116,9 +118,10 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn while1<'t, S, P>(what: &'t str, predicate: P) -> While1<'t, S, P>
+pub const fn while1<'c, 's, S, P>(what: &'c str, predicate: P) -> While1<'c, S, P>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
     P: FnMut(u8) -> bool,
 {
     While1 { predicate, what, _s: PhantomData }

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    19 Mar 2025, 10:32:42
+//    22 Apr 2025, 11:36:00
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
@@ -28,17 +28,19 @@ use crate::span::Utf8Parsable;
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`one_of1()`].
 #[derive(Debug)]
-pub struct OneOf1<'t, S> {
-    charset: &'t [&'t str],
+pub struct OneOf1<'c, S> {
+    charset: &'c [&'c str],
     _s:      PhantomData<S>,
 }
-impl<'t, S> Combinator<'t, S> for OneOf1<'t, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -105,9 +107,10 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn one_of1<'t, S>(charset: &'t [&'t str]) -> OneOf1<'t, S>
+pub const fn one_of1<'c, 's, S>(charset: &'c [&'c str]) -> OneOf1<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     OneOf1 { charset, _s: PhantomData }
 }

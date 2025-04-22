@@ -4,7 +4,7 @@
 //  Created:
 //    17 Mar 2025, 10:14:05
 //  Last edited:
-//    24 Mar 2025, 11:42:19
+//    22 Apr 2025, 10:40:38
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,6 @@
 
 use std::cell::{Ref, RefMut};
 use std::fmt::Debug;
-use std::hash::{DefaultHasher, Hash, Hasher as _};
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
@@ -25,23 +24,31 @@ use crate::range::Range;
 /***** LIBRARY *****/
 /// Defines things that can be [`Span`]ned.
 ///
-/// Remember that this always concerns a array of sorts.
-pub trait Spannable {
+/// Remember that this always concerns a array of sorts. For more information, see the
+/// [`Span`](crate::span::Span).
+///
+/// Note that the implementations using spans (and therefore [`Spannable`]) will assume that the
+/// span as a whole is cheaply [`Clone`]able. Therefore, the trait is designed to hold a reference
+/// to the full source text somewhere else instead of owning it.
+///
+/// # Lifetime
+/// The given lifetime `'s` represents the lifetime of the spanned item. This is used to commute
+/// the lifetime of the spanned item over the container referencing it (i.e., the span).
+///
+/// If your object does not have a lifetime (e.g., an owned object like [`String`]), then this
+/// lifetime should be `'static`.
+pub trait Spannable<'s> {
     /// Describes the sliced version of this Spannable.
-    type Slice<'s>
-    where
-        Self: 's;
+    type Slice;
     /// Describes the ID returned by [`Spannable::source_id()`].
-    type SourceId<'s>: Debug + Eq + PartialEq
-    where
-        Self: 's;
+    type SourceId: Debug + Eq + PartialEq;
 
 
     /// Returns some identifier of a source that is used to acertain uniqueness.
     ///
     /// # Returns
     /// A formatter of type [`Spannable::SourceId`] that implements [`Display`].
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s>;
+    fn source_id(&self) -> Self::SourceId;
 
     /// Returns a sliced version of this string.
     ///
@@ -50,7 +57,7 @@ pub trait Spannable {
     ///
     /// # Returns
     /// A [`Spannable::Slice`] that representes the sliced part.
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s>;
+    fn slice(&self, range: Range) -> Self::Slice;
 
     /// Returns the total length of the thing.
     ///
@@ -72,19 +79,16 @@ pub trait Spannable {
 }
 
 // Default impls
-impl Spannable for str {
-    type Slice<'s> = &'s str;
-    type SourceId<'s>
-        = usize
-    where
-        Self: 's;
+impl<'a> Spannable<'a> for &'a str {
+    type Slice = &'a str;
+    type SourceId = usize;
 
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { (self as *const str).addr() }
+    fn source_id(&self) -> Self::SourceId { (*self as *const str).addr() }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> {
+    fn slice(&self, range: Range) -> Self::Slice {
         let start: usize = match range.start_resolved(self.len()) {
             Some(pos) => pos,
             None => return &"",
@@ -99,22 +103,16 @@ impl Spannable for str {
     #[inline]
     fn len(&self) -> usize { <str>::len(self) }
 }
-impl<T> Spannable for [T] {
-    type Slice<'s>
-        = &'s [T]
-    where
-        Self: 's;
-    type SourceId<'s>
-        = usize
-    where
-        Self: 's;
+impl<'a, T> Spannable<'a> for &'a [T] {
+    type Slice = &'a [T];
+    type SourceId = usize;
 
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { (self as *const [T]).addr() }
+    fn source_id(&self) -> Self::SourceId { (*self as *const [T]).addr() }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> {
+    fn slice(&self, range: Range) -> Self::Slice {
         let start: usize = match range.start_resolved(self.len()) {
             Some(pos) => pos,
             None => return &[],
@@ -132,72 +130,32 @@ impl<T> Spannable for [T] {
     #[inline]
     fn is_empty(&self) -> bool { <[T]>::is_empty(self) }
 }
-impl<const LEN: usize, T: Hash> Spannable for [T; LEN] {
-    type SourceId<'s>
-        = u64
-    where
-        Self: 's;
-    type Slice<'s>
-        = &'s [T]
-    where
-        Self: 's;
-
-    #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> {
-        let mut hasher = DefaultHasher::new();
-        for elem in self {
-            elem.hash(&mut hasher);
-        }
-        hasher.finish()
-    }
-
-    #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <[T]>::slice(self.as_slice(), range) }
-
-    #[inline]
-    fn len(&self) -> usize { <[T]>::len(self.as_slice()) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <[T]>::is_empty(self.as_slice()) }
-}
-impl<T: Debug + Eq + PartialEq, U: Spannable> Spannable for (T, U) {
-    type Slice<'s>
-        = <U as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = &'s T
-    where
-        Self: 's;
+impl<'a, T: Clone + Debug + Eq + PartialEq, U: Spannable<'a>> Spannable<'a> for (T, U) {
+    type Slice = <U as Spannable<'a>>::Slice;
+    type SourceId = T;
 
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { &self.0 }
+    fn source_id(&self) -> Self::SourceId { self.0.clone() }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <U as Spannable>::slice(&self.1, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <U as Spannable>::slice(&self.1, range) }
 
     #[inline]
     fn len(&self) -> usize { self.1.len() }
 }
 
 // Pointer-like impls
-impl<'a, T: ?Sized + Spannable> Spannable for &'a T {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for &'b T {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
 
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -205,21 +163,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for &'a T {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for &'a mut T {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for &'b mut T {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -227,21 +180,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for &'a mut T {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<T: ?Sized + Spannable> Spannable for Box<T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Box<T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -249,21 +197,16 @@ impl<T: ?Sized + Spannable> Spannable for Box<T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<T: ?Sized + Spannable> Spannable for Rc<T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Rc<T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -271,21 +214,16 @@ impl<T: ?Sized + Spannable> Spannable for Rc<T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<T: ?Sized + Spannable> Spannable for Arc<T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Arc<T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -293,21 +231,16 @@ impl<T: ?Sized + Spannable> Spannable for Arc<T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for MutexGuard<'a, T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for MutexGuard<'b, T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -315,21 +248,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for MutexGuard<'a, T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for RwLockReadGuard<'a, T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RwLockReadGuard<'b, T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -337,21 +265,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for RwLockReadGuard<'a, T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for RwLockWriteGuard<'a, T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RwLockWriteGuard<'b, T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -359,21 +282,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for RwLockWriteGuard<'a, T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for Ref<'a, T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for Ref<'b, T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -381,21 +299,16 @@ impl<'a, T: ?Sized + Spannable> Spannable for Ref<'a, T> {
     #[inline]
     fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
 }
-impl<'a, T: ?Sized + Spannable> Spannable for RefMut<'a, T> {
-    type Slice<'s>
-        = <T as Spannable>::Slice<'s>
-    where
-        Self: 's;
-    type SourceId<'s>
-        = <T as Spannable>::SourceId<'s>
-    where
-        Self: 's;
+impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RefMut<'b, T> {
+    type Slice = <T as Spannable<'a>>::Slice;
+    type SourceId = <T as Spannable<'a>>::SourceId;
+
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <T as Spannable>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <T as Spannable>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <T as Spannable>::len(self) }

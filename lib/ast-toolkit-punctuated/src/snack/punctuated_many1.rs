@@ -4,7 +4,7 @@
 //  Created:
 //    12 Mar 2025, 13:43:43
 //  Last edited:
-//    24 Mar 2025, 11:57:46
+//    22 Apr 2025, 13:16:53
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::remember;
 use ast_toolkit_snack::result::{Expected, Result as SResult, SnackError};
 use ast_toolkit_snack::span::Parsable;
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 pub use super::punctuated_most1::{ExpectsFormatter, Fatal, Recoverable};
 use crate::Punctuated;
@@ -31,11 +31,12 @@ pub struct PunctuatedMany1<C1, C2, S> {
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, S> Combinator<'t, S> for PunctuatedMany1<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for PunctuatedMany1<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Punctuated<C1::Output, C2::Output>;
@@ -227,11 +228,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn punctuated_many1<'t, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMany1<C1, C2, S>
+pub const fn punctuated_many1<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMany1<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     PunctuatedMany1 { comb, sep, _s: PhantomData }
 }

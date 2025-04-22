@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:11:28
 //  Last edited:
-//    20 Mar 2025, 12:52:00
+//    22 Apr 2025, 11:54:01
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
@@ -31,11 +31,12 @@ pub struct InspectAfter<C, P, S> {
     /// The type of the `S`ource string, which is stored here to keep the link between combinator construction and parsing.
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, S> Combinator<'t, S> for InspectAfter<C, P, S>
+impl<'c, 's, C, P, S> Combinator<'c, 's, S> for InspectAfter<C, P, S>
 where
-    C: Combinator<'t, S>,
+    C: Combinator<'c, 's, S>,
     P: for<'a> FnMut(&'a SResult<C::Output, C::Recoverable, C::Fatal, S>),
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -96,11 +97,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn inspect_after<'t, C, P, S>(comb: C, pred: P) -> InspectAfter<C, P, S>
+pub const fn inspect_after<'c, 's, C, P, S>(comb: C, pred: P) -> InspectAfter<C, P, S>
 where
-    C: Combinator<'t, S>,
+    C: Combinator<'c, 's, S>,
     P: for<'a> FnMut(&'a SResult<C::Output, C::Recoverable, C::Fatal, S>),
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     InspectAfter { comb, pred, _s: PhantomData }
 }

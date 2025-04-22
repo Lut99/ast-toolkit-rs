@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    18 Mar 2025, 10:24:33
+//    22 Apr 2025, 10:54:56
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 pub use super::super::complete::tag::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
@@ -25,22 +25,23 @@ use crate::span::BytesParsable;
 
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`tag()`].
-pub struct Tag<'t, S> {
+pub struct Tag<'c, S> {
     /// The actual tag that is being matched for.
-    tag: &'t [u8],
+    tag: &'c [u8],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s:  PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'t`.
-impl<'c, 't, S> Combinator<'c, S> for Tag<'t, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for Tag<'c, S>
 where
-    't: 'c,
-    S: Clone + BytesParsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -53,7 +54,7 @@ where
         for byte in self.tag {
             // Attempt to get the next byte
             match bytes.next() {
-                Some(head) if byte == head => {
+                Some(head) if *byte == head => {
                     i += 1;
                     continue;
                 },
@@ -119,9 +120,10 @@ where
 ///     Err(SnackError::NotEnough { needed: Some(1), span: span3.slice(4..) })
 /// );
 /// ```
-pub const fn tag<'t, S>(tag: &'t [u8]) -> Tag<'t, S>
+pub const fn tag<'c, 's, S>(tag: &'c [u8]) -> Tag<'c, S>
 where
-    S: Clone + BytesParsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: BytesParsable<'s>,
 {
     Tag { tag, _s: PhantomData }
 }

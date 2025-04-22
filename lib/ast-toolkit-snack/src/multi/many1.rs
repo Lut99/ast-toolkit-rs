@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:44:42
 //  Last edited:
-//    24 Mar 2025, 11:46:35
+//    22 Apr 2025, 12:01:32
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 pub use super::most1::ExpectsFormatter;
 use crate::Combinator;
@@ -36,10 +36,11 @@ pub struct Many1<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Many1<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Many1<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -171,10 +172,11 @@ where
 /// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: None, span: span3 }));
 /// ```
 #[inline]
-pub const fn many1<'t, C, S>(comb: C) -> Many1<C, S>
+pub const fn many1<'c, 's, C, S>(comb: C) -> Many1<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Many1 { comb, _s: PhantomData }
 }

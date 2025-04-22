@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    19 Mar 2025, 09:20:03
+//    22 Apr 2025, 11:12:50
 //  Auto updated?
 //    Yes
 //
@@ -84,7 +84,7 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn into_span(self) -> Span<S> { self.span }
             }
-            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S: Spannable> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            impl<'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S: Spannable<'s>> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
                 [<F $fi>]: ExpectsFormatter,
                 $([<F $i>]: ExpectsFormatter,)*
@@ -173,7 +173,11 @@ macro_rules! tuple_branching_comb_impl {
             /***** IMPL *****/
             // Then implement Branchable for the tuple
             paste::paste!(
-                impl<'t, 's: 't, S: 's + Clone + Parsable, O, [<C $fi>]: Combinator<'t, S, Output = O> $(, [<C $i>]: Combinator<'t, S, Output = O>)*> BranchingCombinator<'t, S> for ([<C $fi>], $([<C $i>],)*) {
+                impl<'c, 's, S, O, [<C $fi>]: Combinator<'c, 's, S, Output = O> $(, [<C $i>]: Combinator<'c, 's, S, Output = O>)*> BranchingCombinator<'c, 's, S> for ([<C $fi>], $([<C $i>],)*)
+                where
+                    S: Clone + Spannable<'s>,
+                    S::Slice: Parsable<'s>,
+                {
                     type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
                     type Recoverable = [<Recoverable $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*, [<C $fi>]::Recoverable $(, [<C $i>]::Recoverable)*, S>;
@@ -273,10 +277,11 @@ pub struct Alt<B, S> {
     branches: B,
     _s: PhantomData<S>,
 }
-impl<'t, B, S> Combinator<'t, S> for Alt<B, S>
+impl<'c, 's, B, S> Combinator<'c, 's, S> for Alt<B, S>
 where
-    B: BranchingCombinator<'t, S>,
-    S: Clone + Parsable,
+    B: BranchingCombinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = B::ExpectsFormatter;
     type Output = B::Output;
@@ -336,10 +341,11 @@ where
 /// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(alt::Recoverable2 { .. }))));
 /// ```
 #[inline]
-pub const fn alt<'t, B, S>(branches: B) -> Alt<B, S>
+pub const fn alt<'c, 's, B, S>(branches: B) -> Alt<B, S>
 where
-    B: BranchingCombinator<'t, S>,
-    S: Clone + Parsable,
+    B: BranchingCombinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Alt { branches, _s: PhantomData }
 }

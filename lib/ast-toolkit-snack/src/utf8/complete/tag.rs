@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    20 Mar 2025, 15:55:15
+//    22 Apr 2025, 11:33:39
 //  Auto updated?
 //    Yes
 //
@@ -30,18 +30,18 @@ use crate::{Combinator, ExpectsFormatter as _};
 /***** ERRORS *****/
 // Recoverable error for the [`Tag`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct Recoverable<'t, S> {
+pub struct Recoverable<'c, S> {
     /// What we expected
-    pub tag:  &'t str,
+    pub tag:  &'c str,
     /// Where we expected it
     pub span: Span<S>,
 }
-impl<'t, S> Display for Recoverable<'t, S> {
+impl<'c, S> Display for Recoverable<'c, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", ExpectsFormatter { tag: self.tag }) }
 }
-impl<'t, S: Spannable> Error for Recoverable<'t, S> {}
-impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
+impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
@@ -56,17 +56,17 @@ impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
 /***** FORMATTERS *****/
 /// Expects formatter for the [`Tag`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'t> {
-    pub tag: &'t str,
+pub struct ExpectsFormatter<'c> {
+    pub tag: &'c str,
 }
-impl<'t> Display for ExpectsFormatter<'t> {
+impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
     #[inline]
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:?}", self.tag) }
 }
@@ -78,20 +78,21 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`tag()`].
 #[derive(Debug)]
-pub struct Tag<'t, S> {
-    tag: &'t str,
+pub struct Tag<'c, S> {
+    tag: &'c str,
     _s:  PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'t`.
-impl<'c, 't, S> Combinator<'c, S> for Tag<'t, S>
+// any smaller lifetime than `'c`.
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for Tag<'c, S>
 where
-    't: 'c,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -171,9 +172,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn tag<'t, S>(tag: &'t str) -> Tag<'t, S>
+pub const fn tag<'c, 's, S>(tag: &'c str) -> Tag<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Tag { tag, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:11:28
 //  Last edited:
-//    20 Mar 2025, 11:33:44
+//    22 Apr 2025, 11:43:17
 //  Auto updated?
 //    Yes
 //
@@ -13,6 +13,8 @@
 //
 
 use std::marker::PhantomData;
+
+use ast_toolkit_span::Spannable;
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -28,12 +30,13 @@ pub struct MapFatal<C, P, S> {
     pred: P,
     _s:   PhantomData<S>,
 }
-impl<'t, C, P, E1, E2, S> Combinator<'t, S> for MapFatal<C, P, S>
+impl<'c, 's, C, P, E1, E2, S> Combinator<'c, 's, S> for MapFatal<C, P, S>
 where
-    C: Combinator<'t, S, Fatal = E1>,
+    C: Combinator<'c, 's, S, Fatal = E1>,
     P: FnMut(E1) -> E2,
     E2: ParseError<S>,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -105,12 +108,13 @@ where
 /// assert_eq!(comb.parse(span2), Err(SnackError::Fatal(Hidden)));
 /// ```
 #[inline]
-pub const fn map_fatal<'t, C, P, E1, E2, S>(comb: C, pred: P) -> MapFatal<C, P, S>
+pub const fn map_fatal<'c, 's, C, P, E1, E2, S>(comb: C, pred: P) -> MapFatal<C, P, S>
 where
-    C: Combinator<'t, S, Fatal = E1>,
+    C: Combinator<'c, 's, S, Fatal = E1>,
     P: FnMut(E1) -> E2,
     E2: ParseError<S>,
-    S: Clone + Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     MapFatal { comb, pred, _s: PhantomData }
 }

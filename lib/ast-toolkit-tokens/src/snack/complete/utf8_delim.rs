@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 20:38:17
 //  Last edited:
-//    24 Mar 2025, 12:18:28
+//    22 Apr 2025, 13:18:51
 //  Auto updated?
 //    Yes
 //
@@ -45,7 +45,7 @@ impl<E: Display, S> Display for Recoverable<E, S> {
         }
     }
 }
-impl<E: fmt::Debug + Display, S: Spannable> Error for Recoverable<E, S> {}
+impl<'s, E: fmt::Debug + Display, S: Spannable<'s>> Error for Recoverable<E, S> {}
 impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> {
@@ -81,7 +81,7 @@ impl<E: Display, S> Display for Fatal<E, S> {
         }
     }
 }
-impl<E: fmt::Debug + Display, S: Spannable> Error for Fatal<E, S> {}
+impl<'s, E: fmt::Debug + Display, S: Spannable<'s>> Error for Fatal<E, S> {}
 impl<E: Spanning<S>, S: Clone> Spanning<S> for Fatal<E, S> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> {
@@ -146,11 +146,12 @@ pub struct Utf8Delim<T, C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, T, C, S> Combinator<'t, S> for Utf8Delim<T, C, S>
+impl<'c, 's, T, C, S> Combinator<'c, 's, S> for Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = (C::Output, T);
@@ -266,11 +267,12 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn utf8_delim<'t, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
+pub const fn utf8_delim<'c, 's, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
-    C: Combinator<'t, S>,
-    S: Clone + Utf8Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Utf8Delim { _t: PhantomData, comb, _s: PhantomData }
 }

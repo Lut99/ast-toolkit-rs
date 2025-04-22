@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 14:06:22
 //  Last edited:
-//    24 Mar 2025, 11:52:16
+//    22 Apr 2025, 12:02:44
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::super::combinator::recognize;
 pub use super::separated_most0::{ExpectsFormatter, Fatal};
@@ -31,11 +31,12 @@ pub struct SeparatedMany0<C1, C2, S> {
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'t, C1, C2, S> Combinator<'t, S> for SeparatedMany0<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for SeparatedMany0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
@@ -191,11 +192,12 @@ where
 /// assert_eq!(comb.parse(span3), Ok((span3, vec![])));
 /// ```
 #[inline]
-pub const fn separated_many0<'t, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMany0<C1, C2, S>
+pub const fn separated_many0<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> SeparatedMany0<C1, C2, S>
 where
-    C1: Combinator<'t, S>,
-    C2: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C1: Combinator<'c, 's, S>,
+    C2: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     SeparatedMany0 { comb, sep, _s: PhantomData }
 }

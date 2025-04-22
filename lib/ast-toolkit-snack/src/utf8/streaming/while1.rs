@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    19 Mar 2025, 09:42:37
+//    22 Apr 2025, 11:37:05
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use super::super::complete::while1 as while1_complete;
 pub use super::super::complete::while1::{ExpectsFormatter, Recoverable};
@@ -27,19 +27,21 @@ use crate::span::Utf8Parsable;
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`While1()`].
 #[derive(Debug)]
-pub struct While1<'t, P, S> {
+pub struct While1<'c, P, S> {
     predicate: P,
-    what: &'t str,
+    what: &'c str,
     _s: PhantomData<S>,
 }
-impl<'t, P, S> Combinator<'static, S> for While1<'t, P, S>
+impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
-    P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    P: for<'b> FnMut(&'b str) -> bool,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -112,10 +114,11 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn while1<'t, P, S>(what: &'t str, predicate: P) -> While1<'t, P, S>
+pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }

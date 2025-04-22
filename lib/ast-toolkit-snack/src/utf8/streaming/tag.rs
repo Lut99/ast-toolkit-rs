@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    24 Mar 2025, 11:42:28
+//    22 Apr 2025, 11:36:31
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 use unicode_segmentation::UnicodeSegmentation as _;
 
 pub use super::super::complete::tag::{ExpectsFormatter, Recoverable};
@@ -27,17 +27,19 @@ use crate::span::Utf8Parsable;
 /***** COMBINATORS *****/
 /// Actual combinator implementing [`tag()`].
 #[derive(Debug)]
-pub struct Tag<'t, S> {
-    tag: &'t str,
+pub struct Tag<'c, S> {
+    tag: &'c str,
     _s:  PhantomData<S>,
 }
-impl<'t, S> Combinator<'t, S> for Tag<'t, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for Tag<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    'c: 'a,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
-    type ExpectsFormatter = ExpectsFormatter<'t>;
+    type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
-    type Recoverable = Recoverable<'t, S>;
+    type Recoverable = Recoverable<'c, S>;
     type Fatal = Infallible;
 
     #[inline]
@@ -123,9 +125,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn tag<'t, S>(tag: &'t str) -> Tag<'t, S>
+pub const fn tag<'c, 's, S>(tag: &'c str) -> Tag<'c, S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Tag { tag, _s: PhantomData }
 }

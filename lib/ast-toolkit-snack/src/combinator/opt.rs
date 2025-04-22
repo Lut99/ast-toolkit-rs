@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:56:52
 //  Last edited:
-//    20 Mar 2025, 12:14:48
+//    22 Apr 2025, 11:43:47
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::span::Parsable;
@@ -27,7 +27,7 @@ use crate::{Combinator, ExpectsFormatter as _};
 /// Expectsformatter for the [`Opt`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExpectsFormatter<F> {
-    /// The nested formatter of the thing we _didn't_ expect.
+    /// The nested formatter of the thing we _didn'c_ expect.
     pub fmt: F,
 }
 impl<F: crate::ExpectsFormatter> Display for ExpectsFormatter<F> {
@@ -55,10 +55,11 @@ pub struct Opt<C, S> {
     comb: C,
     _s:   PhantomData<S>,
 }
-impl<'t, C, S> Combinator<'t, S> for Opt<C, S>
+impl<'c, 's, C, S> Combinator<'c, 's, S> for Opt<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Option<C::Output>;
@@ -115,10 +116,11 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2, None)));
 /// ```
 #[inline]
-pub const fn opt<'t, C, S>(comb: C) -> Opt<C, S>
+pub const fn opt<'c, 's, C, S>(comb: C) -> Opt<C, S>
 where
-    C: Combinator<'t, S>,
-    S: Clone + Parsable,
+    C: Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+    S::Slice: Parsable<'s>,
 {
     Opt { comb, _s: PhantomData }
 }

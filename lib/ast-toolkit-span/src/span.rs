@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:51:07
 //  Last edited:
-//    24 Mar 2025, 11:42:54
+//    22 Apr 2025, 10:41:08
 //  Auto updated?
 //    Yes
 //
@@ -65,7 +65,7 @@ pub struct Span<S> {
 }
 
 // Constructors
-impl<S: Spannable> Span<S> {
+impl<'s, S: Spannable<'s>> Span<S> {
     /// Constructor for the Span that initializes it to span the given array.
     ///
     /// # Arguments
@@ -101,10 +101,7 @@ impl<S: Spannable> Span<S> {
 }
 
 // Ops
-impl<S> Debug for Span<S>
-where
-    S: Spannable,
-{
+impl<'s, S: Spannable<'s>> Debug for Span<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult {
         let Self { source, range } = self;
@@ -116,21 +113,17 @@ where
         fmt.finish()
     }
 }
-impl<S> Eq for Span<S> where S: Spannable {}
-impl<S> PartialEq for Span<S>
-where
-    S: Spannable,
-{
+impl<'s, S: Spannable<'s>> Eq for Span<S> {}
+impl<'s, S: Spannable<'s>> PartialEq for Span<S> {
     /// Note that equality on Spans requires that:
     /// - They are [from the same source](Span::source_id()); and
     /// - They span the same area.
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.source_id() == other.source_id() && self.range == other.range }
 }
-impl<S> Hash for Span<S>
+impl<'s, S: Spannable<'s>> Hash for Span<S>
 where
-    S: Spannable,
-    for<'a> S::SourceId<'a>: Hash,
+    S::SourceId: Hash,
 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -138,10 +131,9 @@ where
         self.range.hash(state);
     }
 }
-impl<S> Ord for Span<S>
+impl<'s, S: Spannable<'s>> Ord for Span<S>
 where
-    S: Spannable,
-    for<'a> S::Slice<'a>: Ord,
+    S::Slice: Ord,
 {
     /// # Panics
     /// This function simply wraps the [`PartialOrd::partial_cmp()`]-implementation for this
@@ -152,17 +144,16 @@ where
     #[track_caller]
     fn cmp(&self, other: &Self) -> Ordering { self.partial_cmp(other).unwrap() }
 }
-impl<S> PartialOrd for Span<S>
+impl<'s, S: Spannable<'s>> PartialOrd for Span<S>
 where
-    S: Spannable,
-    for<'a> S::Slice<'a>: PartialOrd,
+    S::Slice: PartialOrd,
 {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { self.value().partial_cmp(&other.value()) }
 }
 
 // Span
-impl<S: Clone + Spannable> Span<S> {
+impl<'s, S: Clone + Spannable<'s>> Span<S> {
     /// Slices the spanned area.
     ///
     /// This is like [`Span::shrink()`], but not in-place.
@@ -197,7 +188,7 @@ impl<S: Clone + Spannable> Span<S> {
         Some(span)
     }
 }
-impl<S: Spannable> Span<S> {
+impl<'s, S: Spannable<'s>> Span<S> {
     /// Shrinks this the spanned area by this span.
     ///
     /// This is like [`Span::slice()`], but in-place.
@@ -243,7 +234,7 @@ impl<S: Spannable> Span<S> {
     /// # Returns
     /// A slice of the internal source as spanned by this Span.
     #[inline]
-    pub fn value<'s>(&'s self) -> S::Slice<'s> { self.source.slice(self.range) }
+    pub fn value(&self) -> S::Slice { self.source.slice(self.range) }
 
     /// Returns the source behind this Spannable.
     ///
@@ -272,7 +263,7 @@ impl<S: Spannable> Span<S> {
     /// # Returns
     /// An [`S::SourceId`](Spannable::SourceId) that can be used to compare sources.
     #[inline]
-    pub fn source_id<'s>(&'s self) -> S::SourceId<'s> { <S as Spannable>::source_id(&self.source) }
+    pub fn source_id(&self) -> S::SourceId { <S as Spannable>::source_id(&self.source) }
 
     /// Returns the range over the main source span that is embedded in this span.
     ///
@@ -295,21 +286,15 @@ impl<S: Spannable> Span<S> {
     #[inline]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
-impl<S: Clone + Spannable> Spannable for Span<S> {
-    type SourceId<'s>
-        = <S as Spannable>::SourceId<'s>
-    where
-        Self: 's;
-    type Slice<'s>
-        = Span<S>
-    where
-        Self: 's;
+impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
+    type SourceId = <S as Spannable<'s>>::SourceId;
+    type Slice = Span<S>;
 
     #[inline]
-    fn source_id<'s>(&'s self) -> Self::SourceId<'s> { <Self>::source_id(self) }
+    fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
-    fn slice<'s>(&'s self, range: Range) -> Self::Slice<'s> { <Self>::slice(self, range) }
+    fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
@@ -329,5 +314,11 @@ mod tests {
         let span = Span::ranged("5+5", 1..);
         let slice = span.slice(1..);
         assert_eq!(*slice.range(), 2..);
+    }
+
+    #[test]
+    fn test_span_commute_lifetime() {
+        fn slice_value<'s>(value: &Span<&'s str>, range: std::ops::RangeFrom<usize>) -> &'s str { value.slice(range).value() }
+        assert_eq!(slice_value(&Span::new("hiya"), 1..), "iya");
     }
 }

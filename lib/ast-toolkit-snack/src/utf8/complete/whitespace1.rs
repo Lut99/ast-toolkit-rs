@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:23:19
 //  Last edited:
-//    19 Mar 2025, 09:41:00
+//    22 Apr 2025, 11:34:59
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use super::one_of1;
 use crate::result::{Expected, Result as SResult, SnackError};
@@ -58,9 +58,10 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 pub struct Whitespace1<S> {
     _s: PhantomData<S>,
 }
-impl<S> Combinator<'static, S> for Whitespace1<S>
+impl<'s, S> Combinator<'static, 's, S> for Whitespace1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -132,9 +133,10 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn whitespace1<S>() -> Whitespace1<S>
+pub const fn whitespace1<'s, S>() -> Whitespace1<S>
 where
-    S: Clone + Utf8Parsable,
+    S: Clone + Spannable<'s>,
+    S::Slice: Utf8Parsable<'s>,
 {
     Whitespace1 { _s: PhantomData }
 }
