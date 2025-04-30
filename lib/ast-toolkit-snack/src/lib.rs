@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    22 Apr 2025, 12:04:17
+//    30 Apr 2025, 08:57:03
 //  Auto updated?
 //    Yes
 //
@@ -40,15 +40,6 @@ use ast_toolkit_span::Spannable;
 // Re-exports
 pub use ast_toolkit_span::{Span, Spanning};
 use span::Parsable;
-
-
-/***** CONSTANTS *****/
-/// Defines the indent size for every level in [`Expects`] formatting.
-#[allow(unused)]
-const EXPECTS_INDENT_SIZE: usize = 4;
-
-
-
 
 
 /***** LIBRARY *****/
