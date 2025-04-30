@@ -4,7 +4,7 @@
 //  Created:
 //    30 Apr 2025, 09:20:08
 //  Last edited:
-//    30 Apr 2025, 09:27:42
+//    30 Apr 2025, 10:59:37
 //  Auto updated?
 //    Yes
 //
@@ -80,7 +80,9 @@ where
 /// see [`graph()`](super::super::complete::graph()) instead.
 ///
 /// _Note:_ For the grapheme parser, the [`SnackError::NotEnough`] does not provide a size hint.
-/// This because graphemes of arbitrary byte size may be expected by the `pred`icate.
+/// This because graphemes of arbitrary byte size may be expected by the `pred`icate. In general,
+/// though, unicode characters are at most 4 bytes wide, so it's a safe default to assume (but it's
+/// not a minimum).
 ///
 /// # Arguments
 /// - `what`: Some user-friendly description of what this combinator expects. Should complete:
