@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:21:02
 //  Last edited:
-//    08 May 2025, 15:31:56
+//    08 May 2025, 15:50:37
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,7 @@ pub mod map;
 pub mod map_fallible;
 pub mod map_fatal;
 pub mod map_recoverable;
+pub mod nonempty;
 pub mod nop;
 pub mod not;
 pub mod opt;
@@ -36,6 +37,7 @@ pub use map::map;
 pub use map_fallible::map_fallible;
 pub use map_fatal::map_fatal;
 pub use map_recoverable::map_recoverable;
+pub use nonempty::nonempty;
 pub use nop::nop;
 pub use not::not;
 pub use opt::opt;
