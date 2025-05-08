@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    22 Apr 2025, 11:38:13
+//    08 May 2025, 11:57:03
 //  Auto updated?
 //    Yes
 //
@@ -16,10 +16,9 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableUtf8};
 
 use crate::result::Result as SResult;
-use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -71,8 +70,7 @@ pub struct OneOf0<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -84,20 +82,9 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for c in input.graphs() {
-            // Check if it's in the set
-            if self.charset.contains(&c) {
-                i += c.len();
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        // Being `0`, this combinator always returns
-        Ok((input.slice(i..), input.slice(..i)))
+        // Return if there's at least one
+        let split: usize = input.match_utf8_while(|c| self.charset.contains(&c));
+        Ok((input.slice(split..), input.slice(..split)))
     }
 }
 
@@ -146,8 +133,7 @@ where
 #[inline]
 pub const fn one_of0<'c, 's, S>(charset: &'c [&'c str]) -> OneOf0<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     OneOf0 { charset, _s: PhantomData }
 }

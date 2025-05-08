@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2025, 16:51:07
 //  Last edited:
-//    22 Apr 2025, 10:41:08
+//    08 May 2025, 11:40:49
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use std::fmt::{Debug, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 use crate::range::Range;
-use crate::spannable::Spannable;
+use crate::spannable::{Spannable, SpannableUtf8};
 
 
 /***** LIBRARY *****/
@@ -51,7 +51,7 @@ use crate::spannable::Spannable;
 /// let span2 = Span::ranged(("<example>", "Hello, world!"), ..5);
 /// assert_eq!(span2.value(), "Hello");
 /// assert_eq!(span2.source(), &("<example>", "Hello, world!"));
-/// assert_eq!(span2.source_id(), &"<example>");
+/// assert_eq!(span2.source_id(), "<example>");
 /// ```
 #[derive(Clone, Copy)]
 pub struct Span<S> {
@@ -98,6 +98,78 @@ impl<'s, S: Spannable<'s>> Span<S> {
     /// A new Span that spans nothing of the given `source`.
     #[inline]
     pub fn empty(source: S) -> Self { Self::ranged(source, Range::empty()) }
+}
+
+// Parsing
+impl<'s, S: Spannable<'s>> Span<S> {
+    /// Returns the index up to where the elements at the head of the spanned area match the given
+    /// predicate.
+    ///
+    /// # Arguments
+    /// - `pred`: Some predicate to match the elements at the head of self with.
+    ///
+    /// # Returns
+    /// The index of the first element that does not match the predicate. If all elements match it,
+    /// then this equals the length of the spanned area.
+    #[inline]
+    pub fn match_while(&self, mut pred: impl for<'a> FnMut(&'a S::Elem) -> bool) -> usize {
+        // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
+        // within the range
+        let mut i: usize = 0;
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(source_len);
+        self.source.match_while(|elem| {
+            if i < start {
+                // We skip until we find the start of the range
+                i += 1;
+                true
+            } else if i < end {
+                // Match as usual
+                i += 1;
+                pred(elem)
+            } else {
+                // When we go out-of-range, we stop
+                false
+            }
+        }) - start
+    }
+}
+impl<'s, S: SpannableUtf8<'s>> Span<S> {
+    /// Interpreting the spanned area as unicode segments, will match up to where graphemes at the
+    /// head of the area match the given predicate.
+    ///
+    /// Note that it is iterated by _extended_ unicode graphemes.
+    ///
+    /// # Arguments
+    /// - `pred`: Some predicate to match the graphemes at the head of self with.
+    ///
+    /// # Returns
+    /// The _byte_ index of the first grapheme that does not match the predicate. If all elements
+    /// match it, then this equals the length of the array.
+    #[inline]
+    fn match_utf8_while(&self, mut pred: impl for<'a> FnMut(&'a str) -> bool) -> usize {
+        // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
+        // within the range
+        let mut i: usize = 0;
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(source_len);
+        self.source.match_utf8_while(|elem| {
+            if i < start {
+                // We skip until we find the start of the range
+                i += elem.len();
+                true
+            } else if i < end {
+                // Match as usual
+                i += elem.len();
+                pred(elem)
+            } else {
+                // When we go out-of-range, we stop
+                false
+            }
+        }) - start
+    }
 }
 
 // Ops
@@ -287,6 +359,7 @@ impl<'s, S: Spannable<'s>> Span<S> {
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
+    type Elem = <S as Spannable<'s>>::Elem;
     type SourceId = <S as Spannable<'s>>::SourceId;
     type Slice = Span<S>;
 
@@ -294,10 +367,17 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
+    fn match_while(&self, pred: impl for<'a> FnMut(&'a Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
+
+    #[inline]
     fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
+}
+impl<'s, S: Clone + SpannableUtf8<'s>> SpannableUtf8<'s> for Span<S> {
+    #[inline]
+    fn match_utf8_while(&self, pred: impl for<'a> FnMut(&'a str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
 }
 
 

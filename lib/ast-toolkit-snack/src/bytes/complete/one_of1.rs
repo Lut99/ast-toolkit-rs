@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    22 Apr 2025, 13:30:26
+//    08 May 2025, 11:29:28
 //  Auto updated?
 //    Yes
 //
@@ -18,11 +18,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -103,8 +102,7 @@ pub struct OneOf1<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -116,21 +114,10 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for byte in input.bytes() {
-            // Check if it's in the set
-            if self.byteset.contains(&byte) {
-                i += 1;
-                continue;
-            } else {
-                break;
-            }
-        }
-
         // Return if there's at least one
-        if i > 0 {
-            Ok((input.slice(i..), input.slice(..i)))
+        let split: usize = input.match_bytes_while(|b| self.byteset.contains(&b));
+        if split > 0 {
+            Ok((input.slice(split..), input.slice(..split)))
         } else {
             Err(SnackError::Recoverable(Recoverable { byteset: self.byteset, span: input }))
         }
@@ -194,8 +181,7 @@ where
 #[inline]
 pub const fn one_of1<'c, 's, S>(byteset: &'c [u8]) -> OneOf1<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     OneOf1 { byteset, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    22 Apr 2025, 11:15:04
+//    08 May 2025, 11:34:35
 //  Auto updated?
 //    Yes
 //
@@ -16,10 +16,9 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::result::Result as SResult;
-use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -59,8 +58,7 @@ pub struct While0<'c, S, P> {
 impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While0<'c, S, P>
 where
     'c: 's,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
@@ -73,20 +71,8 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for byte in input.bytes() {
-            // Check if it's in the set
-            if (self.predicate)(byte) {
-                i += 1;
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        // This one accepts ANY length result
-        Ok((input.slice(i..), input.slice(..i)))
+        let split: usize = input.match_bytes_while(&mut self.predicate);
+        Ok((input.slice(split..), input.slice(..split)))
     }
 }
 
@@ -142,8 +128,7 @@ where
 #[inline]
 pub const fn while0<'c, 's, S, P>(what: &'c str, predicate: P) -> While0<'c, S, P>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
 {
     While0 { predicate, what, _s: PhantomData }

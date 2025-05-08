@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:00:24
 //  Last edited:
-//    22 Apr 2025, 11:29:44
+//    08 May 2025, 13:12:13
 //  Auto updated?
 //    Yes
 //
@@ -16,11 +16,10 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, SpannableUtf8, Spanning};
 
 pub use super::super::complete::escaped::{EscapedString, ExpectsFormatter, Fatal, Recoverable};
 use crate::result::{Result as SResult, SnackError, SpanningError};
-use crate::span::Utf8Parsable;
 use crate::{Combinator, utf8};
 
 
@@ -54,8 +53,7 @@ where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> Result<Cow<'b, str>, E>,
     E: 'c + Error,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = EscapedString<S>;
@@ -81,7 +79,8 @@ where
         let mut i: usize = 0;
         let mut close: Option<Span<S>> = None;
         let mut value = String::new();
-        for c in rem.graphs() {
+        let mut ret_err: Option<Self::Fatal> = None;
+        rem.match_utf8_while(|c| {
             match state {
                 State::Body => {
                     // Either we parse a closing delim OR an escapee
@@ -89,12 +88,12 @@ where
                         // OK! That's it folks!
                         close = Some(rem.slice(i..i + c.len()));
                         i += c.len();
-                        break;
+                        false
                     } else if c == self.escaper {
                         // Switch to escaper mode
                         i += c.len();
                         state = State::Escaped;
-                        continue;
+                        true
                     } else {
                         // As we are
                         i += c.len();
@@ -102,7 +101,7 @@ where
                             value.reserve(1 + value.len());
                         }
                         value.push_str(c);
-                        continue;
+                        true
                     }
                 },
 
@@ -113,14 +112,20 @@ where
                             i += c.len();
                             value.push_str(val.as_ref());
                             state = State::Body;
-                            continue;
+                            true
                         },
                         Err(err) => {
-                            return Err(SnackError::Fatal(Fatal::IllegalEscapee { err: SpanningError { err, span: rem.slice(i..i + c.len()) } }));
+                            // A bit hacky, but best we can do while working in a closure
+                            ret_err = Some(Fatal::IllegalEscapee { err: SpanningError { err, span: rem.slice(i..i + c.len()) } });
+                            false
                         },
                     }
                 },
             }
+        });
+        // Quit if there was an error
+        if let Some(err) = ret_err {
+            return Err(SnackError::Fatal(err));
         }
 
         // Do some error catching
@@ -259,8 +264,7 @@ pub const fn escaped<'c, 's, P, E, S>(delim: &'c str, escaper: &'c str, callback
 where
     P: for<'a> FnMut(&'a str) -> Result<Cow<'a, str>, E>,
     E: 'c + Error,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Escaped { delim, escaper, callback, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    18 Jan 2025, 18:56:39
 //  Last edited:
-//    22 Apr 2025, 12:03:37
+//    08 May 2025, 11:20:53
 //  Auto updated?
 //    Yes
 //
@@ -23,7 +23,6 @@ use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -124,7 +123,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Vec<C1::Output>;
@@ -276,7 +274,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     SeparatedMost0 { comb, sep, _s: PhantomData }
 }

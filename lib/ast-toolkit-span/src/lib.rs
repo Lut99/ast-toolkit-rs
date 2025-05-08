@@ -4,7 +4,7 @@
 //  Created:
 //    25 Feb 2024, 11:11:33
 //  Last edited:
-//    17 Mar 2025, 13:06:50
+//    08 May 2025, 10:25:38
 //  Auto updated?
 //    Yes
 //
@@ -24,5 +24,5 @@ mod spanning;
 
 // Bring some of it into the parent namespace
 pub use span::Span;
-pub use spannable::Spannable;
+pub use spannable::{Spannable, SpannableBytes, SpannableUtf8};
 pub use spanning::Spanning;

@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:45:04
 //  Last edited:
-//    22 Apr 2025, 11:38:45
+//    08 May 2025, 11:57:46
 //  Auto updated?
 //    Yes
 //
@@ -16,10 +16,9 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableUtf8};
 
 use crate::result::Result as SResult;
-use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -58,8 +57,7 @@ impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -71,20 +69,8 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for c in input.graphs() {
-            // Check if it's in the set
-            if (self.predicate)(c) {
-                i += c.len();
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        // This one's always successful
-        Ok((input.slice(i..), input.slice(..i)))
+        let split: usize = input.match_utf8_while(&mut self.predicate);
+        Ok((input.slice(split..), input.slice(..split)))
     }
 }
 
@@ -137,8 +123,7 @@ where
 pub const fn while0<'c, 's, P, S>(what: &'c str, predicate: P) -> While0<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     While0 { predicate, what, _s: PhantomData }
 }

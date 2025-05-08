@@ -4,7 +4,7 @@
 //  Created:
 //    30 Apr 2025, 09:20:08
 //  Last edited:
-//    30 Apr 2025, 10:59:37
+//    08 May 2025, 13:18:02
 //  Auto updated?
 //    Yes
 //
@@ -16,12 +16,11 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableUtf8};
 
-pub use super::super::complete::graph::{ExpectsFormatter, Recoverable};
+pub use super::super::complete::graph::{ExpectsFormatter, Recoverable, graph as graph_complete};
 use crate::Combinator;
-use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::Utf8Parsable;
+use crate::result::{Result as SResult, SnackError};
 
 
 /***** COMBINATOR *****/
@@ -37,8 +36,7 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Graph<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -50,18 +48,13 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Affirm there is a graph
-        let c: &str = match input.graphs().next() {
-            Some(c) => c,
-            None => return Err(SnackError::NotEnough { needed: None, span: input }),
-        };
-
-        // Check it matches
-        if (self.pred)(c) {
-            Ok((input.slice(c.len()..), input.slice(..c.len())))
-        } else {
-            Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
+        // Check first if there's *any* input to parse.
+        if input.is_empty() {
+            return Err(SnackError::NotEnough { needed: None, span: input });
         }
+
+        // Otherwise, continue as usual
+        graph_complete(self.what, &mut self.pred).parse(input)
     }
 }
 
@@ -125,8 +118,7 @@ where
 pub const fn graph<'s, 'c, P, S>(what: &'c str, pred: P) -> Graph<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Graph { what, pred, _s: PhantomData }
 }

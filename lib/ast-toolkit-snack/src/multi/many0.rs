@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:37:50
 //  Last edited:
-//    22 Apr 2025, 12:01:11
+//    08 May 2025, 11:20:44
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,6 @@ use ast_toolkit_span::{Span, Spannable};
 pub use super::most0::ExpectsFormatter;
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
@@ -33,7 +32,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Many0<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -149,7 +147,6 @@ pub const fn many0<'c, 's, C, S>(comb: C) -> Many0<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Many0 { comb, _s: PhantomData }
 }

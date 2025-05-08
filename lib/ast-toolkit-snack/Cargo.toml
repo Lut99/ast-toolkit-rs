@@ -17,7 +17,7 @@ required-features = []
 ast-toolkit-span = { path = "../ast-toolkit-span" }
 better-derive = { git = "https://github.com/Lut99/better-derive-rs" }
 paste = "1.0"
-unicode-segmentation = "1.11"
+# unicode-segmentation = "1.11"
 
 # ast-toolkit-snack-derive = { path = "../../derive/ast-toolkit-snack-derive", optional = true }
 

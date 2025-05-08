@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:35:03
 //  Last edited:
-//    22 Apr 2025, 11:44:56
+//    08 May 2025, 11:20:26
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
@@ -31,7 +30,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Remember<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = (C::Output, Span<S>);
@@ -104,7 +102,6 @@ pub const fn remember<'c, 's, C, S>(comb: C) -> Remember<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Remember { comb, _s: PhantomData }
 }

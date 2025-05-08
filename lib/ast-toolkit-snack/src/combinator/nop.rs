@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:33:56
 //  Last edited:
-//    22 Apr 2025, 11:42:23
+//    08 May 2025, 11:19:54
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -51,7 +50,6 @@ pub struct Nop<S> {
 impl<'s, S> Combinator<'static, 's, S> for Nop<S>
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = ();
@@ -95,4 +93,9 @@ where
 /// assert_eq!(comb.parse(span2), Ok((span2, ())));
 /// ```
 #[inline]
-pub const fn nop<S>() -> Nop<S> { Nop { _s: PhantomData } }
+pub const fn nop<'s, S>() -> Nop<S>
+where
+    S: Clone + Spannable<'s>,
+{
+    Nop { _s: PhantomData }
+}

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:05:30
 //  Last edited:
-//    22 Apr 2025, 12:05:25
+//    08 May 2025, 11:21:02
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,6 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter};
 
 
@@ -111,7 +110,6 @@ macro_rules! tuple_comb_impl {
                 [<C $fi>]: Combinator<'c, 's, S>,
                 $([<C $i>]: Combinator<'c, 's, S>,)*
                 S: Clone + Spannable<'s>,
-                S::Slice: Parsable<'s>,
             {
                 type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                 type Output = ([<C $fi>]::Output, $([<C $i>]::Output),*);

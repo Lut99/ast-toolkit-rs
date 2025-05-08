@@ -4,7 +4,7 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    30 Apr 2025, 08:57:03
+//    08 May 2025, 10:27:40
 //  Auto updated?
 //    Yes
 //
@@ -28,7 +28,7 @@ pub mod error;
 pub mod multi;
 pub mod result;
 pub mod sequence;
-pub mod span;
+// pub mod span;
 pub mod utf8;
 
 // Imports
@@ -36,10 +36,8 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::Spannable;
 // Re-exports
-pub use ast_toolkit_span::{Span, Spanning};
-use span::Parsable;
+pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spanning};
 
 
 /***** LIBRARY *****/
@@ -127,7 +125,6 @@ impl ExpectsFormatter for String {
 pub trait Combinator<'t, 's, S>
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
@@ -185,7 +182,6 @@ where
 impl<'t, 's, 'a, S, T: Combinator<'t, 's, S>> Combinator<'t, 's, S> for &'a mut T
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;
@@ -221,7 +217,6 @@ where
 pub trait BranchingCombinator<'t, 's, S>
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
@@ -279,7 +274,6 @@ where
 impl<'t, 's, 'a, S, T: BranchingCombinator<'t, 's, S>> BranchingCombinator<'t, 's, S> for &'a mut T
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = T::ExpectsFormatter;
     type Output = T::Output;

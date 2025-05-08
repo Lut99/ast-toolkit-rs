@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 15:26:17
 //  Last edited:
-//    24 Mar 2025, 12:14:50
+//    08 May 2025, 13:25:24
 //  Auto updated?
 //    Yes
 //
@@ -18,4 +18,7 @@ pub mod complete;
 pub mod streaming;
 
 // Re-export some snack stuff for the macros
-pub use ast_toolkit_snack::{Combinator, span};
+pub mod __private {
+    pub use ast_toolkit_snack::Combinator;
+    pub use ast_toolkit_span::SpannableUtf8;
+}

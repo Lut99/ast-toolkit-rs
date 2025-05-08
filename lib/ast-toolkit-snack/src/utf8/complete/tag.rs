@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:16:33
 //  Last edited:
-//    22 Apr 2025, 11:33:39
+//    08 May 2025, 13:09:32
 //  Auto updated?
 //    Yes
 //
@@ -18,12 +18,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes as _, SpannableUtf8, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
-use unicode_segmentation::UnicodeSegmentation;
 
 use crate::result::SnackError;
-use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -87,8 +85,7 @@ pub struct Tag<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for Tag<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -100,29 +97,27 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> Result<(Span<S>, Self::Output), SnackError<Self::Recoverable, Self::Fatal, S>> {
-        // Try to iterate over the head to find the match
+        // Match the tag
+        let tag: &[u8] = self.tag.as_bytes();
+        let tag_len: usize = tag.len();
         let mut i: usize = 0;
-        let mut head = input.graphs();
-        for c in self.tag.graphemes(true) {
-            // Attempt to get the next byte
-            match head.next() {
-                Some(head) if c == head => {
-                    i += head.len();
-                    continue;
-                },
-                Some(_) | None => {
-                    // Note: required, or else Rust will think the iterator will be destructed at
-                    // the end of the loop
-                    drop(head);
-                    return Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }));
-                },
+        let split: usize = input.match_bytes_while(|b| {
+            if i < tag_len && b == tag[i] {
+                i += 1;
+                true
+            } else {
+                false
             }
-        }
-        #[cfg(debug_assertions)]
-        assert_eq!(i, self.tag.len());
+        });
 
-        // We parsed it!
-        Ok((input.slice(i..), input.slice(..i)))
+        // Assert there is at least one
+        if split == tag_len {
+            Ok((input.slice(i..), input.slice(..i)))
+        } else if split > tag_len {
+            unreachable!()
+        } else {
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }))
+        }
     }
 }
 
@@ -174,8 +169,7 @@ where
 #[inline]
 pub const fn tag<'c, 's, S>(tag: &'c str) -> Tag<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Tag { tag, _s: PhantomData }
 }

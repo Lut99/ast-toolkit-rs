@@ -4,7 +4,7 @@
 //  Created:
 //    30 Apr 2025, 09:20:08
 //  Last edited:
-//    30 Apr 2025, 09:25:25
+//    08 May 2025, 11:46:21
 //  Auto updated?
 //    Yes
 //
@@ -17,11 +17,10 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableUtf8};
 
 use crate::Combinator;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::Utf8Parsable;
 
 
 /***** TYPE ALIASES *****/
@@ -68,8 +67,7 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Graph<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -81,15 +79,20 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Affirm there is a graph
-        let c: &str = match input.graphs().next() {
-            Some(c) => c,
-            None => return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input })),
-        };
+        // It's like while but only once
+        let mut first: bool = true;
+        let split: usize = input.match_utf8_while(|c| {
+            if first {
+                first = false;
+                (self.pred)(c)
+            } else {
+                false
+            }
+        });
 
-        // Check it matches
-        if (self.pred)(c) {
-            Ok((input.slice(c.len()..), input.slice(..c.len())))
+        // Decide what to return
+        if split > 0 {
+            Ok((input.slice(split..), input.slice(..split)))
         } else {
             Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
         }
@@ -156,8 +159,7 @@ where
 pub const fn graph<'s, 'c, P, S>(what: &'c str, pred: P) -> Graph<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Graph { what, pred, _s: PhantomData }
 }

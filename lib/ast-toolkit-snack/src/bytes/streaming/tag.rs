@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:25:00
 //  Last edited:
-//    22 Apr 2025, 10:54:56
+//    08 May 2025, 14:39:51
 //  Auto updated?
 //    Yes
 //
@@ -15,12 +15,11 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
-pub use super::super::complete::tag::{ExpectsFormatter, Recoverable};
+pub use super::super::complete::tag::{ExpectsFormatter, Recoverable, tag as tag_complete};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::BytesParsable;
 
 
 /***** COMBINATORS *****/
@@ -36,8 +35,7 @@ pub struct Tag<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for Tag<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -48,34 +46,28 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { tag: self.tag } }
 
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
+        // Match the tag
+        let tag_len: usize = self.tag.len();
         let mut i: usize = 0;
-        let mut bytes = input.bytes();
-        for byte in self.tag {
-            // Attempt to get the next byte
-            match bytes.next() {
-                Some(head) if *byte == head => {
-                    i += 1;
-                    continue;
-                },
-                Some(_) => {
-                    // Note: required, or else Rust will think the iterator will be destructed at
-                    // the end of the loop
-                    drop(bytes);
-                    return Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }));
-                },
-                None => {
-                    // We crash with notenough instead
-                    drop(bytes);
-                    return Err(SnackError::NotEnough { needed: Some(self.tag.len() - i), span: input.slice(i..) });
-                },
+        let split: usize = input.match_bytes_while(|b| {
+            if i < tag_len && b == self.tag[i] {
+                i += 1;
+                true
+            } else {
+                false
             }
-        }
-        #[cfg(debug_assertions)]
-        assert_eq!(i, self.tag.len());
+        });
 
-        // We parsed it!
-        Ok((input.slice(i..), input.slice(..i)))
+        // Assert there is at least one
+        if split == tag_len {
+            Ok((input.slice(i..), input.slice(..i)))
+        } else if split > tag_len {
+            unreachable!()
+        } else if split < input.len() {
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }))
+        } else {
+            Err(SnackError::NotEnough { needed: Some(tag_len - split), span: input.slice(split..) })
+        }
     }
 }
 
@@ -108,22 +100,26 @@ where
 /// let span1 = Span::new(b"Hello, world!".as_slice());
 /// let span2 = Span::new(b"Goodbye, world!".as_slice());
 /// let span3 = Span::new(b"Hell".as_slice());
+/// let span4 = Span::new(b"abc".as_slice());
 ///
 /// let mut comb = tag(b"Hello");
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2.slice(..) }))
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2 }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::NotEnough { needed: Some(1), span: span3.slice(4..) })
 /// );
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span4 }))
+/// );
 /// ```
 pub const fn tag<'c, 's, S>(tag: &'c [u8]) -> Tag<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Tag { tag, _s: PhantomData }
 }

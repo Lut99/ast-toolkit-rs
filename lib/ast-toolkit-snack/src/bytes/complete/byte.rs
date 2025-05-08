@@ -4,7 +4,7 @@
 //  Created:
 //    30 Apr 2025, 08:59:24
 //  Last edited:
-//    30 Apr 2025, 09:17:28
+//    08 May 2025, 11:30:38
 //  Auto updated?
 //    Yes
 //
@@ -17,11 +17,10 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::Combinator;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::BytesParsable;
 
 
 /***** TYPE ALIASES *****/
@@ -68,8 +67,7 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Byte<'c, P, S>
 where
     'c: 'a,
     P: FnMut(u8) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -81,15 +79,22 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Affirm there is a byte
-        let b: u8 = match input.bytes().next() {
-            Some(b) => b,
-            None => return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input })),
-        };
+        // It's like while but only once
+        let mut first: bool = true;
+        let split: usize = input.match_bytes_while(|b| {
+            if first {
+                first = false;
+                (self.pred)(b)
+            } else {
+                false
+            }
+        });
 
-        // Check it matches
-        if (self.pred)(b) {
-            Ok((input.slice(1..), input.slice(..1)))
+        // Decide what to return
+        if split == 1 {
+            Ok((input.slice(split..), input.slice(..split)))
+        } else if split > 1 {
+            unreachable!()
         } else {
             Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
         }
@@ -156,8 +161,7 @@ where
 pub const fn byte<'s, 'c, P, S>(what: &'c str, pred: P) -> Byte<'c, P, S>
 where
     P: FnMut(u8) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Byte { what, pred, _s: PhantomData }
 }

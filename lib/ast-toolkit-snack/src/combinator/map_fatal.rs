@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 12:11:28
 //  Last edited:
-//    22 Apr 2025, 11:43:17
+//    08 May 2025, 11:19:12
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::Spannable;
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ParseError};
 
 
@@ -36,7 +35,6 @@ where
     P: FnMut(E1) -> E2,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -114,7 +112,6 @@ where
     P: FnMut(E1) -> E2,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     MapFatal { comb, pred, _s: PhantomData }
 }

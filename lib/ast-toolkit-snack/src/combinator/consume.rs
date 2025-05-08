@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:22:15
 //  Last edited:
-//    22 Apr 2025, 11:43:10
+//    08 May 2025, 11:18:51
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,6 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -110,7 +109,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Consume<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = C::Output;
@@ -189,7 +187,6 @@ pub const fn consume<'c, 's, C, S>(comb: C) -> Consume<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Consume { comb, _s: PhantomData }
 }

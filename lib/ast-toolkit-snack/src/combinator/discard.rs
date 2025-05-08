@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 18:55:10
 //  Last edited:
-//    22 Apr 2025, 11:43:13
+//    08 May 2025, 11:18:57
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_span::Spannable;
 
 use crate::Combinator;
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
@@ -31,7 +30,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Discard<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = ();
@@ -91,7 +89,6 @@ pub const fn discard<'c, 's, C, S>(comb: C) -> Discard<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Discard { comb, _s: PhantomData }
 }

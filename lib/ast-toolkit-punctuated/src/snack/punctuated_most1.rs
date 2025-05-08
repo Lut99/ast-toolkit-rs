@@ -4,7 +4,7 @@
 //  Created:
 //    12 Mar 2025, 13:38:05
 //  Last edited:
-//    22 Apr 2025, 13:17:43
+//    08 May 2025, 13:22:21
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::remember;
 pub use ast_toolkit_snack::multi::separated_most1::{ExpectsFormatter, Recoverable};
 use ast_toolkit_snack::result::{Expected, Result as SResult, SnackError};
-use ast_toolkit_snack::span::Parsable;
 use ast_toolkit_span::{Span, Spannable};
 
 pub use super::punctuated_most0::Fatal;
@@ -37,7 +36,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Punctuated<C1::Output, C2::Output>;
@@ -215,7 +213,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     PunctuatedMost1 { comb, sep, _s: PhantomData }
 }

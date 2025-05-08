@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 21:50:58
 //  Last edited:
-//    22 Apr 2025, 13:26:34
+//    08 May 2025, 11:20:52
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,6 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -83,7 +82,6 @@ pub struct FatalComb<S> {
 impl<'s, S> Combinator<'static, 's, S> for FatalComb<S>
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Infallible;
@@ -130,7 +128,6 @@ where
 pub const fn fatal<'s, S>() -> FatalComb<S>
 where
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     FatalComb { _s: PhantomData }
 }

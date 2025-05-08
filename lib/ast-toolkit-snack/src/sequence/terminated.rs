@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 19:43:22
 //  Last edited:
-//    22 Apr 2025, 13:27:13
+//    08 May 2025, 11:20:44
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,6 @@ use super::pair;
 pub use super::pair::{Error, ExpectsFormatter, Fatal, Recoverable};
 use crate::Combinator;
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 
 
 /***** LIBRARY *****/
@@ -39,7 +38,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = C1::Output;
@@ -113,7 +111,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Terminated { left: first, right: second, _s: PhantomData }
 }

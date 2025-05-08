@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 23:12:16
 //  Last edited:
-//    22 Apr 2025, 13:26:53
+//    08 May 2025, 11:20:52
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,6 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 
 
 /***** ERRORS *****/
@@ -84,7 +83,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Uncut<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -149,7 +147,6 @@ pub const fn uncut<'c, 's, C, S>(comb: C) -> Uncut<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Uncut { comb, _s: PhantomData }
 }

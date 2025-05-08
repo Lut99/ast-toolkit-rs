@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:23:14
 //  Last edited:
-//    22 Apr 2025, 12:01:53
+//    08 May 2025, 11:20:54
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -59,7 +58,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Most0<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -173,7 +171,6 @@ pub const fn most0<'c, 's, C, S>(comb: C) -> Most0<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Most0 { comb, _s: PhantomData }
 }

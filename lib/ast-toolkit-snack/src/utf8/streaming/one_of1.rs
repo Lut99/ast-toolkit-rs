@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 12:19:21
 //  Last edited:
-//    22 Apr 2025, 11:36:00
+//    08 May 2025, 11:55:33
 //  Auto updated?
 //    Yes
 //
@@ -16,13 +16,12 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableUtf8};
 
 use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Utf8Parsable;
 
 
 /***** COMBINATORS *****/
@@ -35,8 +34,7 @@ pub struct OneOf1<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -109,8 +107,7 @@ where
 #[inline]
 pub const fn one_of1<'c, 's, S>(charset: &'c [&'c str]) -> OneOf1<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     OneOf1 { charset, _s: PhantomData }
 }

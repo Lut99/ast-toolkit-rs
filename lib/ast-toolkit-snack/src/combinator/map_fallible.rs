@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:57:10
 //  Last edited:
-//    22 Apr 2025, 11:43:15
+//    08 May 2025, 11:19:05
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ParseError};
 
 
@@ -100,7 +99,6 @@ where
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = O2;
@@ -193,7 +191,6 @@ where
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     MapFallible { comb, pred, _s: PhantomData }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    22 Apr 2025, 10:55:17
+//    08 May 2025, 11:31:53
 //  Auto updated?
 //    Yes
 //
@@ -15,13 +15,12 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use super::super::complete::one_of1 as one_of1_complete;
 pub use super::super::complete::one_of1::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::BytesParsable;
 
 
 /***** COMBINATORS *****/
@@ -37,8 +36,7 @@ pub struct OneOf1<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -112,8 +110,7 @@ where
 #[inline]
 pub const fn one_of1<'c, 's, S>(byteset: &'c [u8]) -> OneOf1<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     OneOf1 { byteset, _s: PhantomData }
 }

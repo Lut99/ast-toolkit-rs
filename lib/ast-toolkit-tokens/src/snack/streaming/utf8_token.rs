@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:21
 //  Last edited:
-//    22 Apr 2025, 13:20:09
+//    08 May 2025, 13:23:46
 //  Auto updated?
 //    Yes
 //
@@ -17,9 +17,8 @@ use std::marker::PhantomData;
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::recognize;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
-use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::streaming::tag;
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, SpannableUtf8, Spanning};
 
 pub use super::super::complete::utf8_token::{ExpectsFormatter, Recoverable};
 
@@ -37,8 +36,7 @@ impl<'c, 's, T, C, S> Combinator<'c, 's, S> for Utf8Token<T, C, S>
 where
     T: crate::Utf8Token<S>,
     C: Combinator<'c, 's, S>,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = T;
@@ -159,8 +157,7 @@ pub const fn utf8_token<'c, 's, T, C, S>(comb: C) -> Utf8Token<T, C, S>
 where
     T: crate::Utf8Token<S>,
     C: Combinator<'c, 's, S>,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Utf8Token { _t: PhantomData, eot: comb, _s: PhantomData }
 }

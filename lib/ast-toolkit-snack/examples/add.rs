@@ -18,10 +18,9 @@ use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
-use ast_toolkit_snack::span::{BytesParsable, Utf8Parsable};
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
 use ast_toolkit_snack::{Combinator, branch};
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes as _, SpannableUtf8};
 use better_derive::{Debug, Eq, PartialEq};
 
 
@@ -117,8 +116,7 @@ mod expr {
     }
     impl<'s, S> Combinator<'static, 's, S> for Expr<S>
     where
-        S: 's + Clone + Spannable<'s>,
-        S::Slice: Utf8Parsable<'s>,
+        S: 's + Clone + SpannableUtf8<'s>,
     {
         type ExpectsFormatter = &'static str;
         type Output = super::Expr;
@@ -172,7 +170,6 @@ mod expr {
 const fn expr<'s, S>() -> expr::Expr<S>
 where
     S: 's + Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
 {
     expr::Expr { _s: std::marker::PhantomData }
 }
@@ -192,8 +189,7 @@ where
 /// representation.
 const fn lit<'s, S>() -> impl Combinator<'static, 's, S, Output = Lit>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     closure("A literal", |input| branch::alt((lit_int(),)).parse(input))
 }
@@ -221,8 +217,7 @@ where
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 const fn lit_int<'s, S>() -> impl Combinator<'static, 's, S, Output = Lit>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     closure("An integer literal", |input: Span<S>| {
         // Parse the characters
@@ -234,21 +229,24 @@ where
 
         // Convert to an integer
         let mut value: u64 = 0;
-        for b in val.bytes() {
+        let mut res: Result<(), SnackError<_, _, S>> = Ok(());
+        val.match_bytes_while(|b| {
             if b >= b'0' && b <= b'9' {
                 let i: u64 = (b - b'0') as u64;
                 if value > (u64::MAX - i) / 10 {
-                    return Err(SnackError::Fatal(Fatal::Overflow { span: val.clone() }));
+                    res = Err(SnackError::Fatal(Fatal::Overflow { span: val.clone() }));
+                    return false;
                 }
                 value *= 10;
                 value += i;
+                true
             } else {
-                unreachable!();
+                unreachable!()
             }
-        }
+        });
 
         // Ok!
-        Ok((rem, Lit::Int(value)))
+        res.map(|()| (rem, Lit::Int(value)))
     })
 }
 

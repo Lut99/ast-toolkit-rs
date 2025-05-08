@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2025, 21:12:24
 //  Last edited:
-//    22 Apr 2025, 13:19:48
+//    08 May 2025, 13:23:42
 //  Auto updated?
 //    Yes
 //
@@ -16,9 +16,8 @@ use std::marker::PhantomData;
 
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
-use ast_toolkit_snack::span::Utf8Parsable;
 use ast_toolkit_snack::utf8::streaming::tag;
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, SpannableUtf8, Spanning};
 
 pub use super::super::complete::utf8_delim::{ExpectsFormatter, Fatal, Recoverable};
 use crate::Utf8Delimiter;
@@ -37,8 +36,7 @@ impl<'c, 's, T, C, S> Combinator<'c, 's, S> for Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
     C: Combinator<'c, 's, S>,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = (C::Output, T);
@@ -157,8 +155,7 @@ pub const fn utf8_delim<'c, 's, T, C, S>(comb: C) -> Utf8Delim<T, C, S>
 where
     T: Utf8Delimiter<S>,
     C: Combinator<'c, 's, S>,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     Utf8Delim { _t: PhantomData, comb, _s: PhantomData }
 }

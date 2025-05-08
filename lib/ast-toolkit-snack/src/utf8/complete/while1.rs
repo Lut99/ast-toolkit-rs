@@ -4,7 +4,7 @@
 //  Created:
 //    02 Nov 2024, 11:40:18
 //  Last edited:
-//    22 Apr 2025, 11:34:40
+//    08 May 2025, 11:49:17
 //  Auto updated?
 //    Yes
 //
@@ -18,11 +18,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Utf8Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -88,8 +87,7 @@ impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -101,20 +99,12 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for c in input.graphs() {
-            // Check if it's in the set
-            if (self.predicate)(c) {
-                i += c.len();
-                continue;
-            } else {
-                break;
-            }
+        let split: usize = input.match_utf8_while(&mut self.predicate);
+        if split > 0 {
+            Ok((input.slice(split..), input.slice(..split)))
+        } else {
+            Err(SnackError::Recoverable(Recoverable { what: self.what, span: input }))
         }
-
-        // Return if there's at least one
-        if i > 0 { Ok((input.slice(i..), input.slice(..i))) } else { Err(SnackError::Recoverable(Recoverable { what: self.what, span: input })) }
     }
 }
 
@@ -181,8 +171,7 @@ where
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }

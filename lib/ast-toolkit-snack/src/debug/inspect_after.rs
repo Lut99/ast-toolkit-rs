@@ -4,7 +4,7 @@
 //  Created:
 //    01 Dec 2024, 12:11:28
 //  Last edited:
-//    22 Apr 2025, 11:54:01
+//    08 May 2025, 11:20:32
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
@@ -36,7 +35,6 @@ where
     C: Combinator<'c, 's, S>,
     P: for<'a> FnMut(&'a SResult<C::Output, C::Recoverable, C::Fatal, S>),
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -102,7 +100,6 @@ where
     C: Combinator<'c, 's, S>,
     P: for<'a> FnMut(&'a SResult<C::Output, C::Recoverable, C::Fatal, S>),
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     InspectAfter { comb, pred, _s: PhantomData }
 }

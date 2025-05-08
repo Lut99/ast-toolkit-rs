@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:09:36
 //  Last edited:
-//    22 Apr 2025, 11:14:16
+//    08 May 2025, 11:34:08
 //  Auto updated?
 //    Yes
 //
@@ -16,10 +16,9 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::result::Result as SResult;
-use crate::span::BytesParsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -71,8 +70,7 @@ pub struct OneOf0<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -84,20 +82,9 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Try to iterate over the head to find the match
-        let mut i: usize = 0;
-        for byte in input.bytes() {
-            // Check if it's in the set
-            if self.byteset.contains(&byte) {
-                i += 1;
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        // Return the found set
-        Ok((input.slice(i..), input.slice(..i)))
+        // Return if there's at least one
+        let split: usize = input.match_bytes_while(|b| self.byteset.contains(&b));
+        Ok((input.slice(split..), input.slice(..split)))
     }
 }
 
@@ -147,8 +134,7 @@ where
 #[inline]
 pub const fn one_of0<'c, 's, S>(byteset: &'c [u8]) -> OneOf0<'c, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     OneOf0 { byteset, _s: PhantomData }
 }

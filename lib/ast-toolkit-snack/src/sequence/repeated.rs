@@ -4,7 +4,7 @@
 //  Created:
 //    14 Dec 2024, 18:14:44
 //  Last edited:
-//    22 Apr 2025, 13:27:06
+//    08 May 2025, 11:20:44
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,6 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -98,7 +97,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Repeated<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Vec<C::Output>;
@@ -202,7 +200,6 @@ pub const fn repeated<'c, 's, C, S>(n: usize, comb: C) -> Repeated<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Repeated { comb, n, _s: PhantomData }
 }

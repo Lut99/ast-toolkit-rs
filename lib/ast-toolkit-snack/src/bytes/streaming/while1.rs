@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:42:41
 //  Last edited:
-//    22 Apr 2025, 11:22:29
+//    08 May 2025, 11:31:58
 //  Auto updated?
 //    Yes
 //
@@ -15,13 +15,12 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use super::super::complete::while1 as while1_complete;
 pub use super::super::complete::while1::{ExpectsFormatter, Recoverable};
 use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
-use crate::span::BytesParsable;
 
 
 /***** COMBINATORS *****/
@@ -39,8 +38,7 @@ pub struct While1<'c, S, P> {
 impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While1<'c, S, P>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
@@ -120,8 +118,7 @@ where
 #[inline]
 pub const fn while1<'c, 's, S, P>(what: &'c str, predicate: P) -> While1<'c, S, P>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
 {
     While1 { predicate, what, _s: PhantomData }

@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 13:56:52
 //  Last edited:
-//    22 Apr 2025, 11:43:47
+//    08 May 2025, 11:20:09
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -59,7 +58,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Opt<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = Option<C::Output>;
@@ -120,7 +118,6 @@ pub const fn opt<'c, 's, C, S>(comb: C) -> Opt<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Opt { comb, _s: PhantomData }
 }

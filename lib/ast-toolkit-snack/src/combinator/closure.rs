@@ -4,7 +4,7 @@
 //  Created:
 //    18 Mar 2025, 16:14:07
 //  Last edited:
-//    22 Apr 2025, 11:48:28
+//    08 May 2025, 11:18:45
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,6 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ParseError};
 
 
@@ -84,7 +83,6 @@ where
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<F>;
     type Output = O;
@@ -118,7 +116,6 @@ where
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Closure { expected, closure, _output: PhantomData, _recoverable: PhantomData, _fatal: PhantomData, _s: PhantomData }
 }

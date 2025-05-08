@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 19:38:26
 //  Last edited:
-//    22 Apr 2025, 11:42:50
+//    08 May 2025, 11:20:01
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,6 @@ use ast_toolkit_span::{Span, Spannable};
 
 use super::recognize;
 use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -67,7 +66,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Not<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<C::ExpectsFormatter>;
     type Output = ();
@@ -147,7 +145,6 @@ pub const fn not<'c, 's, C, S>(comb: C) -> Not<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Not { comb, _s: PhantomData }
 }

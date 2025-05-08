@@ -4,7 +4,7 @@
 //  Created:
 //    05 Apr 2024, 18:10:59
 //  Last edited:
-//    06 May 2025, 16:24:46
+//    08 May 2025, 11:21:34
 //  Auto updated?
 //    Yes
 //
@@ -311,8 +311,7 @@ impl<'s> Utf8Parsable<'s> for &'s str {
 }
 impl<'s, S> Utf8Parsable<'s> for Span<S>
 where
-    S: Clone + Spannable<'s>,
-    S::Slice: Utf8Parsable<'s>,
+    S: Clone + SpannableUtf8<'s>,
 {
     type GraphsIter = <S::Slice as Utf8Parsable<'s>>::GraphsIter;
     type GraphIndicesIter = <S::Slice as Utf8Parsable<'s>>::GraphIndicesIter;

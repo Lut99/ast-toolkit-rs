@@ -4,7 +4,7 @@
 //  Created:
 //    09 Sep 2024, 14:38:51
 //  Last edited:
-//    22 Apr 2025, 13:22:13
+//    08 May 2025, 13:25:58
 //  Auto updated?
 //    Yes
 //
@@ -166,9 +166,8 @@ macro_rules! utf8_token_snack {
             #[inline]
             pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
-                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
+                C: $crate::snack::__private::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
             {
                 $crate::snack::complete::utf8_token::utf8_token(comb)
             }
@@ -191,9 +190,8 @@ macro_rules! utf8_token_snack {
             #[inline]
             pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, S>
             where
-                C: $crate::snack::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
-                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
+                C: $crate::snack::__private::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
             {
                 $crate::snack::streaming::utf8_token::utf8_token(comb)
             }
@@ -397,9 +395,8 @@ macro_rules! utf8_delim_snack {
             #[inline]
             pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
-                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
+                C: $crate::snack::__private::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
             {
                 $crate::snack::complete::utf8_delim::utf8_delim(comb)
             }
@@ -420,9 +417,8 @@ macro_rules! utf8_delim_snack {
             #[inline]
             pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, S>
             where
-                C: $crate::snack::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
-                S::Slice: $crate::snack::span::Utf8Parsable<'s>,
+                C: $crate::snack::__private::Combinator<'c, 's, S>,
+                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
             {
                 $crate::snack::streaming::utf8_delim::utf8_delim(comb)
             }

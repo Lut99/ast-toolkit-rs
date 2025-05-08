@@ -4,7 +4,7 @@
 //  Created:
 //    30 Apr 2025, 09:15:34
 //  Last edited:
-//    30 Apr 2025, 09:18:35
+//    08 May 2025, 11:31:43
 //  Auto updated?
 //    Yes
 //
@@ -16,12 +16,11 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
+use ast_toolkit_span::{Span, SpannableBytes};
 
-pub use super::super::complete::byte::{ExpectsFormatter, Recoverable};
+pub use super::super::complete::byte::{ExpectsFormatter, Recoverable, byte as byte_complete};
 use crate::Combinator;
-use crate::result::{Expected, Result as SResult, SnackError};
-use crate::span::BytesParsable;
+use crate::result::{Result as SResult, SnackError};
 
 
 /***** COMBINATOR *****/
@@ -37,8 +36,7 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Byte<'c, P, S>
 where
     'c: 'a,
     P: FnMut(u8) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -50,18 +48,13 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Affirm there is a byte
-        let b: u8 = match input.bytes().next() {
-            Some(b) => b,
-            None => return Err(SnackError::NotEnough { needed: Some(1), span: input }),
-        };
-
-        // Check it matches
-        if (self.pred)(b) {
-            Ok((input.slice(1..), input.slice(..1)))
-        } else {
-            Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
+        // Check first if there's *any* input to parse.
+        if input.is_empty() {
+            return Err(SnackError::NotEnough { needed: Some(1), span: input });
         }
+
+        // Otherwise, continue as usual
+        byte_complete(self.what, &mut self.pred).parse(input)
     }
 }
 
@@ -120,8 +113,7 @@ where
 pub const fn byte<'s, 'c, P, S>(what: &'c str, pred: P) -> Byte<'c, P, S>
 where
     P: FnMut(u8) -> bool,
-    S: Clone + Spannable<'s>,
-    S::Slice: BytesParsable<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Byte { what, pred, _s: PhantomData }
 }

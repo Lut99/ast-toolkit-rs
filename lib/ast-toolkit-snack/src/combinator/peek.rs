@@ -4,7 +4,7 @@
 //  Created:
 //    07 Mar 2025, 17:19:33
 //  Last edited:
-//    22 Apr 2025, 11:44:07
+//    08 May 2025, 11:20:15
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,6 @@ use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::Result as SResult;
-use crate::span::Parsable;
 
 
 /***** COMBINATORS *****/
@@ -31,7 +30,6 @@ impl<'c, 's, C, S> Combinator<'c, 's, S> for Peek<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = C::ExpectsFormatter;
     type Output = C::Output;
@@ -90,7 +88,6 @@ pub const fn peek<'c, 's, C, S>(comb: C) -> Peek<C, S>
 where
     C: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Peek { comb, _s: PhantomData }
 }

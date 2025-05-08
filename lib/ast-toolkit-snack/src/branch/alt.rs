@@ -4,7 +4,7 @@
 //  Created:
 //    11 Sep 2024, 17:26:29
 //  Last edited:
-//    22 Apr 2025, 11:12:50
+//    08 May 2025, 11:14:52
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,6 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::span::Parsable;
 use crate::{BranchingCombinator, Combinator, ExpectsFormatter};
 
 
@@ -176,7 +175,6 @@ macro_rules! tuple_branching_comb_impl {
                 impl<'c, 's, S, O, [<C $fi>]: Combinator<'c, 's, S, Output = O> $(, [<C $i>]: Combinator<'c, 's, S, Output = O>)*> BranchingCombinator<'c, 's, S> for ([<C $fi>], $([<C $i>],)*)
                 where
                     S: Clone + Spannable<'s>,
-                    S::Slice: Parsable<'s>,
                 {
                     type ExpectsFormatter = [<ExpectsFormatter $li>]<[<C $fi>]::ExpectsFormatter $(, [<C $i>]::ExpectsFormatter)*>;
                     type Output = O;
@@ -281,7 +279,6 @@ impl<'c, 's, B, S> Combinator<'c, 's, S> for Alt<B, S>
 where
     B: BranchingCombinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     type ExpectsFormatter = B::ExpectsFormatter;
     type Output = B::Output;
@@ -345,7 +342,6 @@ pub const fn alt<'c, 's, B, S>(branches: B) -> Alt<B, S>
 where
     B: BranchingCombinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     Alt { branches, _s: PhantomData }
 }

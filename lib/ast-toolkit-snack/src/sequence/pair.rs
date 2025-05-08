@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:06:36
 //  Last edited:
-//    22 Apr 2025, 12:04:57
+//    08 May 2025, 11:20:46
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,6 @@ use ast_toolkit_span::Spannable;
 
 pub use super::tuple::{Error2 as Error, ExpectsFormatter2 as ExpectsFormatter};
 use crate::Combinator;
-use crate::span::Parsable;
 
 
 /***** TYPE ALIASES *****/
@@ -83,7 +82,6 @@ where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
-    S::Slice: Parsable<'s>,
 {
     (first, second)
 }
