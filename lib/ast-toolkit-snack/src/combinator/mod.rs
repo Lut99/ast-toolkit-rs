@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:21:02
 //  Last edited:
-//    20 Mar 2025, 12:15:01
+//    08 May 2025, 15:31:56
 //  Auto updated?
 //    Yes
 //
@@ -26,6 +26,7 @@ pub mod opt;
 pub mod peek;
 pub mod recognize;
 pub mod remember;
+pub mod until;
 
 // Imports
 pub use closure::closure;
@@ -41,3 +42,4 @@ pub use opt::opt;
 pub use peek::peek;
 pub use recognize::recognize;
 pub use remember::remember;
+pub use until::until;
