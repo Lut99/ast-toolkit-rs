@@ -26,7 +26,7 @@ use crate::{Combinator, ExpectsFormatter, ParseError};
 /***** IMPORT ALIASES *****/
 /// Assembles all of the interfaces.
 pub mod prelude {
-    pub use super::{BoxableParseError, BoxedCombinator, IntoBoxedResult};
+    pub use super::{BoxableParseError, BoxedCombinator, ResultExt};
 }
 
 
@@ -91,8 +91,8 @@ pub type BoxedCombinator<'a, 'f, 'e1, 'e2, 'c, 's, O, S> = Box<
 
 
 /***** BOXING INTERFACES *****/
-/// Provides [`IntoBoxableResult::into_boxed()`] on [`Result`]s over [`SnackError`]s.
-pub trait IntoBoxedResult<T, E1, E2, S: Clone> {
+/// Provides [`ResultExt::into_boxed()`] on [`Result`]s over [`SnackError`]s.
+pub trait ResultExt<T, E1, E2, S: Clone> {
     /// Convenience function that calls [`SnackError::into_boxed()`] transparently on [`Result`]s.
     ///
     /// # Returns
@@ -104,8 +104,8 @@ pub trait IntoBoxedResult<T, E1, E2, S: Clone> {
         E2: 'e2;
 }
 
-// Blanket impl for [`IntoBoxedResult`]
-impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> IntoBoxedResult<T, E1, E2, S> for Result<T, SnackError<E1, E2, S>> {
+// Blanket impl for [`ResultExt`]
+impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> ResultExt<T, E1, E2, S> for Result<T, SnackError<E1, E2, S>> {
     #[inline]
     fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>>
     where

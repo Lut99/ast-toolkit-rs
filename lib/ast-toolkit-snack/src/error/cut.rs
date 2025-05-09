@@ -12,62 +12,18 @@
 //!   Implements the [`cut()`]-combinator.
 //
 
-use std::borrow::Cow;
 use std::convert::Infallible;
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{CutError, Result as SResult, ResultExt as _};
 
 
 /***** ERRORS *****/
 /// Defines fatal errors for the [`Cut`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
-pub enum Fatal<E1, E2> {
-    /// It's a recoverable error of the nested combinator.
-    Recoverable(E1),
-    /// It's a fatal error of the nested combinator.
-    Fatal(E2),
-}
-impl<E1: Display, E2: Display> Display for Fatal<E1, E2> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        match self {
-            Self::Recoverable(err) => err.fmt(f),
-            Self::Fatal(err) => err.fmt(f),
-        }
-    }
-}
-impl<E1: Error, E2: Error> Error for Fatal<E1, E2> {
-    #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Recoverable(err) => err.source(),
-            Self::Fatal(err) => err.source(),
-        }
-    }
-}
-impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Fatal<E1, E2> {
-    #[inline]
-    fn span(&self) -> Cow<Span<S>> {
-        match self {
-            Self::Recoverable(err) => err.span(),
-            Self::Fatal(err) => err.span(),
-        }
-    }
-
-    #[inline]
-    fn into_span(self) -> Span<S> {
-        match self {
-            Self::Recoverable(err) => err.into_span(),
-            Self::Fatal(err) => err.into_span(),
-        }
-    }
-}
+pub type Fatal<E1, E2> = CutError<E1, E2>;
 
 
 
@@ -93,14 +49,7 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { self.comb.expects() }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        match self.comb.parse(input) {
-            Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(Fatal::Recoverable(err))),
-            Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Fatal::Fatal(err))),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
-        }
-    }
+    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> { self.comb.parse(input).cut() }
 }
 
 

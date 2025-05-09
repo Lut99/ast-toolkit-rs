@@ -14,14 +14,115 @@
 //
 
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{self, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::ExpectsFormatter;
 use crate::boxed::{BoxableParseError, BoxedParseError};
+
+
+/***** IMPORT ALIASES *****/
+/// Assembles all of the interfaces.
+pub mod prelude {
+    pub use super::ResultExt;
+}
+
+
+
+
+
+/***** ERRORS *****/
+/// Auxillary type for the [`SnackError`] for when it is [`cut()`](SnackError::cut()).
+#[derive(Debug, Eq, PartialEq)]
+pub enum CutError<E1, E2> {
+    /// It was originally a [`SnackError::Recoverable`] error.
+    Recoverable(E1),
+    /// It was originally also a [`SnackError::Fatal`] error.
+    Fatal(E2),
+}
+impl<E1: Display, E2: Display> Display for CutError<E1, E2> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Recoverable(err) => err.fmt(f),
+            Self::Fatal(err) => err.fmt(f),
+        }
+    }
+}
+impl<E1: fmt::Debug + Display, E2: fmt::Debug + Display> Error for CutError<E1, E2> {}
+impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for CutError<E1, E2> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> {
+        match self {
+            Self::Recoverable(err) => err.span(),
+            Self::Fatal(err) => err.span(),
+        }
+    }
+
+    #[inline]
+    fn into_span(self) -> Span<S> {
+        match self {
+            Self::Recoverable(err) => err.into_span(),
+            Self::Fatal(err) => err.into_span(),
+        }
+    }
+}
+
+
+
+
+
+/***** INTERFACES *****/
+/// Defines some [`SnackError`]s transparently on [`Result`]s.
+pub trait ResultExt<T, E1, E2, S>: Sized {
+    /// "Cuts" the [`SnackError`] in this Result.
+    ///
+    /// This is a shortcut for using the [`cut()`](crate::error::cut())-combinator. In essence, it
+    /// will turn all [recoverable](SnackError::Recoverable) errors into
+    /// [fatal](SnackError::Fatal), ones, "cutting" the branching search.
+    ///
+    /// # Returns
+    /// A Result with a [`SnackError`] which is either [`SnackError::Fatal`] or
+    /// [`SnackError::NotEnough`].
+    fn cut(self) -> std::result::Result<T, SnackError<Infallible, CutError<E1, E2>, S>>;
+
+    /// "Uncuts" the [`SnackError`] in this Result.
+    ///
+    /// This is a shortcut for using the [`uncut()`](crate::error::uncut())-combinator. In essence,
+    /// it will turn all [fatal](SnackError::Fatal) errors into
+    /// [recoverable](SnackError::Recoverable) ones, "catching" the fatal error and instead
+    /// allowing parent branches to be searched again.
+    ///
+    /// # Returns
+    /// A Result with a [`SnackError`] which is either [`SnackError::Recoverable`] or
+    /// [`SnackError::NotEnough`].
+    fn uncut(self) -> std::result::Result<T, SnackError<CutError<E1, E2>, Infallible, S>>;
+}
+
+impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackError<E1, E2, S>> {
+    #[inline]
+    fn cut(self) -> std::result::Result<T, SnackError<Infallible, CutError<E1, E2>, S>> {
+        match self {
+            Ok(res) => Ok(res),
+            Err(err) => Err(err.cut()),
+        }
+    }
+
+    #[inline]
+    fn uncut(self) -> std::result::Result<T, SnackError<CutError<E1, E2>, Infallible, S>> {
+        match self {
+            Ok(res) => Ok(res),
+            Err(err) => Err(err.uncut()),
+        }
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -41,7 +142,7 @@ pub type Result<T, E1, E2, S> = std::result::Result<(Span<S>, T), SnackError<E1,
 /// 3. Not enough input, which is only relevant for streaming versions of combinators. In this
 ///    case, it signals that the branch _looks_ incorrect/incomplete, but that additional things
 ///    can be given after the current end-of-file that collapses the correctness one way or another.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum SnackError<E1, E2, S> {
     /// It's a recoverable error.
     ///
@@ -67,6 +168,42 @@ pub enum SnackError<E1, E2, S> {
         /// The span pointing to the end of the input stream.
         span:   Span<S>,
     },
+}
+impl<E1, E2, S> SnackError<E1, E2, S> {
+    /// "Cuts" this SnackError.
+    ///
+    /// This is a shortcut for using the [`cut()`](crate::error::cut())-combinator. In essence, it
+    /// will turn all [recoverable](SnackError::Recoverable) errors into
+    /// [fatal](SnackError::Fatal), ones, "cutting" the branching search.
+    ///
+    /// # Returns
+    /// A SnackError which is either [`SnackError::Fatal`] or [`SnackError::NotEnough`].
+    #[inline]
+    pub fn cut(self) -> SnackError<Infallible, CutError<E1, E2>, S> {
+        match self {
+            Self::Recoverable(err) => SnackError::Fatal(CutError::Recoverable(err)),
+            Self::Fatal(err) => SnackError::Fatal(CutError::Fatal(err)),
+            Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
+        }
+    }
+
+    /// "Uncuts" this SnackError.
+    ///
+    /// This is a shortcut for using the [`uncut()`](crate::error::uncut())-combinator. In essence,
+    /// it will turn all [fatal](SnackError::Fatal) errors into
+    /// [recoverable](SnackError::Recoverable) ones, "catching" the fatal error and instead
+    /// allowing parent branches to be searched again.
+    ///
+    /// # Returns
+    /// A SnackError which is either [`SnackError::Recoverable`] or [`SnackError::NotEnough`].
+    #[inline]
+    pub fn uncut(self) -> SnackError<CutError<E1, E2>, Infallible, S> {
+        match self {
+            Self::Recoverable(err) => SnackError::Recoverable(CutError::Recoverable(err)),
+            Self::Fatal(err) => SnackError::Recoverable(CutError::Fatal(err)),
+            Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
+        }
+    }
 }
 impl<E1: BoxableParseError<S>, E2: BoxableParseError<S>, S: Clone> SnackError<E1, E2, S> {
     /// Boxes the two errors in the SnackError.
@@ -106,34 +243,6 @@ where
                 }
                 Ok(())
             },
-        }
-    }
-}
-impl<'a, E1, E2, S> Eq for SnackError<E1, E2, S>
-where
-    E1: Eq,
-    E2: Eq,
-    S: Spannable<'a>,
-{
-}
-impl<'a, E1, E2, S> PartialEq for SnackError<E1, E2, S>
-where
-    E1: PartialEq,
-    E2: PartialEq,
-    S: Spannable<'a>,
-{
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            // Only match other with the same variant
-            (Self::Recoverable(err1), Self::Recoverable(err2)) => err1 == err2,
-            (Self::Fatal(err1), Self::Fatal(err2)) => err1 == err2,
-            (Self::NotEnough { needed: needed1, span: span1 }, Self::NotEnough { needed: needed2, span: span2 }) => {
-                needed1 == needed2 && span1 == span2
-            },
-
-            // Anything else never equals
-            _ => false,
         }
     }
 }
