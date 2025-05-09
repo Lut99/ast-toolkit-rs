@@ -4,7 +4,7 @@
 //  Created:
 //    03 Nov 2024, 11:21:02
 //  Last edited:
-//    08 May 2025, 15:50:37
+//    09 May 2025, 09:57:03
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,7 @@
 pub mod closure;
 pub mod consume;
 pub mod discard;
+pub mod forget_ty;
 pub mod map;
 pub mod map_fallible;
 pub mod map_fatal;
@@ -33,6 +34,7 @@ pub mod until;
 pub use closure::closure;
 pub use consume::consume;
 pub use discard::discard;
+pub use forget_ty::forget_ty;
 pub use map::map;
 pub use map_fallible::map_fallible;
 pub use map_fatal::map_fatal;

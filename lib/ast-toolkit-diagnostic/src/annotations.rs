@@ -15,8 +15,7 @@
 
 use std::fmt::Debug;
 
-use ast_toolkit_span::{Span, Spanning};
-
+// use ast_toolkit_span::{Span, Spanning};
 use crate::span::Highlight;
 
 

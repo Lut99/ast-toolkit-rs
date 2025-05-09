@@ -14,9 +14,9 @@
 
 use std::fmt::{Formatter, Result as FResult};
 
-use crate::annotations::Annotation;
-use crate::style::{Plain, Style};
 use crate::Severity;
+use crate::annotations::Annotation;
+use crate::style::Style;
 
 
 /***** AUXILLARY *****/
@@ -44,17 +44,17 @@ pub trait IntoDiagnostic {
 /// sevirity levels (errors and warnings).
 pub struct Diagnostic {
     /// The style to apply while rendering.
-    style: Box<dyn Style>,
+    _style: Box<dyn Style>,
 
     /// The main severity of the Diagnostic.
-    sev:  Severity,
+    _sev:  Severity,
     /// Any code to display with the main message.
-    code: Option<String>,
+    _code: Option<String>,
     /// The main message of this Diagnostic.
-    msg:  String,
+    _msg:  String,
 
     /// The annotations slapped onto this Diagnostic.
-    annots: Vec<Annotation>,
+    _annots: Vec<Annotation>,
 }
 
 // Constructors
@@ -73,9 +73,7 @@ impl Diagnostic {
     ///
     /// # Errors
     /// This function may error if we failed to write to `f`.
-    pub fn render(&self, f: &mut Formatter) -> FResult {
-        // Step 1: We need to divide the highlights into snippets
-    }
+    pub fn render(&self, _f: &mut Formatter) -> FResult { todo!() }
 }
 
 // From

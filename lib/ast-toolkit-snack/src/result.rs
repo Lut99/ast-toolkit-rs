@@ -15,12 +15,12 @@
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{self, Display, Formatter, Result as FResult};
+use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
-use crate::{ExpectsFormatter, ParseError};
+use crate::ExpectsFormatter;
 
 
 /***** LIBRARY *****/
@@ -221,40 +221,4 @@ impl<E, S: Clone> Spanning<S> for SpanningError<E, S> {
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
-}
-
-/// Implements a [`ParseError`] that is [`Box`]ed.
-///
-/// This is a separate type because [`Box`] does not implement [`Error`] unless the wrapped type is
-/// [`Sized`] (see <https://users.rust-lang.org/t/why-box-dyn-error-is-not-sized/61642/4>).
-///
-/// We fix it by defining this custom type ourselves which _does_ implement [`Error`] and,
-/// therefore, [`ParseError`].
-pub struct BoxedParseError<'e, S: Clone>(pub Box<dyn 'e + ParseError<S>>);
-impl<'e, S: Clone> BoxedParseError<'e, S> {
-    #[inline]
-    pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
-}
-impl<'e, S: Clone> fmt::Debug for BoxedParseError<'e, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let Self(err) = self;
-        let mut fmt = f.debug_tuple("BoxedParseError");
-        fmt.field(err);
-        fmt.finish()
-    }
-}
-impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
-}
-impl<'e, S: Clone> Error for BoxedParseError<'e, S> {
-    #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
-}
-impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
-    #[inline]
-    fn span(&self) -> Cow<Span<S>> { self.0.span() }
-    #[inline]
-    fn into_span(self) -> Span<S> { self.0.into_span() }
 }

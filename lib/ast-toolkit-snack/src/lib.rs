@@ -4,20 +4,21 @@
 //  Created:
 //    14 Mar 2024, 08:37:24
 //  Last edited:
-//    08 May 2025, 10:27:40
+//    08 May 2025, 16:53:50
 //  Auto updated?
 //    Yes
 //
 //  Description:
 //!   The sun is coming out, the birds are tweeting... It's that time of
 //!   the year again! Lut99 makes another re-code of `nom`!
-//!   
+//!
 //!   Provides a parser-combinator framework heavily inspired by
 //!   [nom](https://github.com/rust-bakery/nom), except that it gives up a
 //!   little bit of performance over a more human-friendly debug experience.
 //
 
 // Declare submodules
+pub mod boxed;
 pub mod branch;
 pub mod bytes;
 #[cfg(feature = "c")]
@@ -28,7 +29,6 @@ pub mod error;
 pub mod multi;
 pub mod result;
 pub mod sequence;
-// pub mod span;
 pub mod utf8;
 
 // Imports
@@ -122,7 +122,7 @@ impl ExpectsFormatter for String {
 /// - `'s`: Some lifetime of the _input_. Since the input tends to refer to a reference, we would
 ///   like to abstract over the lifetime of anything containing that reference.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait Combinator<'t, 's, S>
+pub trait Combinator<'c, 's, S>
 where
     S: Clone + Spannable<'s>,
 {
@@ -179,7 +179,7 @@ where
 }
 
 // Default impl for pointer-like types
-impl<'t, 's, 'a, S, T: Combinator<'t, 's, S>> Combinator<'t, 's, S> for &'a mut T
+impl<'c, 's, 'a, S, T: Combinator<'c, 's, S>> Combinator<'c, 's, S> for &'a mut T
 where
     S: Clone + Spannable<'s>,
 {
@@ -189,11 +189,29 @@ where
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'t, 's, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'c, 's, S>>::expects(self) }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        <T as Combinator<'t, 's, S>>::parse(self, input)
+        <T as Combinator<'c, 's, S>>::parse(self, input)
+    }
+}
+impl<'c, 's, S, T> Combinator<'c, 's, S> for Box<T>
+where
+    T: ?Sized + Combinator<'c, 's, S>,
+    S: Clone + Spannable<'s>,
+{
+    type ExpectsFormatter = T::ExpectsFormatter;
+    type Output = T::Output;
+    type Recoverable = T::Recoverable;
+    type Fatal = T::Fatal;
+
+    #[inline]
+    fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'c, 's, S>>::expects(self) }
+
+    #[inline]
+    fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        <T as Combinator<'c, 's, S>>::parse(self, input)
     }
 }
 
@@ -209,12 +227,12 @@ where
 /// parsing.
 ///
 /// # Generics
-/// - `'t`: Some lifetime of something upon which the combinator depends. Typically, this is used
+/// - `'c`: Some lifetime of something upon which the combinator depends. Typically, this is used
 ///   to make the [`Combinator::ExpectsFormatter`] depend on it too and efficiently delay
 ///   serialization of the expects-string until the last moment.
 /// - `F`: Some from-string that any input [`Span`] carries.
 /// - `S`: Some source-string that any input [`Span`] carries. This is what is effectively parsed.
-pub trait BranchingCombinator<'t, 's, S>
+pub trait BranchingCombinator<'c, 's, S>
 where
     S: Clone + Spannable<'s>,
 {
@@ -271,7 +289,7 @@ where
 }
 
 // Default impl for pointer-like types
-impl<'t, 's, 'a, S, T: BranchingCombinator<'t, 's, S>> BranchingCombinator<'t, 's, S> for &'a mut T
+impl<'c, 's, 'a, S, T: BranchingCombinator<'c, 's, S>> BranchingCombinator<'c, 's, S> for &'a mut T
 where
     S: Clone + Spannable<'s>,
 {
@@ -281,10 +299,10 @@ where
     type Fatal = T::Fatal;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'t, 's, S>>::expects(self) }
+    fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'c, 's, S>>::expects(self) }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> crate::result::Result<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        <T as BranchingCombinator<'t, 's, S>>::parse(self, input)
+        <T as BranchingCombinator<'c, 's, S>>::parse(self, input)
     }
 }

@@ -16,11 +16,12 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
+use ast_toolkit_snack::boxed::BoxableParseError as _;
 use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
 use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{Combinator, branch};
-use ast_toolkit_span::{Span, Spannable, SpannableBytes as _, SpannableUtf8};
+use ast_toolkit_snack::{Combinator, branch, combinator as comb};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes as _, SpannableUtf8, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 
@@ -40,7 +41,7 @@ impl<S> Display for Fatal<S> {
     }
 }
 impl<'s, S: Spannable<'s>> Error for Fatal<S> {}
-impl<S: Clone> ast_toolkit_span::Spanning<S> for Fatal<S> {
+impl<S: Clone> Spanning<S> for Fatal<S> {
     #[inline]
     fn span(&self) -> std::borrow::Cow<Span<S>> {
         match self {
@@ -101,52 +102,53 @@ impl Lit {
 
 
 /***** PARSERS *****/
-// The [`expr()`] is rather complicated due to recursion, so we'll create a fully-fledged
-// combinator out of it.
-mod expr {
-    use std::marker::PhantomData;
+// // The [`expr()`] is rather complicated due to recursion, so we'll create a fully-fledged
+// // combinator out of it.
+// mod expr {
+//     use std::marker::PhantomData;
 
-    use ast_toolkit_snack::result::{BoxedParseError, Result as SResult};
+//     use ast_toolkit_snack::boxed::BoxedParseError;
+//     use ast_toolkit_snack::result::Result as SResult;
 
-    use super::*;
+//     use super::*;
 
-    /// The combinator implementation itself.
-    pub(super) struct Expr<S> {
-        pub(super) _s: PhantomData<S>,
-    }
-    impl<'s, S> Combinator<'static, 's, S> for Expr<S>
-    where
-        S: 's + Clone + SpannableUtf8<'s>,
-    {
-        type ExpectsFormatter = &'static str;
-        type Output = super::Expr;
-        type Recoverable = BoxedParseError<'s, S>;
-        type Fatal = BoxedParseError<'s, S>;
+//     /// The combinator implementation itself.
+//     pub(super) struct Expr<S> {
+//         pub(super) _s: PhantomData<S>,
+//     }
+//     impl<'s, S> Combinator<'static, 's, S> for Expr<S>
+//     where
+//         S: 's + Clone + SpannableUtf8<'s>,
+//     {
+//         type ExpectsFormatter = &'static str;
+//         type Output = super::Expr;
+//         type Recoverable = BoxedParseError<'s, S>;
+//         type Fatal = BoxedParseError<'s, S>;
 
-        #[inline]
-        fn expects(&self) -> Self::ExpectsFormatter { "Expected an expression" }
+//         #[inline]
+//         fn expects(&self) -> Self::ExpectsFormatter { "Expected an expression" }
 
-        #[inline]
-        fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-            // Always parse a number first
-            let (rem, val) = match lit().parse(input) {
-                Ok(res) => res,
-                Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(BoxedParseError::new(err))),
-                Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(BoxedParseError::new(err))),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
-            };
+//         #[inline]
+//         fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+//             // Always parse a number first
+//             let (rem, val) = match lit().parse(input) {
+//                 Ok(res) => res,
+//                 Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(BoxedParseError::new(err))),
+//                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(BoxedParseError::new(err))),
+//                 Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
+//             };
 
-            // Then recursively parse the rest if there's an addition
-            match tag("+").parse(rem.clone()) {
-                Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, super::Expr::Add(Box::new(super::Expr::Lit(val)), Box::new(expr)))),
-                // If there's no addition, we are still OK
-                Err(SnackError::Recoverable(_)) => Ok((rem, super::Expr::Lit(val))),
-                Err(SnackError::Fatal(_)) => unreachable!(),
-                Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
-            }
-        }
-    }
-}
+//             // Then recursively parse the rest if there's an addition
+//             match tag("+").parse(rem.clone()) {
+//                 Ok((rem, _)) => expr().parse(rem).map(|(rem, expr)| (rem, super::Expr::Add(Box::new(super::Expr::Lit(val)), Box::new(expr)))),
+//                 // If there's no addition, we are still OK
+//                 Err(SnackError::Recoverable(_)) => Ok((rem, super::Expr::Lit(val))),
+//                 Err(SnackError::Fatal(_)) => unreachable!(),
+//                 Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
+//             }
+//         }
+//     }
+// }
 /// Parses an arbitrary expression.
 ///
 /// Luckily for us, our combinator needn't deal with precedence and associativity and all that
@@ -167,11 +169,37 @@ mod expr {
 ///
 /// Erroring means that this combinator successfully recognizes the input, but it was invalid.
 #[inline]
-const fn expr<'s, S>() -> expr::Expr<S>
+const fn expr<'s, S>() -> impl Combinator<'static, 's, S, Output = Expr>
 where
-    S: 's + Clone + Spannable<'s>,
+    S: 's + Clone + SpannableUtf8<'s>,
 {
-    expr::Expr { _s: std::marker::PhantomData }
+    // This combinator requires recursion. We have to do that at parse time to correctly describe
+    // base cases, and as such, we use `closure()` to turn a closure into a custom combinator.
+    comb::closure("an expression", |input| -> ast_toolkit_snack::result::Result<Expr, _, _, _> {
+        // Always parse a number first
+        let (rem, lhs) = match lit().parse(input) {
+            Ok(res) => res,
+            // NOTE: We box these errors because of the recursion below. It's also a quick way to
+            // return multiple different errors without creating new enums.
+            Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err.boxed())),
+            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err.boxed())),
+            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
+        };
+
+        // Then recursively parse the rest if there's an addition
+        match tag("+").parse(rem.clone()) {
+            Ok((rem, _)) => match expr().parse(rem) {
+                Ok((rem, rhs)) => Ok((rem, Expr::Add(Box::new(Expr::Lit(lhs)), Box::new(rhs)))),
+                Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(err.boxed())),
+                Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err.boxed())),
+                Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
+            },
+            // If there's no addition, we are still OK
+            Err(SnackError::Recoverable(_)) => Ok((rem, Expr::Lit(lhs))),
+            Err(SnackError::Fatal(_)) => unreachable!(),
+            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
+        }
+    })
 }
 
 /// Parses any literal.
