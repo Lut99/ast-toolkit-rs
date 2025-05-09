@@ -21,6 +21,7 @@ use ast_toolkit_span::{Span, Spannable, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
 use crate::ExpectsFormatter;
+use crate::boxed::{BoxableParseError, BoxedParseError};
 
 
 /***** LIBRARY *****/
@@ -66,6 +67,27 @@ pub enum SnackError<E1, E2, S> {
         /// The span pointing to the end of the input stream.
         span:   Span<S>,
     },
+}
+impl<E1: BoxableParseError<S>, E2: BoxableParseError<S>, S: Clone> SnackError<E1, E2, S> {
+    /// Boxes the two errors in the SnackError.
+    ///
+    /// This is different from calling [`BoxableParseError::boxed()`] on the SnackError, as that
+    /// boxes the error as a whole, whereas this function boxes its innards.
+    ///
+    /// # Returns
+    /// An identical SnackError that has box `E1` and `E2` replaced with [`BoxedParseError`]s.
+    #[inline]
+    pub fn into_boxed<'e1, 'e2>(self) -> SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>
+    where
+        E1: 'e1,
+        E2: 'e2,
+    {
+        match self {
+            Self::Recoverable(err) => SnackError::Recoverable(err.boxed()),
+            Self::Fatal(err) => SnackError::Fatal(err.boxed()),
+            Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
+        }
+    }
 }
 impl<E1, E2, S> Display for SnackError<E1, E2, S>
 where
