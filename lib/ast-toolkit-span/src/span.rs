@@ -35,7 +35,7 @@ use crate::spannable::{Spannable, SpannableUtf8};
 /// # Generics
 /// - `S`: The type of the internal source array. Usually, you would want this type to be very
 ///   cheaply [`Clone`]able (e.g., a reference or something like [`Rc`](std::rc::Rc)).
-///   
+///
 ///   Optionally, you can also give a tuple of [some type](Spannable::SourceId) and a [`Spannable`]
 ///   object to separate the identifier of the source from the source itself. Note, though, that
 ///   the whole type should _still_ be cheaply clonable, _and_ that the concrete value of the
@@ -112,7 +112,7 @@ impl<'s, S: Spannable<'s>> Span<S> {
     /// The index of the first element that does not match the predicate. If all elements match it,
     /// then this equals the length of the spanned area.
     #[inline]
-    pub fn match_while(&self, mut pred: impl for<'a> FnMut(&'a S::Elem) -> bool) -> usize {
+    pub fn match_while(&self, mut pred: impl FnMut(&'s S::Elem) -> bool) -> usize {
         // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
         // within the range
         let mut i: usize = 0;
@@ -148,7 +148,7 @@ impl<'s, S: SpannableUtf8<'s>> Span<S> {
     /// The _byte_ index of the first grapheme that does not match the predicate. If all elements
     /// match it, then this equals the length of the array.
     #[inline]
-    fn match_utf8_while(&self, mut pred: impl for<'a> FnMut(&'a str) -> bool) -> usize {
+    pub fn match_utf8_while(&self, mut pred: impl FnMut(&'s str) -> bool) -> usize {
         // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
         // within the range
         let mut i: usize = 0;
@@ -367,7 +367,7 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
-    fn match_while(&self, pred: impl for<'a> FnMut(&'a Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
+    fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
 
     #[inline]
     fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
@@ -377,7 +377,7 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
 }
 impl<'s, S: Clone + SpannableUtf8<'s>> SpannableUtf8<'s> for Span<S> {
     #[inline]
-    fn match_utf8_while(&self, pred: impl for<'a> FnMut(&'a str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
+    fn match_utf8_while(&self, pred: impl FnMut(&'s str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
 }
 
 

@@ -8,8 +8,9 @@ description = "Provides an error-like type called a `Diagnostic` that is used to
 
 
 [dependencies]
-stackvec = { git = "https://github.com/Lut99/stackvec-rs" }
-unicode-segmentation = "1.11"
+better-derive = { git = "https://github.com/Lut99/better-derive-rs" }
+# stackvec = { git = "https://github.com/Lut99/stackvec-rs" }
+# unicode-segmentation = "1.11"
 
 ast-toolkit-span = { path = "../ast-toolkit-span" }
 

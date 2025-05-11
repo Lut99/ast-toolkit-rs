@@ -15,11 +15,12 @@
 
 // Declare modules
 pub mod annotations;
-pub mod diagnostic;
-pub mod render;
-pub mod span;
-pub mod style;
+// pub mod diagnostic;
+mod layout;
+// pub mod render;
+// pub mod span;
+// pub mod style;
 
-// Bring some of it onto the crate-level.
-pub use annotations::{Annotation, AnnotationHighlight, AnnotationSuggestion, Severity};
-pub use diagnostic::Diagnostic;
+// // Bring some of it onto the crate-level.
+// pub use annotations::{Annotation, AnnotationHighlight, AnnotationSuggestion, Severity};
+// pub use diagnostic::Diagnostic;
