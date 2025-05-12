@@ -138,7 +138,14 @@ impl<'s, S: Clone + Spannable<'s>> Buffer<S> {
     ///
     /// # Returns
     /// A Buffer initialized to render a snippet matching the `span`.
-    pub fn from_span(span: Span<S>, pred: impl FnMut(&'s S::Elem) -> bool) -> Self { todo!() }
+    pub fn from_span(span: Span<S>, pred: impl FnMut(&'s S::Elem) -> bool) -> Self {
+        let source: &S = span.source();
+        let source_len: usize = source.len();
+        let start: usize = span.range().start_resolved(span.len()).unwrap_or(0);
+        let end: usize = span.range().end_resolved(span.len()).unwrap_or(0);
+
+        // Go thru the _source_, not the span, to find the surrounding lines
+    }
 }
 
 // Ops
