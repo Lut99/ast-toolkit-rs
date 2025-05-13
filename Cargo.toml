@@ -21,7 +21,7 @@ default = []
 
 # derive = ["ast-toolkit-railroad/derive", "ast-toolkit-snack/derive"]
 derive = ["ast-toolkit-railroad/derive"]
-serde = ["ast-toolkit-span/serde"]
+serde = ["ast-toolkit-span/serde", "ast-toolkit-tokens/serde"]
 
 diagnostic = ["dep:ast-toolkit-diagnostic"]
 
@@ -40,6 +40,7 @@ span = ["dep:ast-toolkit-span"]
 span-serde = ["ast-toolkit-span/serde"]
 
 tokens = ["dep:ast-toolkit-tokens"]
+tokens-serde = ["ast-toolkit-tokens/serde"]
 
 
 [workspace]
