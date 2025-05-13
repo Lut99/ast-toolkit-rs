@@ -367,15 +367,31 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
-    fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
+    fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
 
     #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
+    fn as_slice(&self) -> &'s [Self::Elem] {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source.as_slice()[start..end]
+    }
+
+    #[inline]
+    fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
 }
 impl<'s, S: Clone + SpannableUtf8<'s>> SpannableUtf8<'s> for Span<S> {
+    #[inline]
+    fn as_str(&self) -> &'s str {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source.as_str()[start..end]
+    }
+
     #[inline]
     fn match_utf8_while(&self, pred: impl FnMut(&'s str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
 }
