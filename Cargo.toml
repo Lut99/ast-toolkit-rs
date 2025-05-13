@@ -37,6 +37,7 @@ snack-extra = ["snack", "ast-toolkit-snack/extra"]
 snack-c = ["snack", "ast-toolkit-snack/c"]
 
 span = ["dep:ast-toolkit-span"]
+span-serde = ["ast-toolkit-span/serde"]
 
 tokens = ["dep:ast-toolkit-tokens"]
 
