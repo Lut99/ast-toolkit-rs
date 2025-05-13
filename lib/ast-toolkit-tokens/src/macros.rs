@@ -237,6 +237,53 @@ macro_rules! utf8_token_railroad {
     };
 }
 
+/// Generates a serde `Serialize` implementation for a token.
+///
+/// # Arguments
+/// This macro accepts a comma-separated list of:
+/// - `$name:ident`: An identifier that is used as the token name to generate the impl for.
+///
+/// # Generates
+/// This macro generates a `Serialize` impl for a type with the given `$name`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_tokens::{utf8_token, utf8_token_serde};
+/// use serde::Serialize as _;
+///
+/// // The implementation
+/// utf8_token!(Dot, ".");
+/// utf8_token_serde!(Dot);
+///
+/// // Now you can do
+/// let dot = serde_json::to_string(&Dot { span: Span::new(".") }).unwrap();
+/// ```
+#[macro_export]
+#[cfg(feature = "serde")]
+macro_rules! utf8_token_serde {
+    ($name:ident) => {
+        // Serde impl
+        impl<'s, S> $crate::__private::Serialize for $name<S>
+        where
+            S: $crate::__private::Spannable<'s>,
+            S::SourceId: $crate::__private::Serialize,
+        {
+            #[inline]
+            fn serialize<SE>(&self, serializer: SE) -> Result<SE::Ok, SE::Error>
+            where
+                SE: $crate::__private::Serializer,
+            {
+                use $crate::__private::SerializeStruct as _;
+
+                let mut ser = serializer.serialize_struct(::std::stringify!($name), 1)?;
+                ser.serialize_field("span", &self.span)?;
+                ser.end()
+            }
+        }
+    };
+}
+
 
 
 /// Generates an implementation for a Delimiter that parses UTF-8 text.
@@ -473,6 +520,55 @@ macro_rules! utf8_delim_railroad {
             fn railroad_open() -> Self::NodeOpen { $crate::__private::railroad::railroad::Terminal::new($open.into()) }
             #[inline]
             fn railroad_close() -> Self::NodeClose { $crate::__private::railroad::railroad::Terminal::new($close.into()) }
+        }
+    };
+}
+
+/// Generates a serde `Serialize` implementation for a delimited token.
+///
+/// # Arguments
+/// This macro accepts a comma-separated list of:
+/// - `$name:ident`: An identifier that is used as the token name to generate the impl for.
+///
+/// # Generates
+/// This macro generates a `Serialize` impl for a type with the given `$name`.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit_span::Span;
+/// use ast_toolkit_tokens::{utf8_delim, utf8_delim_serde};
+/// use serde::Serialize as _;
+///
+/// // The implementation
+/// utf8_delim!(Parens, "(", ")");
+/// utf8_delim_serde!(Parens);
+///
+/// // Now you can do
+/// let dot =
+///     serde_json::to_string(&Parens { open: Span::new("("), close: Span::new(")") }).unwrap();
+/// ```
+#[macro_export]
+#[cfg(feature = "serde")]
+macro_rules! utf8_delim_serde {
+    ($name:ident) => {
+        // Serde impl
+        impl<'s, S> $crate::__private::Serialize for $name<S>
+        where
+            S: $crate::__private::Spannable<'s>,
+            S::SourceId: $crate::__private::Serialize,
+        {
+            #[inline]
+            fn serialize<SE>(&self, serializer: SE) -> Result<SE::Ok, SE::Error>
+            where
+                SE: $crate::__private::Serializer,
+            {
+                use $crate::__private::SerializeStruct as _;
+
+                let mut ser = serializer.serialize_struct(::std::stringify!($name), 2)?;
+                ser.serialize_field("open", &self.open)?;
+                ser.serialize_field("close", &self.close)?;
+                ser.end()
+            }
         }
     };
 }

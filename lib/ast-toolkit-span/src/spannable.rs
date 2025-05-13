@@ -549,6 +549,13 @@ impl<'s> SpannableUtf8<'s> for &'s str {
     #[inline]
     fn as_str(&self) -> &'s str { self }
 }
+impl<'a, T: Clone + Debug + Eq + PartialEq, U: SpannableUtf8<'a>> SpannableUtf8<'a> for (T, U) {
+    #[inline]
+    fn as_str(&self) -> &'a str { <U as SpannableUtf8<'a>>::as_str(&self.1) }
+
+    #[inline]
+    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <U as SpannableUtf8<'a>>::match_utf8_while(&self.1, pred) }
+}
 // The `SpannableUtf8` impl for Span is over at its own definition
 
 // Pointer-like impls

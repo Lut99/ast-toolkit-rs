@@ -22,6 +22,8 @@ utf8_token!(Dot, ".");
 ast_toolkit_tokens::utf8_token_snack!(Dot);
 #[cfg(feature = "railroad")]
 ast_toolkit_tokens::utf8_token_railroad!(Dot, ".");
+#[cfg(feature = "serde")]
+ast_toolkit_tokens::utf8_token_serde!(Dot);
 
 
 
@@ -30,11 +32,11 @@ ast_toolkit_tokens::utf8_token_railroad!(Dot, ".");
 /***** ENTRYPOINT *****/
 fn main() {
     // We can create them as expected
-    let dot1 = Dot { span: Span::new(".") };
-    let dot2 = Dot { span: Span::new(".") };
+    let dot1 = Dot { span: Span::new(("<example1>", ".")) };
+    let dot2 = Dot { span: Span::new(("<example2>", ".")) };
 
     // Now we can do stuff with it
-    assert!(format!("{dot1:?}").starts_with("Dot { span: Span<&str> { source: "));
+    assert_eq!(format!("{dot1:?}"), "Dot { span: Span<(&str, &str)> { source: \"<example1>\", range: .. } }");
     assert_eq!(dot1, dot2);
     assert_eq!(Dot::<()>::TOKEN, ".");
 
@@ -42,11 +44,15 @@ fn main() {
     #[cfg(feature = "snack")]
     use ast_toolkit_snack::Combinator as _;
     #[cfg(feature = "snack")]
-    let dot3 = Dot::parser(ast_toolkit_snack::combinator::nop()).parse(Span::new(".")).unwrap().1;
+    let dot3 = Dot::parser(ast_toolkit_snack::combinator::nop()).parse(Span::new(("<example3>", "."))).unwrap().1;
     #[cfg(feature = "snack")]
-    assert!(format!("{dot3:?}").starts_with("Dot { span: Span<&str> { source: "));
+    assert_eq!(format!("{dot3:?}"), "Dot { span: Span<(&str, &str)> { source: \"<example3>\", range: ..1 } }");
 
     // Also generate railroad diagram nodes
     #[cfg(feature = "railroad")]
     let _node = <Dot<&str> as ast_toolkit_railroad::ToNode>::railroad();
+
+    // Also serialize it
+    #[cfg(feature = "serde")]
+    assert_eq!(serde_json::to_string(&dot1).unwrap(), "{\"span\":{\"source\":\"<example1>\",\"range\":{\"inner\":\"Full\"}}}");
 }

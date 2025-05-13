@@ -27,6 +27,8 @@ pub mod __private {
     #[cfg(feature = "railroad")]
     pub use ast_toolkit_railroad as railroad;
     pub use ast_toolkit_span::{Span, Spannable, Spanning};
+    #[cfg(feature = "serde")]
+    pub use serde::{Serialize, Serializer, ser::SerializeStruct};
 }
 
 
