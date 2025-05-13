@@ -17,8 +17,6 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
-use serde::ser::SerializeStruct;
-
 use crate::range::Range;
 use crate::spannable::{Spannable, SpannableUtf8};
 
@@ -237,6 +235,8 @@ where
     where
         SE: serde::Serializer,
     {
+        use serde::ser::SerializeStruct as _;
+
         let mut ser = serializer.serialize_struct("Span", 2)?;
         ser.serialize_field("source", &self.source.source_id())?;
         ser.serialize_field("range", &self.range)?;
