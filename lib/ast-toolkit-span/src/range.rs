@@ -18,6 +18,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 /***** HELPERS *****/
 /// Actual implementation of the [`Range`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 enum RangeInner {
     // Fully bounded
     /// Captures a specific slice of the source text.
@@ -53,6 +54,7 @@ enum RangeInner {
 /// - It implements [`Copy`].
 /// - It can encode special states of the range, e.g. [`Empty`](Range::Empty) or open-ended ranges.
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Range {
     /// The actual range type, but hidden to avoid manual construction (and preserve properties).
     inner: RangeInner,

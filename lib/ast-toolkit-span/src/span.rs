@@ -17,6 +17,8 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
+use serde::ser::SerializeStruct;
+
 use crate::range::Range;
 use crate::spannable::{Spannable, SpannableUtf8};
 
@@ -222,6 +224,24 @@ where
 {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { self.value().partial_cmp(&other.value()) }
+}
+
+// Serde
+#[cfg(feature = "serde")]
+impl<'s, S> serde::Serialize for Span<S>
+where
+    S: Spannable<'s>,
+    S::SourceId: serde::Serialize,
+{
+    fn serialize<SE>(&self, serializer: SE) -> Result<SE::Ok, SE::Error>
+    where
+        SE: serde::Serializer,
+    {
+        let mut ser = serializer.serialize_struct("Span", 2)?;
+        ser.serialize_field("source", &self.source.source_id())?;
+        ser.serialize_field("range", &self.range)?;
+        ser.end()
+    }
 }
 
 // Span
