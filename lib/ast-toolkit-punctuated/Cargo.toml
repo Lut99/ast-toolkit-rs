@@ -8,7 +8,7 @@ description = "Implements a wrapper around a [`Vec`] that allows it to be conven
 
 
 [dependencies]
-better-derive = { git = "https://github.com/Lut99/better-derive-rs", default-features = false, optional = true }
+better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.5.0", default-features = false, optional = true }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"], optional = true }
 
 ast-toolkit-snack = { path = "../ast-toolkit-snack", default-features = false, optional = true }
