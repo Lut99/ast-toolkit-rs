@@ -101,6 +101,28 @@ pub trait ResultExt<T, E1, E2, S>: Sized {
     /// A Result with a [`SnackError`] which is either [`SnackError::Recoverable`] or
     /// [`SnackError::NotEnough`].
     fn uncut(self) -> std::result::Result<T, SnackError<CutError<E1, E2>, Infallible, S>>;
+
+
+
+    /// Maps the recoverable error in the [`SnackError`] embedded in this Result to another one.
+    ///
+    /// # Arguments
+    /// - `map`: Some [`FnOnce`] that does the mapping.
+    ///
+    /// # Returns
+    /// A Result that, if it was an [`Err`] with [`SnackError::Recoverable`], has the result of the
+    /// `map` instead of the original error. If it was anything else, it is untouched.
+    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> std::result::Result<T, SnackError<E, E2, S>>;
+
+    /// Maps the fatal error in the [`SnackError`] embedded in this Result to another one.
+    ///
+    /// # Arguments
+    /// - `map`: Some [`FnOnce`] that does the mapping.
+    ///
+    /// # Returns
+    /// A Result that, if it was an [`Err`] with [`SnackError::Fatal`], has the result of the `map`
+    /// instead of the original error. If it was anything else, it is untouched.
+    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> std::result::Result<T, SnackError<E1, E, S>>;
 }
 
 impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackError<E1, E2, S>> {
@@ -117,6 +139,24 @@ impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackErr
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(err.uncut()),
+        }
+    }
+
+
+
+    #[inline]
+    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> std::result::Result<T, SnackError<E, E2, S>> {
+        match self {
+            Ok(res) => Ok(res),
+            Err(err) => Err(err.map_recoverable(map)),
+        }
+    }
+
+    #[inline]
+    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> std::result::Result<T, SnackError<E1, E, S>> {
+        match self {
+            Ok(res) => Ok(res),
+            Err(err) => Err(err.map_fatal(map)),
         }
     }
 }
@@ -201,6 +241,42 @@ impl<E1, E2, S> SnackError<E1, E2, S> {
         match self {
             Self::Recoverable(err) => SnackError::Recoverable(CutError::Recoverable(err)),
             Self::Fatal(err) => SnackError::Recoverable(CutError::Fatal(err)),
+            Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
+        }
+    }
+
+
+
+    /// Maps the recoverable error in this SnackError to another one.
+    ///
+    /// # Arguments
+    /// - `map`: Some [`FnOnce`] that does the mapping.
+    ///
+    /// # Returns
+    /// A SnackError that, if it was a [`SnackError::Recoverable`], has the result of the `map`
+    /// instead of the original error. If it was anything else, it is untouched.
+    #[inline]
+    pub fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> SnackError<E, E2, S> {
+        match self {
+            Self::Recoverable(err) => SnackError::Recoverable(map(err)),
+            Self::Fatal(err) => SnackError::Fatal(err),
+            Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
+        }
+    }
+
+    /// Maps the fatal error in this SnackError to another one.
+    ///
+    /// # Arguments
+    /// - `map`: Some [`FnOnce`] that does the mapping.
+    ///
+    /// # Returns
+    /// A SnackError that, if it was a [`SnackError::Fatal`], has the result of the `map`
+    /// instead of the original error. If it was anything else, it is untouched.
+    #[inline]
+    pub fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> SnackError<E1, E, S> {
+        match self {
+            Self::Recoverable(err) => SnackError::Recoverable(err),
+            Self::Fatal(err) => SnackError::Fatal(map(err)),
             Self::NotEnough { needed, span } => SnackError::NotEnough { needed, span },
         }
     }
