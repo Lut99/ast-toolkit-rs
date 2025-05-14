@@ -116,7 +116,7 @@ macro_rules! utf8_token {
         // Spanning impl
         impl<'s, S> $crate::__private::Spanning<S> for $name<S>
         where
-            S: ::std::clone::Clone + $crate::__private::Spannable<'s>,
+            S: ::std::clone::Clone,
         {
             #[inline]
             fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Borrowed(&self.span) }
