@@ -65,7 +65,7 @@ pub struct Span<S> {
 }
 
 // Constructors
-impl<'s, S: Spannable<'s>> Span<S> {
+impl<'s, S> Span<S> {
     /// Constructor for the Span that initializes it to span the given array.
     ///
     /// # Arguments
@@ -246,22 +246,6 @@ where
 
 // Span
 impl<'s, S: Clone + Spannable<'s>> Span<S> {
-    /// Slices the spanned area.
-    ///
-    /// This is like [`Span::shrink()`], but not in-place.
-    ///
-    /// # Arguments
-    /// - `range`: The [`Range`] that decides how to slice the source.
-    ///
-    /// # Returns
-    /// A new Span that is the same but with the sliced `range`.
-    #[inline]
-    pub fn slice(&self, range: impl Into<Range>) -> Self {
-        let mut slice = self.clone();
-        slice.shrink(range);
-        slice
-    }
-
     /// Creates a Span that encompass this plus the given one.
     ///
     /// This is like [`Span::extend()`], but not in-place.
@@ -280,22 +264,24 @@ impl<'s, S: Clone + Spannable<'s>> Span<S> {
         Some(span)
     }
 }
-impl<'s, S: Spannable<'s>> Span<S> {
-    /// Shrinks this the spanned area by this span.
+impl<'s, S: Clone> Span<S> {
+    /// Slices the spanned area.
     ///
-    /// This is like [`Span::slice()`], but in-place.
+    /// This is like [`Span::shrink()`], but not in-place.
     ///
     /// # Arguments
     /// - `range`: The [`Range`] that decides how to slice the source.
     ///
     /// # Returns
-    /// A mutable reference to Self for chaining.
+    /// A new Span that is the same but with the sliced `range`.
     #[inline]
-    pub fn shrink(&mut self, range: impl Into<Range>) -> &mut Self {
-        self.range = self.range.slice(range);
-        self
+    pub fn slice(&self, range: impl Into<Range>) -> Self {
+        let mut slice = self.clone();
+        slice.shrink(range);
+        slice
     }
-
+}
+impl<'s, S: Spannable<'s>> Span<S> {
     /// Extends this Span to encompass itself plus the given one.
     ///
     /// This is like [`Span::join()`], but in-place.
@@ -317,8 +303,6 @@ impl<'s, S: Spannable<'s>> Span<S> {
         }
     }
 
-
-
     /// Returns the spanned part of the source behind this Spannable.
     ///
     /// To obtain the **whole** source, see [`Span::source()`].
@@ -327,6 +311,47 @@ impl<'s, S: Spannable<'s>> Span<S> {
     /// A slice of the internal source as spanned by this Span.
     #[inline]
     pub fn value(&self) -> S::Slice { self.source.slice(self.range) }
+
+
+
+    /// Returns the source ID of the underyling source text.
+    ///
+    /// # Returns
+    /// An [`S::SourceId`](Spannable::SourceId) that can be used to compare sources.
+    #[inline]
+    pub fn source_id(&self) -> S::SourceId { <S as Spannable>::source_id(&self.source) }
+
+    /// Returns the number of elements spanned by this Span.
+    ///
+    /// # Returns
+    /// A [`usize`] that encodes this number.
+    #[inline]
+    pub fn len(&self) -> usize { self.range.resolved_len(self.source.len()) }
+
+    /// Convenience function for checking if [`Span::len() == 0`](Span::len()).
+    ///
+    /// # Returns
+    /// True if nothing is contained in this Span, or false otherwise.
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+}
+impl<S> Span<S> {
+    /// Shrinks this the spanned area by this span.
+    ///
+    /// This is like [`Span::slice()`], but in-place.
+    ///
+    /// # Arguments
+    /// - `range`: The [`Range`] that decides how to slice the source.
+    ///
+    /// # Returns
+    /// A mutable reference to Self for chaining.
+    #[inline]
+    pub fn shrink(&mut self, range: impl Into<Range>) -> &mut Self {
+        self.range = self.range.slice(range);
+        self
+    }
+
+
 
     /// Returns the source behind this Spannable.
     ///
@@ -350,33 +375,12 @@ impl<'s, S: Spannable<'s>> Span<S> {
 
 
 
-    /// Returns the source ID of the underyling source text.
-    ///
-    /// # Returns
-    /// An [`S::SourceId`](Spannable::SourceId) that can be used to compare sources.
-    #[inline]
-    pub fn source_id(&self) -> S::SourceId { <S as Spannable>::source_id(&self.source) }
-
     /// Returns the range over the main source span that is embedded in this span.
     ///
     /// # Returns
     /// A [`Range`] object that represents the spanned area in the total [source array](Span::source()).
     #[inline]
     pub const fn range(&self) -> &Range { &self.range }
-
-    /// Returns the number of elements spanned by this Span.
-    ///
-    /// # Returns
-    /// A [`usize`] that encodes this number.
-    #[inline]
-    pub fn len(&self) -> usize { self.range.resolved_len(self.source.len()) }
-
-    /// Convenience function for checking if [`Span::len() == 0`](Span::len()).
-    ///
-    /// # Returns
-    /// True if nothing is contained in this Span, or false otherwise.
-    #[inline]
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     type Elem = <S as Spannable<'s>>::Elem;
