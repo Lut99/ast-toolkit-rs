@@ -76,10 +76,12 @@ pub struct Closure<F, C, O, E1, E2, S> {
     _fatal: PhantomData<E2>,
     _s: PhantomData<S>,
 }
-impl<'c, 's, F, C, O, E1, E2, S> Combinator<'c, 's, S> for Closure<F, C, O, E1, E2, S>
+impl<'a, 'b, 'c, 's, F, C, O, E1, E2, S> Combinator<'c, 's, S> for Closure<F, C, O, E1, E2, S>
 where
-    F: 'c + Clone + Debug + Display,
-    C: 'c + FnMut(Span<S>) -> SResult<O, E1, E2, S>,
+    'c: 'a,
+    'c: 'b,
+    F: 'a + Clone + Debug + Display,
+    C: 'b + FnMut(Span<S>) -> SResult<O, E1, E2, S>,
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
@@ -109,10 +111,10 @@ where
 
 /***** LIBRARY *****/
 #[inline]
-pub const fn closure<'c, 's, F, C, O, E1, E2, S>(expected: F, closure: C) -> Closure<F, C, O, E1, E2, S>
+pub const fn closure<'s, F, C, O, E1, E2, S>(expected: F, closure: C) -> Closure<F, C, O, E1, E2, S>
 where
-    F: 'c + Clone + Debug + Display,
-    C: 'c + FnMut(Span<S>) -> SResult<O, E1, E2, S>,
+    F: Clone + Debug + Display,
+    C: FnMut(Span<S>) -> SResult<O, E1, E2, S>,
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
