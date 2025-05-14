@@ -41,12 +41,12 @@ pub mod prelude {
 ///
 /// We fix it by defining this custom type ourselves which _does_ implement [`Error`] and,
 /// therefore, [`ParseError`].
-pub struct BoxedParseError<'e, S: Clone>(pub Box<dyn 'e + ParseError<S>>);
+pub struct BoxedParseError<'e, S>(pub Box<dyn 'e + ParseError<S>>);
 impl<'e, S: Clone> BoxedParseError<'e, S> {
     #[inline]
     pub fn new(err: impl 'e + ParseError<S>) -> Self { Self(Box::new(err) as Box<dyn 'e + ParseError<S>>) }
 }
-impl<'e, S: Clone> fmt::Debug for BoxedParseError<'e, S> {
+impl<'e, S> fmt::Debug for BoxedParseError<'e, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         let Self(err) = self;
@@ -55,11 +55,11 @@ impl<'e, S: Clone> fmt::Debug for BoxedParseError<'e, S> {
         fmt.finish()
     }
 }
-impl<'e, S: Clone> Display for BoxedParseError<'e, S> {
+impl<'e, S> Display for BoxedParseError<'e, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Box<dyn ParseError<S>> as Display>::fmt(&self.0, f) }
 }
-impl<'e, S: Clone> Error for BoxedParseError<'e, S> {
+impl<'e, S> Error for BoxedParseError<'e, S> {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> { self.0.source() }
 }
