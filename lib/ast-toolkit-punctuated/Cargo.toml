@@ -8,16 +8,22 @@ description = "Implements a wrapper around a [`Vec`] that allows it to be conven
 
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+
 better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.5.0", default-features = false, optional = true }
-enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"], optional = true }
+enum-debug = { git = "https://github.com/Lut99/enum-debug", features = [
+    "derive",
+], optional = true }
 
 ast-toolkit-snack = { path = "../ast-toolkit-snack", default-features = false, optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span", default-features = false, optional = true }
 
 
 [features]
-default = [ "normal" ]
+default = ["normal"]
 
-normal = [ "dep:enum-debug" ]
+serde = ["dep:serde"]
 snack = ["dep:better-derive", "dep:ast-toolkit-snack", "dep:ast-toolkit-span"]
+
+normal = ["dep:enum-debug"]
 trailing = []

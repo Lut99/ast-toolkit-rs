@@ -21,18 +21,36 @@ default = []
 
 # derive = ["ast-toolkit-railroad/derive", "ast-toolkit-snack/derive"]
 derive = ["ast-toolkit-railroad/derive"]
-serde = ["ast-toolkit-span/serde", "ast-toolkit-tokens/serde"]
+serde = [
+    "ast-toolkit-punctuated/serde",
+    "ast-toolkit-span/serde",
+    "ast-toolkit-tokens/serde",
+]
 
 diagnostic = ["dep:ast-toolkit-diagnostic"]
 
 punctuated = ["dep:ast-toolkit-punctuated"]
-punctuated-normal = ["punctuated", "ast-toolkit-punctuated/normal", "ast-toolkit-railroad/punctuated-normal"]
-punctuated-trailing = ["punctuated", "ast-toolkit-punctuated/trailing", "ast-toolkit-railroad/punctuated-trailing"]
+punctuated-normal = [
+    "punctuated",
+    "ast-toolkit-punctuated/normal",
+    "ast-toolkit-railroad/punctuated-normal",
+]
+punctuated-serde = ["punctuated", "ast-toolkit-punctuated/serde"]
+punctuated-snack = ["punctuated", "ast-toolkit-punctuated/snack"]
+punctuated-trailing = [
+    "punctuated",
+    "ast-toolkit-punctuated/trailing",
+    "ast-toolkit-railroad/punctuated-trailing",
+]
 
 railroad = ["dep:ast-toolkit-railroad", "ast-toolkit-tokens/railroad"]
 railroad-parking-lot = ["railroad", "ast-toolkit-railroad/parking-lot"]
 
-snack = ["dep:ast-toolkit-snack", "ast-toolkit-punctuated/snack", "ast-toolkit-tokens/snack"]
+snack = [
+    "dep:ast-toolkit-snack",
+    "ast-toolkit-punctuated/snack",
+    "ast-toolkit-tokens/snack",
+]
 snack-extra = ["snack", "ast-toolkit-snack/extra"]
 snack-c = ["snack", "ast-toolkit-snack/c"]
 
@@ -63,5 +81,5 @@ members = [
 
 [workspace.package]
 edition = "2021"
-authors = [ "Lut99" ]
+authors = ["Lut99"]
 repository = "https://github.com/Lut99/ast-toolkit-rs"

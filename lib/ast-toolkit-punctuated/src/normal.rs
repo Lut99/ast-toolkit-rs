@@ -17,6 +17,9 @@ use std::fmt::{Debug, DebugList, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 use std::ops::{Index, IndexMut};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::common::{PunctIndex, ValueIndex};
 
 
@@ -314,6 +317,7 @@ impl<V, P> Iterator for IntoIter<V, P> {
 /// - `V`: The type of the value that is found in the list.
 /// - `P`: The type of the punctuation/separator.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Punctuated<V, P> {
     /// The first element in the list, that hasn't got any punctuation.
     first: Option<Box<V>>,
@@ -386,7 +390,7 @@ impl<V, P> Punctuated<V, P> {
 
     /// Removes the most recent punctuation from the list and returns it.
     ///
-    /// This function skips values, discarding it. Use [`Self::pop()`](Punctuated::pop()) to get it.  
+    /// This function skips values, discarding it. Use [`Self::pop()`](Punctuated::pop()) to get it.
     /// This behaviour may also happen if there is only a value left in the list (despite [`None`] being returned).
     ///
     /// # Returns

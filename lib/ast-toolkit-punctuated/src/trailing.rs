@@ -18,6 +18,8 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Index, IndexMut};
 
 use enum_debug::EnumDebug;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::common::{PunctIndex, ValueIndex};
 
@@ -374,6 +376,7 @@ pub enum NextValue {
 /// - `V`: The type of the value that is found in the list.
 /// - `P`: The type of the punctuation/separator.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct PunctuatedTrailing<V, P> {
     /// The first element in the list, that hasn't got any punctuation.
     first: Option<Box<V>>,
@@ -455,7 +458,7 @@ impl<V, P> PunctuatedTrailing<V, P> {
 
     /// Removes the most recent punctuation from the list and returns it.
     ///
-    /// This function skips values, discarding it. Use [`Self::pop()`](PunctuatedTrailing::pop()) to get it.  
+    /// This function skips values, discarding it. Use [`Self::pop()`](PunctuatedTrailing::pop()) to get it.
     /// This behaviour may also happen if there is only a value left in the list (despite [`None`] being returned).
     ///
     /// # Returns
@@ -542,7 +545,7 @@ impl<V, P> PunctuatedTrailing<V, P> {
     /// Checks what the next value should be.
     ///
     /// # Returns
-    /// [`NextValue::Value`] if a value should be given next (i.e., [`Self::accepts_value()`](PunctuatedTrailing::accepts_value()) is true);  
+    /// [`NextValue::Value`] if a value should be given next (i.e., [`Self::accepts_value()`](PunctuatedTrailing::accepts_value()) is true);
     /// or [`NextValue::Punctuation`] if a punctuation should be given next (i.e., [`Self::accepts_punct()`](PunctuatedTrailing::accepts_punct()) is true)
     ///
     /// # Example
