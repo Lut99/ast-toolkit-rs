@@ -10,7 +10,7 @@
 //
 //  Description:
 //!   Provides traits for recursively generating [railroad](https://crates.io/crates/railroad/0.2.0) diagrams.
-//!   
+//!
 //!   Comes with a derive macro for convenience.
 //
 
@@ -96,7 +96,7 @@ macro_rules! propagate_impl {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_railroad::{diagram, railroad as rr, ToNode, ToNonTerm};
+/// use ast_toolkit_railroad::{ToNode, ToNonTerm, diagram, railroad as rr};
 ///
 /// struct Example;
 /// impl ToNode for Example {
@@ -168,7 +168,7 @@ macro_rules! _diagram {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_railroad::{diagram_svg, railroad as rr, ToNode, ToNonTerm};
+/// use ast_toolkit_railroad::{ToNode, ToNonTerm, diagram_svg, railroad as rr};
 ///
 /// struct Example;
 /// impl ToNode for Example {
@@ -211,7 +211,7 @@ macro_rules! diagram_svg {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_railroad::{diagram_svg_file, railroad as rr, ToNode, ToNonTerm};
+/// use ast_toolkit_railroad::{ToNode, ToNonTerm, diagram_svg_file, railroad as rr};
 ///
 /// struct Example;
 /// impl ToNode for Example {
@@ -248,11 +248,6 @@ macro_rules! diagram_svg_file {
 /// Trait that generalizes over AST nodes such that they can hiearchically create [`railroad`] diagrams.
 ///
 /// See the [`ToNode`](crate::procedural::ToNode)-derive macro to make implementing this trait for structs & enums very convenient.
-///
-/// # Example
-/// ```rust
-/// todo!();
-/// ```
 pub trait ToNode {
     /// The [`railroad::Node`]-type to which this AST node compiles.
     type Node: 'static + railroad::Node;
@@ -273,11 +268,6 @@ pub trait ToNode {
 /// Conventionally, the normal [`ToNode`]-implementation returns a [`railroad::NonTerminal`] that only refers to it.
 ///
 /// See the [`ToNonTerm`](crate::procedural::ToNonTerm)-derive macro to make implementing this trait for structs & enums very convenient.
-///
-/// # Example
-/// ```rust
-/// todo!();
-/// ```
 pub trait ToNonTerm: ToNode {
     /// The [`railroad::Node`]-type to which this AST node compiles when asked for its full representation.
     type NodeNonTerm: 'static + railroad::Node;
@@ -296,11 +286,6 @@ pub trait ToNonTerm: ToNode {
 /// Conventionally, the normal [`ToNode`]-implementation returns the delimiters in one go.
 ///
 /// See the [`ToDelimNode`](crate::procedural::ToDelimNode)-derive macro to make implementing this trait for structs & enums very convenient.
-///
-/// # Example
-/// ```rust
-/// todo!();
-/// ```
 pub trait ToDelimNode: ToNode {
     /// The [`railroad::Node`]-type to which this AST node compiles when asked for only its opening half.
     type NodeOpen: 'static + railroad::Node;

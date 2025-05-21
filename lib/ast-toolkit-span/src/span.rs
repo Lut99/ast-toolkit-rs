@@ -193,10 +193,7 @@ impl<'s, S: Spannable<'s>> PartialEq for Span<S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.source_id() == other.source_id() && self.range == other.range }
 }
-impl<'s, S: Spannable<'s>> Hash for Span<S>
-where
-    S::SourceId: Hash,
-{
+impl<'s, S: Spannable<'s>> Hash for Span<S> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.source_id().hash(state);

@@ -145,6 +145,7 @@ impl<'s, S: Clone + Spannable<'s>> Buffer<S> {
         let end: usize = span.range().end_resolved(span.len()).unwrap_or(0);
 
         // Go thru the _source_, not the span, to find the surrounding lines
+        todo!()
     }
 }
 

@@ -15,6 +15,7 @@
 
 use std::cell::{Ref, RefMut};
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
@@ -45,7 +46,7 @@ pub trait Spannable<'s> {
     /// Describes the sliced version of this Spannable.
     type Slice;
     /// Describes the ID returned by [`Spannable::source_id()`].
-    type SourceId: Debug + Eq + PartialEq;
+    type SourceId: Debug + Eq + Hash + PartialEq;
 
 
     // Mandatory implementation
@@ -188,7 +189,7 @@ impl<'a, T> Spannable<'a> for &'a [T] {
     #[inline]
     fn as_slice(&self) -> &'a [Self::Elem] { self }
 }
-impl<'a, T: Clone + Debug + Eq + PartialEq, U: Spannable<'a>> Spannable<'a> for (T, U) {
+impl<'a, T: Clone + Debug + Eq + Hash + PartialEq, U: Spannable<'a>> Spannable<'a> for (T, U) {
     type Elem = <U as Spannable<'a>>::Elem;
     type Slice = <U as Spannable<'a>>::Slice;
     type SourceId = T;
@@ -549,7 +550,7 @@ impl<'s> SpannableUtf8<'s> for &'s str {
     #[inline]
     fn as_str(&self) -> &'s str { self }
 }
-impl<'a, T: Clone + Debug + Eq + PartialEq, U: SpannableUtf8<'a>> SpannableUtf8<'a> for (T, U) {
+impl<'a, T: Clone + Debug + Eq + Hash + PartialEq, U: SpannableUtf8<'a>> SpannableUtf8<'a> for (T, U) {
     #[inline]
     fn as_str(&self) -> &'a str { <U as SpannableUtf8<'a>>::as_str(&self.1) }
 
