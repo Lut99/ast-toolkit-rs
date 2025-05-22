@@ -18,7 +18,7 @@ use std::fmt::{Debug, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 use crate::range::Range;
-use crate::spannable::{Spannable, SpannableUtf8};
+use crate::spannable::{Spannable, SpannableBytes, SpannableUtf8};
 
 
 /***** LIBRARY *****/
@@ -379,6 +379,58 @@ impl<S> Span<S> {
     #[inline]
     pub const fn range(&self) -> &Range { &self.range }
 }
+impl<'s, S: Spannable<'s>> Span<S> {
+    /// Returns slice version of the spanned area.
+    ///
+    /// This function imposes quite some requirements on the underlying memory, namely that it is
+    /// a) present and b) continuous. However, it does align with the intended usage of a [`Span`],
+    /// and offers for great convenience in interoperating with other libraries (i.e., get a byte
+    /// slice of [`str`] as value of a [`Span`]).
+    ///
+    /// NOTE: The only difference between this function and [`Spannable::as_slice()`] (which is
+    /// also implemented on [`Span`]) is that its bounds are slightly less restrictive ([`Clone`]
+    /// is not necessary).
+    ///
+    /// # Returns
+    /// A slice of internal elements that should be a counterpart of the spanned area.
+    #[inline]
+    pub fn as_slice(&self) -> &'s [S::Elem] {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source.as_slice()[start..end]
+    }
+}
+impl<'s, S: SpannableBytes<'s>> Span<S> {
+    /// Alias for [`Span::as_slice()`] that has a more topical name.
+    ///
+    /// NOTE: The only difference between this function and [`SpannableBytes::as_bytes()`] (which
+    /// is also implemented on [`Span`]) is that its bounds are slightly less restrictive
+    /// ([`Clone`] is not necessary).
+    ///
+    /// # Returns
+    /// A byte slice representing the spanned area.
+    #[inline]
+    pub fn as_bytes(&self) -> &'s [u8] { <Self>::as_slice(self) }
+}
+impl<'s, S: SpannableUtf8<'s>> Span<S> {
+    /// Alias for [`Spannable::as_slice()`] that returns this array as a valid UTF-8 slice (i.e.,
+    /// a [`str`]).
+    ///
+    /// NOTE: The only difference between this function and [`SpannableUtf8::ast_str()`] (which is
+    /// also implemented on [`Span`]) is that its bounds are slightly less restrictive ([`Clone`]
+    /// is not necessary).
+    ///
+    /// # Returns
+    /// A [`str`] representing this array.
+    #[inline]
+    pub fn as_str(&self) -> &'s str {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source.as_str()[start..end]
+    }
+}
 impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     type Elem = <S as Spannable<'s>>::Elem;
     type SourceId = <S as Spannable<'s>>::SourceId;
@@ -391,12 +443,7 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
 
     #[inline]
-    fn as_slice(&self) -> &'s [Self::Elem] {
-        let source_len: usize = self.source.len();
-        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
-        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
-        &self.source.as_slice()[start..end]
-    }
+    fn as_slice(&self) -> &'s [Self::Elem] { <Self>::as_slice(self) }
 
     #[inline]
     fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
@@ -406,12 +453,7 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
 }
 impl<'s, S: Clone + SpannableUtf8<'s>> SpannableUtf8<'s> for Span<S> {
     #[inline]
-    fn as_str(&self) -> &'s str {
-        let source_len: usize = self.source.len();
-        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
-        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
-        &self.source.as_str()[start..end]
-    }
+    fn as_str(&self) -> &'s str { <Self>::as_str(self) }
 
     #[inline]
     fn match_utf8_while(&self, pred: impl FnMut(&'s str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
