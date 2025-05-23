@@ -324,6 +324,12 @@ pub struct Punctuated<V, P> {
     /// The list of elements stored within.
     data:  Vec<(P, V)>,
 }
+
+// Constructors
+impl<V, P> Default for Punctuated<V, P> {
+    #[inline]
+    fn default() -> Self { Self::new() }
+}
 impl<V, P> Punctuated<V, P> {
     /// Constructor for the Punctuated that initializes it as an as-empty-as-possible list.
     ///
@@ -341,7 +347,10 @@ impl<V, P> Punctuated<V, P> {
     /// A new Punctuated with no elements or punctuation.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self { Self { first: None, data: Vec::with_capacity(capacity.saturating_sub(1)) } }
+}
 
+// Collection
+impl<V, P> Punctuated<V, P> {
     /// Sets the first element in the list.
     ///
     /// # Arguments
@@ -377,9 +386,12 @@ impl<V, P> Punctuated<V, P> {
         self.data.push((punct.into(), value.into()));
     }
 
+
+
     /// Removes the most recent value from the list and returns it.
     ///
-    /// This function skips punctuation, discarding it. Use [`Self::pop()`](Punctuated::pop()) to get it.
+    /// This function discards punctuation preceding the value. Use
+    /// [`Self::pop()`](Punctuated::pop()) to get it.
     ///
     /// # Returns
     /// A value of type `V` that was removed, or [`None`] if the list is empty.
@@ -420,6 +432,17 @@ impl<V, P> Punctuated<V, P> {
             self.first.take().map(|v| (*v, None))
         }
     }
+
+    /// Clears all elements from this vector.
+    ///
+    /// Doesn't de-allocate the vector, so the capacity does not change.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.first = None;
+        self.data.clear();
+    }
+
+
 
     /// Checks whether a first value can be given.
     ///
@@ -463,6 +486,167 @@ impl<V, P> Punctuated<V, P> {
     #[inline]
     pub fn accepts_next(&self) -> bool { self.first.is_some() }
 
+
+
+    /// Reserves more space for values in this iterator.
+    ///
+    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
+    ///
+    /// # Arguments
+    /// - `additional`: The additional number of elements to reserve space for.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
+
+    /// Gets the reserved space for elements in the list.
+    ///
+    /// Note: this counts values, not punctuations.
+    ///
+    /// Be aware, do not use this to assume whether (re)allocations happen or not. The list buffers trailing commas, which are allocated upon addition.
+    ///
+    /// # Returns
+    /// The number of values for which we have allocated space in this Punctuated.
+    #[inline]
+    pub fn capacity(&self) -> usize { 1 + self.data.capacity() }
+
+    /// Gets the total number of elements in the list.
+    ///
+    /// Note: this counts values, not punctuations.
+    ///
+    /// # Returns
+    /// The number of values in this Punctuated.
+    #[inline]
+    pub fn len(&self) -> usize { self.data.len() + if self.first.is_some() { 1 } else { 0 } }
+
+    /// Returns whether there are any _values_ in this list.
+    ///
+    /// If there's only punctuation, this is ignored.
+    ///
+    /// # Returns
+    /// True if it's empty, or false otherwise.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        // NOTE: This _should_ be enough. Else there's bugs elsewhere in the program.
+        self.first.is_none()
+    }
+}
+
+// Element access
+impl<V, P> Punctuated<V, P> {
+    /// Peeks at the first value in the list.
+    ///
+    /// # Returns
+    /// A reference to the value if it existed, or else [`None`].
+    #[inline]
+    pub fn first_value(&self) -> Option<&V> { self.first.as_ref().map(|v| v.as_ref()) }
+
+    /// Peeks at the first value in the list, mutably.
+    ///
+    /// # Returns
+    /// A mutable reference to the value if it existed, or else [`None`].
+    #[inline]
+    pub fn first_value_mut(&mut self) -> Option<&mut V> { self.first.as_mut().map(|v| v.as_mut()) }
+
+    /// Peeks at the first punctuation in the list.
+    ///
+    /// # Returns
+    /// A reference to the punctuation if it existed, or else [`None`].
+    #[inline]
+    pub fn first_punct(&self) -> Option<&P> { self.data.first().map(|(p, _)| p) }
+
+    /// Peeks at the first punctuation in the list, mutably.
+    ///
+    /// # Returns
+    /// A mutable reference to the punctuation if it existed, or else [`None`].
+    #[inline]
+    pub fn first_punct_mut(&mut self) -> Option<&mut P> { self.data.first_mut().map(|(p, _)| p) }
+
+    /// Peeks at the first (value, punctuation)-pair.
+    ///
+    /// If it's the only one, then only the value is returned.
+    ///
+    /// # Returns
+    /// A pair of references to the first value and the first punctuation (or [`None`] if it was
+    /// the only value); or [`None`] if there was no value.
+    #[inline]
+    pub fn first(&self) -> Option<(&V, Option<&P>)> { self.first.as_ref().map(|v| (v.as_ref(), self.data.first().map(|(p, _)| p))) }
+
+    /// Peeks at the first (value, punctuation)-pair, mutably.
+    ///
+    /// If it's the only one, then only the value is returned.
+    ///
+    /// # Returns
+    /// A pair of mutable references to the first value and the first punctuation (or [`None`] if
+    /// it was the only value); or [`None`] if there was no value.
+    #[inline]
+    pub fn first_mut(&mut self) -> Option<(&mut V, Option<&mut P>)> {
+        self.first.as_mut().map(|v| (v.as_mut(), self.data.first_mut().map(|(p, _)| p)))
+    }
+
+
+
+    /// Peeks at the last value in the list.
+    ///
+    /// # Returns
+    /// A reference to the value if it existed, or else [`None`].
+    #[inline]
+    pub fn last_value(&self) -> Option<&V> { self.data.last().map(|(_, v)| v) }
+
+    /// Peeks at the last value in the list, mutably.
+    ///
+    /// # Returns
+    /// A mutable reference to the value if it existed, or else [`None`].
+    #[inline]
+    pub fn last_value_mut(&mut self) -> Option<&mut V> { self.data.last_mut().map(|(_, v)| v) }
+
+    /// Peeks at the last punctuation in the list.
+    ///
+    /// # Returns
+    /// A reference to the punctuation if it existed, or else [`None`].
+    #[inline]
+    pub fn last_punct(&self) -> Option<&P> { self.data.last().map(|(p, _)| p) }
+
+    /// Peeks at the last punctuation in the list, mutably.
+    ///
+    /// # Returns
+    /// A mutable reference to the punctuation if it existed, or else [`None`].
+    #[inline]
+    pub fn last_punct_mut(&mut self) -> Option<&mut P> { self.data.last_mut().map(|(p, _)| p) }
+
+    /// Peeks at the last (value, punctuation)-pair.
+    ///
+    /// If it's the only one, then only the value is returned.
+    ///
+    /// # Returns
+    /// A pair of references to the last value and the last punctuation (or [`None`] if it was
+    /// the only value); or [`None`] if there was no value.
+    #[inline]
+    pub fn last(&self) -> Option<(&V, Option<&P>)> {
+        // Get the last two elements in the list
+        let mut iter = self.data.iter().rev();
+        let last_v: &V = iter.next().map(|(_, v)| v)?;
+        let last_p: Option<&P> = iter.next().map(|(p, _)| p);
+        Some((last_v, last_p))
+    }
+
+    /// Peeks at the last (value, punctuation)-pair, mutably.
+    ///
+    /// If it's the only one, then only the value is returned.
+    ///
+    /// # Returns
+    /// A pair of mutable references to the last value and the last punctuation (or [`None`] if
+    /// it was the only value); or [`None`] if there was no value.
+    #[inline]
+    pub fn last_mut(&mut self) -> Option<(&mut V, Option<&mut P>)> {
+        // Get the last two elements in the list
+        let mut iter = self.data.iter_mut().rev();
+        let last_v: &mut V = iter.next().map(|(_, v)| v)?;
+        let last_p: Option<&mut P> = iter.next().map(|(p, _)| p);
+        Some((last_v, last_p))
+    }
+}
+
+// Iterators
+impl<V, P> Punctuated<V, P> {
     /// Returns an iterator over references to the values in this Puncuated.
     ///
     /// # Returns
@@ -484,6 +668,8 @@ impl<V, P> Punctuated<V, P> {
     #[inline]
     pub fn into_values(self) -> IntoValues<V, P> { IntoValues { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
 
+
+
     /// Returns an iterator over references to the punctuation in this Puncuated.
     ///
     /// # Returns
@@ -504,6 +690,8 @@ impl<V, P> Punctuated<V, P> {
     /// An [`Iterator`] that iterates over the values by ownership.
     #[inline]
     pub fn into_puncts(self) -> IntoPuncts<V, P> { IntoPuncts { data: self.data.into_iter() } }
+
+
 
     /// Returns an iterator over references to pairs of value and punctuation in this Puncuated.
     ///
@@ -531,58 +719,30 @@ impl<V, P> Punctuated<V, P> {
     /// An [`Iterator`] that iterates over the values & punctuation by ownership.
     #[inline]
     pub fn into_pairs(self) -> IntoIter<V, P> { IntoIter { prev: self.first.map(|v| *v), data: self.data.into_iter() } }
+}
+impl<V, P> IntoIterator for Punctuated<V, P> {
+    type IntoIter = IntoIter<V, P>;
+    type Item = (V, Option<P>);
 
-    /// Clears all elements from this vector.
-    ///
-    /// Doesn't de-allocate the vector, so the capacity does not change.
     #[inline]
-    pub fn clear(&mut self) {
-        self.first = None;
-        self.data.clear();
-    }
+    fn into_iter(self) -> Self::IntoIter { self.into_pairs() }
+}
+impl<'p, V, P> IntoIterator for &'p Punctuated<V, P> {
+    type IntoIter = Iter<'p, V, P>;
+    type Item = (&'p V, Option<&'p P>);
 
-    /// Reserves more space for values in this iterator.
-    ///
-    /// Note this may allocate for more elements than ask if deemed efficient or due to alignment or whatever, but not less.
-    ///
-    /// # Arguments
-    /// - `additional`: The additional number of elements to reserve space for.
     #[inline]
-    pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional) }
+    fn into_iter(self) -> Self::IntoIter { self.pairs() }
+}
+impl<'p, V, P> IntoIterator for &'p mut Punctuated<V, P> {
+    type IntoIter = IterMut<'p, V, P>;
+    type Item = (&'p mut V, Option<&'p mut P>);
 
-    /// Gets the total number of elements in the list.
-    ///
-    /// Note: this counts values, not punctuations.
-    ///
-    /// # Returns
-    /// The number of values in this Punctuated.
     #[inline]
-    pub fn len(&self) -> usize { self.data.len() + if self.first.is_some() { 1 } else { 0 } }
-
-    /// Gets the reserved space for elements in the list.
-    ///
-    /// Note: this counts values, not punctuations.
-    ///
-    /// Be aware, do not use this to assume whether (re)allocations happen or not. The list buffers trailing commas, which are allocated upon addition.
-    ///
-    /// # Returns
-    /// The number of values for which we have allocated space in this Punctuated.
-    #[inline]
-    pub fn capacity(&self) -> usize { 1 + self.data.capacity() }
-
-    /// Returns whether there are any _values_ in this list.
-    ///
-    /// If there's only punctuation, this is ignored.
-    ///
-    /// # Returns
-    /// True if it's empty, or false otherwise.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        // NOTE: This _should_ be enough. Else there's bugs elsewhere in the program.
-        self.first.is_none()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.pairs_mut() }
 }
 
+// Operators
 impl<V: Debug, P: Debug> Debug for Punctuated<V, P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         let mut list: DebugList = f.debug_list();
@@ -668,29 +828,6 @@ impl<V, P> IndexMut<PunctIndex> for Punctuated<V, P> {
         }
     }
 }
-
-impl<V, P> IntoIterator for Punctuated<V, P> {
-    type IntoIter = IntoIter<V, P>;
-    type Item = (V, Option<P>);
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.into_pairs() }
-}
-impl<'p, V, P> IntoIterator for &'p Punctuated<V, P> {
-    type IntoIter = Iter<'p, V, P>;
-    type Item = (&'p V, Option<&'p P>);
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.pairs() }
-}
-impl<'p, V, P> IntoIterator for &'p mut Punctuated<V, P> {
-    type IntoIter = IterMut<'p, V, P>;
-    type Item = (&'p mut V, Option<&'p mut P>);
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.pairs_mut() }
-}
-
 impl<V: Eq, P> Eq for Punctuated<V, P> {}
 impl<V: Hash, P> Hash for Punctuated<V, P> {
     /// Implements hashing for the Punctuated.
@@ -737,6 +874,7 @@ impl<V: PartialEq, P> PartialEq for Punctuated<V, P> {
     }
 }
 
+// Conversion
 impl<V, P, I> From<I> for Punctuated<V, P>
 where
     P: Default,
