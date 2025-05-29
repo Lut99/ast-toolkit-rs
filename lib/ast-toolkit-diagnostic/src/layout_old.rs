@@ -384,11 +384,12 @@ impl<'s> Debug for LayoutUtf8Buffer<'s> {
 /// This function will panic if any of the given `annots` is from a different `S`ource then `main`,
 /// or if the given `annots` iterator is empty.
 #[track_caller]
-pub fn layout_utf8<'s, S>(annots: impl IntoIterator<Item = Annotation<S>>, max_line_width: usize) -> LayoutUtf8Buffer<'s>
+pub fn layout_utf8<'s, S>(annots: impl IntoIterator<Item = Annotation<'s, S>>, max_line_width: usize) -> LayoutUtf8Buffer<'s>
 where
     S: Clone + SpannableUtf8<'s>,
+    S::Elem: Debug,
 {
-    let annots: Vec<Annotation<S>> = annots.into_iter().collect();
+    let annots: Vec<Annotation<'s, S>> = annots.into_iter().collect();
 
     // Collect the source
     let mut range: Option<Span<S>> = None;

@@ -13,7 +13,7 @@
 //!   [`Diagnostic`](crate::Diagnostic)s.
 //
 
-use ast_toolkit_span::Span;
+use ast_toolkit_span::{Span, Spannable};
 use better_derive::{Clone, Copy, Debug};
 
 
@@ -38,20 +38,28 @@ pub enum Severity {
 /***** LIBRARY *****/
 /// Defines annotations that can be given in a snippet.
 #[derive(Clone, Debug)]
-pub struct Annotation<S> {
+#[better_derive(bound = (S: Clone + Spannable<'s>, S::Elem: Clone + std::fmt::Debug))]
+pub struct Annotation<'s, S>
+where
+    S: Spannable<'s>,
+{
     /// Defines any annotation-specific fields.
-    pub inner: AnnotationInner,
+    pub inner: AnnotationInner<'s, S>,
     /// Defines the place in the source describing what this annotation highlights.
     pub span:  Span<S>,
 }
 
 /// Defines variations of the base [`Annotation`].
 #[derive(Clone, Debug)]
-pub enum AnnotationInner {
+#[better_derive(bound = (S: Clone + Spannable<'s>, S::Elem: Clone + std::fmt::Debug))]
+pub enum AnnotationInner<'s, S>
+where
+    S: Spannable<'s>,
+{
     /// It's a highlight, i.e., marking an area in the text with potentially a message.
     Highlight(AnnotationInnerHighlight),
     /// It's a suggestion, i.e., replacing the same source text with new info.
-    Suggestion(AnnotationInnerSuggestion),
+    Suggestion(AnnotationInnerSuggestion<S::Elem>),
 }
 
 
@@ -66,7 +74,7 @@ pub struct AnnotationInnerHighlight {
 }
 
 // Convertions
-impl From<AnnotationInnerHighlight> for AnnotationInner {
+impl<'s, S: Spannable<'s>> From<AnnotationInnerHighlight> for AnnotationInner<'s, S> {
     #[inline]
     fn from(value: AnnotationInnerHighlight) -> Self { Self::Highlight(value) }
 }
@@ -75,15 +83,15 @@ impl From<AnnotationInnerHighlight> for AnnotationInner {
 
 /// Defines annotations that suggest a replacement (or insert) in the source text.
 #[derive(Clone, Debug)]
-pub struct AnnotationInnerSuggestion {
+pub struct AnnotationInnerSuggestion<E> {
     /// The replacement to insert.
-    pub replacement: String,
+    pub replacement: Vec<E>,
     /// Any message to show, if any.
     pub message:     Option<String>,
 }
 
 // Convertions
-impl From<AnnotationInnerSuggestion> for AnnotationInner {
+impl<'s, S: Spannable<'s>> From<AnnotationInnerSuggestion<S::Elem>> for AnnotationInner<'s, S> {
     #[inline]
-    fn from(value: AnnotationInnerSuggestion) -> Self { Self::Suggestion(value) }
+    fn from(value: AnnotationInnerSuggestion<S::Elem>) -> Self { Self::Suggestion(value) }
 }

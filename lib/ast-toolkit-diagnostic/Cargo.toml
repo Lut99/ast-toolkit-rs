@@ -8,7 +8,7 @@ description = "Provides an error-like type called a `Diagnostic` that is used to
 
 
 [dependencies]
-better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.5.0" }
+better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v3.0.0" }
 # stackvec = { git = "https://github.com/Lut99/stackvec-rs" }
 # unicode-segmentation = "1.11"
 
