@@ -623,6 +623,105 @@ impl<V, P> Punctuated<V, P> {
 
 // Non-resizing element access
 impl<V, P> Punctuated<V, P> {
+    /// Returns the first _value_ in the punctuated list.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get(0)`](Punctuated::get()).
+    ///
+    /// # Returns
+    /// A reference to the first value in the list, or [`None`] if it is empty.
+    #[inline]
+    pub fn first(&self) -> Option<&V> { self.data.first().map(|(v, _)| v) }
+
+    /// Returns the first _value_ in the punctuated list, mutably.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get_mut(0)`](Punctuated::get_mut()).
+    ///
+    /// # Returns
+    /// A mutable reference to the first value in the list, or [`None`] if it is empty.
+    #[inline]
+    pub fn first_mut(&mut self) -> Option<&mut V> { self.data.first_mut().map(|(v, _)| v) }
+
+    /// Returns the first value/punctuation pair in the punctuated list.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get_pair(0)`](Punctuated::get_pair()).
+    ///
+    /// # Returns
+    /// A reference to the first value and, if any, its punctuation in the list, or [`None`] if it
+    /// is empty.
+    #[inline]
+    pub fn first_pair(&self) -> Option<(&V, Option<&P>)> {
+        // SAFETY: We can assume `p` is initialized because we assert it is either a non-last
+        // value, in which case it's guaranteed to be initialized; or else we remember it existing.
+        self.data.first().map(|(v, p)| (v, if self.data.len() > 1 || self.has_trailing { Some(unsafe { p.assume_init_ref() }) } else { None }))
+    }
+
+    /// Returns the first value/punctuation pair in the punctuated list, mutably.
+    ///
+    /// This is simply an alias for calling
+    /// [`Punctuated::get_pair_mut(0)`](Punctuated::get_pair_mut()).
+    ///
+    /// # Returns
+    /// A mutable reference to the first value and, if any, its punctuation in the list, or
+    /// [`None`] if it is empty.
+    #[inline]
+    pub fn first_pair_mut(&mut self) -> Option<(&mut V, Option<&mut P>)> {
+        let data_len: usize = self.data.len();
+        // SAFETY: We can assume `p` is initialized because we assert it is either a non-last
+        // value, in which case it's guaranteed to be initialized; or else we remember it existing.
+        self.data.first_mut().map(|(v, p)| (v, if data_len > 1 || self.has_trailing { Some(unsafe { p.assume_init_mut() }) } else { None }))
+    }
+
+
+
+    /// Returns the last _value_ in the punctuated list.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get(0)`](Punctuated::get()).
+    ///
+    /// # Returns
+    /// A reference to the last value in the list, or [`None`] if it is empty.
+    #[inline]
+    pub fn last(&self) -> Option<&V> { self.data.last().map(|(v, _)| v) }
+
+    /// Returns the last _value_ in the punctuated list, mutably.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get_mut(0)`](Punctuated::get_mut()).
+    ///
+    /// # Returns
+    /// A mutable reference to the last value in the list, or [`None`] if it is empty.
+    #[inline]
+    pub fn last_mut(&mut self) -> Option<&mut V> { self.data.last_mut().map(|(v, _)| v) }
+
+    /// Returns the last value/punctuation pair in the punctuated list.
+    ///
+    /// This is simply an alias for calling [`Punctuated::get_pair(0)`](Punctuated::get_pair()).
+    ///
+    /// # Returns
+    /// A reference to the last value and, if any, its punctuation in the list, or [`None`] if it
+    /// is empty.
+    #[inline]
+    pub fn last_pair(&self) -> Option<(&V, Option<&P>)> {
+        // SAFETY: `p` is guaranteed to be the last element, so it is only initialized if there is
+        // a trailing punctuation.
+        self.data.last().map(|(v, p)| (v, if self.has_trailing { Some(unsafe { p.assume_init_ref() }) } else { None }))
+    }
+
+    /// Returns the last value/punctuation pair in the punctuated list, mutably.
+    ///
+    /// This is simply an alias for calling
+    /// [`Punctuated::get_pair_mut(0)`](Punctuated::get_pair_mut()).
+    ///
+    /// # Returns
+    /// A mutable reference to the last value and, if any, its punctuation in the list, or
+    /// [`None`] if it is empty.
+    #[inline]
+    pub fn last_pair_mut(&mut self) -> Option<(&mut V, Option<&mut P>)> {
+        // SAFETY: `p` is guaranteed to be the last element, so it is only initialized if there is
+        // a trailing punctuation.
+        self.data.last_mut().map(|(v, p)| (v, if self.has_trailing { Some(unsafe { p.assume_init_mut() }) } else { None }))
+    }
+
+
+
     /// Returns the _value_ at the given index of the punctuated list.
     ///
     /// # Arguments
