@@ -1054,6 +1054,36 @@ impl<V, P> Punctuated<V, P> {
 }
 
 // Operators
+impl<V: Clone, P: Clone> Clone for Punctuated<V, P> {
+    #[inline]
+    fn clone(&self) -> Self {
+        // Allocate a vector with unintialized memory
+        let data_len: usize = self.data.len();
+        let mut data: Vec<MaybeUninit<(V, MaybeUninit<P>)>> = Vec::with_capacity(data_len);
+        for _ in 0..data_len {
+            data.push(MaybeUninit::uninit());
+        }
+
+        // Copy the elements over one-by-one
+        for (i, (v, p)) in self.data.iter().enumerate() {
+            // We will write in the uninitialized memory bc we're cool
+            // SAFETY: We know that `i` is in range because it has the same length as `self.data`
+            unsafe { data.get_unchecked_mut(i) }.write((
+                v.clone(),
+                // SAFETY: We clone the `p` if it exists, which is only does if it's a non-last
+                // punctuation OR we have a trailing punctuation.
+                if i < data_len - 1 || self.has_trailing { MaybeUninit::new(unsafe { p.assume_init_ref() }.clone()) } else { MaybeUninit::uninit() },
+            ));
+        }
+
+        // That'll do her
+        // SAFETY: This transmute is safe, because `MaybeUninit` has the same layouting guarantees
+        // as the tuple, which it wraps. Further, it is an issue if the container is a struct
+        // (due to field ordering; not applicable) or if it relies on e.g. memory niches (not
+        // applicable either).
+        Self { data: unsafe { std::mem::transmute(data) }, has_trailing: self.has_trailing }
+    }
+}
 impl<V: Debug, P: Debug> Debug for Punctuated<V, P> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -1548,6 +1578,21 @@ mod tests {
         let removed: Punctuated<&str, char> = punct.drain(0..).collect();
         assert_eq_punct!(punct, []);
         assert_eq_punct!(removed, []);
+    }
+
+    #[test]
+    fn test_clone() {
+        let punct: Punctuated<&str, char> = Punctuated::new();
+        let punct_prime: Punctuated<&str, char> = punct.clone();
+        assert_eq!(punct, punct_prime);
+
+        let punct: Punctuated<&str, char> = Punctuated::singleton("Hello");
+        let punct_prime: Punctuated<&str, char> = punct.clone();
+        assert_eq!(punct, punct_prime);
+
+        let punct: Punctuated<&str, char> = Punctuated::from(["Hello", "world"]);
+        let punct_prime: Punctuated<&str, char> = punct.clone();
+        assert_eq!(punct, punct_prime);
     }
 
     #[test]
