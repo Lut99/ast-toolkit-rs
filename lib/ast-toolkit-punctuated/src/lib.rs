@@ -19,7 +19,9 @@ mod iters;
 #[cfg(feature = "macros")]
 mod macros;
 #[cfg(feature = "railroad")]
-pub mod railroad;
+mod railroad;
+#[cfg(feature = "serde")]
+mod serde;
 #[cfg(feature = "snack")]
 pub mod snack;
 

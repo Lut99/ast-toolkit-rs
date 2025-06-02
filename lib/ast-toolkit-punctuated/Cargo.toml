@@ -20,6 +20,10 @@ ast-toolkit-snack = { path = "../ast-toolkit-snack", default-features = false, o
 ast-toolkit-span = { path = "../ast-toolkit-span", default-features = false, optional = true }
 
 
+[dev-dependencies]
+serde_json = "1.0"
+
+
 [features]
 default = ["macros"]
 

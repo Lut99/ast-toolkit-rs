@@ -10,7 +10,7 @@ use ast_toolkit_railroad::{ToNode, ToNonTerm, railroad as rr};
 use crate::Punctuated;
 
 
-/***** LIBRARY *****/
+/***** IMPLS *****/
 // Propagation for the Punctuated set
 impl<V: ToNode, P: ToNode> ToNode for Punctuated<V, P> {
     type Node = rr::Repeat<V::Node, P::Node>;
