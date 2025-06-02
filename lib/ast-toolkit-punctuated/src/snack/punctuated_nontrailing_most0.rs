@@ -1,37 +1,37 @@
-//  PUNCTUATED MOST 1.rs
+//  PUNCTUATED MOST 0.rs
 //    by Lut99
 //
 //  Created:
-//    12 Mar 2025, 13:38:05
+//    07 Mar 2025, 17:15:43
 //  Last edited:
-//    08 May 2025, 13:22:21
+//    08 May 2025, 13:22:18
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements the [`punctuated_most1()`]-combinator.
+//!   Implements the [`punctuated_nontrailing_most0()`]-combinator.
 //
 
+use std::convert::Infallible;
 use std::marker::PhantomData;
 
 use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::remember;
-pub use ast_toolkit_snack::multi::separated_most1::{ExpectsFormatter, Recoverable};
-use ast_toolkit_snack::result::{Expected, Result as SResult, SnackError};
+pub use ast_toolkit_snack::multi::separated_most0::{ExpectsFormatter, Fatal};
+use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_span::{Span, Spannable};
 
-pub use super::punctuated_most0::Fatal;
 use crate::Punctuated;
 
 
 /***** COMBINATORS *****/
-/// Actual implementation of the [`punctuated_most1()`]-combinator.
-pub struct PunctuatedMost1<C1, C2, S> {
+/// Actual implementation of the [`punctuated_nontrailing_most0()`]-combinator.
+pub struct PunctuatedNontrailingMost0<C1, C2, S> {
     comb: C1,
     sep:  C2,
     _s:   PhantomData<S>,
 }
-impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for PunctuatedMost1<C1, C2, S>
+impl<'c, 's, C1, C2, S> Combinator<'c, 's, S> for PunctuatedNontrailingMost0<C1, C2, S>
 where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
@@ -39,7 +39,7 @@ where
 {
     type ExpectsFormatter = ExpectsFormatter<C1::ExpectsFormatter, C2::ExpectsFormatter>;
     type Output = Punctuated<C1::Output, C2::Output>;
-    type Recoverable = Recoverable<C1::ExpectsFormatter, C2::ExpectsFormatter, S>;
+    type Recoverable = Infallible;
     type Fatal = Fatal<C1::Fatal, C2::Fatal, S>;
 
     #[inline]
@@ -54,10 +54,11 @@ where
                 if res.len() >= res.capacity() {
                     res.reserve(1 + res.len())
                 }
-                res.push_first(elem);
+                // SAFETY: It's the first element, so always safe to push
+                unsafe { res.push_value_unchecked(elem) };
                 rem
             },
-            Err(SnackError::Recoverable(_)) => return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input })),
+            Err(SnackError::Recoverable(_)) => return Ok((input, res)),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
             Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
@@ -81,7 +82,9 @@ where
                     if res.len() >= res.capacity() {
                         res.reserve(1 + res.len())
                     }
-                    res.push(sep, elem);
+                    res.push_punct(sep);
+                    // SAFETY: We push a punctuation in the line above, so we always know it's safe to push
+                    unsafe { res.push_value_unchecked(elem) };
                     rem = rem2;
                 },
                 Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span })),
@@ -100,16 +103,15 @@ where
 /// Applies some combinator interleaved by some separator as many times as possible until it fails,
 /// greedily parsing multiple instances of the same input.
 ///
-/// Note that this combinator requires at least 1 occurrence of the chosen combinator. If you want
-/// a version that also accepts parsing none, see [`punctuated_most0()`](super::punctuated_most0())
-/// instead.
+/// Note that this combinator is OK with matching no input, and can therefore itself not fail.
+/// If you want at least one, see [`punctuated_nontrailing_most1()`](super::punctuated_nontrailing_most1()) instead.
 ///
 /// # Streaming
-/// The punctuated_most1-combinator's streamingness comes from using a streamed version of the
+/// The punctuated_nontrailing_most0-combinator's streamingness comes from using a streamed version of the
 /// nested combinator or not. Being greedy, if no input is left after a successful parse of `comb`,
 /// this will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop
 /// parsing in such a scenario instead, consider using
-/// [`punctuated_many1()`](super::punctuated_many1()) instead.
+/// [`punctuated_nontrailing_many0()`](super::punctuated_nontrailing_many0()) instead.
 ///
 /// As a rule of thumb, use the `most`-combinators when the user indicates the end of the
 /// repetitions by something concrete (e.g., expressions wrapped in parenthesis).
@@ -118,7 +120,7 @@ where
 /// - `comb`: The combinator to repeatedly apply until it fails.
 ///
 /// # Returns
-/// A combinator [`PunctuatedMost1`] that applies the given `comb`inator until it fails.
+/// A combinator [`PunctuatedNontrailingMost0`] that applies the given `comb`inator until it fails.
 ///
 /// It will return the input as a [`Punctuated`].
 ///
@@ -129,7 +131,7 @@ where
 /// # Examples
 /// ```rust
 /// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_punctuated::snack::punctuated_most1;
+/// use ast_toolkit_punctuated::snack::punctuated_nontrailing_most0;
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf8::complete::tag;
@@ -141,41 +143,23 @@ where
 /// let span4 = Span::new(",hello");
 /// let span5 = Span::new("hello,helgoodbye");
 ///
-/// let mut comb = punctuated_most1(tag("hello"), tag(","));
+/// let mut comb = punctuated_nontrailing_most0(tag("hello"), tag(","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(17..), punct![
-///         v => span1.slice(..5),
-///         p => span1.slice(5..6),
-///         v => span1.slice(6..11),
-///         p => span1.slice(11..12),
-///         v => span1.slice(12..17)
+///         span1.slice(..5),
+///         span1.slice(5..6),
+///         span1.slice(6..11),
+///         span1.slice(11..12),
+///         span1.slice(12..17)
 ///     ]))
 /// );
-/// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), punct![v => span2.slice(..5)])));
-/// assert_eq!(
-///     comb.parse(span3),
-///     Err(SnackError::Recoverable(punctuated_most1::Recoverable {
-///         fmt:  punctuated_most1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
-///         },
-///         span: span3,
-///     }))
-/// );
-/// assert_eq!(
-///     comb.parse(span4),
-///     Err(SnackError::Recoverable(punctuated_most1::Recoverable {
-///         fmt:  punctuated_most1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
-///         },
-///         span: span4,
-///     }))
-/// );
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(5..), punct![span2.slice(..5)])));
+/// assert_eq!(comb.parse(span3), Ok((span3, punct![])));
+/// assert_eq!(comb.parse(span4), Ok((span4, punct![])));
 /// assert_eq!(
 ///     comb.parse(span5),
-///     Err(SnackError::Fatal(punctuated_most1::Fatal::TrailingSeparator {
+///     Err(SnackError::Fatal(punctuated_nontrailing_most0::Fatal::TrailingSeparator {
 ///         span: span5.slice(5..6),
 ///     }))
 /// );
@@ -183,7 +167,7 @@ where
 ///
 /// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
 /// ```rust
-/// use ast_toolkit_punctuated::snack::punctuated_most1;
+/// use ast_toolkit_punctuated::snack::punctuated_nontrailing_most0;
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::utf8::streaming::tag;
@@ -193,7 +177,7 @@ where
 /// let span2 = Span::new("hello,hel");
 /// let span3 = Span::new("");
 ///
-/// let mut comb = punctuated_most1(tag("hello"), tag(","));
+/// let mut comb = punctuated_nontrailing_most0(tag("hello"), tag(","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Err(SnackError::NotEnough { needed: Some(1), span: span1.slice(11..) })
@@ -208,11 +192,11 @@ where
 /// );
 /// ```
 #[inline]
-pub const fn punctuated_most1<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedMost1<C1, C2, S>
+pub const fn punctuated_nontrailing_most0<'c, 's, C1, C2, S>(comb: C1, sep: C2) -> PunctuatedNontrailingMost0<C1, C2, S>
 where
     C1: Combinator<'c, 's, S>,
     C2: Combinator<'c, 's, S>,
     S: Clone + Spannable<'s>,
 {
-    PunctuatedMost1 { comb, sep, _s: PhantomData }
+    PunctuatedNontrailingMost0 { comb, sep, _s: PhantomData }
 }

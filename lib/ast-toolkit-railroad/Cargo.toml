@@ -28,13 +28,10 @@ required-features = ["derive"]
 parking_lot = { version = "0.12.3", optional = true }
 railroad = "0.3.2"
 
-ast-toolkit-punctuated = { path = "../ast-toolkit-punctuated", optional = true }
 ast-toolkit-railroad-derive = { path = "../../derive/ast-toolkit-railroad-derive", optional = true }
 
 
 [features]
 default = []
-derive = [ "dep:ast-toolkit-railroad-derive" ]
-parking-lot = [ "dep:parking_lot" ]
-punctuated-normal = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/normal" ]
-punctuated-trailing = [ "dep:ast-toolkit-punctuated", "ast-toolkit-punctuated/trailing" ]
+derive = ["dep:ast-toolkit-railroad-derive"]
+parking-lot = ["dep:parking_lot"]

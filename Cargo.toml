@@ -30,20 +30,15 @@ serde = [
 diagnostic = ["dep:ast-toolkit-diagnostic"]
 
 punctuated = ["dep:ast-toolkit-punctuated"]
-punctuated-normal = [
-    "punctuated",
-    "ast-toolkit-punctuated/normal",
-    "ast-toolkit-railroad/punctuated-normal",
-]
+punctuated-macros = ["punctuated", "ast-toolkit-punctuated/macros"]
 punctuated-serde = ["punctuated", "ast-toolkit-punctuated/serde"]
 punctuated-snack = ["punctuated", "ast-toolkit-punctuated/snack"]
-punctuated-trailing = [
-    "punctuated",
-    "ast-toolkit-punctuated/trailing",
-    "ast-toolkit-railroad/punctuated-trailing",
-]
 
-railroad = ["dep:ast-toolkit-railroad", "ast-toolkit-tokens/railroad"]
+railroad = [
+    "dep:ast-toolkit-railroad",
+    "ast-toolkit-punctuated/railroad",
+    "ast-toolkit-tokens/railroad",
+]
 railroad-parking-lot = ["railroad", "ast-toolkit-railroad/parking-lot"]
 
 snack = [

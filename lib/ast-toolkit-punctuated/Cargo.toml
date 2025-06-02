@@ -1,6 +1,6 @@
 [package]
 name = "ast-toolkit-punctuated"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -15,15 +15,15 @@ enum-debug = { git = "https://github.com/Lut99/enum-debug", features = [
     "derive",
 ], optional = true }
 
+ast-toolkit-railroad = { path = "../ast-toolkit-railroad", default-features = false, optional = true }
 ast-toolkit-snack = { path = "../ast-toolkit-snack", default-features = false, optional = true }
 ast-toolkit-span = { path = "../ast-toolkit-span", default-features = false, optional = true }
 
 
 [features]
-default = ["normal"]
+default = ["macros"]
 
+macros = []
+railroad = ["dep:ast-toolkit-railroad"]
 serde = ["dep:serde"]
 snack = ["dep:better-derive", "dep:ast-toolkit-snack", "dep:ast-toolkit-span"]
-
-normal = ["dep:enum-debug"]
-trailing = []
