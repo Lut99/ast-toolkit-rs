@@ -26,6 +26,7 @@ pub mod c;
 pub mod combinator;
 pub mod debug;
 pub mod error;
+mod macros;
 pub mod multi;
 pub mod result;
 pub mod sequence;

@@ -23,7 +23,9 @@ paste = "1.0"
 
 
 [features]
-default = ["extra"]
+default = ["extra", "macros"]
 
 extra = ["c"]
 c = []
+
+macros = []
