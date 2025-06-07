@@ -6,4 +6,5 @@
 //
 
 // Declare the modules
+pub mod layout;
 pub mod slice;

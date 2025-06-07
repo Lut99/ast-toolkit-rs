@@ -11,7 +11,7 @@
 
 use ast_toolkit_span::{Span, Spannable};
 
-use crate::annotations::{Annotation, Severity};
+use crate::annotations::{Annotation, AnnotationInner, AnnotationInnerHighlight, AnnotationInnerSuggestion, Severity};
 
 
 /***** AUXILLARY *****/
@@ -34,18 +34,20 @@ where
     /// The span that is being represented here.
     span:   Span<S>,
     /// What to colour this span as.
+    ///
+    /// Note that the latest colour is always applied.
     color:  SliceColor,
     /// A list of annotations that are sticked on top of this area.
-    annots: Vec<SliceAnnot<S::Slice>>,
+    annots: Vec<SliceAnnot<S::Elem>>,
 }
 
 /// Defines possible annotations attached to a [`Slice`].
 #[derive(Clone, Debug)]
-pub enum SliceAnnot<E> {
-    /// It's a message.
-    Highlight(String),
-    /// It's a suggestion.
-    Suggestion(Vec<E>),
+pub struct SliceAnnot<E> {
+    /// The message to write.
+    pub message:    Option<String>,
+    /// Any replacement if this is a suggestion.
+    pub suggestion: Option<Vec<E>>,
 }
 
 
@@ -77,7 +79,10 @@ impl<'s, S: Spannable<'s>> SliceBuffer<'s, S> {
 }
 
 // Annotations
-impl<'s, S: Spannable<'s>> SliceBuffer<'s, S> {
+impl<'s, S: Spannable<'s>> SliceBuffer<'s, S>
+where
+    S::Elem: Clone,
+{
     /// Writes a new annotation to the slice buffer.
     ///
     /// # Arguments
@@ -87,21 +92,29 @@ impl<'s, S: Spannable<'s>> SliceBuffer<'s, S> {
     /// This function will return `true` if the annotation was applied, or `false` if it was either
     /// from a different `S`ource or not in range of the internal main span.
     #[inline]
-    pub fn annotate(&mut self, Annotation { span: mut annot_span, inner: annot_inner }: Annotation<'s, S>) -> bool {
+    pub fn annotate(&mut self, annot: Annotation<'s, S>) -> bool {
+        let Annotation { inner, span } = annot;
+
         // Assert it is from the same source
-        if self.slices[0].span.source_id() != annot_span.source_id() {
+        if self.slices[0].span.source_id() != span.source_id() {
             return false;
         }
 
+        // Extract some o' t' details
+        let (color, message, suggestion): (SliceColor, Option<String>, Option<Vec<S::Elem>>) = match inner {
+            AnnotationInner::Highlight(AnnotationInnerHighlight { severity, message }) => (SliceColor::Severity(severity), message, None),
+            AnnotationInner::Suggestion(AnnotationInnerSuggestion { replacement, message }) => (SliceColor::Suggestion, message, Some(replacement)),
+        };
+
         // Get the ranges from the annotation span
-        let annot_source_len: usize = annot_span.source().len();
-        let annot_start: usize = annot_span.range().start_resolved(annot_source_len).unwrap_or(0);
-        let annot_end: usize = annot_span.range().end_resolved(annot_source_len).unwrap_or(0);
+        let annot_source_len: usize = span.source().len();
+        let annot_start: usize = span.range().start_resolved(annot_source_len).unwrap_or(0);
+        let annot_end: usize = span.range().end_resolved(annot_source_len).unwrap_or(0);
 
         // Search to apply it
         let slices_len: usize = self.slices.len();
         for i in 0..slices_len {
-            if annot_span.is_empty() {
+            if span.is_empty() {
                 break;
             }
 
@@ -111,9 +124,34 @@ impl<'s, S: Spannable<'s>> SliceBuffer<'s, S> {
             let slice_start: usize = slice.span.range().start_resolved(slice_source_len).unwrap_or(0);
             let slice_end: usize = slice.span.range().end_resolved(slice_source_len).unwrap_or(0);
 
-            // If they overlap, cut the
+            // There's multiple ways in which they overlap
+            if annot_start == slice_start && annot_end >= slice_end {
+                // Perfect replace
+                self.slices[i].color = color;
+                // self.slices[i].annots.push(SliceAnnot { message, suggestion });
+
+                // Now either quit, or refresh and try for the next one
+                if annot_end > slice_end {
+                } else {
+                    return true;
+                }
+            } else if annot_start == slice_start && annot_end < slice_end {
+                // Cut the start
+                // NOTE: Yes there's an unguarded subtraction here. Should be fine though, I'm
+                // sure, since `annot_start` == `slice_start` and all that.
+                self.slices[i].span.shrink(annot_end - slice_start..);
+                let mut annots: Vec<SliceAnnot<S::Elem>> = self.slices[i].annots.clone();
+                // annots.push(SliceAnnot { message, suggestion });
+                self.slices.insert(i, Slice { span, color, annots });
+                return true;
+            } else if annot_start > slice_start && annot_start < slice_end && annot_end >= slice_end {
+                // Cut the end
+            } else if annot_start > slice_start && annot_start < slice_end && annot_end < slice_end {
+                // Middle replace
+            }
         }
 
-        todo!()
+        // It wasn't within range of any slice
+        false
     }
 }
