@@ -6,10 +6,21 @@
 //!   arrange them differently suiting with the user's usecase.
 //
 
+use std::borrow::Cow;
+
 use ast_toolkit_span::{Span, Spannable, SpannableBytes};
+use unicode_segmentation::UnicodeSegmentation as _;
 
 use super::buffers::layout::{LayoutBuffer, Line};
 use crate::layout::buffers::layout::Cell;
+
+
+/***** CONSTANTS *****/
+/// Defines the character we use for when we encounter non-UTF-8 byte sequences.
+pub const UNKNOWN_CHAR: &'static str = "\u{FFFD}";
+
+
+
 
 
 /***** HELPER FUNCTIONS *****/
@@ -25,24 +36,24 @@ use crate::layout::buffers::layout::Cell;
 /// If the given byte is too high.
 #[inline]
 #[track_caller]
-fn render_byte(b: u8) -> u8 {
+fn render_byte(b: u8) -> char {
     match b {
-        0x00 => b'0',
-        0x01 => b'1',
-        0x02 => b'2',
-        0x03 => b'3',
-        0x04 => b'4',
-        0x05 => b'5',
-        0x06 => b'6',
-        0x07 => b'7',
-        0x08 => b'8',
-        0x09 => b'9',
-        0x0A => b'A',
-        0x0B => b'B',
-        0x0C => b'C',
-        0x0D => b'D',
-        0x0E => b'E',
-        0x0F => b'F',
+        0x00 => '0',
+        0x01 => '1',
+        0x02 => '2',
+        0x03 => '3',
+        0x04 => '4',
+        0x05 => '5',
+        0x06 => '6',
+        0x07 => '7',
+        0x08 => '8',
+        0x09 => '9',
+        0x0A => 'A',
+        0x0B => 'B',
+        0x0C => 'C',
+        0x0D => 'D',
+        0x0E => 'E',
+        0x0F => 'F',
         _ => panic!("Given byte 0x{b:X} is too high (> 0x0F)"),
     }
 }
@@ -55,14 +66,17 @@ fn render_byte(b: u8) -> u8 {
 /// - `span`: The [`Span`] to find the lines it touches of.
 ///
 /// # Returns
-/// A list of [`Span`]s, each of which spanning a line touched by the given `Span`.
-fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> Vec<Span<S>> {
+/// A tuple with the line number of the first line (as a one-indexed number), and a list of
+/// [`Span`]s, each of which spanning a line touched by the given `Span`. Note that the line number
+/// is [`None`] if the span not spanning anything from the `S`ource.
+fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> (Option<usize>, Vec<Span<S>>) {
     let source: &S = span.source();
     let source_len: usize = source.len();
     let start: usize = span.range().start_resolved(source_len).unwrap_or(0); // Inclusive
     let end: usize = span.range().end_resolved(source_len).unwrap_or(0); // Exclusive
 
     // Go thru the _source_, not the span, to find the surrounding lines
+    let mut l: usize = 1;
     let mut i: usize = 0;
     let mut line_start: usize = 0; // Inclusive
     let mut lines: Vec<Span<S>> = Vec::with_capacity(1);
@@ -74,6 +88,8 @@ fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> Vec<S
             // Store the line
             if i >= start {
                 lines.push(Span::ranged(source.clone(), line_start..i + 1));
+            } else {
+                l += 1;
             }
 
             // Update the new line start
@@ -93,7 +109,7 @@ fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> Vec<S
         // There's still range left; get the remaining
         lines.push(Span::ranged(source.clone(), line_start..));
     }
-    lines
+    (if !lines.is_empty() { Some(l) } else { None }, lines)
 }
 
 /// Finds the chunks that are touched by the given Span.
@@ -130,7 +146,9 @@ fn find_touched_chunks<'s, S: Clone + SpannableBytes<'s>>(chunk_len: usize, span
 
 /***** LIBRARY *****/
 /// Defines a general Layouter that will take care of physically rendering everything.
-pub trait Layouter<'s, S: Spannable<'s>> {
+pub trait Layouter<'s, S> {
+    type CellValue;
+
     /// Renders some [`Span`] to a [`LayoutBuffer`].
     ///
     /// # Arguments
@@ -138,7 +156,7 @@ pub trait Layouter<'s, S: Spannable<'s>> {
     ///
     /// # Returns
     /// A [`LayoutBuffer`] that will do the layouting.
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::Elem>;
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue>;
 }
 
 
@@ -156,7 +174,63 @@ impl TextLayouter {
     pub const fn new() -> Self { Self }
 }
 impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for TextLayouter {
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::Elem> { find_touched_lines(span).into_iter().map(Line::from).collect() }
+    type CellValue = Cow<'s, str>;
+
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue> {
+        let (l, lines): (Option<usize>, Vec<Span<S>>) = find_touched_lines(span);
+        lines
+            .into_iter()
+            .enumerate()
+            .map(|(i, span)| {
+                // Get the absolute span offset
+                let source_len: usize = span.source().len();
+                let mut start: usize = span.range().start_resolved(source_len).unwrap_or(0);
+
+                // Prepare a `Line` buffer with the correct line number
+                let mut bytes: &[u8] = span.as_bytes();
+                let mut line = Line::with_capacity(bytes.len());
+                // SAFETY: We can unwrap here because `l` is only every `None` if there are no
+                // lines (in which case this closure won't be called)
+                line.set_line_number(unsafe { l.unwrap_unchecked() } + i);
+
+                // Interpret the span as UTF-8, manually injecting owned `Cow`s in order to re-use
+                // as much from the source as possible.
+                // NOTE: This section is very much taken from
+                // <https://doc.rust-lang.org/std/str/struct.Utf8Error.html#examples>
+                loop {
+                    match std::str::from_utf8(bytes) {
+                        Ok(valid) => {
+                            // The remaining `bytes` are valid; store them and be done with it
+                            for (i, s) in valid.grapheme_indices(true) {
+                                line.push(Cell::from_source(start + i, Cow::Borrowed(s)));
+                            }
+                            break;
+                        },
+                        Err(err) => {
+                            // It was valid up to a certain point; so those we can add
+                            let (valid, after_valid) = bytes.split_at(err.valid_up_to());
+                            // SAFETY: We can do this because we know they are valid up to `valid`
+                            for (i, s) in unsafe { std::str::from_utf8_unchecked(valid) }.grapheme_indices(true) {
+                                line.push(Cell::from_source(start + i, Cow::Borrowed(s)));
+                            }
+                            // Now push the "unknown" character
+                            line.push(Cell::from_source(start + valid.len(), Cow::Owned(UNKNOWN_CHAR.into())));
+
+                            // If it's just an unexpected byte, we continue. Else, we quit and don't
+                            // add the last part
+                            if let Some(invalid_len) = err.error_len() {
+                                start += valid.len() + invalid_len;
+                                bytes = &after_valid[invalid_len..];
+                            } else {
+                                break;
+                            }
+                        },
+                    }
+                }
+                line
+            })
+            .collect()
+    }
 }
 
 /// Defines a Layouter which lays something out as a hex reader.
@@ -180,7 +254,9 @@ impl BytesLayouter {
     pub const fn new(line_len: usize) -> Self { Self { line_len } }
 }
 impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::Elem> {
+    type CellValue = char;
+
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue> {
         // Get the chunks of 16 which will be our lines
         let lines: Vec<Span<S>> = find_touched_chunks(self.line_len, span);
 
@@ -193,7 +269,7 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
                 line.set_line_number(format!("{:X}", i * self.line_len));
                 for (j, b) in s.as_bytes().iter().copied().enumerate() {
                     if j > 0 {
-                        line.push(Cell::from_value(b' '));
+                        line.push(Cell::from_value(' '));
                     }
                     line.push(Cell::from_source(i * self.line_len + j, render_byte((0xF0 & b) >> 4)));
                     line.push(Cell::from_source(i * self.line_len + j, render_byte(0x0F & b)));
@@ -214,7 +290,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_text_layouter() { todo!() }
+    fn test_text_layouter() {
+        let span = Span::new("Hello, world!\nGoodbye, world!\nEpic\n");
+        let buffer = TextLayouter.layout(span);
+        println!();
+        println!("{}", buffer.render(false));
+        assert_eq!(buffer.render(false).to_string(), "");
+    }
 
     #[test]
     fn test_bytes_layouter() { todo!() }

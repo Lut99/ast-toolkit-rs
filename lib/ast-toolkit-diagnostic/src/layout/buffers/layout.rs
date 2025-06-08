@@ -18,7 +18,33 @@ pub struct LayoutBufferRenderer<'b, E> {
 }
 impl<'b, E: Display> Display for LayoutBufferRenderer<'b, E> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { todo!() }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let Self { buffer } = self;
+
+        // Scan to find the line width
+        let mut max_l_len: usize = 0;
+        for line in &buffer.lines {
+            max_l_len = std::cmp::max(max_l_len, line.l.as_ref().map(String::len).unwrap_or(0));
+        }
+
+        // Format it
+        for line in &buffer.lines {
+            if let Some(l) = &line.l {
+                write!(f, "{l:<len$}", len = max_l_len)?;
+            } else {
+                write!(f, "{:<len$}", "", len = max_l_len)?;
+            }
+            write!(f, "| ")?;
+            for (i, cell) in line.cells.iter().enumerate() {
+                if let Some(value) = &cell.value {
+                    write!(f, "{value}")?;
+                } else {
+                    write!(f, " ")?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 
@@ -132,7 +158,9 @@ where
         for (i, elem) in value.as_slice().iter().enumerate() {
             res.cells.push(Cell { i: Some(start + i), value: Some(elem.clone()) })
         }
-        todo!()
+
+        // Done
+        res
     }
 }
 
