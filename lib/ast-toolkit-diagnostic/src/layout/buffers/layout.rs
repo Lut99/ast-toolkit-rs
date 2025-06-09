@@ -30,12 +30,12 @@ impl<'b, E: Display> Display for LayoutBufferRenderer<'b, E> {
         // Format it
         for line in &buffer.lines {
             if let Some(l) = &line.l {
-                write!(f, "{l:<len$}", len = max_l_len)?;
+                write!(f, "{l:>len$}", len = max_l_len)?;
             } else {
-                write!(f, "{:<len$}", "", len = max_l_len)?;
+                write!(f, "{:>len$}", "", len = max_l_len)?;
             }
             write!(f, "| ")?;
-            for (i, cell) in line.cells.iter().enumerate() {
+            for cell in line.cells.iter() {
                 if let Some(value) = &cell.value {
                     write!(f, "{value}")?;
                 } else {

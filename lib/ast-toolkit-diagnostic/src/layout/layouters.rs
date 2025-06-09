@@ -258,24 +258,37 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
 
     fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue> {
         // Get the chunks of 16 which will be our lines
+        let source_len: usize = span.source().len();
+        let start: usize = span.range().start_resolved(source_len).unwrap_or(0);
         let lines: Vec<Span<S>> = find_touched_chunks(self.line_len, span);
 
+        // Prepare the initial line
+        let mut line = Line::with_capacity(2 * self.line_len + self.line_len + 1);
+        for j in 0..16u8 {
+            if j > 0 {
+                line.push(Cell::from_value(' '));
+            }
+            line.push(Cell::from_value(render_byte((0xF0 & j) >> 4)));
+            line.push(Cell::from_value(render_byte(0x0F & j)));
+        }
+        line.push(Cell::from_value('\n'));
+
         // Render them to actual lines
-        lines
+        Some(line)
             .into_iter()
-            .enumerate()
-            .map(|(i, s)| {
-                let mut line = Line::with_capacity(2 * self.line_len + self.line_len);
-                line.set_line_number(format!("{:X}", i * self.line_len));
+            .chain(lines.into_iter().enumerate().map(|(i, s)| {
+                let mut line = Line::with_capacity(2 * self.line_len + self.line_len + 1);
+                line.set_line_number(format!("{:X}", start + i * self.line_len));
                 for (j, b) in s.as_bytes().iter().copied().enumerate() {
                     if j > 0 {
                         line.push(Cell::from_value(' '));
                     }
-                    line.push(Cell::from_source(i * self.line_len + j, render_byte((0xF0 & b) >> 4)));
-                    line.push(Cell::from_source(i * self.line_len + j, render_byte(0x0F & b)));
+                    line.push(Cell::from_source(start + i * self.line_len + j, render_byte((0xF0 & b) >> 4)));
+                    line.push(Cell::from_source(start + i * self.line_len + j, render_byte(0x0F & b)));
                 }
+                line.push(Cell::from_value('\n'));
                 line
-            })
+            }))
             .collect()
     }
 }
@@ -293,11 +306,39 @@ mod tests {
     fn test_text_layouter() {
         let span = Span::new("Hello, world!\nGoodbye, world!\nEpic\n");
         let buffer = TextLayouter.layout(span);
-        println!();
-        println!("{}", buffer.render(false));
-        assert_eq!(buffer.render(false).to_string(), "");
+        assert_eq!(buffer.render(false).to_string(), "1| Hello, world!\n2| Goodbye, world!\n3| Epic\n");
+
+        let line = span.slice(14..29);
+        let buffer = TextLayouter.layout(line);
+        assert_eq!(buffer.render(false).to_string(), "2| Goodbye, world!\n");
+
+        let part = line.slice(7..8);
+        let buffer = TextLayouter.layout(part);
+        assert_eq!(buffer.render(false).to_string(), "2| Goodbye, world!\n");
     }
 
     #[test]
-    fn test_bytes_layouter() { todo!() }
+    fn test_bytes_layouter() {
+        let span = Span::new("Hello, world!\nGoodbye, world!\nEpic\n");
+        let buffer = BytesLayouter::default().layout(span);
+        assert_eq!(
+            buffer.render(false).to_string(),
+            "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n 0| 48 65 6C 6C 6F 2C 20 77 6F 72 6C 64 21 0A 47 6F\n10| 6F 64 62 79 65 2C 20 77 \
+             6F 72 6C 64 21 0A 45 70\n20| 69 63 0A\n"
+        );
+
+        let line = span.slice(16..32);
+        let buffer = BytesLayouter::default().layout(line);
+        assert_eq!(
+            buffer.render(false).to_string(),
+            "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n10| 6F 64 62 79 65 2C 20 77 6F 72 6C 64 21 0A 45 70\n"
+        );
+
+        let part = line.slice(7..8);
+        let buffer = BytesLayouter::default().layout(part);
+        assert_eq!(
+            buffer.render(false).to_string(),
+            "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n17| 6F 64 62 79 65 2C 20 77 6F 72 6C 64 21 0A 45 70\n"
+        );
+    }
 }
