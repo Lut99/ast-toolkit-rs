@@ -16,10 +16,10 @@
 // Declare modules
 pub mod annotations;
 // pub mod diagnostic;
-mod layout;
+pub mod layout;
 pub mod themes;
 
 // // Bring some of it onto the crate-level.
 // pub use annotations::{Annotation, AnnotationHighlight, AnnotationSuggestion, Severity};
 // pub use diagnostic::Diagnostic;
-pub use layout::*;
+// pub use layout::{Cell, CellBuffer, HexLayouter, Layouter, Line, Utf8Layouter};

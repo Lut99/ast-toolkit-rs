@@ -17,8 +17,8 @@
 //!
 //!      RESULT: We stop caring about unique sources.
 //!
-//!      RESULT: All [`Span`](ast_toolkit::span::Span)s in annotations are
-//!      replaced with their [`Range`](ast_toolkit::span::range::Range)s only.
+//!      RESULT: All [`Span`](ast_toolkit_span::Span)s in annotations are
+//!      replaced with their `Range`s only.
 //!   2. _Splitting overlapping replaces:_
 //!
 //!      In the second step, we examine any annotation with a `replace` whether
@@ -42,28 +42,24 @@
 //!
 //!      RESULT: We stop caring about replaces.
 //!
-//!      RESULT: The main [`Span`](ast_toolkit::span::Span) becomes a
-//!      [`VirtualSpan`](s3_apply_replace::VirtualSpan), and all
-//!      [`Range`](ast_toolkit::span::range::Range)s in annotations become
-//!      [`VirtualRange`](s3_apply_replace::VirtualRange)s. No annotation will
-//!      have a `replacement` anymore.
+//!      RESULT: The main [`Span`](ast_toolkit_span::Span) becomes a
+//!      `VirtualSpan`, and all `Range`s in annotations become `VirtualRange`s.
+//!      No annotation will have a `replacement` anymore.
 //!   4. _Layouters:_
 //!
 //!      In the fourth step, we apply a user-selected
-//!      [`Layouter`](s4_layouters::Layouter) that, with a maximum line width
-//!      in mind, will render the virtual span into a cellbuffer. It, albeit
-//!      with help from the virtual span, is responsible for annotating the
-//!      resulting cellbuffer with flags indicating when annotations start and
-//!      stop.
+//!      [`Layouter`] that, with a maximum line width in mind, will render the
+//!      virtual span into a cellbuffer. It, albeit with help from the virtual
+//!      span, is responsible for annotating the resulting cellbuffer with
+//!      flags indicating when annotations start and stop.
 //!
 //!      RESULT: We unlock any visual information we need to place annotations.
 //!
 //!      RESULT: We stop caring about ranges, as the flags will signpost where
 //!      to apply them instead.
 //!
-//!      RESULT: We obtain a populated [`CellBuffer`](s4_layouters::CellBuffer)
-//!      that carries the visual representation of the source text as well as
-//!      annotations in flag form.
+//!      RESULT: We obtain a populated [`CellBuffer`] that carries the visual
+//!      representation of the source text as well as annotations in flag form.
 //!   5. _Placing:_
 //!
 //!      In the fifth and arguably main step, we apply the placing algorithm to
@@ -91,12 +87,12 @@
 //
 
 // Declare the modules
-pub mod s1_grouping;
-pub mod s2_split_replace;
-pub mod s3_apply_replace;
-pub mod s4_layouters;
-pub mod s5_placing;
-pub mod s6_rendering;
+mod s1_grouping;
+mod s2_split_replace;
+mod s3_apply_replace;
+mod s4_layouters;
+mod s5_placing;
+mod s6_rendering;
 
 // Define public interfaces
-pub use s4_layouters::{Cell, CellBuffer, HexLayouter, Layouter, Line, Utf8Layouter};
+pub use s4_layouters::{AnnotFlag, Cell, CellBuffer, HexLayouter, Layouter, Line, Utf8Layouter};

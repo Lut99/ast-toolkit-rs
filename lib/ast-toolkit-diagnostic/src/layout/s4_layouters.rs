@@ -256,8 +256,8 @@ impl<E> Line<E> {
 impl<E> Line<E> {
     /// Gets the [`Cell`] at the given column position.
     ///
-    /// This function takes columns position by zero-indexed value. See [`get1()`] to get it by
-    /// one-indexed value instead.
+    /// This function takes columns position by zero-indexed value. See [`Line::get1()`] to get it
+    /// by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed column position to get the cell at.
@@ -272,8 +272,8 @@ impl<E> Line<E> {
     /// It's YOUR responsibility to ensure that `index` is within bounds of [`Self::width()`].
     /// If it isn't, undefined behaviour looms.
     ///
-    /// This function takes columns position by zero-indexed value. See [`get1_unchecked()`] to get
-    /// it by one-indexed value instead.
+    /// This function takes columns position by zero-indexed value. See [`Line::get1_unchecked()`]
+    /// to get it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed column position to get the cell at.
@@ -285,8 +285,8 @@ impl<E> Line<E> {
 
     /// Gets the [`Cell`] at the given column position, mutably.
     ///
-    /// This function takes columns position by zero-indexed value. See [`get1_mut()`] to get it by
-    /// one-indexed value instead.
+    /// This function takes columns position by zero-indexed value. See [`Line::get1_mut()`] to get
+    /// it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed column position to get the cell at.
@@ -302,8 +302,8 @@ impl<E> Line<E> {
     /// It's YOUR responsibility to ensure that `index` is within bounds of [`Self::width()`].
     /// If it isn't, undefined behaviour looms.
     ///
-    /// This function takes columns position by zero-indexed value. See [`get1_unchecked_mut()`] to
-    /// get it by one-indexed value instead.
+    /// This function takes columns position by zero-indexed value. See
+    /// [`Line::get1_unchecked_mut()`] to get it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed column position to get the cell at.
@@ -317,8 +317,8 @@ impl<E> Line<E> {
 
     /// Gets the [`Cell`] at the given column position.
     ///
-    /// This function takes columns position by one-indexed value. See [`get0()`] to get it by
-    /// zero-indexed value instead.
+    /// This function takes columns position by one-indexed value. See [`Line::get0()`] to get it
+    /// by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed column position to get the cell at.
@@ -341,8 +341,8 @@ impl<E> Line<E> {
     /// It's YOUR responsibility to ensure that `index` is larger than 0 AND within bounds of
     /// [`Self::width()`]. If either guarantee isn't met, undefined behaviour looms.
     ///
-    /// This function takes columns position by one-indexed value. See [`get0_unchecked()`] to get
-    /// it by zero-indexed value instead.
+    /// This function takes columns position by one-indexed value. See [`Line::get0_unchecked()`]
+    /// to get it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed column position to get the cell at.
@@ -357,8 +357,8 @@ impl<E> Line<E> {
 
     /// Gets the [`Cell`] at the given column position, mutably.
     ///
-    /// This function takes columns position by one-indexed value. See [`get0_mut()`] to get it by
-    /// zero-indexed value instead.
+    /// This function takes columns position by one-indexed value. See [`Line::get0_mut()`] to get
+    /// it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed column position to get the cell at.
@@ -382,8 +382,8 @@ impl<E> Line<E> {
     /// It's YOUR responsibility to ensure that `index` is larger than 0 AND within bounds of
     /// [`Self::width()`]. If either guarantee isn't met, undefined behaviour looms.
     ///
-    /// This function takes columns position by one-indexed value. See [`get0_unchecked_mut()`] to
-    /// get it by zero-indexed value instead.
+    /// This function takes columns position by one-indexed value. See
+    /// [`Line::get0_unchecked_mut()`] to get it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed column position to get the cell at.
@@ -453,29 +453,6 @@ impl<E> IndexMut<usize> for Line<E> {
         self.get0_mut(index).unwrap_or_else(|| panic!("Index {index} is out-of-bounds for Line of width {cells_len}"))
     }
 }
-
-// // Conversion
-// impl<'s, S: Spannable<'s>> From<Span<S>> for Line<S::SourceId, S::Elem>
-// where
-//     S::Elem: Clone,
-// {
-//     #[inline]
-//     fn from(value: Span<S>) -> Self {
-//         // Resolve the start index of the Span
-//         let source: &S = value.source();
-//         let source_len: usize = source.len();
-//         let start: usize = value.range().start_resolved(source_len).unwrap_or(0);
-
-//         // Add them
-//         let mut res: Self = Self::with_capacity(source_len);
-//         for (i, elem) in value.as_slice().iter().enumerate() {
-//             res.cells.push(Cell { i: Some((value.source_id(), start + i)), value: Some(elem.clone()) })
-//         }
-
-//         // Done
-//         res
-//     }
-// }
 
 
 
@@ -672,8 +649,8 @@ impl<E> CellBuffer<E> {
 
     /// Gets the [`Line`] at the given line position.
     ///
-    /// This function takes lines position by zero-indexed value. See [`get1()`] to get it by
-    /// one-indexed value instead.
+    /// This function takes lines position by zero-indexed value. See [`CellBuffer::get1()`] to get
+    /// it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed line position to get the cell at.
@@ -688,8 +665,8 @@ impl<E> CellBuffer<E> {
     /// It's YOUR responsibility to ensure that `index` is within bounds of [`Self::width()`].
     /// If it isn't, undefined behaviour looms.
     ///
-    /// This function takes lines position by zero-indexed value. See [`get1_unchecked()`] to get
-    /// it by one-indexed value instead.
+    /// This function takes lines position by zero-indexed value. See
+    /// [`CellBuffer::get1_unchecked()`] to get it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed line position to get the cell at.
@@ -701,8 +678,8 @@ impl<E> CellBuffer<E> {
 
     /// Gets the [`Line`] at the given line position, mutably.
     ///
-    /// This function takes lines position by zero-indexed value. See [`get1_mut()`] to get it by
-    /// one-indexed value instead.
+    /// This function takes lines position by zero-indexed value. See [`CellBuffer::get1_mut()`] to
+    /// get it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed line position to get the cell at.
@@ -718,8 +695,8 @@ impl<E> CellBuffer<E> {
     /// It's YOUR responsibility to ensure that `index` is within bounds of [`Self::width()`].
     /// If it isn't, undefined behaviour looms.
     ///
-    /// This function takes lines position by zero-indexed value. See [`get1_unchecked_mut()`] to
-    /// get it by one-indexed value instead.
+    /// This function takes lines position by zero-indexed value. See
+    /// [`CellBuffer::get1_unchecked_mut()`] to get it by one-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A zero-indexed line position to get the cell at.
@@ -733,8 +710,8 @@ impl<E> CellBuffer<E> {
 
     /// Gets the [`Line`] at the given line position.
     ///
-    /// This function takes lines position by one-indexed value. See [`get0()`] to get it by
-    /// zero-indexed value instead.
+    /// This function takes lines position by one-indexed value. See [`CellBuffer::get0()`] to get
+    /// it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed line position to get the cell at.
@@ -757,8 +734,8 @@ impl<E> CellBuffer<E> {
     /// It's YOUR responsibility to ensure that `index` is larger than 0 AND within bounds of
     /// [`Self::width()`]. If either guarantee isn't met, undefined behaviour looms.
     ///
-    /// This function takes lines position by one-indexed value. See [`get0_unchecked()`] to get
-    /// it by zero-indexed value instead.
+    /// This function takes lines position by one-indexed value. See
+    /// [`CellBuffer::get0_unchecked()`] to get it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed line position to get the cell at.
@@ -773,8 +750,8 @@ impl<E> CellBuffer<E> {
 
     /// Gets the [`Line`] at the given line position, mutably.
     ///
-    /// This function takes lines position by one-indexed value. See [`get0_mut()`] to get it by
-    /// zero-indexed value instead.
+    /// This function takes lines position by one-indexed value. See [`CellBuffer::get0_mut()`] to
+    /// get it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed line position to get the cell at.
@@ -798,8 +775,8 @@ impl<E> CellBuffer<E> {
     /// It's YOUR responsibility to ensure that `index` is larger than 0 AND within bounds of
     /// [`Self::width()`]. If either guarantee isn't met, undefined behaviour looms.
     ///
-    /// This function takes lines position by one-indexed value. See [`get0_unchecked_mut()`] to
-    /// get it by zero-indexed value instead.
+    /// This function takes lines position by one-indexed value. See
+    /// [`CellBuffer::get0_unchecked_mut()`] to get it by zero-indexed value instead.
     ///
     /// # Arguments
     /// - `index`: A one-indexed line position to get the cell at.
