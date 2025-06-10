@@ -22,3 +22,4 @@ pub mod themes;
 // // Bring some of it onto the crate-level.
 // pub use annotations::{Annotation, AnnotationHighlight, AnnotationSuggestion, Severity};
 // pub use diagnostic::Diagnostic;
+pub use layout::*;

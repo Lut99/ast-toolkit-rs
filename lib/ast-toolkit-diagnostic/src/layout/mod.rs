@@ -97,3 +97,6 @@ pub mod s3_apply_replace;
 pub mod s4_layouters;
 pub mod s5_placing;
 pub mod s6_rendering;
+
+// Define public interfaces
+pub use s4_layouters::{Cell, CellBuffer, HexLayouter, Layouter, Line, Utf8Layouter};
