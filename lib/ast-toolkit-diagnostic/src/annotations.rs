@@ -14,7 +14,6 @@
 //
 
 use ast_toolkit_span::{Span, Spannable};
-use better_derive::{Clone, Copy, Debug};
 
 
 /***** AUXILLARY *****/
@@ -27,6 +26,8 @@ pub enum Severity {
     Error,
     /// Some other information auxillary to earlier diagnostics.
     Help,
+    /// A suggestion to do something.
+    Suggestion,
     /// Non-fatal warnings.
     Warning,
 }
@@ -38,60 +39,16 @@ pub enum Severity {
 /***** LIBRARY *****/
 /// Defines annotations that can be given in a snippet.
 #[derive(Clone, Debug)]
-#[better_derive(bound = (S: Clone + Spannable<'s>, S::Elem: Clone + std::fmt::Debug))]
 pub struct Annotation<'s, S>
 where
     S: Spannable<'s>,
 {
-    /// Defines any annotation-specific fields.
-    pub inner: AnnotationInner<'s, S>,
-    /// Defines the place in the source describing what this annotation highlights.
-    pub span:  Span<S>,
-}
-
-/// Defines variations of the base [`Annotation`].
-#[derive(Clone, Debug)]
-#[better_derive(bound = (S: Clone + Spannable<'s>, S::Elem: Clone + std::fmt::Debug))]
-pub enum AnnotationInner<'s, S>
-where
-    S: Spannable<'s>,
-{
-    /// It's a highlight, i.e., marking an area in the text with potentially a message.
-    Highlight(AnnotationInnerHighlight),
-    /// It's a suggestion, i.e., replacing the same source text with new info.
-    Suggestion(AnnotationInnerSuggestion<S::Elem>),
-}
-
-
-
-/// Defines annotations that highlight a particular source text, optionally with a message.
-#[derive(Clone, Debug)]
-pub struct AnnotationInnerHighlight {
-    /// The severity level to use for this highlight.
+    /// Defines any visual suggested replacement for the underlying `S`ource text.
+    pub replacement: Option<Vec<S::Elem>>,
+    /// Defines any message to give with this annotation.
+    pub message: Option<String>,
+    /// The severity (= color and markers like "error" or "help") of this annotation.
     pub severity: Severity,
-    /// Any message to show, if any.
-    pub message:  Option<String>,
-}
-
-// Convertions
-impl<'s, S: Spannable<'s>> From<AnnotationInnerHighlight> for AnnotationInner<'s, S> {
-    #[inline]
-    fn from(value: AnnotationInnerHighlight) -> Self { Self::Highlight(value) }
-}
-
-
-
-/// Defines annotations that suggest a replacement (or insert) in the source text.
-#[derive(Clone, Debug)]
-pub struct AnnotationInnerSuggestion<E> {
-    /// The replacement to insert.
-    pub replacement: Vec<E>,
-    /// Any message to show, if any.
-    pub message:     Option<String>,
-}
-
-// Convertions
-impl<'s, S: Spannable<'s>> From<AnnotationInnerSuggestion<S::Elem>> for AnnotationInner<'s, S> {
-    #[inline]
-    fn from(value: AnnotationInnerSuggestion<S::Elem>) -> Self { Self::Suggestion(value) }
+    /// Defines the place in the source describing what this annotation highlights.
+    pub span: Span<S>,
 }

@@ -5,46 +5,66 @@
 //!   Defines an output layout buffer.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::Display;
 
 use ast_toolkit_span::{Span, Spannable};
 
+use super::annotated::AnnotatedBuffer;
+use crate::annotations::{Annotation, AnnotationInner, AnnotationInnerHighlight, AnnotationInnerSuggestion, Severity};
 
-/***** FORMATTERS *****/
-/// Renders a [`LayoutBuffer`] to some [`Formatter`].
-pub struct LayoutBufferRenderer<'b, E> {
-    /// The buffer to render.
-    buffer: &'b LayoutBuffer<E>,
+
+/***** AUXILLARY *****/
+/// Defines a range of line/column pairs with start/stop.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Range {
+    /// The start position (inclusive).
+    pub start: Position,
+    /// The end position (inclusive).
+    pub end:   Position,
 }
-impl<'b, E: Display> Display for LayoutBufferRenderer<'b, E> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let Self { buffer } = self;
-
-        // Scan to find the line width
-        let mut max_l_len: usize = 0;
-        for line in &buffer.lines {
-            max_l_len = std::cmp::max(max_l_len, line.l.as_ref().map(String::len).unwrap_or(0));
-        }
-
-        // Format it
-        for line in &buffer.lines {
-            if let Some(l) = &line.l {
-                write!(f, "{l:>len$}", len = max_l_len)?;
-            } else {
-                write!(f, "{:>len$}", "", len = max_l_len)?;
-            }
-            write!(f, "| ")?;
-            for cell in line.cells.iter() {
-                if let Some(value) = &cell.value {
-                    write!(f, "{value}")?;
-                } else {
-                    write!(f, " ")?;
-                }
-            }
-        }
-        Ok(())
+impl Range {
+    /// Checks if this range overlaps with another.
+    ///
+    /// # Arguments
+    /// - `other`: The other range to check for overlap with.
+    ///
+    /// # Returns
+    /// True if they overlap, or false otherwise.
+    pub fn overlaps_with(&self, other: &Self) -> bool {
+        // Based on https://stackoverflow.com/a/3269471
+        (self.start.line < other.end.line || self.start.col <= other.end.col) && (other.start.line < self.end.line || other.start.col <= self.end.col)
     }
+}
+
+/// Defines a line/column pair.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Position {
+    /// The line number, zero indexed.
+    pub line: usize,
+    /// The column number, zero indexed.
+    pub col:  usize,
+}
+impl Position {
+    /// Constructor for the Position.
+    ///
+    /// # Arguments
+    /// - `line`: The zero-indexed line number this position points to.
+    /// - `col`: The zero-indexed column number this position points to.
+    ///
+    /// # Returns
+    /// A Position pointing to `(line, col)`.
+    #[inline]
+    pub const fn new(line: usize, col: usize) -> Self { Self { line, col } }
+}
+
+
+
+/// Defines the colouring options for a [`Chunk`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Color {
+    Severity(Severity),
+    Suggestion,
+    Plain,
 }
 
 
@@ -54,15 +74,15 @@ impl<'b, E: Display> Display for LayoutBufferRenderer<'b, E> {
 /***** LIBRARY *****/
 /// Individual cells in a line.
 #[derive(Debug, Clone)]
-pub struct Cell<E> {
-    /// The original source location, if any.
-    i:     Option<usize>,
+pub struct Cell<I, E> {
+    /// The original source location, if any, as a pair of source ID & position.
+    pub(super) i:     Option<(I, usize)>,
     /// The value of the cell, if any.
-    value: Option<E>,
+    pub(super) value: Option<E>,
 }
 
 // Constructors
-impl<E> Cell<E> {
+impl<I, E> Cell<I, E> {
     /// Constructor for a Cell with a value but not from source.
     ///
     /// # Arguments
@@ -76,28 +96,45 @@ impl<E> Cell<E> {
     /// Constructor for a Cell from source with a value.
     ///
     /// # Arguments
+    /// - `id`: The source identifier of the source producing this value.
     /// - `i`: The original source position.
     /// - `value`: The value to set.
     ///
     /// # Returns
     /// A new Cell.
     #[inline]
-    pub const fn from_source(i: usize, value: E) -> Self { Self { i: Some(i), value: Some(value) } }
+    pub const fn from_source(id: I, i: usize, value: E) -> Self { Self { i: Some((id, i)), value: Some(value) } }
+}
+
+
+
+/// Defines an abstract annotation range to apply to a [`Line`].
+#[derive(Debug, Clone)]
+pub struct AnnotRange<E> {
+    /// Any replaceing to do.
+    pub(super) replacement: Option<Vec<E>>,
+    /// Any message to display.
+    pub(super) message: Option<String>,
+    /// The color of the annotation.
+    pub(super) color: Color,
+    /// The range it concerns, as a pair of (start, end) pairs of (line, column). Note the end is
+    /// INCLUSIVE!
+    pub(super) range: Range,
 }
 
 
 
 /// Individual lines in the output.
 #[derive(Debug, Clone)]
-pub struct Line<E> {
+pub struct Line<I, E> {
     /// The line number
-    l:     Option<String>,
+    pub(super) l:     Option<String>,
     /// A list of cells in this line.
-    cells: Vec<Cell<E>>,
+    pub(super) cells: Vec<Cell<I, E>>,
 }
 
 // Constructors
-impl<E> Line<E> {
+impl<I, E> Line<I, E> {
     /// Constructs a new Line with capacity for at least the given number of cells.
     ///
     /// # Arguments
@@ -111,7 +148,7 @@ impl<E> Line<E> {
 }
 
 // Collection
-impl<E> Line<E> {
+impl<I, E> Line<I, E> {
     /// Set a line number for this line, already rendered.
     ///
     /// Note that any preceding spaces are added automatically later.
@@ -135,14 +172,14 @@ impl<E> Line<E> {
     /// # Returns
     /// Self for chaining.
     #[inline]
-    pub fn push(&mut self, cell: impl Into<Cell<E>>) -> &mut Self {
+    pub fn push(&mut self, cell: impl Into<Cell<I, E>>) -> &mut Self {
         self.cells.push(cell.into());
         self
     }
 }
 
 // Conversion
-impl<'s, S: Spannable<'s>> From<Span<S>> for Line<S::Elem>
+impl<'s, S: Spannable<'s>> From<Span<S>> for Line<S::SourceId, S::Elem>
 where
     S::Elem: Clone,
 {
@@ -156,7 +193,7 @@ where
         // Add them
         let mut res: Self = Self::with_capacity(source_len);
         for (i, elem) in value.as_slice().iter().enumerate() {
-            res.cells.push(Cell { i: Some(start + i), value: Some(elem.clone()) })
+            res.cells.push(Cell { i: Some((value.source_id(), start + i)), value: Some(elem.clone()) })
         }
 
         // Done
@@ -168,13 +205,15 @@ where
 
 /// Defines the buffer in which we'll write the output source fragment.
 #[derive(Debug, Clone)]
-pub struct LayoutBuffer<E> {
+pub struct LayoutBuffer<I, E> {
     /// The lines of output we'll write to.
-    lines: Vec<Line<E>>,
+    pub(super) lines:  Vec<Line<I, E>>,
+    /// A list of annotations to apply to this line together with the range of cells they concern.
+    pub(super) annots: Vec<AnnotRange<E>>,
 }
 
 // Constructors
-impl<E> LayoutBuffer<E> {
+impl<I, E> LayoutBuffer<I, E> {
     /// Constructs a new LayoutBuffer with capacity for at least the given number of lines.
     ///
     /// # Arguments
@@ -184,11 +223,11 @@ impl<E> LayoutBuffer<E> {
     /// A new LayoutBuffer that will be able to store at least `capacity` lines before reallocation
     /// is necessary.
     #[inline]
-    pub fn with_capacity(capacity: usize) -> Self { Self { lines: Vec::with_capacity(capacity) } }
+    pub fn with_capacity(capacity: usize) -> Self { Self { lines: Vec::with_capacity(capacity), annots: Vec::new() } }
 }
 
 // Collection
-impl<E> LayoutBuffer<E> {
+impl<I, E> LayoutBuffer<I, E> {
     /// Write a new line to the buffer.
     ///
     /// # Arguments
@@ -197,27 +236,97 @@ impl<E> LayoutBuffer<E> {
     /// # Returns
     /// Self for chaining.
     #[inline]
-    pub fn push(&mut self, line: impl Into<Line<E>>) -> &mut Self {
+    pub fn push(&mut self, line: impl Into<Line<I, E>>) -> &mut Self {
         self.lines.push(line.into());
+        self
+    }
+
+    /// Pushes an [`AnnotRange`] to this buffer.
+    ///
+    /// This is to collect annotations before we render them.
+    ///
+    /// # Arguments
+    /// - `replacement`: If [`Some`], should attempt to replace text in the source with the one
+    ///   given one when visually rendering the line. This is only possible if there is no other
+    ///   annotation covering this range.
+    /// - `message`: Any message to add to the annotation.
+    /// - `color`: The [`Color`] to apply when rendering it.
+    /// - `range`: The range this annotation concerns. At this point, **this range must be in range
+    ///   for this span!**.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[inline]
+    pub fn push_annot(&mut self, replacement: Option<Vec<E>>, message: Option<String>, color: Color, range: Range) -> &mut Self {
+        self.annots.push(AnnotRange { replacement, message, color, range });
         self
     }
 }
 
-// Rendering
-impl<E> LayoutBuffer<E> {
-    /// Returns a formatter for the LayoutBuffer.
+// Annotations
+impl<I, E> LayoutBuffer<I, E> {
+    /// Applies the given [`Annotation`] to the buffer's contents.
+    ///
+    /// Note that this function does nothing if the annotation is from a different source than the
+    /// internal spans, or if it's out-of-range.
     ///
     /// # Arguments
-    /// - `with_color`: Whether to use ANSI colors or not.
+    /// - An [`Annotation`] to apply to this buffer's source text.
     ///
     /// # Returns
-    /// A [`LayoutBufferRenderer`] implementing [`Display`].
-    #[inline]
-    pub const fn render(&self, with_color: bool) -> LayoutBufferRenderer<E> { LayoutBufferRenderer { buffer: self } }
+    /// Self for chaining.
+    pub fn annotate<'s, S>(&mut self, annot: Annotation<'s, S>) -> &mut Self
+    where
+        S: Spannable<'s, Elem = E>,
+        S::SourceId: PartialEq<I>,
+    {
+        // Get the span bounds
+        let source: &S = annot.span.source();
+        let source_id: S::SourceId = annot.span.source_id();
+        let source_len: usize = source.len();
+        let start: usize = annot.span.range().start_resolved(source_len).unwrap_or(0);
+        let end: usize = annot.span.range().end_resolved(source_len).unwrap_or(0);
+
+        // Scan to find where the span applies
+        let mut write_range: Option<Range> = None;
+        for l in 0..self.lines.len() {
+            // SAFETY: Possible because the loop ensures `l` is within range
+            let line: &Line<_, _> = unsafe { self.lines.get_unchecked(l) };
+            for c in 0..line.cells.len() {
+                // SAFETY: Possible because the loop ensures `c` is within range
+                let cell: &Cell<_, _> = unsafe { line.cells.get_unchecked(c) };
+                if let Some((id, i)) = &cell.i {
+                    // We ensure that this cell is from the annotation's range and within range
+                    if source_id.eq(id) && start >= *i && *i < end {
+                        // OK, update the writes
+                        match &mut write_range {
+                            Some(Range { end, .. }) => *end = Position::new(l, c),
+                            None => write_range = Some(Range { start: Position::new(l, c), end: Position::new(l, c) }),
+                        }
+                    }
+                }
+            }
+        }
+        let write_range: Range = match write_range {
+            Some(range) => range,
+            // Not within range / other source!
+            None => return self,
+        };
+
+        // Get some annotation particulars
+        let (message, replacement, color): (Option<String>, Option<Vec<E>>, Color) = match annot.inner {
+            AnnotationInner::Highlight(AnnotationInnerHighlight { message, severity }) => (message, None, Color::Severity(severity)),
+            AnnotationInner::Suggestion(AnnotationInnerSuggestion { message, replacement }) => (message, Some(replacement), Color::Suggestion),
+        };
+
+        // Now mark this annotation as ready-to-write
+        self.push_annot(replacement, message, color, write_range)
+    }
 }
+// There's also an impl at `annotated.rs`, placed there to have this file be a bit coherent
 
 // Iterators
-impl<E> FromIterator<Line<E>> for LayoutBuffer<E> {
+impl<I, E> FromIterator<Line<I, E>> for LayoutBuffer<I, E> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = Line<E>>>(iter: T) -> Self { Self { lines: Vec::from_iter(iter) } }
+    fn from_iter<T: IntoIterator<Item = Line<I, E>>>(iter: T) -> Self { Self { lines: Vec::from_iter(iter), annots: Vec::new() } }
 }

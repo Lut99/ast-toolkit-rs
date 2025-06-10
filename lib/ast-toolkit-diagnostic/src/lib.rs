@@ -17,10 +17,7 @@
 pub mod annotations;
 // pub mod diagnostic;
 mod layout;
-mod layout_old;
-// pub mod render;
-// pub mod span;
-// pub mod style;
+pub mod themes;
 
 // // Bring some of it onto the crate-level.
 // pub use annotations::{Annotation, AnnotationHighlight, AnnotationSuggestion, Severity};

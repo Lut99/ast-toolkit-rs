@@ -7,4 +7,5 @@
 
 // Declare the modules
 pub mod layout;
-pub mod slice;
+// pub mod slice;
+pub mod annotated;

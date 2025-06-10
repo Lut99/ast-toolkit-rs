@@ -146,7 +146,7 @@ fn find_touched_chunks<'s, S: Clone + SpannableBytes<'s>>(chunk_len: usize, span
 
 /***** LIBRARY *****/
 /// Defines a general Layouter that will take care of physically rendering everything.
-pub trait Layouter<'s, S> {
+pub trait Layouter<'s, S: Spannable<'s>> {
     type CellValue;
 
     /// Renders some [`Span`] to a [`LayoutBuffer`].
@@ -156,7 +156,7 @@ pub trait Layouter<'s, S> {
     ///
     /// # Returns
     /// A [`LayoutBuffer`] that will do the layouting.
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue>;
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::SourceId, Self::CellValue>;
 }
 
 
@@ -176,7 +176,7 @@ impl TextLayouter {
 impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for TextLayouter {
     type CellValue = Cow<'s, str>;
 
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue> {
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::SourceId, Self::CellValue> {
         let (l, lines): (Option<usize>, Vec<Span<S>>) = find_touched_lines(span);
         lines
             .into_iter()
@@ -202,7 +202,7 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for TextLayouter {
                         Ok(valid) => {
                             // The remaining `bytes` are valid; store them and be done with it
                             for (i, s) in valid.grapheme_indices(true) {
-                                line.push(Cell::from_source(start + i, Cow::Borrowed(s)));
+                                line.push(Cell::from_source(span.source_id(), start + i, Cow::Borrowed(s)));
                             }
                             break;
                         },
@@ -211,10 +211,10 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for TextLayouter {
                             let (valid, after_valid) = bytes.split_at(err.valid_up_to());
                             // SAFETY: We can do this because we know they are valid up to `valid`
                             for (i, s) in unsafe { std::str::from_utf8_unchecked(valid) }.grapheme_indices(true) {
-                                line.push(Cell::from_source(start + i, Cow::Borrowed(s)));
+                                line.push(Cell::from_source(span.source_id(), start + i, Cow::Borrowed(s)));
                             }
                             // Now push the "unknown" character
-                            line.push(Cell::from_source(start + valid.len(), Cow::Owned(UNKNOWN_CHAR.into())));
+                            line.push(Cell::from_source(span.source_id(), start + valid.len(), Cow::Owned(UNKNOWN_CHAR.into())));
 
                             // If it's just an unexpected byte, we continue. Else, we quit and don't
                             // add the last part
@@ -256,11 +256,11 @@ impl BytesLayouter {
 impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
     type CellValue = char;
 
-    fn layout(&self, span: Span<S>) -> LayoutBuffer<Self::CellValue> {
+    fn layout(&self, span: Span<S>) -> LayoutBuffer<S::SourceId, Self::CellValue> {
         // Get the chunks of 16 which will be our lines
         let source_len: usize = span.source().len();
         let start: usize = span.range().start_resolved(source_len).unwrap_or(0);
-        let lines: Vec<Span<S>> = find_touched_chunks(self.line_len, span);
+        let lines: Vec<Span<S>> = find_touched_chunks(self.line_len, span.clone());
 
         // Prepare the initial line
         let mut line = Line::with_capacity(2 * self.line_len + self.line_len + 1);
@@ -283,8 +283,8 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
                     if j > 0 {
                         line.push(Cell::from_value(' '));
                     }
-                    line.push(Cell::from_source(start + i * self.line_len + j, render_byte((0xF0 & b) >> 4)));
-                    line.push(Cell::from_source(start + i * self.line_len + j, render_byte(0x0F & b)));
+                    line.push(Cell::from_source(span.source_id(), start + i * self.line_len + j, render_byte((0xF0 & b) >> 4)));
+                    line.push(Cell::from_source(span.source_id(), start + i * self.line_len + j, render_byte(0x0F & b)));
                 }
                 line.push(Cell::from_value('\n'));
                 line
@@ -301,43 +301,44 @@ impl<'s, S: Clone + SpannableBytes<'s>> Layouter<'s, S> for BytesLayouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::themes::Plain;
 
     #[test]
     fn test_text_layouter() {
         let span = Span::new("Hello, world!\nGoodbye, world!\nEpic\n");
-        let buffer = TextLayouter.layout(span);
-        assert_eq!(buffer.render(false).to_string(), "1| Hello, world!\n2| Goodbye, world!\n3| Epic\n");
+        let buffer = TextLayouter.layout(span).apply_annotations();
+        assert_eq!(buffer.display(Plain).to_string(), "1| Hello, world!\n2| Goodbye, world!\n3| Epic\n");
 
         let line = span.slice(14..29);
-        let buffer = TextLayouter.layout(line);
-        assert_eq!(buffer.render(false).to_string(), "2| Goodbye, world!\n");
+        let buffer = TextLayouter.layout(line).apply_annotations();
+        assert_eq!(buffer.display(Plain).to_string(), "2| Goodbye, world!\n");
 
         let part = line.slice(7..8);
-        let buffer = TextLayouter.layout(part);
-        assert_eq!(buffer.render(false).to_string(), "2| Goodbye, world!\n");
+        let buffer = TextLayouter.layout(part).apply_annotations();
+        assert_eq!(buffer.display(Plain).to_string(), "2| Goodbye, world!\n");
     }
 
     #[test]
     fn test_bytes_layouter() {
         let span = Span::new("Hello, world!\nGoodbye, world!\nEpic\n");
-        let buffer = BytesLayouter::default().layout(span);
+        let buffer = BytesLayouter::default().layout(span).apply_annotations();
         assert_eq!(
-            buffer.render(false).to_string(),
+            buffer.display(Plain).to_string(),
             "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n 0| 48 65 6C 6C 6F 2C 20 77 6F 72 6C 64 21 0A 47 6F\n10| 6F 64 62 79 65 2C 20 77 \
              6F 72 6C 64 21 0A 45 70\n20| 69 63 0A\n"
         );
 
         let line = span.slice(16..32);
-        let buffer = BytesLayouter::default().layout(line);
+        let buffer = BytesLayouter::default().layout(line).apply_annotations();
         assert_eq!(
-            buffer.render(false).to_string(),
+            buffer.display(Plain).to_string(),
             "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n10| 6F 64 62 79 65 2C 20 77 6F 72 6C 64 21 0A 45 70\n"
         );
 
         let part = line.slice(7..8);
-        let buffer = BytesLayouter::default().layout(part);
+        let buffer = BytesLayouter::default().layout(part).apply_annotations();
         assert_eq!(
-            buffer.render(false).to_string(),
+            buffer.display(Plain).to_string(),
             "  | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n17| 6F 64 62 79 65 2C 20 77 6F 72 6C 64 21 0A 45 70\n"
         );
     }
