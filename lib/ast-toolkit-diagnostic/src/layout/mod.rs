@@ -95,4 +95,5 @@ mod s5_placing;
 mod s6_rendering;
 
 // Define public interfaces
+pub use s3_apply_replace::VirtualSpan;
 pub use s4_layouters::{AnnotFlag, Cell, CellBuffer, HexLayouter, Layouter, Line, Utf8Layouter};

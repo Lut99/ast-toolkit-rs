@@ -19,7 +19,93 @@ use std::vec::Drain;
 
 use ast_toolkit_span::{Span, Spannable, SpannableBytes};
 
+use super::s3_apply_replace::VirtualSpan;
 use crate::annotations::Severity;
+
+
+/***** HELPER FUNCTIONS *****/
+/// Finds the lines that are touched by the given Span.
+///
+/// # Arguments
+/// - `span`: The [`Span`] to find the lines it touches of.
+///
+/// # Returns
+/// A tuple with the line number of the first line (as a one-indexed number), and a list of
+/// [`Span`]s, each of which spanning a line touched by the given `Span`. Note that the line number
+/// is [`None`] if the span not spanning anything from the `S`ource.
+fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> (Option<usize>, Vec<Span<S>>) {
+    let source: &S = span.source();
+    let source_len: usize = source.len();
+    let start: usize = span.range().start_resolved(source_len).unwrap_or(0); // Inclusive
+    let end: usize = span.range().end_resolved(source_len).unwrap_or(0); // Exclusive
+
+    // Go thru the _source_, not the span, to find the surrounding lines
+    let mut l: usize = 1;
+    let mut i: usize = 0;
+    let mut line_start: usize = 0; // Inclusive
+    let mut lines: Vec<Span<S>> = Vec::with_capacity(1);
+    source.match_while(|elem| {
+        // We initially match on newlines
+        if *elem == b'\n' {
+            // It's the last element of the current line
+
+            // Store the line
+            if i >= start {
+                lines.push(Span::ranged(source.clone(), line_start..i + 1));
+            } else {
+                l += 1;
+            }
+
+            // Update the new line start
+            line_start = i + 1;
+
+            // Potentially quit
+            if i + 1 >= end {
+                return false;
+            }
+        }
+
+        // Now update our position according to the element and keep iterating
+        i += 1;
+        true
+    });
+    if i + 1 < end {
+        // There's still range left; get the remaining
+        lines.push(Span::ranged(source.clone(), line_start..));
+    }
+    (if !lines.is_empty() { Some(l) } else { None }, lines)
+}
+
+/// Finds the chunks that are touched by the given Span.
+///
+/// # Arguments
+/// - `chunk_len`: The size of every chunk.
+/// - `span`: The [`Span`] to find the chunks it touches.
+///
+/// # Returns
+/// A list of [`Span`]s, each of which spanning a chunk touched by the given `Span`.
+fn find_touched_chunks<'s, S: Clone + SpannableBytes<'s>>(chunk_len: usize, span: Span<S>) -> Vec<Span<S>> {
+    let source: &S = span.source();
+    let source_len: usize = source.len();
+    let mut start: usize = span.range().start_resolved(source_len).unwrap_or(0); // Inclusive
+    let mut end: usize = span.range().end_resolved(source_len).unwrap_or(0); // Exclusive
+
+    // Now extend start- and end to touch chunk boundaries.
+    start -= start % chunk_len;
+    end += if end % chunk_len > 0 { chunk_len - (end % chunk_len) } else { 0 };
+
+    // Now slice
+    let mut res = Vec::with_capacity((end - start) / chunk_len);
+    let mut i: usize = start;
+    while i < end {
+        res.push(Span::ranged(source.clone(), i..i + chunk_len));
+        i += chunk_len;
+    }
+    res
+}
+
+
+
 
 
 /***** DATA STRUCTURES *****/
@@ -901,19 +987,20 @@ impl<E> FromIterator<Line<E>> for CellBuffer<E> {
 
 
 /***** LIBRARY *****/
-/// Defines a procedure for rendering a [`Span`] of some `S`ource to a [`CellBuffer`].
+/// Defines a procedure for rendering a [`VirtualSpan`] of some `S`ource to a [`CellBuffer`].
 ///
 /// This can be done in various ways. For example, for [`S`ources over bytes](SpannableBytes), one
 /// could either render it as [UTF-8 text](Utf8Layouter), _or_ as a
 /// [raw hexadecimal viewer](HexLayouter).
 pub trait Layouter<'s, S: Spannable<'s>> {
-    /// Lays a [`Span`] out by writing it to the given [`CellBuffer`].
+    /// Lays a [`VirtualSpan`] out by writing it to the given [`CellBuffer`].
     ///
     /// # Arguments
-    /// - `span`: Some [`Span`] to write.
+    /// - `span`: Some [`VirtualSpan`] to write.
     /// - `buffer`: Some [`CellBuffer`] to write it. You can be assured it is empty, but it may
-    ///   still have memory allocated for efficiency purposes.
-    fn layout(&self, span: &Span<S>, buffer: &mut CellBuffer<S::Elem>);
+    ///   still have memory allocated for efficiency purposes. Also note that it has a certain line
+    ///   [`CellBuffer::width()`] that must be respected.
+    fn layout(&self, span: &VirtualSpan<'s, S>, buffer: &mut CellBuffer<S::Elem>);
 }
 
 
@@ -921,7 +1008,7 @@ pub trait Layouter<'s, S: Spannable<'s>> {
 /// [`Layouter`] for rendering a [span over bytes](SpannableBytes) as a UTF-8 text source snippet.
 pub struct Utf8Layouter;
 impl<'s, S: SpannableBytes<'s>> Layouter<'s, S> for Utf8Layouter {
-    fn layout(&self, span: &Span<S>, buffer: &mut CellBuffer<u8>) { todo!() }
+    fn layout(&self, span: &VirtualSpan<'s, S>, buffer: &mut CellBuffer<u8>) { todo!() }
 }
 
 
@@ -929,5 +1016,5 @@ impl<'s, S: SpannableBytes<'s>> Layouter<'s, S> for Utf8Layouter {
 /// [`Layouter`] for rendering a [span over bytes](SpannableBytes) as a grid of Base16-encoded bytes.
 pub struct HexLayouter;
 impl<'s, S: SpannableBytes<'s>> Layouter<'s, S> for HexLayouter {
-    fn layout(&self, span: &Span<S>, buffer: &mut CellBuffer<u8>) { todo!() }
+    fn layout(&self, span: &VirtualSpan<'s, S>, buffer: &mut CellBuffer<u8>) { todo!() }
 }
