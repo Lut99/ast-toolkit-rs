@@ -58,6 +58,10 @@ macro_rules! tuple_branching_comb_impl {
             /***** ERRORS *****/
             #[doc = concat!("The recoverable error returned by an [`alt()`] of ", stringify!($li), " branches.\n\nThis error type contains the recoverable error of every branch, as it only occurs when all branches fail.")]
             #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+            #[better_derive(
+                impl_gen = <'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>,
+                bound = ([<F $fi>]: r#trait $(, [<F $i>]: r#trait)*, [<E $fi>]: r#trait $(, [<E $i>]: r#trait)*, S: Spannable<'s>),
+            )]
             pub struct [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> {
                 /// The formatter built to describe what we expected.
                 pub fmt: [<ExpectsFormatter $li>]<[<F $fi>] $(, [<F $i>])*>,
@@ -94,7 +98,7 @@ macro_rules! tuple_branching_comb_impl {
 
 
             #[doc = concat!("The fatal error returned by an [`alt()`] of ", stringify!($li), " branches.\n\nThis error type only contains the fatal error of the branch that failed.")]
-            #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+            #[derive(Debug, Eq, PartialEq)]
             pub enum [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[doc = concat!("Branch ", stringify!($fi), " has failed.")]
                 [<Branch $fi>]([<E $fi>]),

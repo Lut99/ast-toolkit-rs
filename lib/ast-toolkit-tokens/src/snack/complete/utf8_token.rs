@@ -22,12 +22,12 @@ use ast_toolkit_snack::combinator::recognize;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::utf8::complete::tag;
 use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 
 /***** ERRORS *****/
 /// Defines the recoverable error for the [`utf8_token()`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub enum Recoverable<E, S> {
     /// Not the token we expected.
     Keyword { what: &'static str, span: Span<S> },

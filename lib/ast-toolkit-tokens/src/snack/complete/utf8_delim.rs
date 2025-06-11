@@ -21,14 +21,14 @@ use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::utf8::complete::tag;
 use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use crate::Utf8Delimiter;
 
 
 /***** ERRORS *****/
 /// Defines recoverable errors for the [`utf8_delim()`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub enum Recoverable<E, S> {
     /// Failed to parse the opening delimiter.
     OpenKeyword { what: &'static str, span: Span<S> },
@@ -64,7 +64,8 @@ impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
 }
 
 /// Defines fatal errors for the [`utf8_delim()`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub enum Fatal<E, S> {
     /// The inner parser failed fatally.
     Inner { err: E },

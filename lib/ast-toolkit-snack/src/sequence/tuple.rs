@@ -37,7 +37,7 @@ macro_rules! tuple_comb_impl {
             pub type [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> = [<Error $li>]<[<E $fi>] $(, [<E $i>])*>;
 
             #[doc = concat!("The recoverable/fatal error returned by a tuple of ", stringify!($li), " combinators.")]
-            #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+            #[derive(Debug, Eq, PartialEq)]
             pub enum [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[doc = concat!("Combinator ", stringify!($fi), " failed.")]
                 [<Comb $fi>]([<E $fi>]),

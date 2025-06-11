@@ -19,7 +19,6 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ExpectsFormatter as _};
@@ -28,7 +27,8 @@ use crate::{Combinator, ExpectsFormatter as _};
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'c, 's, S>, bounds = (S: Spannable<'s>))]
 pub struct Recoverable<'c, S> {
     /// Some description of what was expected.
     pub what: &'c str,

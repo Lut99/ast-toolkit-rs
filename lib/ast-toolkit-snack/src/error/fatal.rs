@@ -19,7 +19,6 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ExpectsFormatter as _};
@@ -27,7 +26,8 @@ use crate::{Combinator, ExpectsFormatter as _};
 
 /***** ERRORS *****/
 /// Defines the fatal error thrown by the [`Fatal`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, S>, bound = (S: Spannable<'s>))]
 pub struct Fatal<S> {
     /// The place where the fatal error was thrown.
     pub span: Span<S>,

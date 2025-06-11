@@ -16,7 +16,6 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable};
-use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
 pub use super::separated_most0::Fatal;
