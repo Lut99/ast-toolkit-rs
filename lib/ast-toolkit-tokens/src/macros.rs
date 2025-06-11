@@ -67,7 +67,7 @@ macro_rules! utf8_token {
         // Standard impls
         impl<S> ::std::clone::Clone for $name<S>
         where
-            $crate::__private::Span<S>: ::std::clone::Clone,
+            S: ::std::clone::Clone,
         {
             #[inline]
             fn clone(&self) -> Self {
@@ -76,11 +76,11 @@ macro_rules! utf8_token {
         }
         impl<S> ::std::marker::Copy for $name<S>
         where
-            $crate::__private::Span<S>: ::std::marker::Copy,
+            S: ::std::marker::Copy,
         {}
-        impl<S> ::std::fmt::Debug for $name<S>
+        impl<'s, S> ::std::fmt::Debug for $name<S>
         where
-            $crate::__private::Span<S>: ::std::fmt::Debug,
+            S: $crate::__private::Spannable<'s>,
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -341,7 +341,7 @@ macro_rules! utf8_delim {
         // Standard impls
         impl<S> ::std::clone::Clone for $name<S>
         where
-            $crate::__private::Span<S>: ::std::clone::Clone,
+            S: ::std::clone::Clone,
         {
             #[inline]
             fn clone(&self) -> Self {
@@ -350,11 +350,11 @@ macro_rules! utf8_delim {
         }
         impl<S> ::std::marker::Copy for $name<S>
         where
-            $crate::__private::Span<S>: ::std::marker::Copy,
+            S: ::std::marker::Copy,
         {}
-        impl<S> ::std::fmt::Debug for $name<S>
+        impl<'s, S> ::std::fmt::Debug for $name<S>
         where
-            $crate::__private::Span<S>: ::std::fmt::Debug,
+            S: $crate::__private::Spannable<'s>,
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
