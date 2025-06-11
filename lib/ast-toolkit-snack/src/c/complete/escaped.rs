@@ -18,7 +18,6 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use crate::result::{Result as SResult, SnackError, SpanningError};
 use crate::{Combinator, ExpectsFormatter as _, utf8};
@@ -28,7 +27,8 @@ use crate::{Combinator, ExpectsFormatter as _, utf8};
 /// Defines the recoverable error of the [`Escaped`]-combinator.
 ///
 /// This error means that no opening delimiter was found.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'c, 's, S>, bound = (S: Spannable<'s>))]
 pub struct Recoverable<'c, S> {
     /// Some character acting as the opening/closing character (e.g., '"').
     pub delim:   &'c str,
@@ -51,7 +51,8 @@ impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
 }
 
 /// Defines the fatal errors of the [`Escaped`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'c, 's, E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub enum Fatal<'c, E, S> {
     /// Failed to find the matching closing delimiter.
     DelimClose { delim: &'c str, escaper: &'c str, span: Span<S> },
@@ -145,7 +146,8 @@ enum State {
 
 /***** AUXILLARY *****/
 /// Represents the result of the [`escaped`]-combinator.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'c, 's, S>, bound = (S: Spannable<'s>))]
 pub struct EscapedString<S> {
     /// The value of the escaped string.
     pub value: String,

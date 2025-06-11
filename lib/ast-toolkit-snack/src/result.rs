@@ -19,7 +19,6 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter, Result as FResult};
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use crate::ExpectsFormatter;
 use crate::boxed::{BoxableParseError, BoxedParseError};
@@ -182,7 +181,8 @@ pub type Result<T, E1, E2, S> = std::result::Result<(Span<S>, T), SnackError<E1,
 /// 3. Not enough input, which is only relevant for streaming versions of combinators. In this
 ///    case, it signals that the branch _looks_ incorrect/incomplete, but that additional things
 ///    can be given after the current end-of-file that collapses the correctness one way or another.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s,E1, E2, S>, bound = (E1: r#trait, E2: r#trait, S: Spannable<'s>))]
 pub enum SnackError<E1, E2, S> {
     /// It's a recoverable error.
     ///
@@ -351,7 +351,8 @@ where
 
 /// Defines a common [recoverable](SnackError::Recoverable) error type that simply describes what
 /// was expected.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s,O, S>, bound = (O: r#trait, S: Spannable<'s>))]
 pub struct Expected<O, S> {
     /// The formatter that will tell us what was expected.
     pub fmt:  O,
@@ -407,7 +408,8 @@ impl<O, S: Clone> Spanning<S> for Expected<O, S> {
 ///
 /// is_parse_error(SpanningError { err: u32::from_str("a").unwrap_err(), span: Span::new("a") });
 /// ```
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s,E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub struct SpanningError<E, S> {
     /// The error wrapped.
     pub err:  E,

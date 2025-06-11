@@ -18,7 +18,6 @@ use std::fmt::{self, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use super::remember;
 use crate::Combinator;
@@ -27,7 +26,8 @@ use crate::result::{Result as SResult, SnackError};
 
 /***** ERRORS *****/
 /// Defines recoverable errors thrown by the [`NonEmpty`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, E, F, S>, bound = (E: r#trait, F: r#trait, S: Spannable<'s>))]
 pub enum Recoverable<E, F, S> {
     /// The nested combinator failed.
     Comb(E),

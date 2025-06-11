@@ -19,7 +19,6 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
-use better_derive::{Debug, Eq, PartialEq};
 
 use super::super::combinator::recognize;
 use crate::result::{Result as SResult, SnackError};
@@ -28,7 +27,8 @@ use crate::{Combinator, ExpectsFormatter as _};
 
 /***** ERRORS *****/
 /// Defines the fatal errors thrown by [`SeparatedMost0`].
-#[derive(Debug, Eq, PartialEq)]
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'s, E1, E2, S>, bound = (E1: r#trait, E2: r#trait, S: Spannable<'s>))]
 pub enum Fatal<E1, E2, S> {
     /// The element-combinator failed fatally.
     Comb(E1),

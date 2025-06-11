@@ -66,7 +66,7 @@ where
 /// combinator.
 ///
 /// Essentially, this combinator turns any [`ExpectsFormatter`] or [`ParseError`] into
-/// [`Box<dyn ExpectsFormatter>`](Box) and [`BoxedParseError`], respectively. This is useful when
+/// [`Box<dyn ExpectsFormatter>`](Box) and [`BoxedParseError`]s, respectively. This is useful when
 /// you find yourself needed to mention the associated types of the combinator, but either can't be
 /// bothered (they are huge) or it's impossible (recursion).
 ///
