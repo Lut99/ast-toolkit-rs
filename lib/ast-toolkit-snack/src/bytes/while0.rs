@@ -47,7 +47,7 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`while0()`]-combinator.
-pub struct While0<'c, S, P> {
+pub struct While0<'c, P, S> {
     /// The predicate used for matching.
     predicate: P,
     /// A description of what was while'd
@@ -55,11 +55,11 @@ pub struct While0<'c, S, P> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While0<'c, S, P>
+impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
 where
     'c: 's,
-    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -126,10 +126,10 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn while0<'c, 's, S, P>(what: &'c str, predicate: P) -> While0<'c, S, P>
+pub const fn while0<'c, 's, P, S>(what: &'c str, predicate: P) -> While0<'c, P, S>
 where
-    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
+    S: Clone + SpannableBytes<'s>,
 {
     While0 { predicate, what, _s: PhantomData }
 }

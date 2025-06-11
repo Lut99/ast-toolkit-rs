@@ -25,7 +25,7 @@ use crate::result::{Result as SResult, SnackError};
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<'c, S, P> {
+pub struct While1<'c, P, S> {
     /// The predicate used for matching.
     predicate: P,
     /// A helper provided by the user to describe what is expected.
@@ -35,11 +35,11 @@ pub struct While1<'c, S, P> {
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
 // any smaller lifetime than `'c`.
-impl<'c, 's, 'a, S, P> Combinator<'a, 's, S> for While1<'c, S, P>
+impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
-    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -116,10 +116,10 @@ where
 /// assert_eq!(comb.parse(span5), Err(SnackError::NotEnough { needed: Some(1), span: span5 }));
 /// ```
 #[inline]
-pub const fn while1<'c, 's, S, P>(what: &'c str, predicate: P) -> While1<'c, S, P>
+pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
-    S: Clone + SpannableBytes<'s>,
     P: FnMut(u8) -> bool,
+    S: Clone + SpannableBytes<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }
