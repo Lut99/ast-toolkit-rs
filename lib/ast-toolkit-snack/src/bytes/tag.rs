@@ -12,14 +12,86 @@
 //!   Implements the (binary) [`tag()`]-combinator.
 //
 
+use std::borrow::Cow;
 use std::convert::Infallible;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableBytes};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 
-pub use super::super::complete::tag::{ExpectsFormatter, Recoverable, tag as tag_complete};
-use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
+use crate::{Combinator, ParseError};
+
+
+/***** ERRORS *****/
+// Recoverable error for the [`Tag`]-combinator.
+#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
+#[better_derive(impl_gen = <'t, 's, S>, bound = (S: Spannable<'s>))]
+pub struct Recoverable<'t, S> {
+    /// What we expected
+    pub tag: &'t [u8],
+    /// Whether more might fix the error.
+    ///
+    /// If true, this means that `tag` matches whatever is still sliced by `span` - there just
+    /// isn't enough of it.
+    pub is_fixable: bool,
+    /// Where we expected it
+    pub span: Span<S>,
+}
+impl<'t, S> Display for Recoverable<'t, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", ExpectsFormatter { tag: self.tag }) }
+}
+impl<'t, 'a, S: Spannable<'a>> Error for Recoverable<'t, S> {}
+impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+
+    #[inline]
+    fn into_span(self) -> Span<S> { self.span }
+}
+impl<'s, 't, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<'t, S> {
+    #[inline]
+    fn more_might_fix(&self) -> bool { self.is_fixable }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> {
+        if self.is_fixable {
+            // SAFETY: This will never underflow because `self.is_fixable` only occurs when there isn't
+            // enough in `self.span` to match `self.tag` (i.e., it is shorter)
+            Some(self.tag.len() - self.span.len())
+        } else {
+            None
+        }
+    }
+}
+
+
+
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`Tag`] combinator.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExpectsFormatter<'t> {
+    /// The tag of bytes we expect one of.
+    pub tag: &'t [u8],
+}
+impl<'t> Display for ExpectsFormatter<'t> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        <Self as crate::ExpectsFormatter>::expects_fmt(self, f, 0)
+    }
+}
+impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "{:#04X?}", self.tag) }
+}
+
+
+
 
 
 /***** COMBINATORS *****/
@@ -63,10 +135,8 @@ where
             Ok((input.slice(i..), input.slice(..i)))
         } else if split > tag_len {
             unreachable!()
-        } else if split < input.len() {
-            Err(SnackError::Recoverable(Recoverable { tag: self.tag, span: input }))
         } else {
-            Err(SnackError::NotEnough { needed: Some(tag_len - split), span: input.slice(split..) })
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, is_fixable: split >= input.len(), span: input }))
         }
     }
 }
@@ -92,9 +162,9 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::streaming::tag;
+/// use ast_toolkit_snack::bytes::tag;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::{Combinator as _, ParseError as _};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new(b"Hello, world!".as_slice());
@@ -104,14 +174,16 @@ where
 ///
 /// let mut comb = tag(b"Hello");
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
-/// assert_eq!(
-///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2 }))
-/// );
-/// assert_eq!(
-///     comb.parse(span3),
-///     Err(SnackError::NotEnough { needed: Some(1), span: span3.slice(4..) })
-/// );
+///
+/// let err = comb.parse(span2);
+/// assert_eq!(err, Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span2 })));
+/// assert!(!err.more_might_fix());
+///
+/// let err = comb.parse(span3);
+/// assert_eq!(err, Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span4 })));
+/// assert!(err.more_might_fix());
+/// assert_eq!(err.needed_to_fix(), Some(1));
+///
 /// assert_eq!(
 ///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(tag::Recoverable { tag: b"Hello", span: span4 }))

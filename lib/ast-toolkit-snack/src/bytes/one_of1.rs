@@ -4,7 +4,7 @@
 //  Created:
 //    30 Nov 2024, 22:34:02
 //  Last edited:
-//    08 May 2025, 11:29:28
+//    08 May 2025, 11:31:53
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ExpectsFormatter as _};
+use crate::{Combinator, ParseError};
 
 
 /***** ERRORS *****/
@@ -47,6 +47,13 @@ impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
 }
+impl<'c, 's, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<'c, S> {
+    #[inline]
+    fn more_might_fix(&self) -> bool { self.span.is_empty() }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> { if self.more_might_fix() { Some(1) } else { None } }
+}
 
 
 
@@ -63,7 +70,7 @@ impl<'c> Display for ExpectsFormatter<'c> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
+        <Self as crate::ExpectsFormatter>::expects_fmt(self, f, 0)
     }
 }
 impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
@@ -98,7 +105,7 @@ pub struct OneOf1<'c, S> {
     _s:      PhantomData<S>,
 }
 // NOTE: This lifetime trick will tell Rust that the impl is actually not invariant, but accepts
-// any smaller lifetime than `'c`.
+// any smaller lifetime than `'b`.
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
     'c: 'a,
@@ -143,13 +150,14 @@ where
 /// `byteset`.
 ///
 /// # Fails
-/// The returned combinator fails if it did not match at least one byte.
+/// The returned combinator fails if it did not match at least one byte. If this match failed
+/// because end-of-input was reached, then this fails with a [`SnackError::NotEnough`] instead.
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::complete::one_of1;
+/// use ast_toolkit_snack::bytes::one_of1;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::{Combinator as _, ParseError as _};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new(b"abcdefg".as_slice());
@@ -163,20 +171,27 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
+///
+/// let err = comb.parse(span4);
 /// assert_eq!(
-///     comb.parse(span4),
+///     err,
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         byteset: &[b'a', b'b', b'c', 191, 195],
 ///         span:    span4,
 ///     }))
 /// );
+/// assert!(!err.more_might_fix());
+///
+/// let err = comb.parse(span5);
 /// assert_eq!(
-///     comb.parse(span5),
+///     err,
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         byteset: &[b'a', b'b', b'c', 191, 195],
 ///         span:    span5,
 ///     }))
 /// );
+/// assert!(err.more_might_fix());
+/// assert_eq!(err.needed_to_fix(), Some(1));
 /// ```
 #[inline]
 pub const fn one_of1<'c, 's, S>(byteset: &'c [u8]) -> OneOf1<'c, S>

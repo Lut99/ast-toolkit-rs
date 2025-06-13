@@ -34,6 +34,7 @@ pub mod utf8;
 
 // Imports
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
@@ -43,8 +44,53 @@ pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spann
 
 /***** LIBRARY *****/
 /// A trait implemented by errors that are returned by snack [`Combinator`]s.
-pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {}
-impl<T: Error + Spanning<S>, S: Clone> ParseError<S> for T {}
+pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {
+    /// This function tells if more input might fix this error.
+    ///
+    /// This is very useful for streaming input. If you see a
+    /// ([recoverable](result::SnackError::Recoverable)) error occur that might be fixed with more
+    /// input, it means that the error occurred because an unexpected end-of-file was encountered,
+    /// but otherwise this input was promising. Hence, if you request more input from the stream,
+    /// this still might be a valid prefix.
+    ///
+    /// See [`ParseError::needed_to_fix()`] to obtain an estimate for how many bytes you should
+    /// stream before trying again.
+    ///
+    /// # Default implementation
+    /// By default, this function returns that no additional bytes might fix this error.
+    ///
+    /// # Returns
+    /// True if more input might turns this frown upside down (fix the error). False if this is not
+    /// the case (we explicitly detected something illegal for this combinator).
+    fn more_might_fix(&self) -> bool;
+
+    /// If [more input might fix this error](ParseError::more_might_fix()) (i.e., it was because we
+    /// reached an unexpected end-of-file), this function returns an estimate for how many elements
+    /// are needed _at minimum_ to do so.
+    ///
+    /// For example, for [`tag`](bytes::tag)s, this function returns the size of the part of the
+    /// tag that was out-of-bounds for the input. For a greedy, repetitive combinator, this might
+    /// return the number of bytes needed to finish the current iteration.
+    ///
+    /// # Default implementation
+    /// By default, this function returns that no estimate exists.
+    ///
+    /// # Returns
+    /// The estimated **minimum** number of elements needed to potentially fix this error (it might
+    /// just be something else after all). It can return [`None`] if
+    /// [`ParseError::more_might_fix()`] is false or, if it is, if there is no such estimate
+    /// available.
+    fn needed_to_fix(&self) -> Option<usize>;
+}
+
+// Default impls
+impl<S: Clone> ParseError<S> for Infallible {
+    #[inline]
+    fn more_might_fix(&self) -> bool { false }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> { None }
+}
 
 
 

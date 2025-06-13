@@ -2,15 +2,15 @@
 //    by Lut99
 //
 //  Created:
-//    30 Apr 2025, 08:59:24
+//    30 Apr 2025, 09:15:34
 //  Last edited:
-//    08 May 2025, 11:30:38
+//    08 May 2025, 11:31:43
 //  Auto updated?
 //    Yes
 //
 //  Description:
 //!   Implements a combinator that will consume exactly one byte if it
-//!   matches a predicate.
+//!   matches a predicate. The streaming version, that is.
 //
 
 use std::convert::Infallible;
@@ -79,6 +79,11 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Check first if there's *any* input to parse.
+        if input.is_empty() {
+            return Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: Some(Some(1)), span: input }));
+        }
+
         // It's like while but only once
         let mut first: bool = true;
         let split: usize = input.match_bytes_while(|b| {
@@ -96,7 +101,7 @@ where
         } else if split > 1 {
             unreachable!()
         } else {
-            Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
+            Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: None, span: input }))
         }
     }
 }
@@ -110,9 +115,6 @@ where
 ///
 /// This is very much like [`while1()`](super::while1()), except that it will not greedily match
 /// more bytes beyond the first.
-///
-/// Note that this is the complete version of the parser. If you're intending to stream input
-/// instead, see [`byte()`](super::super::streaming::byte()).
 ///
 /// # Arguments
 /// - `what`: Some user-friendly description of what this combinator expects. Should complete:
@@ -132,7 +134,7 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::complete::byte;
+/// use ast_toolkit_snack::bytes::byte;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_span::Span;
 ///
@@ -145,15 +147,17 @@ where
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(byte::Recoverable {
-///         fmt:  byte::ExpectsFormatter { what: "uppercase letter" },
-///         span: span2,
+///         fmt:     byte::ExpectsFormatter { what: "uppercase letter" },
+///         fixable: None,
+///         span:    span2,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(byte::Recoverable {
-///         fmt:  byte::ExpectsFormatter { what: "uppercase letter" },
-///         span: span3,
+///         fmt:     byte::ExpectsFormatter { what: "uppercase letter" },
+///         fixable: Some(Some(1)),
+///         span:    span3,
 ///     }))
 /// );
 /// ```

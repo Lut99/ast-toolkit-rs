@@ -98,16 +98,16 @@ pub trait ResultExt<T, E1, E2, S: Clone> {
     /// # Returns
     /// An equivalent result with its [`SnackError`] over [`BoxedParseError`]s instead of whatever
     /// it was before.
-    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>>
+    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>>>
     where
         E1: 'e1,
         E2: 'e2;
 }
 
 // Blanket impl for [`ResultExt`]
-impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> ResultExt<T, E1, E2, S> for Result<T, SnackError<E1, E2, S>> {
+impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> ResultExt<T, E1, E2, S> for Result<T, SnackError<E1, E2>> {
     #[inline]
-    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>>
+    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>>>
     where
         E1: 'e1,
         E2: 'e2,
