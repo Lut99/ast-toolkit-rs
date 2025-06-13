@@ -14,7 +14,7 @@
 //
 
 use ast_toolkit_span::Span;
-use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
+use ast_toolkit_tokens::{Utf8Delimiter, Utf8Token as _, utf8_delim};
 
 
 /***** AST *****/
@@ -31,17 +31,17 @@ ast_toolkit_tokens::utf8_delim_serde!(Parens);
 fn main() {
     let span1 = Span::new(("<example1>", "(foo)"));
     let span2 = Span::new(("<example2>", "(bar)"));
-    let paren1 = Parens { open: span1.slice(..1), close: span1.slice(4..) };
-    let paren2 = Parens { open: span2.slice(..1), close: span2.slice(4..) };
+    let paren1 = Parens { open: ParensOpen { span: span1.slice(..1) }, close: ParensClose { span: span1.slice(4..) } };
+    let paren2 = Parens { open: ParensOpen { span: span2.slice(..1) }, close: ParensClose { span: span2.slice(4..) } };
 
     // We can create them as expected
     assert_eq!(
         format!("{paren1:?}"),
-        "Parens { open: Span<(&str, &str)> { source: \"<example1>\", range: ..1 }, close: Span<(&str, &str)> { source: \"<example1>\", range: 4.. } \
-         }"
+        "Parens { open: ParensOpen { span: Span<(&str, &str)> { source: \"<example1>\", range: ..1 } }, close: ParensClose { span: Span<(&str, \
+         &str)> { source: \"<example1>\", range: 4.. } } }"
     );
     assert_eq!(paren1, paren2);
-    assert_eq!(Parens::<()>::OPEN_TOKEN, "(");
+    assert_eq!(<Parens<()> as Utf8Delimiter<()>>::OpenToken::TOKEN, "(");
 
     // Also parse some string
     #[cfg(feature = "snack")]
@@ -51,8 +51,8 @@ fn main() {
     #[cfg(feature = "snack")]
     assert_eq!(
         format!("{parens:?}"),
-        "Parens { open: Span<(&str, &str)> { source: \"<example3>\", range: ..1 }, close: Span<(&str, &str)> { source: \"<example3>\", range: 4..5 \
-         } }"
+        "Parens { open: ParensOpen { span: Span<(&str, &str)> { source: \"<example3>\", range: ..1 } }, close: ParensClose { span: Span<(&str, \
+         &str)> { source: \"<example3>\", range: 4..5 } } }"
     );
 
     // Also generate railroad diagram nodes
@@ -65,7 +65,7 @@ fn main() {
     #[cfg(feature = "serde")]
     assert_eq!(
         serde_json::to_string(&paren1).unwrap(),
-        "{\"open\":{\"source\":\"<example1>\",\"range\":{\"inner\":{\"Until\":1}}},\"close\":{\"source\":\"<example1>\",\"range\":{\"inner\":{\"\
-         Onwards\":4}}}}"
+        "{\"open\":{\"span\":{\"source\":\"<example1>\",\"range\":{\"inner\":{\"Until\":1}}}},\"close\":{\"span\":{\"source\":\"<example1>\",\"\
+         range\":{\"inner\":{\"Onwards\":4}}}}}"
     );
 }

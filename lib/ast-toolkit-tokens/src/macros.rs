@@ -50,7 +50,7 @@ macro_rules! utf8_token {
     };
 
     ($name:ident, $token:literal, $token_desc:literal) => {
-        #[doc = concat!("Represents a '", $token_desc, "' token.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
+        #[doc = concat!("Represents a '", $token_desc, "' token.\n\n# Generics\n - `S`: The type of the source text that is embedded in all [`Span`](", ::std::stringify!($crate::__private::Span), ")s in this AST.\n")]
         pub struct $name<S> {
             /// The span that locates this token in the source text.
             pub span: $crate::__private::Span<S>,
@@ -300,31 +300,49 @@ macro_rules! utf8_token_serde {
 /// # Example
 /// ```rust
 /// use ast_toolkit_span::Span;
-/// use ast_toolkit_tokens::{Utf8Delimiter as _, utf8_delim};
+/// use ast_toolkit_tokens::{Utf8Delimiter, Utf8Token as _, utf8_delim};
 ///
 /// // The implementation
 /// utf8_delim!(Parens, "(", ")");
 ///
 /// // Now this struct exists
-/// let span1 = Span::new("(foo)");
-/// let span2 = Span::new("(bar)");
-/// let paren1 = Parens { open: span1.slice(..1), close: span1.slice(4..) };
-/// let paren2 = Parens { open: span2.slice(..1), close: span2.slice(4..) };
+/// let span1 = Span::new(("<example>", "(foo)"));
+/// let span2 = Span::new(("<example>", "(bar)"));
+/// let paren1 = Parens {
+///     open:  ParensOpen { span: span1.slice(..1) },
+///     close: ParensClose { span: span1.slice(4..) },
+/// };
+/// // Alternatively,
+/// let paren2 = Parens::from((span2.slice(..1), span2.slice(4..)));
 ///
 /// // And you can do some stuff with it!
-/// assert!(format!("{paren1:?}").starts_with("Parens { open: Span<&str> { source: "));
+/// assert_eq!(
+///     format!("{paren1:?}"),
+///     "Parens { open: ParensOpen { span: Span<(&str, &str)> { source: \"<example>\", range: ..1 \
+///      } }, close: ParensClose { span: Span<(&str, &str)> { source: \"<example>\", range: 4.. } \
+///      } }"
+/// );
 /// assert_eq!(paren1, paren2);
-/// assert_eq!(Parens::<()>::OPEN_TOKEN, "(");
+/// assert_eq!(<Parens<()> as Utf8Delimiter<()>>::OpenToken::TOKEN, "(");
 /// ```
 #[macro_export]
 macro_rules! utf8_delim {
     ($name:ident, $open:literal, $close:literal) => {
-        #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `F`: The type of the filename (or other description of the source) that is embedded in all [`Span`]s in this AST.\n - `S`: The type of the source text that is embedded in all [`Span`]s in this AST.\n")]
-        pub struct $name<S> {
-            #[doc = concat!("The opening delimiter `", $open, "`.\n")]
-            pub open:  $crate::__private::Span<S>,
-            #[doc = concat!("The closing delimiter `", $close, "`.\n")]
-            pub close: $crate::__private::Span<S>,
+        // Generate the two individual tokens first
+        ::paste::paste! { $crate::utf8_token!([<$name Open>], $open); }
+        ::paste::paste! { $crate::utf8_token!([<$name Close>], $close); }
+
+
+
+        // Generates the delimiter
+        ::paste::paste! {
+            #[doc = concat!("Represents the delimiting token pair '", $open, $close, "'.\n\n# Generics\n - `S`: The type of the source text that is embedded in all [`Span`](", ::std::stringify!($crate::__private::Span), ")s in this AST.\n")]
+            pub struct $name<S> {
+                #[doc = concat!("The opening delimiter [`", stringify!([<$name Open>]), "`].\n")]
+                pub open:  [<$name Open>]<S>,
+                #[doc = concat!("The closing delimiter [`", stringify!([<$name Close>]), "`].\n")]
+                pub close: [<$name Close>]<S>,
+            }
         }
 
         // Default
@@ -332,8 +350,8 @@ macro_rules! utf8_delim {
             #[inline]
             fn default() -> Self {
                 Self {
-                    open: $crate::__private::Span::new(<Self as $crate::Utf8Delimiter<&'static str>>::OPEN_TOKEN),
-                    close: $crate::__private::Span::new(<Self as $crate::Utf8Delimiter<&'static str>>::CLOSE_TOKEN),
+                    open: ::std::default::Default::default(),
+                    close: ::std::default::Default::default(),
                 }
             }
         }
@@ -358,9 +376,10 @@ macro_rules! utf8_delim {
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                let Self { open, close } = self;
                 let mut fmt = f.debug_struct(::std::stringify!($name));
-                fmt.field("open", &self.open);
-                fmt.field("close", &self.close);
+                fmt.field("open", open);
+                fmt.field("close", close);
                 fmt.finish()
             }
         }
@@ -384,9 +403,11 @@ macro_rules! utf8_delim {
         }
 
         // Token impls
-        impl<S> $crate::Utf8Delimiter<S> for $name<S> {
-            const OPEN_TOKEN: &'static str = $open;
-            const CLOSE_TOKEN: &'static str = $close;
+        ::paste::paste! {
+            impl<S> $crate::Utf8Delimiter<S> for $name<S> {
+                type OpenToken = [<$name Open>]<S>;
+                type CloseToken = [<$name Close>]<S>;
+            }
         }
 
         // Spanning impl
@@ -396,7 +417,7 @@ macro_rules! utf8_delim {
         {
             #[inline]
             #[track_caller]
-            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Owned(self.open.join(&self.close).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files"))) }
+            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Owned(<<Self as $crate::Utf8Delimiter<S>>::OpenToken as $crate::__private::Spanning<S>>::span(&self.open).join(<<Self as $crate::Utf8Delimiter<S>>::CloseToken as $crate::__private::Spanning<S>>::span(&self.close).as_ref()).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files"))) }
 
             #[inline]
             #[track_caller]
@@ -404,10 +425,20 @@ macro_rules! utf8_delim {
         }
 
         // Convertion impls
-        impl<S> ::std::convert::From<($crate::__private::Span<S>, $crate::__private::Span<S>)> for $name<S> {
-            #[inline]
-            fn from((open, close): ($crate::__private::Span<S>, $crate::__private::Span<S>)) -> Self {
-                Self { open, close }
+        ::paste::paste! {
+            impl<S> ::std::convert::From<($crate::__private::Span<S>, $crate::__private::Span<S>)> for $name<S> {
+                #[inline]
+                fn from((open, close): ($crate::__private::Span<S>, $crate::__private::Span<S>)) -> Self {
+                    Self { open: [<$name Open>] { span: open }, close: [<$name Close>] { span: close } }
+                }
+            }
+        }
+        ::paste::paste! {
+            impl<S> ::std::convert::From<([<$name Open>]<S>, [<$name Close>]<S>)> for $name<S> {
+                #[inline]
+                fn from((open, close): ([<$name Open>]<S>, [<$name Close>]<S>)) -> Self {
+                    Self { open, close }
+                }
             }
         }
     };
@@ -544,13 +575,18 @@ macro_rules! utf8_delim_railroad {
 /// utf8_delim_serde!(Parens);
 ///
 /// // Now you can do
-/// let dot =
-///     serde_json::to_string(&Parens { open: Span::new("("), close: Span::new(")") }).unwrap();
+/// let dot = serde_json::to_string(&Parens::from((Span::new("("), Span::new(")")))).unwrap();
 /// ```
 #[macro_export]
 #[cfg(feature = "serde")]
 macro_rules! utf8_delim_serde {
     ($name:ident) => {
+        // Also serde impl for its tokens
+        ::paste::paste! { $crate::utf8_token_serde!([<$name Open>]); }
+        ::paste::paste! { $crate::utf8_token_serde!([<$name Close>]); }
+
+
+
         // Serde impl
         impl<'s, S> $crate::__private::Serialize for $name<S>
         where

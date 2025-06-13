@@ -22,7 +22,7 @@ use ast_toolkit_snack::result::{Result as SResult, SnackError};
 use ast_toolkit_snack::utf8::complete::tag;
 use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
 
-use crate::Utf8Delimiter;
+use crate::{Utf8Delimiter, Utf8Token};
 
 
 /***** ERRORS *****/
@@ -158,15 +158,17 @@ where
     type Fatal = Fatal<C::Fatal, S>;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { left: T::OPEN_TOKEN, inner: self.comb.expects(), right: T::CLOSE_TOKEN } }
+    fn expects(&self) -> Self::ExpectsFormatter {
+        ExpectsFormatter { left: T::OpenToken::TOKEN, inner: self.comb.expects(), right: T::CloseToken::TOKEN }
+    }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Attempt to parse the opening delimiter
-        let (rem, open): (Span<S>, Span<S>) = match tag(T::OPEN_TOKEN).parse(input) {
+        let (rem, open): (Span<S>, Span<S>) = match tag(T::OpenToken::TOKEN).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
-                return Err(SnackError::Recoverable(Recoverable::OpenKeyword { what: T::OPEN_TOKEN, span: err.into_span() }));
+                return Err(SnackError::Recoverable(Recoverable::OpenKeyword { what: T::OpenToken::TOKEN, span: err.into_span() }));
             },
             Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
         };
@@ -180,9 +182,9 @@ where
         };
 
         // Finally, parse the closing delim
-        match tag(T::CLOSE_TOKEN).parse(rem) {
+        match tag(T::CloseToken::TOKEN).parse(rem) {
             Ok((rem, close)) => Ok((rem, (inner, T::from((open, close))))),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(Fatal::CloseKeyword { what: T::CLOSE_TOKEN, span: err.into_span() })),
+            Err(SnackError::Recoverable(err)) => Err(SnackError::Fatal(Fatal::CloseKeyword { what: T::CloseToken::TOKEN, span: err.into_span() })),
             Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
         }
     }
@@ -238,7 +240,7 @@ where
 ///     comb1.parse(span1),
 ///     Ok((
 ///         span1.slice(5..),
-///         (span1.slice(1..4), Parens { open: span1.slice(0..1), close: span1.slice(4..5) })
+///         (span1.slice(1..4), Parens::from((span1.slice(0..1), span1.slice(4..5))))
 ///     ))
 /// );
 /// assert_eq!(

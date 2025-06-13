@@ -45,9 +45,9 @@ pub trait Utf8Token<S>: From<Span<S>> {
 ///
 /// This is practical for representing something that always consists of the same sequence of an
 /// opening and closing tokens with bits in between (e.g., parenthesis).
-pub trait Utf8Delimiter<S>: From<(Span<S>, Span<S>)> {
-    /// The actual sequence of text representing the opening delimiter.
-    const OPEN_TOKEN: &'static str;
-    /// The actual sequence of text representing the closing delimiter.
-    const CLOSE_TOKEN: &'static str;
+pub trait Utf8Delimiter<S>: From<(Span<S>, Span<S>)> + From<(Self::OpenToken, Self::CloseToken)> {
+    /// The opening delimiter, as a nested token.
+    type OpenToken: Utf8Token<S>;
+    /// The closing delimiter, as a nested token.
+    type CloseToken: Utf8Token<S>;
 }
