@@ -13,11 +13,12 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableBytes};
+use ast_toolkit_span::{Span, Spannable};
 
+use crate::fmt::{ElemDisplay, ElemDisplayFormatter};
 use crate::result::Result as SResult;
 use crate::{Combinator, ExpectsFormatter as _};
 
@@ -25,30 +26,30 @@ use crate::{Combinator, ExpectsFormatter as _};
 /***** FORMATTERS *****/
 /// ExpectsFormatter for the [`OneOf0`] combinator.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter<'b> {
-    /// The set of bytes we expect one of.
-    pub byteset: &'b [u8],
+pub struct ExpectsFormatter<'b, T> {
+    /// The set of elements we expect one of.
+    pub set: &'b [T],
 }
-impl<'b> Display for ExpectsFormatter<'b> {
+impl<'b, T: Debug + ElemDisplay> Display for ExpectsFormatter<'b, T> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
         self.expects_fmt(f, 0)
     }
 }
-impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
+impl<'b, T: Debug + ElemDisplay> crate::ExpectsFormatter for ExpectsFormatter<'b, T> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "one of ")?;
-        for i in 0..self.byteset.len() {
+        for i in 0..self.set.len() {
             if i == 0 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                write!(f, "{:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
-            } else if i < self.byteset.len() - 1 {
+                <T as ElemDisplay>::fmt(unsafe { self.set.get_unchecked(i) }, f)?;
+            } else if i < self.set.len() - 1 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                write!(f, ", {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+                write!(f, ", {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;
             } else {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                write!(f, " or {:#04x?}", unsafe { self.byteset.get_unchecked(i) })?;
+                write!(f, " or {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;
             }
         }
         Ok(())
@@ -61,29 +62,30 @@ impl<'b> crate::ExpectsFormatter for ExpectsFormatter<'b> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`one_of0()`]-combinator.
-pub struct OneOf0<'c, S> {
-    /// The set of bytes to one of.
-    byteset: &'c [u8],
+pub struct OneOf0<'c, T, S> {
+    /// The set of elements to one of.
+    set: &'c [T],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
-    _s:      PhantomData<S>,
+    _s:  PhantomData<S>,
 }
-impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
+impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S::Elem, S>
 where
     'c: 'a,
-    S: Clone + SpannableBytes<'s>,
+    S: Clone + Spannable<'s>,
+    S::Elem: Debug + ElemDisplay + PartialEq,
 {
-    type ExpectsFormatter = ExpectsFormatter<'c>;
+    type ExpectsFormatter = ExpectsFormatter<'c, S::Elem>;
     type Output = Span<S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { byteset: self.byteset } }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { set: self.set } }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Return if there's at least one
-        let split: usize = input.match_bytes_while(|b| self.byteset.contains(&b));
+        let split: usize = input.match_while(|elem| self.set.contains(elem));
         Ok((input.slice(split..), input.slice(..split)))
     }
 }
@@ -93,19 +95,18 @@ where
 
 
 /***** LIBRARY *****/
-/// Will attempt to match as many bytes from the start of a span as possible, as long as those
-/// bytes are in the set of to-be-searched-for bytes.
+/// Will attempt to match as many elements from the start of a span as possible, as long as those
+/// elements are in the set of to-be-searched-for elements.
 ///
-/// This version accepts matching none of them. See [`one_of1()`](super::complete::one_of1()) (or
-/// its streaming version, [`one_of1()`](super::streaming::one_of1())) to assert at least something
-/// must be matched.
+/// This version accepts matching none of them. See [`one_of1()`](super::one_of1()) to assert at
+/// least something must be matched.
 ///
 /// # Arguments
-/// - `byteset`: A byte array(-like) that defines the set of bytes we are looking for.
+/// - `set`: An array(-like) that defines the set of elements we are looking for.
 ///
 /// # Returns
-/// A combinator [`OneOf0`] that will match the prefix of input as long as those bytes are in
-/// `byteset`.
+/// A combinator [`OneOf0`] that will match the prefix of input as long as those elements are in
+/// `set`.
 ///
 /// # Fails
 /// The returned combinator will never fail.
@@ -113,15 +114,15 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::one_of0;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::one_of0;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new(b"abcdefg".as_slice());
-/// let span2 = Span::new(b"cdefghi".as_slice());
-/// let span3 = Span::new("abÿcdef".as_bytes());
-/// let span4 = Span::new(b"hijklmn".as_slice());
-/// let span5 = Span::new(b"".as_slice());
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// // Note: the magic numbers below are the two bytes made up by "ÿ"
 /// let mut comb = one_of0(&[b'a', b'b', b'c', 191, 195]);
@@ -132,9 +133,10 @@ where
 /// assert_eq!(comb.parse(span5), Ok((span5.slice(0..), span5.slice(..0))));
 /// ```
 #[inline]
-pub const fn one_of0<'c, 's, S>(byteset: &'c [u8]) -> OneOf0<'c, S>
+pub const fn one_of0<'c, 's, S>(set: &'c [S::Elem]) -> OneOf0<'c, S::Elem, S>
 where
-    S: Clone + SpannableBytes<'s>,
+    S: Clone + Spannable<'s>,
+    S::Elem: Debug + ElemDisplay + PartialEq,
 {
-    OneOf0 { byteset, _s: PhantomData }
+    OneOf0 { set, _s: PhantomData }
 }

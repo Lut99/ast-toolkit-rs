@@ -20,26 +20,27 @@
 // Declare submodules
 pub mod boxed;
 pub mod branch;
-pub mod bytes;
-#[cfg(feature = "c")]
-pub mod c;
 pub mod combinator;
 pub mod debug;
 pub mod error;
+#[cfg(feature = "extra")]
+pub mod extra;
+pub mod fmt;
 mod macros;
 pub mod multi;
 pub mod result;
+pub mod scan;
 pub mod sequence;
 pub mod utf8;
 
 // Imports
-use std::borrow::Cow;
 use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::Debug;
 
 // Re-exports
 pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spanning};
+pub use fmt::ExpectsFormatter;
 
 
 /***** LIBRARY *****/
@@ -90,61 +91,6 @@ impl<S: Clone> ParseError<S> for Infallible {
 
     #[inline]
     fn needed_to_fix(&self) -> Option<usize> { None }
-}
-
-
-
-/// A trait implemented by [`Expects::Formatter`]s.
-///
-/// This trait actually produces expect-strings.
-pub trait ExpectsFormatter: Debug + Display {
-    /// Formats the thing that this Expects expected as input.
-    ///
-    /// The string written should be something along the lines of filling in `XXX` in:
-    /// ```plain
-    /// Expected XXX.
-    /// ```
-    ///
-    /// # Arguments
-    /// - `f`: Some [`Formatter`] to write to.
-    /// - `indent`: If this formatter writes newlines, they should be indented by this amount.
-    ///
-    /// # Errors
-    /// This function should only error if it failed to write to the given `f`ormatter.
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
-}
-
-// Default impls for pointer-like types
-impl<'a, T: ?Sized + ExpectsFormatter> ExpectsFormatter for &'a T {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
-}
-impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
-}
-
-// Default impls for string-like types
-impl ExpectsFormatter for str {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
-}
-impl<'a> ExpectsFormatter for Cow<'a, str> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
-}
-impl ExpectsFormatter for String {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
 }
 
 

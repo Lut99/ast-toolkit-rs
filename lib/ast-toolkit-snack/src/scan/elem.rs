@@ -9,22 +9,22 @@
 //    Yes
 //
 //  Description:
-//!   Implements a combinator that will consume exactly one byte if it
-//!   matches a predicate. The streaming version, that is.
+//!   Implements a combinator that will consume exactly one element if it
+//!   matches a predicate.
 //
 
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableBytes};
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
 use crate::result::{Expected, Result as SResult, SnackError};
 
 
 /***** TYPE ALIASES *****/
-/// Defines recoverable errors emitted by the [`Byte`]-combinator.
+/// Defines recoverable errors emitted by the [`Elem`]-combinator.
 pub type Recoverable<'c, S> = Expected<ExpectsFormatter<'c>, S>;
 
 
@@ -32,7 +32,7 @@ pub type Recoverable<'c, S> = Expected<ExpectsFormatter<'c>, S>;
 
 
 /***** EXPECTS ******/
-/// Renders the expects-string for the [`Byte`]-combinator.
+/// Renders the expects-string for the [`Elem`]-combinator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExpectsFormatter<'c> {
     /// Something use-provided describing what was being looked for.
@@ -55,19 +55,19 @@ impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
 
 
 /***** COMBINATOR *****/
-/// Actual implementation of [`byte()`]-.
-pub struct Byte<'c, P, S> {
+/// Actual implementation of [`elem()`]-.
+pub struct Elem<'c, P, S> {
     /// A string describing what was expected.
     what: &'c str,
-    /// The predicate for matching bytes.
+    /// The predicate for matching elements.
     pred: P,
     _s:   PhantomData<S>,
 }
-impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Byte<'c, P, S>
+impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Elem<'c, P, S>
 where
     'c: 'a,
-    P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    P: FnMut(&'s S::Elem) -> bool,
+    S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -86,10 +86,10 @@ where
 
         // It's like while but only once
         let mut first: bool = true;
-        let split: usize = input.match_bytes_while(|b| {
+        let split: usize = input.match_while(|elem| {
             if first {
                 first = false;
-                (self.pred)(b)
+                (self.pred)(elem)
             } else {
                 false
             }
@@ -111,7 +111,7 @@ where
 
 
 /***** LIBRARY *****/
-/// A combinator that will parse a single byte matching a predicate.
+/// A combinator that will parse a single element matching a predicate.
 ///
 /// This is very much like [`while1()`](super::while1()), except that it will not greedily match
 /// more bytes beyond the first.
@@ -119,53 +119,53 @@ where
 /// # Arguments
 /// - `what`: Some user-friendly description of what this combinator expects. Should complete:
 ///   "Expected one ...".
-/// - `pred`: Some [predicate](FnMut) that will be used to check if the parsed byte is what should
-///   be matched.
+/// - `pred`: Some [predicate](FnMut) that will be used to check if the element is what is
+///   expected.
 ///
 /// # Returns
-/// A combinator that will parse a byte matching the given `pred`icate.
+/// A combinator that will parse an element if it matches the given `pred`icate.
 ///
 /// # Fails
-/// The returned combinator fails if the input is empty or the first byte does not match the
-/// `pred`icate.
+/// The returned combinator fails recoverably if the input is empty or the first byte does not
+/// match the `pred`icate.
 ///
 /// The returned combinator never fails fatally.
 ///
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::byte;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::elem;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new(b"A".as_slice());
-/// let span2 = Span::new(b"a".as_slice());
-/// let span3 = Span::new(b"".as_slice());
+/// let span1 = Span::new("A");
+/// let span2 = Span::new("a");
+/// let span3 = Span::new("");
 ///
-/// let mut comb = byte("uppercase letter", |b| b >= b'A' && b <= b'Z');
+/// let mut comb = elem("uppercase letter", |b| *b >= b'A' && *b <= b'Z');
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(1..), span1.slice(..1))));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(byte::Recoverable {
-///         fmt:     byte::ExpectsFormatter { what: "uppercase letter" },
+///     Err(SnackError::Recoverable(elem::Recoverable {
+///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
 ///         fixable: None,
 ///         span:    span2,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
-///     Err(SnackError::Recoverable(byte::Recoverable {
-///         fmt:     byte::ExpectsFormatter { what: "uppercase letter" },
+///     Err(SnackError::Recoverable(elem::Recoverable {
+///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
 ///         fixable: Some(Some(1)),
 ///         span:    span3,
 ///     }))
 /// );
 /// ```
 #[inline]
-pub const fn byte<'s, 'c, P, S>(what: &'c str, pred: P) -> Byte<'c, P, S>
+pub const fn elem<'s, 'c, P, S>(what: &'c str, pred: P) -> Elem<'c, P, S>
 where
     P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    S: Clone + Spannable<'s>,
 {
-    Byte { what, pred, _s: PhantomData }
+    Elem { what, pred, _s: PhantomData }
 }
