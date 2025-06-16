@@ -18,87 +18,80 @@
 //
 
 // Declare submodules
+pub mod ascii;
 pub mod boxed;
 pub mod branch;
-pub mod bytes;
-#[cfg(feature = "c")]
-pub mod c;
 pub mod combinator;
 pub mod debug;
 pub mod error;
+// #[cfg(feature = "extra")]
+// pub mod extra;
+pub mod fmt;
 mod macros;
 pub mod multi;
 pub mod result;
+pub mod scan;
 pub mod sequence;
 pub mod utf8;
 
 // Imports
-use std::borrow::Cow;
+use std::convert::Infallible;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::Debug;
 
 // Re-exports
 pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spanning};
+pub use fmt::ExpectsFormatter;
 
 
 /***** LIBRARY *****/
 /// A trait implemented by errors that are returned by snack [`Combinator`]s.
-pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {}
-impl<T: Error + Spanning<S>, S: Clone> ParseError<S> for T {}
-
-
-
-/// A trait implemented by [`Expects::Formatter`]s.
-///
-/// This trait actually produces expect-strings.
-pub trait ExpectsFormatter: Debug + Display {
-    /// Formats the thing that this Expects expected as input.
+pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {
+    /// This function tells if more input might fix this error.
     ///
-    /// The string written should be something along the lines of filling in `XXX` in:
-    /// ```plain
-    /// Expected XXX.
-    /// ```
+    /// This is very useful for streaming input. If you see a
+    /// ([recoverable](result::SnackError::Recoverable)) error occur that might be fixed with more
+    /// input, it means that the error occurred because an unexpected end-of-file was encountered,
+    /// but otherwise this input was promising. Hence, if you request more input from the stream,
+    /// this still might be a valid prefix.
     ///
-    /// # Arguments
-    /// - `f`: Some [`Formatter`] to write to.
-    /// - `indent`: If this formatter writes newlines, they should be indented by this amount.
+    /// See [`ParseError::needed_to_fix()`] to obtain an estimate for how many bytes you should
+    /// stream before trying again.
     ///
-    /// # Errors
-    /// This function should only error if it failed to write to the given `f`ormatter.
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult;
+    /// # Default implementation
+    /// By default, this function returns that no additional bytes might fix this error.
+    ///
+    /// # Returns
+    /// True if more input might turns this frown upside down (fix the error). False if this is not
+    /// the case (we explicitly detected something illegal for this combinator).
+    fn more_might_fix(&self) -> bool;
+
+    /// If [more input might fix this error](ParseError::more_might_fix()) (i.e., it was because we
+    /// reached an unexpected end-of-file), this function returns an estimate for how many elements
+    /// are needed _at minimum_ to do so.
+    ///
+    /// For example, for [`tag`](bytes::tag)s, this function returns the size of the part of the
+    /// tag that was out-of-bounds for the input. For a greedy, repetitive combinator, this might
+    /// return the number of bytes needed to finish the current iteration.
+    ///
+    /// # Default implementation
+    /// By default, this function returns that no estimate exists.
+    ///
+    /// # Returns
+    /// The estimated **minimum** number of elements needed to potentially fix this error (it might
+    /// just be something else after all). It can return [`None`] if
+    /// [`ParseError::more_might_fix()`] is false or, if it is, if there is no such estimate
+    /// available.
+    fn needed_to_fix(&self) -> Option<usize>;
 }
 
-// Default impls for pointer-like types
-impl<'a, T: ?Sized + ExpectsFormatter> ExpectsFormatter for &'a T {
+// Default impls
+impl<S: Clone> ParseError<S> for Infallible {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
-}
-impl<T: ?Sized + ExpectsFormatter> ExpectsFormatter for Box<T> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult { (**self).expects_fmt(f, indent) }
-}
+    fn more_might_fix(&self) -> bool { false }
 
-// Default impls for string-like types
-impl ExpectsFormatter for str {
     #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
-}
-impl<'a> ExpectsFormatter for Cow<'a, str> {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
-}
-impl ExpectsFormatter for String {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
-        // If it begins with `Expected`, cut that off
-        if self.starts_with("Expected ") { <str as Display>::fmt(&self[9..], f) } else { <str as Display>::fmt(self, f) }
-    }
+    fn needed_to_fix(&self) -> Option<usize> { None }
 }
 
 

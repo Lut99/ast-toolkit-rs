@@ -71,12 +71,12 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::peek;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello, world!");
 ///
-/// let mut comb = peek(tag("Hello"));
+/// let mut comb = peek(tag(b"Hello"));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     // Note: The remainder did not change

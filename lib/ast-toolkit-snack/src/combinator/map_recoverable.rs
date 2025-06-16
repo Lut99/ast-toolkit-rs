@@ -50,7 +50,6 @@ where
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable((self.pred)(err))),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -78,7 +77,7 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::map_recoverable;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// // Some error type. Note that it has to be `ParseError`-compatible, either by itself
@@ -96,11 +95,16 @@ where
 /// #   fn span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
 /// #   fn into_span(self) -> Span<S> { unreachable!() }
 /// }
+/// impl<S: Clone> ast_toolkit_snack::ParseError<S> for Hidden {
+///     /* ... */
+/// #   fn more_might_fix(&self) -> bool { false }
+/// #   fn needed_to_fix(&self) -> Option<usize> { None }
+/// }
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 ///
-/// let mut comb = map_recoverable(tag("Hello"), |_err| Hidden);
+/// let mut comb = map_recoverable(tag(b"Hello"), |_err| Hidden);
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(Hidden)));
 /// ```

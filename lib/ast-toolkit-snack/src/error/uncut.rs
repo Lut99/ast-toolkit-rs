@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable};
 
 use crate::Combinator;
-use crate::result::{CutError, Result as SResult, ResultExt as _};
+use crate::result::{CutError, Result as SResult, ResultExt};
 
 
 /***** ERRORS *****/

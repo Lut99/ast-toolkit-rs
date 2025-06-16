@@ -9,22 +9,22 @@
 //    Yes
 //
 //  Description:
-//!   Defines value combinators that are matching UTF-8 sequences.
-//!   
-//!   Note this doesn't necessarily mean they are matching on _strings_. can
-//!   also recognize (some) UTF-8 sequences in possible-UTF8 byte input.
+//!   Defines counterparts for [`scan`](super::scan)-combiantors that are
+//!   working over unicode graphemes instead of individual bytes.
 //
 
 // Submodules
-pub mod complete;
-pub mod digit0;
+pub mod graph;
 pub mod one_of0;
-pub mod streaming;
+pub mod one_of1;
+pub mod tag_s;
 pub mod while0;
-pub mod whitespace0;
+pub mod while1;
 
 // Use the combinator functions themselves
-pub use digit0::digit0;
+pub use graph::graph;
 pub use one_of0::one_of0;
+pub use one_of1::one_of1;
+pub use tag_s::tag_s;
 pub use while0::while0;
-pub use whitespace0::whitespace0;
+pub use while1::while1;

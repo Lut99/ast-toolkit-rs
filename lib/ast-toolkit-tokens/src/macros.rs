@@ -135,65 +135,25 @@ macro_rules! utf8_token {
     };
 }
 
-/// Generates an ast-toolkit-snack shortcut for creating this token's parser.
+/// Generates an [`ElemDisplay`](ast_toolkit_snack::fmt::ElemDisplay)-impl for your token.
+///
+/// This allows you to seemlessly use it in combinators like
+/// [`tag()`](ast_toolkit_snack::scan::tag()).
 ///
 /// # Arguments
 /// - `$name:ident`: The identifier of the type to implement the parser shortcut for.
 ///
 /// # Generates
-/// This macro generates an impl for a type with the given `$name` that implements `parser()` and
-/// `parser_streaming()`.
-///
-/// # Example
-/// For an example, see [`utf8_token()`](crate::snack::complete::utf8_token()).
+/// This macro generates an [`ElemDisplay`]-impl for a token with the name `$name` that simply
+/// renders the token name in uppercase.
 #[macro_export]
 #[cfg(feature = "snack")]
 macro_rules! utf8_token_snack {
     ($name:ident) => {
-        impl<S> $name<S> {
-            /// Returns a snack combinator for parsing this token.
-            ///
-            /// # Arguments
-            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
-            ///   used to ensure that we're not accidentally detecting a keyword within a larger
-            ///   identifier.
-            ///
-            /// # Returns
-            /// A new combinator that can parse this keyword.
-            ///
-            /// # Examples
-            /// See the `utf8_token()`-combinator for more information.
+        impl<S> $crate::__private::ElemDisplay for $name<S> {
             #[inline]
-            pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_token::Utf8Token<Self, C, S>
-            where
-                C: $crate::snack::__private::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
-            {
-                $crate::snack::complete::utf8_token::utf8_token(comb)
-            }
-
-            /// Returns a snack combinator for parsing this token.
-            ///
-            /// This specific function returns a streaming version of the parser. See `parser()` for
-            /// a normal version.
-            ///
-            /// # Arguments
-            /// - `comb`: Some kind of parser for recognizing the end of an identifier. This is
-            ///   used to ensure that we're not accidentally detecting a keyword within a larger
-            ///   identifier.
-            ///
-            /// # Returns
-            /// A new combinator that can parse this keyword.
-            ///
-            /// # Examples
-            /// See the `utf8_token()`-combinator for more information.
-            #[inline]
-            pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_token::Utf8Token<Self, C, S>
-            where
-                C: $crate::snack::__private::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
-            {
-                $crate::snack::streaming::utf8_token::utf8_token(comb)
+            fn elem_fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                ::paste::paste!(::std::write!(f, ::std::stringify!([<$name:snake:upper>])))
             }
         }
     };
@@ -295,7 +255,10 @@ macro_rules! utf8_token_serde {
 /// - `$close:literal`: A string that represents the literal form of the closing token. E.g., for parenthesis, this would be a `")"`.
 ///
 /// # Generates
-/// This macro generates a new struct and impls that make working with the Delimiter convenient.
+/// This macro generates a three new structs:
+/// - One opening token, named after your delimiter with `Open` appended to it, using [`utf8_token!()`];
+/// - One closing token, named after your delimiter with `Close` appended to it, using [`utf8_token!()`]; and
+/// - One delimiter token that combines the opening- and closing token.
 ///
 /// # Example
 /// ```rust
@@ -444,63 +407,24 @@ macro_rules! utf8_delim {
     };
 }
 
-/// Generates an ast-toolkit-snack shortcut for creating this delimiter's parser.
+/// Generates an [`ElemDisplay`](ast_toolkit_snack::fmt::ElemDisplay)-impl for the opening- and
+/// closing tokens of your delimiter.
+///
+/// This allows you to seemlessly use them in combinators like
+/// [`tag()`](ast_toolkit_snack::scan::tag()).
 ///
 /// # Arguments
 /// - `$name:ident`: The identifier of the type to implement the parser shortcut for.
 ///
 /// # Generates
-/// This macro generates an impl for a type with the given `$name` that implements `parser()` and
-/// `parser_streaming()`.
-///
-/// # Example
-/// For an example, see [`utf8_delim()`](crate::snack::complete::utf8_delim()).
+/// This macro generates an [`ElemDisplay`]-impl for the `$nameOpen`- and `$nameClose`-tokens that
+/// simply renders them as uppercase.
 #[macro_export]
 #[cfg(feature = "snack")]
 macro_rules! utf8_delim_snack {
     ($name:ident) => {
-        impl<S> $name<S> {
-            /// Returns a snack combinator for parsing this token.
-            ///
-            /// # Arguments
-            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
-            ///
-            /// # Returns
-            /// A new combinator that can parse this keyword.
-            ///
-            /// # Examples
-            /// See the `utf8_delim()`-combinator for more information.
-            #[inline]
-            pub const fn parser<'c, 's, C>(comb: C) -> $crate::snack::complete::utf8_delim::Utf8Delim<Self, C, S>
-            where
-                C: $crate::snack::__private::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
-            {
-                $crate::snack::complete::utf8_delim::utf8_delim(comb)
-            }
-
-            /// Returns a snack combinator for parsing this token.
-            ///
-            /// This specific function returns a streaming version of the parser. See `parser()` for
-            /// a normal version.
-            ///
-            /// # Arguments
-            /// - `comb`: Some kind of parser for parsing the part in between the delimiters.
-            ///
-            /// # Returns
-            /// A new combinator that can parse this keyword.
-            ///
-            /// # Examples
-            /// See the `utf8_delim()`-combinator for more information.
-            #[inline]
-            pub const fn parser_streaming<'c, 's, C>(comb: C) -> $crate::snack::streaming::utf8_delim::Utf8Delim<Self, C, S>
-            where
-                C: $crate::snack::__private::Combinator<'c, 's, S>,
-                S: ::std::clone::Clone + $crate::snack::__private::SpannableUtf8<'s>,
-            {
-                $crate::snack::streaming::utf8_delim::utf8_delim(comb)
-            }
-        }
+        ::paste::paste! { $crate::utf8_token_snack!([<$name Open>]); }
+        ::paste::paste! { $crate::utf8_token_snack!([<$name Close>]); }
     };
 }
 

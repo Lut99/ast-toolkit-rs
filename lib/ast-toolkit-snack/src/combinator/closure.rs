@@ -29,17 +29,26 @@ pub struct Recoverable<F, E> {
     pub expected: F,
     pub err:      E,
 }
-impl<F: Clone + Debug + Display, E> Display for Recoverable<F, E> {
+impl<F: Debug + Display, E> Display for Recoverable<F, E> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { expected: self.expected.clone() }) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { expected: &self.expected }) }
 }
-impl<F: Clone + Debug + Display, E: Debug> Error for Recoverable<F, E> {}
+impl<F: Debug + Display, E: Debug> Error for Recoverable<F, E> {}
 impl<F, E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<F, E> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> { self.err.span() }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.err.into_span() }
+}
+impl<F: Debug + Display, E: ParseError<S>, S: Clone> ParseError<S> for Recoverable<F, E> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool { self.err.more_might_fix() }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> { self.err.needed_to_fix() }
 }
 
 
@@ -100,7 +109,6 @@ where
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable { expected: self.expected.clone(), err })),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }

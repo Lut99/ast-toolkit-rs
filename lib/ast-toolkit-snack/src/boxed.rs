@@ -19,7 +19,7 @@ use std::fmt::{self, Display, Formatter, Result as FResult};
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::combinator::forget_ty;
-use crate::result::SnackError;
+use crate::result::Result as SResult;
 use crate::{Combinator, ExpectsFormatter, ParseError};
 
 
@@ -69,6 +69,15 @@ impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
     #[inline]
     fn into_span(self) -> Span<S> { self.0.into_span() }
 }
+impl<'e, S: Clone> ParseError<S> for BoxedParseError<'e, S> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool { self.0.more_might_fix() }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> { self.0.needed_to_fix() }
+}
 
 
 
@@ -98,16 +107,16 @@ pub trait ResultExt<T, E1, E2, S: Clone> {
     /// # Returns
     /// An equivalent result with its [`SnackError`] over [`BoxedParseError`]s instead of whatever
     /// it was before.
-    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>>
+    fn into_boxed<'e1, 'e2>(self) -> SResult<T, BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>
     where
         E1: 'e1,
         E2: 'e2;
 }
 
 // Blanket impl for [`ResultExt`]
-impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> ResultExt<T, E1, E2, S> for Result<T, SnackError<E1, E2, S>> {
+impl<S: Clone, T, E1: BoxableParseError<S>, E2: BoxableParseError<S>> ResultExt<T, E1, E2, S> for SResult<T, E1, E2, S> {
     #[inline]
-    fn into_boxed<'e1, 'e2>(self) -> Result<T, SnackError<BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>>
+    fn into_boxed<'e1, 'e2>(self) -> SResult<T, BoxedParseError<'e1, S>, BoxedParseError<'e2, S>, S>
     where
         E1: 'e1,
         E2: 'e2,

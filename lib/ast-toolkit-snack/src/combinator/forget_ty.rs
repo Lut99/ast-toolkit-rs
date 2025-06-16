@@ -52,7 +52,6 @@ where
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(BoxedParseError::new(err))),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(BoxedParseError::new(err))),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -88,7 +87,7 @@ where
 /// combinator:
 /// ```compile_fail
 /// use ast_toolkit_snack::boxed::BoxedParseError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_snack::{Combinator, ExpectsFormatter};
 /// use ast_toolkit_span::{Span, Spannable};
 ///
@@ -110,7 +109,7 @@ where
 /// let span1 = Span::new("Hello, world!");
 ///
 /// // This is the problematic statement
-/// let mut comb = assert_associated(tag("Hello"));
+/// let mut comb = assert_associated(tag(b"Hello"));
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// ```
 ///
@@ -118,7 +117,7 @@ where
 /// ```rust
 /// # use ast_toolkit_snack::boxed::BoxedParseError;
 /// use ast_toolkit_snack::combinator::forget_ty;
-/// # use ast_toolkit_snack::utf8::complete::tag;
+/// # use ast_toolkit_snack::scan::tag;
 /// # use ast_toolkit_snack::{Combinator, ExpectsFormatter};
 /// # use ast_toolkit_span::{Span, Spannable};
 /// #
@@ -141,7 +140,7 @@ where
 /// // ...
 ///
 /// // Now it works!
-/// let mut comb = assert_associated(forget_ty(tag("Hello")));
+/// let mut comb = assert_associated(forget_ty(tag(b"Hello")));
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
 /// ```
 /// ```

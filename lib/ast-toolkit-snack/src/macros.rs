@@ -24,9 +24,9 @@
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::bytes::complete::tag;
 /// use ast_toolkit_snack::combinator::map;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_snack::sequence::pair;
 /// use ast_toolkit_snack::{Combinator as _, comb_cfg};
 /// use ast_toolkit_span::Span;
@@ -56,6 +56,7 @@
 ///     comb.parse(span),
 ///     Err(SnackError::Recoverable(pair::Recoverable::Comb1(tag::Recoverable {
 ///         tag: b"World",
+///         is_fixable: false,
 ///         span,
 ///     })))
 /// );

@@ -21,7 +21,7 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{BranchingCombinator, Combinator, ExpectsFormatter};
+use crate::{BranchingCombinator, Combinator, ExpectsFormatter, ParseError};
 
 
 /***** HELPER MACROS *****/
@@ -78,6 +78,13 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.fmt) }
             }
+            impl<'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S: Spannable<'s>> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            where
+                [<F $fi>]: ExpectsFormatter,
+                $([<F $i>]: ExpectsFormatter,)*
+                [<E $fi>]: Debug,
+                $([<E $i>]: Debug,)*
+            {}
             impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> Spanning<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
                 S: Clone,
@@ -87,13 +94,31 @@ macro_rules! tuple_branching_comb_impl {
                 #[inline]
                 fn into_span(self) -> Span<S> { self.span }
             }
-            impl<'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S: Spannable<'s>> Error for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            impl<'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> ParseError<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
                 [<F $fi>]: ExpectsFormatter,
                 $([<F $i>]: ExpectsFormatter,)*
-                [<E $fi>]: Debug,
-                $([<E $i>]: Debug,)*
-            {}
+                [<E $fi>]: ParseError<S>,
+                $([<E $i>]: ParseError<S>,)*
+                S: Clone + Spannable<'s>,
+            {
+                /// This error is fixable if any of the errors in the branch is.
+                #[inline]
+                fn more_might_fix(&self) -> bool {
+                    if self.fails.$fi.more_might_fix() { return true; }
+                    $(if self.fails.$i.more_might_fix() { return true; })*
+                    false
+                }
+
+                /// This will return the minimum number across all of the branches.
+                #[inline]
+                fn needed_to_fix(&self) -> Option<usize> {
+                    let mut res = None;
+                    if let Some(needed) = self.fails.$fi.needed_to_fix() { match res { Some(needed2) => res = Some(std::cmp::min(needed, needed2)), None => res = Some(needed), } }
+                    $(if let Some(needed) = self.fails.$i.needed_to_fix() { match res { Some(needed2) => res = Some(std::cmp::min(needed, needed2)), None => res = Some(needed), } })*
+                    res
+                }
+            }
 
 
 
@@ -138,6 +163,29 @@ macro_rules! tuple_branching_comb_impl {
                     match self {
                         Self::[<Branch $fi>](err) => err.source(),
                         $(Self::[<Branch $i>](err) => err.source(),)*
+                    }
+                }
+            }
+            impl<'s, [<E $fi>] $(, [<E $i>])*, S> ParseError<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*>
+            where
+                [<E $fi>]: ParseError<S>,
+                $([<E $i>]: ParseError<S>,)*
+                S: Clone,
+            {
+                /// This error is fixable if the internal error is.
+                #[inline]
+                fn more_might_fix(&self) -> bool {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.more_might_fix(),
+                        $(Self::[<Branch $i>](err) => err.more_might_fix(),)*
+                    }
+                }
+
+                #[inline]
+                fn needed_to_fix(&self) -> Option<usize> {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.needed_to_fix(),
+                        $(Self::[<Branch $i>](err) => err.needed_to_fix(),)*
                     }
                 }
             }
@@ -202,7 +250,6 @@ macro_rules! tuple_branching_comb_impl {
                                 fails.$fi.write(err);
                             },
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Fatal $li>]::[<Branch $fi>](err))),
-                            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         }
                         $(match self.$i.parse(input.clone()) {
                             Ok((rem, res)) => return Ok((rem, res)),
@@ -210,7 +257,6 @@ macro_rules! tuple_branching_comb_impl {
                                 fails.$i.write(err);
                             },
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Fatal $li>]::[<Branch $i>](err))),
-                            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         })*
 
                         // If we're here, all branches failed. So we can assume that their error is initialized...
@@ -329,17 +375,31 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::branch::alt;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 /// let span3 = Span::new("World!");
 ///
-/// let mut comb = alt((tag("Hello"), tag("Goodbye")));
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
-/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
-/// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(alt::Recoverable2 { .. }))));
+/// let mut comb = alt((tag(b"Hello"), tag(b"Goodbye")));
+/// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(7..), span2.slice(..7))));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::Recoverable(alt::Recoverable2 {
+///         fmt:   alt::ExpectsFormatter2 {
+///             fmts: (tag::ExpectsFormatter { tag: b"Hello" }, tag::ExpectsFormatter {
+///                 tag: b"Goodbye",
+///             }),
+///         },
+///         fails: (
+///             tag::Recoverable { tag: b"Hello", is_fixable: false, span: span3 },
+///             tag::Recoverable { tag: b"Goodbye", is_fixable: false, span: span3 }
+///         ),
+///         span:  span3,
+///     }))
+/// );
 /// ```
 #[inline]
 pub const fn alt<'c, 's, B, S>(branches: B) -> Alt<B, S>

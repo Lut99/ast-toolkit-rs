@@ -1,10 +1,10 @@
-//  SEPARATED MANY 1.rs
+//  SEPARATED MOST 1.rs
 //    by Lut99
 //
 //  Created:
 //    07 Mar 2025, 11:58:12
 //  Last edited:
-//    08 May 2025, 11:20:54
+//    08 May 2025, 11:20:53
 //  Auto updated?
 //    Yes
 //
@@ -12,14 +12,53 @@
 //!   Implements the [`separated_many1()`]-combinator.
 //
 
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable};
 
-use super::super::combinator::recognize;
-pub use super::separated_most1::{ExpectsFormatter, Fatal, Recoverable};
-use crate::Combinator;
+pub use super::separated_many0::Fatal;
+use crate::combinator::recognize;
 use crate::result::{Expected, Result as SResult, SnackError};
+use crate::{Combinator, ExpectsFormatter as _, ParseError};
+
+
+/***** TYPE ALIASES *****/
+/// The recoverable error returned by [`Most1`].
+pub type Recoverable<O1, O2, S> = Expected<ExpectsFormatter<O1, O2>, S>;
+
+
+
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`SeparatedMany1`] combinator.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExpectsFormatter<O1, O2> {
+    /// The thing we expect multiple times.
+    pub fmt: O1,
+    /// The thing interleaving the thing we expected multiple times.
+    pub sep: O2,
+}
+impl<O1: crate::ExpectsFormatter, O2: crate::ExpectsFormatter> Display for ExpectsFormatter<O1, O2> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        self.expects_fmt(f, 0)
+    }
+}
+impl<O1: crate::ExpectsFormatter, O2: crate::ExpectsFormatter> crate::ExpectsFormatter for ExpectsFormatter<O1, O2> {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, indent: usize) -> FResult {
+        write!(f, "at least one repetitions of ")?;
+        self.fmt.expects_fmt(f, indent)?;
+        write!(f, " interleaved with ")?;
+        self.sep.expects_fmt(f, indent)
+    }
+}
+
+
+
 
 
 /***** COMBINATORS *****/
@@ -55,24 +94,18 @@ where
                 res.push(elem);
                 rem
             },
-            Err(SnackError::Recoverable(_)) => return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input })),
-            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
-            Err(SnackError::NotEnough { needed, span }) => {
-                // We're lazy; so if we happen to bump into the end, we assume that none were found.
-                if input.is_empty() {
-                    return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }));
-                }
-                return Err(SnackError::NotEnough { needed, span });
+            Err(SnackError::Recoverable(err)) => {
+                return Err(SnackError::Recoverable(Expected {
+                    fmt:     self.expects(),
+                    fixable: if err.more_might_fix() { Some(err.needed_to_fix()) } else { None },
+                    span:    input,
+                }));
             },
+            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
         };
 
         // Then parse as long as there are commas
         loop {
-            // This is why it's lazy; if there's no input left, stop
-            if rem.is_empty() {
-                return Ok((rem, res));
-            }
-
             // Try the comma first
             let sep: Span<S> = match recognize(&mut self.sep).parse(rem.clone()) {
                 Ok((rem2, sep)) => {
@@ -81,7 +114,6 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => return Ok((rem, res)),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Separator(err))),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             };
 
             // Parse the element
@@ -95,7 +127,6 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span: sep })),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
         }
     }
@@ -112,17 +143,6 @@ where
 /// Note that this combinator requires at least 1 occurrence of the chosen combinator. If you want
 /// a version that also accepts parsing none, see [`separated_many0()`](super::separated_many0())
 /// instead.
-///
-/// # Streaming
-/// The separated_many1-combinator's streamingness comes from using a streamed version of the
-/// nested combinator or not. BBeing lazy, if no input is left after a successful parse of `comb`,
-/// this will _not_ return a [`SnackError::NotEnough`] (unlike
-/// [`separated_most1()`](super::separated_most1())). If you want the combinator to try and fetch
-/// more input to continue parsing instead, consider using
-/// [`separated_most1()`](super::separated_most1())).
-///
-/// As a rule of thumb, use the `many`-combinators when the user indicates the end of the
-/// repetitions by simply not specifying any more (e.g., statements).
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
@@ -141,7 +161,7 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::multi::separated_many1;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("hello,hello,hellogoodbye");
@@ -149,8 +169,9 @@ where
 /// let span3 = Span::new("goodbye");
 /// let span4 = Span::new(",hello");
 /// let span5 = Span::new("hello,helgoodbye");
+/// let span6 = Span::new("hel");
 ///
-/// let mut comb = separated_many1(tag("hello"), tag(","));
+/// let mut comb = separated_many1(tag(b"hello"), tag(b","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(17..), vec![span1.slice(..5), span1.slice(6..11), span1.slice(12..17)]))
@@ -159,21 +180,23 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(separated_many1::Recoverable {
-///         fmt:  separated_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
+///         fmt:     separated_many1::ExpectsFormatter {
+///             fmt: tag::ExpectsFormatter { tag: b"hello" },
+///             sep: tag::ExpectsFormatter { tag: b"," },
 ///         },
-///         span: span3,
+///         fixable: None,
+///         span:    span3,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(separated_many1::Recoverable {
-///         fmt:  separated_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
+///         fmt:     separated_many1::ExpectsFormatter {
+///             fmt: tag::ExpectsFormatter { tag: b"hello" },
+///             sep: tag::ExpectsFormatter { tag: b"," },
 ///         },
-///         span: span4,
+///         fixable: None,
+///         span:    span4,
 ///     }))
 /// );
 /// assert_eq!(
@@ -182,37 +205,15 @@ where
 ///         span: span5.slice(5..6),
 ///     }))
 /// );
-/// ```
-///
-/// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
-/// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::multi::separated_many1;
-/// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::streaming::tag;
-/// use ast_toolkit_span::Span;
-///
-/// let span1 = Span::new("hello,hello");
-/// let span2 = Span::new("hello,hel");
-/// let span3 = Span::new("");
-///
-/// let mut comb = separated_many1(tag("hello"), tag(","));
 /// assert_eq!(
-///     comb.parse(span1),
-///     Ok((span1.slice(11..), vec![span1.slice(..5), span1.slice(6..11)]))
-/// );
-/// assert_eq!(
-///     comb.parse(span2),
-///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(9..) })
-/// );
-/// assert_eq!(
-///     comb.parse(span3),
+///     comb.parse(span6),
 ///     Err(SnackError::Recoverable(separated_many1::Recoverable {
-///         fmt:  separated_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
+///         fmt:     separated_many1::ExpectsFormatter {
+///             fmt: tag::ExpectsFormatter { tag: b"hello" },
+///             sep: tag::ExpectsFormatter { tag: b"," },
 ///         },
-///         span: span3,
+///         fixable: Some(Some(2)),
+///         span:    span6,
 ///     }))
 /// );
 /// ```

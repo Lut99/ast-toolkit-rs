@@ -47,7 +47,6 @@ snack = [
     "ast-toolkit-tokens/snack",
 ]
 snack-extra = ["snack", "ast-toolkit-snack/extra"]
-snack-c = ["snack", "ast-toolkit-snack/c"]
 snack-macros = ["snack", "ast-toolkit-snack/macros"]
 
 span = ["dep:ast-toolkit-span"]
