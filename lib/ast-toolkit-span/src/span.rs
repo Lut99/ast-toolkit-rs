@@ -75,7 +75,7 @@ impl<'s, S> Span<S> {
     /// # Returns
     /// A new Span that spans the entire `source`.
     #[inline]
-    pub fn new(source: S) -> Self { Self::ranged(source, Range::full()) }
+    pub const fn new(source: S) -> Self { Self { source, range: Range::full() } }
 
     /// Constructor for the Span that initializes to around the given source array, but spans it
     /// around a specific slice.
@@ -98,7 +98,7 @@ impl<'s, S> Span<S> {
     /// # Returns
     /// A new Span that spans nothing of the given `source`.
     #[inline]
-    pub fn empty(source: S) -> Self { Self::ranged(source, Range::empty()) }
+    pub const fn empty(source: S) -> Self { Self { source, range: Range::empty() } }
 }
 
 // Ops
