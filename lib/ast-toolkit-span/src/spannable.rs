@@ -131,7 +131,6 @@ impl<'a> Spannable<'a> for &'a str {
 }
 impl<'a, T> Spannable<'a> for &'a [T] {
     type Elem = T;
-    // type Slice = &'a [T];
     type SourceId = usize;
 
 
