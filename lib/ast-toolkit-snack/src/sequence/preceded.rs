@@ -102,7 +102,7 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(preceded::Recoverable::Comb1(digit1::Recoverable {
-///         fmt:     digit1::ExpectsFormatter,
+///         fmt:     digit1::ExpectsFormatter { what: "digit" },
 ///         fixable: None,
 ///         span:    span3.slice(5..),
 ///     })))

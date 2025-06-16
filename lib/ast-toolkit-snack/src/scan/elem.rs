@@ -84,22 +84,11 @@ where
             return Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: Some(Some(1)), span: input }));
         }
 
-        // It's like while but only once
-        let mut first: bool = true;
-        let split: usize = input.match_while(|elem| {
-            if first {
-                first = false;
-                (self.pred)(elem)
-            } else {
-                false
-            }
-        });
-
-        // Decide what to return
-        if split == 1 {
-            Ok((input.slice(split..), input.slice(..split)))
-        } else if split > 1 {
-            unreachable!()
+        // Match the first element
+        // SAFETY: We know it exists, because the span is non-empty
+        let elem: &'s S::Elem = &input.as_slice()[0];
+        if (self.pred)(elem) {
+            Ok((input.slice(1..), input.slice(..1)))
         } else {
             Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: None, span: input }))
         }

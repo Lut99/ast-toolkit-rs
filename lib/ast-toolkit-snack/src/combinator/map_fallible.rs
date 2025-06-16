@@ -183,14 +183,14 @@ where
 /// let span3 = Span::new("256");
 ///
 /// let mut comb = map_fallible(digit1(), |parsed| {
-///     u8::from_str_radix(parsed.value(), 10)
+///     u8::from_str_radix(std::str::from_utf8(parsed.as_bytes()).unwrap(), 10)
 ///         .map_err(|err| SnackError::<Infallible, _>::Fatal(SpanningError::new(err, parsed)))
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(map_fallible::Error::Comb(digit1::Recoverable {
-///         fmt:     digit1::ExpectsFormatter,
+///         fmt:     digit1::ExpectsFormatter { what: "digit" },
 ///         fixable: None,
 ///         span:    span2,
 ///     })))

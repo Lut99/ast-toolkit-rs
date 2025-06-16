@@ -13,31 +13,19 @@
 //
 
 use std::convert::Infallible;
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, SpannableBytes};
 
+use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
 use crate::scan::while0;
-use crate::{Combinator, ExpectsFormatter as _};
 
 
-/***** FORMATTERS *****/
+/***** TYPE ALIASES *****/
 /// ExpectsFormatter for the [`Digit0`]-combinator.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ExpectsFormatter;
-impl Display for ExpectsFormatter {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl crate::ExpectsFormatter for ExpectsFormatter {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "digits") }
-}
+pub type ExpectsFormatter = while0::ExpectsFormatter<'static>;
 
 
 
@@ -59,11 +47,11 @@ where
     type Fatal = Infallible;
 
     #[inline]
-    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
+    fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: "digits" } }
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        match while0("", |b| -> bool { *b >= b'0' && *b <= b'9' }).parse(input) {
+        match while0("digits", |b| -> bool { *b >= b'0' && *b <= b'9' }).parse(input) {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(_)) => unreachable!(),
             Err(SnackError::Fatal(_)) => unreachable!(),

@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableUtf8};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::result::Result as SResult;
 use crate::{Combinator, ExpectsFormatter as _};
@@ -57,7 +57,7 @@ impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -123,7 +123,7 @@ where
 pub const fn while0<'c, 's, P, S>(what: &'c str, predicate: P) -> While0<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     While0 { predicate, what, _s: PhantomData }
 }

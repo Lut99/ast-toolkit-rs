@@ -18,7 +18,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ParseError};
@@ -94,7 +94,7 @@ impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -192,7 +192,7 @@ where
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }

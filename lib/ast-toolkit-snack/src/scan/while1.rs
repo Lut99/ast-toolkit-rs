@@ -12,48 +12,20 @@
 //!   Implements the [`while1()`]-combinator.
 //
 
-use std::borrow::Cow;
 use std::convert::Infallible;
-use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable};
 
-use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ParseError};
+use crate::Combinator;
+use crate::result::{Expected, Result as SResult, SnackError};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
-#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
-#[better_derive(impl_gen = <'c, 's, S>, bounds = (S: Spannable<'s>))]
-pub struct Recoverable<'c, S> {
-    /// Some description of what was expected.
-    pub what: &'c str,
-    /// The location where no bytes were found.
-    pub span: Span<S>,
-}
-impl<'c, S> Display for Recoverable<'c, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter { what: self.what }) }
-}
-impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
-impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
-    #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
-
-    #[inline]
-    fn into_span(self) -> Span<S> { self.span }
-}
-impl<'c, 's, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<'c, S> {
-    #[inline]
-    fn more_might_fix(&self) -> bool { self.span.is_empty() }
-
-    #[inline]
-    fn needed_to_fix(&self) -> Option<usize> { if self.more_might_fix() { Some(1) } else { None } }
-}
+pub type Recoverable<'c, S> = Expected<ExpectsFormatter<'c>, S>;
 
 
 
@@ -110,17 +82,21 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Check first if there's *any* input to parse.
-        if input.is_empty() {
-            return Err(SnackError::Recoverable(Recoverable { what: self.what, span: input }));
+        // Simply iterate as long as we can
+        let slice: &[S::Elem] = input.as_slice();
+        let slice_len: usize = slice.len();
+        let mut i: usize = 0;
+        while i < slice_len && (self.predicate)(&slice[i]) {
+            i += 1;
         }
-
-        // Otherwise, continue as usual
-        let split: usize = input.match_while(&mut self.predicate);
-        if split > 0 {
-            Ok((input.slice(split..), input.slice(..split)))
+        if i > 0 {
+            Ok((input.slice(i..), input.slice(..i)))
         } else {
-            Err(SnackError::Recoverable(Recoverable { what: self.what, span: input }))
+            Err(SnackError::Recoverable(Recoverable {
+                fmt:     self.expects(),
+                fixable: if input.is_empty() { Some(Some(1)) } else { None },
+                span:    input,
+            }))
         }
     }
 }
@@ -153,9 +129,9 @@ where
 ///
 /// # Example
 /// ```rust
+/// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::while1;
-/// use ast_toolkit_snack::{Combinator as _, ParseError as _};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("abcdefg");
@@ -170,28 +146,22 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
-///
-/// let err = comb.parse(span4);
 /// assert_eq!(
-///     err,
+///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(while1::Recoverable {
-///         what: "'a', 'b', 'c' or 'ÿ'",
-///         span: span4,
+///         fmt:     while1::ExpectsFormatter { what: "'a', 'b', 'c' or 'ÿ'" },
+///         fixable: None,
+///         span:    span4,
 ///     }))
 /// );
-/// assert!(!err.unwrap_err().more_might_fix());
-///
-/// let err = comb.parse(span5);
 /// assert_eq!(
-///     err,
+///     comb.parse(span5),
 ///     Err(SnackError::Recoverable(while1::Recoverable {
-///         what: "'a', 'b', 'c' or 'ÿ'",
-///         span: span5,
+///         fmt:     while1::ExpectsFormatter { what: "'a', 'b', 'c' or 'ÿ'" },
+///         fixable: Some(Some(1)),
+///         span:    span5,
 ///     }))
 /// );
-/// let err = err.unwrap_err();
-/// assert!(err.more_might_fix());
-/// assert_eq!(err.needed_to_fix(), Some(1));
 /// ```
 #[inline]
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>

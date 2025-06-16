@@ -84,9 +84,14 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Return if there's at least one
-        let split: usize = input.match_while(|elem| self.set.contains(elem));
-        Ok((input.slice(split..), input.slice(..split)))
+        // Simply iterate as long as we can
+        let slice: &[S::Elem] = input.as_slice();
+        let slice_len: usize = slice.len();
+        let mut i: usize = 0;
+        while i < slice_len && self.set.contains(&slice[i]) {
+            i += 1;
+        }
+        Ok((input.slice(i..), input.slice(..i)))
     }
 }
 

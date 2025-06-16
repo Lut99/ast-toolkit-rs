@@ -14,17 +14,17 @@
 //
 
 // Submodules
-pub mod graph;
-pub mod one_of0;
-pub mod one_of1;
+// pub mod graph;
+// pub mod one_of0;
+// pub mod one_of1;
 pub mod tag_s;
-pub mod while0;
-pub mod while1;
+// pub mod while0;
+// pub mod while1;
 
 // Use the combinator functions themselves
-pub use graph::graph;
-pub use one_of0::one_of0;
-pub use one_of1::one_of1;
+// pub use graph::graph;
+// pub use one_of0::one_of0;
+// pub use one_of1::one_of1;
 pub use tag_s::tag_s;
-pub use while0::while0;
-pub use while1::while1;
+// pub use while0::while0;
+// pub use while1::while1;

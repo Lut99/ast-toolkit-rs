@@ -17,7 +17,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableUtf8};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::Combinator;
 use crate::result::{Expected, Result as SResult, SnackError};
@@ -67,7 +67,7 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Graph<'c, P, S>
 where
     'c: 'a,
     P: for<'b> FnMut(&'b str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -169,7 +169,7 @@ where
 pub const fn graph<'s, 'c, P, S>(what: &'c str, pred: P) -> Graph<'c, P, S>
 where
     P: for<'a> FnMut(&'a str) -> bool,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Graph { what, pred, _s: PhantomData }
 }

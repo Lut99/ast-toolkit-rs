@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableUtf8};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::result::Result as SResult;
 use crate::{Combinator, ExpectsFormatter as _};
@@ -70,7 +70,7 @@ pub struct OneOf0<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf0<'c, S>
 where
     'c: 'a,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -133,7 +133,7 @@ where
 #[inline]
 pub const fn one_of0<'c, 's, S>(charset: &'c [&'c str]) -> OneOf0<'c, S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     OneOf0 { charset, _s: PhantomData }
 }

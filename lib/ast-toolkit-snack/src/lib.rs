@@ -40,7 +40,7 @@ use std::error::Error;
 use std::fmt::Debug;
 
 // Re-exports
-pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spanning};
+pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 pub use fmt::ExpectsFormatter;
 
 

@@ -18,7 +18,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, SpannableUtf8, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ParseError};
@@ -109,7 +109,7 @@ pub struct OneOf1<'c, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S>
 where
     'c: 'a,
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -196,7 +196,7 @@ where
 #[inline]
 pub const fn one_of1<'c, 's, S>(charset: &'c [&'c str]) -> OneOf1<'c, S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     OneOf1 { charset, _s: PhantomData }
 }

@@ -266,7 +266,7 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(tuple::Recoverable2::Comb1(digit1::Recoverable {
-///         fmt:     digit1::ExpectsFormatter,
+///         fmt:     digit1::ExpectsFormatter { what: "digit" },
 ///         fixable: None,
 ///         span:    span3.slice(5..),
 ///     })))

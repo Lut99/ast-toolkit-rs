@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableUtf8};
+use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::scan::one_of0;
@@ -51,7 +51,7 @@ pub struct Whitespace0<S> {
 }
 impl<'s, S> Combinator<'static, 's, S> for Whitespace0<S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -109,7 +109,7 @@ where
 #[inline]
 pub const fn whitespace0<'s, S>() -> Whitespace0<S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Whitespace0 { _s: PhantomData }
 }

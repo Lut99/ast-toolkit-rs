@@ -10,7 +10,6 @@ description = "Provides a Span that is akin to a slice but with more context. Us
 [dependencies]
 console = "0.15"
 serde = { version = "1.0", features = ["derive"], optional = true }
-unicode-segmentation = "1.11"
 
 
 [dev-dependencies]

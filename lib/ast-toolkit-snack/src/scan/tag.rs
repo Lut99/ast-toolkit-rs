@@ -149,24 +149,17 @@ where
 
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         // Match the tag
+        let slice: &[S::Elem] = input.as_slice();
+        let slice_len: usize = slice.len();
         let tag_len: usize = self.tag.len();
         let mut i: usize = 0;
-        let split: usize = input.match_while(|elem| {
-            if i < tag_len && *elem == self.tag[i] {
-                i += 1;
-                true
-            } else {
-                false
-            }
-        });
-
-        // Assert there is at least one
-        if split == tag_len {
+        while i < std::cmp::min(slice_len, tag_len) && slice[i] == self.tag[i] {
+            i += 1;
+        }
+        if i == tag_len {
             Ok((input.slice(i..), input.slice(..i)))
-        } else if split > tag_len {
-            unreachable!()
         } else {
-            Err(SnackError::Recoverable(Recoverable { tag: self.tag, is_fixable: split >= input.len(), span: input }))
+            Err(SnackError::Recoverable(Recoverable { tag: self.tag, is_fixable: i == slice_len && slice_len < tag_len, span: input }))
         }
     }
 }

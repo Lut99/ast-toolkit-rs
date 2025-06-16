@@ -13,12 +13,13 @@
 //!   many other of the crates.
 //
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 use crate::range::Range;
-use crate::spannable::{Spannable, SpannableBytes, SpannableUtf8};
+use crate::spannable::{Spannable, SpannableBytes};
 
 
 /***** LIBRARY *****/
@@ -46,10 +47,10 @@ use crate::spannable::{Spannable, SpannableBytes, SpannableUtf8};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("howdy");
-/// assert_eq!(span1.value(), "howdy");
+/// assert_eq!(span1.value(), b"howdy");
 ///
 /// let span2 = Span::ranged(("<example>", "Hello, world!"), ..5);
-/// assert_eq!(span2.value(), "Hello");
+/// assert_eq!(span2.value(), b"Hello");
 /// assert_eq!(span2.source(), &("<example>", "Hello, world!"));
 /// assert_eq!(span2.source_id(), "<example>");
 /// ```
@@ -100,78 +101,6 @@ impl<'s, S> Span<S> {
     pub fn empty(source: S) -> Self { Self::ranged(source, Range::empty()) }
 }
 
-// Parsing
-impl<'s, S: Spannable<'s>> Span<S> {
-    /// Returns the index up to where the elements at the head of the spanned area match the given
-    /// predicate.
-    ///
-    /// # Arguments
-    /// - `pred`: Some predicate to match the elements at the head of self with.
-    ///
-    /// # Returns
-    /// The index of the first element that does not match the predicate. If all elements match it,
-    /// then this equals the length of the spanned area.
-    #[inline]
-    pub fn match_while(&self, mut pred: impl FnMut(&'s S::Elem) -> bool) -> usize {
-        // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
-        // within the range
-        let mut i: usize = 0;
-        let source_len: usize = self.source.len();
-        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
-        let end: usize = self.range.end_resolved(source_len).unwrap_or(source_len);
-        self.source.match_while(|elem| {
-            if i < start {
-                // We skip until we find the start of the range
-                i += 1;
-                true
-            } else if i < end {
-                // Match as usual
-                i += 1;
-                pred(elem)
-            } else {
-                // When we go out-of-range, we stop
-                false
-            }
-        }) - start
-    }
-}
-impl<'s, S: SpannableUtf8<'s>> Span<S> {
-    /// Interpreting the spanned area as unicode segments, will match up to where graphemes at the
-    /// head of the area match the given predicate.
-    ///
-    /// Note that it is iterated by _extended_ unicode graphemes.
-    ///
-    /// # Arguments
-    /// - `pred`: Some predicate to match the graphemes at the head of self with.
-    ///
-    /// # Returns
-    /// The _byte_ index of the first grapheme that does not match the predicate. If all elements
-    /// match it, then this equals the length of the array.
-    #[inline]
-    pub fn match_utf8_while(&self, mut pred: impl FnMut(&'s str) -> bool) -> usize {
-        // We can sidestep requiring `Slice` to implement `Spannable` by manually ensuring we stay
-        // within the range
-        let mut i: usize = 0;
-        let source_len: usize = self.source.len();
-        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
-        let end: usize = self.range.end_resolved(source_len).unwrap_or(source_len);
-        self.source.match_utf8_while(|elem| {
-            if i < start {
-                // We skip until we find the start of the range
-                i += elem.len();
-                true
-            } else if i < end {
-                // Match as usual
-                i += elem.len();
-                pred(elem)
-            } else {
-                // When we go out-of-range, we stop
-                false
-            }
-        }) - start
-    }
-}
-
 // Ops
 impl<'s, S: Spannable<'s>> Debug for Span<S> {
     #[inline]
@@ -202,7 +131,7 @@ impl<'s, S: Spannable<'s>> Hash for Span<S> {
 }
 impl<'s, S: Spannable<'s>> Ord for Span<S>
 where
-    S::Slice: Ord,
+    S::Elem: Ord,
 {
     /// # Panics
     /// This function simply wraps the [`PartialOrd::partial_cmp()`]-implementation for this
@@ -215,7 +144,7 @@ where
 }
 impl<'s, S: Spannable<'s>> PartialOrd for Span<S>
 where
-    S::Slice: PartialOrd,
+    S::Elem: PartialOrd,
 {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { self.value().partial_cmp(&other.value()) }
@@ -304,10 +233,12 @@ impl<'s, S: Spannable<'s>> Span<S> {
     ///
     /// To obtain the **whole** source, see [`Span::source()`].
     ///
+    /// At this point, just an alias for [`Span::as_slice()`].
+    ///
     /// # Returns
     /// A slice of the internal source as spanned by this Span.
     #[inline]
-    pub fn value(&self) -> S::Slice { self.source.slice(self.range) }
+    pub fn value(&self) -> &'s [S::Elem] { self.as_slice() }
 
 
 
@@ -379,6 +310,45 @@ impl<S> Span<S> {
     #[inline]
     pub const fn range(&self) -> &Range { &self.range }
 }
+impl<'s> Span<&'s str> {
+    /// Gives access to the internal, sliced string without having to try to unwrap it first.
+    ///
+    /// # Returns
+    /// A [`str`] slice representing the spanned area.
+    #[inline]
+    pub fn as_str(&self) -> &'s str {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source[start..end]
+    }
+}
+impl<'s> Span<Cow<'s, str>> {
+    /// Gives access to the internal, sliced string without having to try to unwrap it first.
+    ///
+    /// # Returns
+    /// A [`str`] slice representing the spanned area.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source[start..end]
+    }
+}
+impl Span<String> {
+    /// Gives access to the internal, sliced string without having to try to unwrap it first.
+    ///
+    /// # Returns
+    /// A [`str`] slice representing the spanned area.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        let source_len: usize = self.source.len();
+        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
+        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
+        &self.source[start..end]
+    }
+}
 impl<'s, S: Spannable<'s>> Span<S> {
     /// Returns slice version of the spanned area.
     ///
@@ -413,50 +383,19 @@ impl<'s, S: SpannableBytes<'s>> Span<S> {
     #[inline]
     pub fn as_bytes(&self) -> &'s [u8] { <Self>::as_slice(self) }
 }
-impl<'s, S: SpannableUtf8<'s>> Span<S> {
-    /// Alias for [`Spannable::as_slice()`] that returns this array as a valid UTF-8 slice (i.e.,
-    /// a [`str`]).
-    ///
-    /// NOTE: The only difference between this function and [`SpannableUtf8::ast_str()`] (which is
-    /// also implemented on [`Span`]) is that its bounds are slightly less restrictive ([`Clone`]
-    /// is not necessary).
-    ///
-    /// # Returns
-    /// A [`str`] representing this array.
-    #[inline]
-    pub fn as_str(&self) -> &'s str {
-        let source_len: usize = self.source.len();
-        let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
-        let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
-        &self.source.as_str()[start..end]
-    }
-}
 impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     type Elem = <S as Spannable<'s>>::Elem;
     type SourceId = <S as Spannable<'s>>::SourceId;
-    type Slice = Span<S>;
+    // type Slice = Span<S>;
 
     #[inline]
     fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <Self>::slice(self, range) }
-
-    #[inline]
     fn as_slice(&self) -> &'s [Self::Elem] { <Self>::as_slice(self) }
 
     #[inline]
-    fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <Self>::match_while(self, pred) }
-
-    #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
-}
-impl<'s, S: Clone + SpannableUtf8<'s>> SpannableUtf8<'s> for Span<S> {
-    #[inline]
-    fn as_str(&self) -> &'s str { <Self>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'s str) -> bool) -> usize { <Self>::match_utf8_while(self, pred) }
 }
 
 
@@ -477,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_span_commute_lifetime() {
-        fn slice_value<'s>(value: &Span<&'s str>, range: std::ops::RangeFrom<usize>) -> &'s str { value.slice(range).value() }
+        fn slice_value<'s>(value: &Span<&'s str>, range: std::ops::RangeFrom<usize>) -> &'s str { value.slice(range).as_str() }
         assert_eq!(slice_value(&Span::new("hiya"), 1..), "iya");
     }
 }

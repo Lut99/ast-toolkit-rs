@@ -12,7 +12,7 @@
 //!   Provides a [nom](https://github.com/rust-bakery/nom)-compatible Span
 //!   that is used to track AST nodes to their location in the source
 //!   text.
-//!   
+//!
 //!   Used in various other parts of the ast-toolkit.
 //
 
@@ -24,5 +24,5 @@ mod spanning;
 
 // Bring some of it into the parent namespace
 pub use span::Span;
-pub use spannable::{Spannable, SpannableBytes, SpannableUtf8};
+pub use spannable::{Spannable, SpannableBytes};
 pub use spanning::Spanning;

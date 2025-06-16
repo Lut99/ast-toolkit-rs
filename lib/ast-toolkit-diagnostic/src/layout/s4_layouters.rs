@@ -44,9 +44,9 @@ fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> (Opti
     let mut i: usize = 0;
     let mut line_start: usize = 0; // Inclusive
     let mut lines: Vec<Span<S>> = Vec::with_capacity(1);
-    source.match_while(|elem| {
+    for b in source.as_bytes() {
         // We initially match on newlines
-        if *elem == b'\n' {
+        if *b == b'\n' {
             // It's the last element of the current line
 
             // Store the line
@@ -61,14 +61,13 @@ fn find_touched_lines<'s, S: Clone + SpannableBytes<'s>>(span: Span<S>) -> (Opti
 
             // Potentially quit
             if i + 1 >= end {
-                return false;
+                break;
             }
         }
 
         // Now update our position according to the element and keep iterating
         i += 1;
-        true
-    });
+    }
     if i + 1 < end {
         // There's still range left; get the remaining
         lines.push(Span::ranged(source.clone(), line_start..));
