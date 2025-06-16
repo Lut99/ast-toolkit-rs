@@ -375,17 +375,31 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::branch::alt;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 /// let span3 = Span::new("World!");
 ///
-/// let mut comb = alt((tag("Hello"), tag("Goodbye")));
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(5..), span1.slice(..5)));
-/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(7..), span2.slice(..7)));
-/// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(alt::Recoverable2 { .. }))));
+/// let mut comb = alt((tag(b"Hello"), tag(b"Goodbye")));
+/// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(7..), span2.slice(..7))));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::Recoverable(alt::Recoverable2 {
+///         fmt:   alt::ExpectsFormatter2 {
+///             fmts: (tag::ExpectsFormatter { tag: b"Hello" }, tag::ExpectsFormatter {
+///                 tag: b"Goodbye",
+///             }),
+///         },
+///         fails: (
+///             tag::Recoverable { tag: b"Hello", is_fixable: false, span: span3 },
+///             tag::Recoverable { tag: b"Goodbye", is_fixable: false, span: span3 }
+///         ),
+///         span:  span3,
+///     }))
+/// );
 /// ```
 #[inline]
 pub const fn alt<'c, 's, B, S>(branches: B) -> Alt<B, S>

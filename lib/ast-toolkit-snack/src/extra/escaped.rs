@@ -21,7 +21,7 @@ use ast_toolkit_span::{Span, Spannable, SpannableBytes, SpannableUtf8, Spanning}
 
 use crate::fmt::{ElemDisplay, ElemDisplayIterFormatter};
 use crate::result::{Expected, Result as SResult, SnackError, SpanningError};
-use crate::{Combinator, ParseError, utf8};
+use crate::{Combinator, ParseError, scan};
 
 
 /***** ERRORS *****/
@@ -183,10 +183,10 @@ pub struct Escaped<'c, T, P, S> {
 impl<'c, 's, 'a, P, E, S> Combinator<'a, 's, S> for Escaped<'c, S::Elem, P, S>
 where
     'c: 'a,
-    P: for<'b> FnMut(&'b str) -> Result<Cow<'b, str>, E>,
+    P: FnMut(&'s S::Elem) -> Result<Option<S::Elem>, E>,
     E: 'c + Error,
     S: Clone + Spannable<'s>,
-    S::Elem: Debug + ElemDisplay,
+    S::Elem: Debug + ElemDisplay + PartialEq,
 {
     type ExpectsFormatter = ExpectsFormatter<'c, S::Elem>;
     type Output = EscapedString<S>;
@@ -208,7 +208,7 @@ where
 
 
         // Step 1: Match the opening delimiter
-        let (rem, open): (Span<S>, Span<S>) = match utf8::complete::tag(self.open).parse(input) {
+        let (rem, open): (Span<S>, Span<S>) = match scan::tag(self.open).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
                 return Err(SnackError::Recoverable(Recoverable {
@@ -224,25 +224,25 @@ where
         let mut state = State::Body;
         let mut i: usize = 0;
         let mut close: Option<Span<S>> = None;
-        let mut value = String::new();
+        let mut value = Vec::new();
         let mut ret_err: Option<Self::Fatal> = None;
-        rem.match_utf8_while(|c| {
+        rem.match_while(|elem| {
             match state {
                 State::Body => {
                     // Either we parse a closing delim OR an escapee
-                    if c == self.delim {
+                    if elem == self.close {
                         // OK! That's it folks!
-                        close = Some(rem.slice(i..i + c.len()));
-                        i += c.len();
+                        close = Some(rem.slice(i..i + 1));
+                        i += 1;
                         false
                     } else if c == self.escaper {
                         // Switch to escaper mode
-                        i += c.len();
+                        i += 1;
                         state = State::Escaped;
                         true
                     } else {
                         // As we are
-                        i += c.len();
+                        i += 1;
                         if 1 + value.len() >= value.capacity() {
                             value.reserve(1 + value.len());
                         }
@@ -414,7 +414,7 @@ where
 /// ```
 pub const fn escaped<'c, 's, P, E, S>(open: &'c [S::Elem], close: &'c [S::Elem], escaper: &'c [S::Elem], callback: P) -> Escaped<'c, S::Elem, P, S>
 where
-    P: for<'a> FnMut(&'a S::Elem) -> Result<Option<S::Elem>, E>,
+    P: FnMut(&'s S::Elem) -> Result<Option<S::Elem>, E>,
     E: 'c + Error,
     S: Clone + SpannableBytes<'s>,
 {

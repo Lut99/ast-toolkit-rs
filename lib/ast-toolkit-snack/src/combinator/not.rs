@@ -78,10 +78,9 @@ where
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         match recognize(&mut self.comb).parse(input.clone()) {
-            Ok((_, parsed)) => Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), span: parsed })),
+            Ok((_, parsed)) => Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), fixable: None, span: parsed })),
             Err(SnackError::Recoverable(_)) => Ok((input, ())),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -93,7 +92,14 @@ where
 /***** LIBRARY *****/
 /// Implements the reverse of a combinator.
 ///
-/// Specifically, will return `Result::Ok(())` if the combinator [`Result::Fail`]s, or a [`Result::Fail`] if it [`Result::Ok`]'s.
+/// Specifically, will return [`Result::Ok`](Ok) if the combinator [`Result::Err`](Err)ors
+/// recoverably, or a `Result::Err` if it `Result::Ok`s.
+///
+/// # A note on streamingness
+/// This combinator will, when it fails recoverably, assume that no more input can fix the problem
+/// of parsing anything (because it was already parsed). If your grammar is "negatable" (i.e.,
+/// _more_ input may _invalid_ input before), this assumption is false, and you need to decide for
+/// yourself whether more input may cause the wrapped `comb` to fail.
 ///
 /// # Arguments
 /// - `comb`: The [`Combinator`] to negate.
@@ -114,20 +120,21 @@ where
 /// use ast_toolkit_snack::combinator::not;
 /// use ast_toolkit_snack::error::cut;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 ///
-/// let mut tag = tag("Goodbye");
+/// let mut tag = tag(b"Goodbye");
 /// let mut comb = not(&mut tag);
 /// assert_eq!(comb.parse(span1), Ok((span1, ())));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(not::Recoverable {
-///         fmt:  comb.expects(),
-///         span: span2.slice(..7),
+///         fmt:     comb.expects(),
+///         fixable: None,
+///         span:    span2.slice(..7),
 ///     }))
 /// );
 ///
@@ -135,7 +142,8 @@ where
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Err(SnackError::Fatal(cut::Fatal::Recoverable(tag::Recoverable {
-///         tag:  "Goodbye",
+///         tag: b"Goodbye",
+///         is_fixable: false,
 ///         span: span1,
 ///     })))
 /// );

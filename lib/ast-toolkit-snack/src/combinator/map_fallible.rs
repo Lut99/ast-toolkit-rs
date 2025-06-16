@@ -78,6 +78,25 @@ impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Error<E1, E2> {
         }
     }
 }
+impl<E1: ParseError<S>, E2: ParseError<S>, S: Clone> ParseError<S> for Error<E1, E2> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool {
+        match self {
+            Self::Comb(err) => err.more_might_fix(),
+            Self::Map(err) => err.more_might_fix(),
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> {
+        match self {
+            Self::Comb(err) => err.needed_to_fix(),
+            Self::Map(err) => err.needed_to_fix(),
+        }
+    }
+}
 
 
 
@@ -95,7 +114,7 @@ pub struct MapFallible<C, P, S> {
 impl<'c, 's, C, P, O1, O2, E1, E2, S> Combinator<'c, 's, S> for MapFallible<C, P, S>
 where
     C: Combinator<'c, 's, S, Output = O1>,
-    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
+    P: FnMut(O1) -> Result<O2, SnackError<E1, E2>>,
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,
@@ -115,11 +134,9 @@ where
                 Ok(res) => Ok((rem, res)),
                 Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Error::Map(err))),
                 Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Error::Map(err))),
-                Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
             },
             Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Error::Comb(err))),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(Error::Comb(err))),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -140,6 +157,9 @@ where
 /// - `pred`: Some closure that takes the `comb`'s result and maps it to something else, or emits
 ///   a custom error.
 ///
+///   Note that this custom error must be a [`ParseError`]. If you aren't returning one, you can
+///   refer to a [`SpanningError`](crate::result::SpanningError) to wrap it and make it do so.
+///
 /// # Returns
 /// A combinator [`MapFallible`] that runs the given `comb`inator, and then maps the result using
 /// pred`, fallibly.
@@ -153,9 +173,9 @@ where
 /// use std::num::ParseIntError;
 ///
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::ascii::digit1;
 /// use ast_toolkit_snack::combinator::map_fallible;
 /// use ast_toolkit_snack::result::{SnackError, SpanningError};
-/// use ast_toolkit_snack::utf8::complete::digit1;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("128");
@@ -163,23 +183,24 @@ where
 /// let span3 = Span::new("256");
 ///
 /// let mut comb = map_fallible(digit1(), |parsed| {
-///     u8::from_str_radix(parsed.value(), 10).map_err(|err| {
-///         SnackError::<Infallible, _, _>::Fatal(SpanningError { err, span: parsed })
-///     })
+///     u8::from_str_radix(parsed.value(), 10)
+///         .map_err(|err| SnackError::<Infallible, _>::Fatal(SpanningError::new(err, parsed)))
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), 128)));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(map_fallible::Error::Comb(digit1::Recoverable {
-///         fmt:  digit1::ExpectsFormatter,
-///         span: span2,
+///         fmt:     digit1::ExpectsFormatter,
+///         fixable: None,
+///         span:    span2,
 ///     })))
 /// );
 /// assert!(matches!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Fatal(map_fallible::Error::Map(SpanningError {
-///         err:  ParseIntError { .. },
-///         span: span3,
+///         err:     ParseIntError { .. },
+///         fixable: None,
+///         span:    span3,
 ///     })))
 /// ));
 /// ```
@@ -187,7 +208,7 @@ where
 pub const fn map_fallible<'c, 's, C, P, O1, O2, E1, E2, S>(comb: C, pred: P) -> MapFallible<C, P, S>
 where
     C: Combinator<'c, 's, S, Output = O1>,
-    P: FnMut(O1) -> Result<O2, SnackError<E1, E2, S>>,
+    P: FnMut(O1) -> Result<O2, SnackError<E1, E2>>,
     E1: ParseError<S>,
     E2: ParseError<S>,
     S: Clone + Spannable<'s>,

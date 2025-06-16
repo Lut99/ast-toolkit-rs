@@ -40,13 +40,9 @@ fn main() {
     assert_eq!(dot1, dot2);
     assert_eq!(Dot::<()>::TOKEN, ".");
 
-    // Also parse some string
+    // Render it to display in snack
     #[cfg(feature = "snack")]
-    use ast_toolkit_snack::Combinator as _;
-    #[cfg(feature = "snack")]
-    let dot3 = Dot::parser(ast_toolkit_snack::combinator::nop()).parse(Span::new(("<example3>", "."))).unwrap().1;
-    #[cfg(feature = "snack")]
-    assert_eq!(format!("{dot3:?}"), "Dot { span: Span<(&str, &str)> { source: \"<example3>\", range: ..1 } }");
+    assert_eq!(format!("{}", ast_toolkit_snack::fmt::ElemDisplayFormatter(&dot1)), "DOT");
 
     // Also generate railroad diagram nodes
     #[cfg(feature = "railroad")]

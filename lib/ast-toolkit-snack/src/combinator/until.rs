@@ -80,7 +80,6 @@ where
                     continue;
                 },
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
         }
         Ok((input.slice(input_len..), input.slice(..input_len)))
@@ -114,7 +113,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::until;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("abcd");
@@ -122,7 +121,7 @@ where
 /// let span3 = Span::new("abce");
 /// let span4 = Span::new("");
 ///
-/// let mut comb = until(tag("d"));
+/// let mut comb = until(tag(b"d"));
 /// assert_eq!(comb.parse(span1).unwrap(), ((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2).unwrap(), ((span2.slice(0..), span2.slice(..0))));
 /// assert_eq!(comb.parse(span3).unwrap(), ((span3.slice(4..), span3.slice(..4))));

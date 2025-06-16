@@ -16,11 +16,12 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
+use ast_toolkit_snack::ascii::digit1;
 use ast_toolkit_snack::boxed::BoxableParseError as _;
 use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
-use ast_toolkit_snack::utf8::complete::{digit1, tag};
-use ast_toolkit_snack::{Combinator, branch, combinator as comb};
+use ast_toolkit_snack::scan::tag;
+use ast_toolkit_snack::{Combinator, ParseError, branch, combinator as comb};
 use ast_toolkit_span::{Span, Spannable, SpannableBytes as _, SpannableUtf8, Spanning};
 use better_derive::{Debug, Eq, PartialEq};
 
@@ -54,6 +55,13 @@ impl<S: Clone> Spanning<S> for Fatal<S> {
             Self::Overflow { span } => span,
         }
     }
+}
+impl<'s, S: Clone + Spannable<'s>> ParseError<S> for Fatal<S> {
+    #[inline]
+    fn more_might_fix(&self) -> bool { false }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> { None }
 }
 
 
@@ -183,21 +191,18 @@ where
             // return multiple different errors without creating new enums.
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err.boxed())),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err.boxed())),
-            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
 
         // Then recursively parse the rest if there's an addition
-        match tag("+").parse(rem.clone()) {
+        match tag(b"+").parse(rem.clone()) {
             Ok((rem, _)) => match expr().parse(rem) {
                 Ok((rem, rhs)) => Ok((rem, Expr::Add(Box::new(Expr::Lit(lhs)), Box::new(rhs)))),
                 Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(err.boxed())),
                 Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err.boxed())),
-                Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
             },
             // If there's no addition, we are still OK
             Err(SnackError::Recoverable(_)) => Ok((rem, Expr::Lit(lhs))),
             Err(SnackError::Fatal(_)) => unreachable!(),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     })
 }
@@ -252,12 +257,12 @@ where
         let (rem, val): (Span<S>, Span<S>) = match digit1().parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(err)),
-            Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
+            Err(SnackError::Fatal(_)) => unreachable!(),
         };
 
         // Convert to an integer
         let mut value: u64 = 0;
-        let mut res: Result<(), SnackError<_, _, S>> = Ok(());
+        let mut res: Result<(), SnackError<_, _>> = Ok(());
         val.match_bytes_while(|b| {
             if b >= b'0' && b <= b'9' {
                 let i: u64 = (b - b'0') as u64;

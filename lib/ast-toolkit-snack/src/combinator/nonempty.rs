@@ -14,14 +14,14 @@
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{self, Display, Formatter, Result as FResult};
+use std::fmt::{self, Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use super::remember;
-use crate::Combinator;
 use crate::result::{Result as SResult, SnackError};
+use crate::{Combinator, ParseError};
 
 
 /***** ERRORS *****/
@@ -58,6 +58,27 @@ impl<'s, E: Spanning<S>, F, S: Clone> Spanning<S> for Recoverable<E, F, S> {
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Empty { span, .. } => span,
+        }
+    }
+}
+impl<'s, E: ParseError<S>, F: crate::ExpectsFormatter, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<E, F, S> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool {
+        match self {
+            Self::Comb(err) => err.more_might_fix(),
+            // See the docs of `nonempty()` for more information
+            Self::Empty { .. } => true,
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> {
+        match self {
+            Self::Comb(err) => err.needed_to_fix(),
+            // See the docs of `nonempty()` for more information
+            Self::Empty { .. } => None,
         }
     }
 }
@@ -119,7 +140,6 @@ where
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Comb(err))),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
 
         // Assert that there is something there
@@ -142,6 +162,18 @@ where
 /// Together with [`until()`](super::until()), this allows one to create
 /// [`while1()`](crate::bytes::complete::while1())-like combinators, but then in the abstract.
 ///
+/// # A note on streamingness
+/// If you are relying on this parser's error's [`ParseError::more_might_fix()`], there is an edge-
+/// case where the parser is left guessing in the current implementation. In particular, _if_ the
+/// wrapped `comb`inator parses **succesfully but nothing** (e.g., a
+/// [`while0()`](crate::scan::while0())-combinator), _and_ it perfectly parsed all available input
+/// (it returns an empty "remaining" input), _then_ we have to guess as to whether more input might
+/// actually make it parse something, resolving our own [`Recoverable::Empty`].
+///
+/// For completeness sake, this combinator assumes **it might**, regardless of whether the
+/// underlying combinator can actually do something with more input. Worst-case, this will require
+/// you to fetch more bytes which turn out not fix anything (of which there is always a risk).
+///
 /// # Arguments
 /// - `comb`: Some other combinator to parse at least *something* of.
 ///
@@ -158,13 +190,13 @@ where
 /// use ast_toolkit_snack::combinator::nonempty;
 /// use ast_toolkit_snack::multi::many0;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("aaab");
 /// let span2 = Span::new("b");
 ///
-/// let mut comb = nonempty(many0(tag("a")));
+/// let mut comb = nonempty(many0(tag(b"a")));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(3..), vec![span1.slice(..1), span1.slice(1..2), span1.slice(2..3)]))
@@ -172,7 +204,7 @@ where
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(nonempty::Recoverable::Empty {
-///         fmt:  many0::ExpectsFormatter { fmt: tag::ExpectsFormatter { tag: "a" } },
+///         fmt:  many0::ExpectsFormatter { fmt: tag::ExpectsFormatter { tag: b"a" } },
 ///         span: span2,
 ///     }))
 /// );
@@ -183,16 +215,17 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::nonempty;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("b");
 ///
-/// let mut comb = nonempty(tag("a"));
+/// let mut comb = nonempty(tag(b"a"));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Err(SnackError::Recoverable(nonempty::Recoverable::Comb(tag::Recoverable {
-///         tag:  "a",
+///         tag: b"a",
+///         is_fixable: false,
 ///         span: span1,
 ///     })))
 /// );

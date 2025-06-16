@@ -20,7 +20,7 @@ use std::mem::MaybeUninit;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ExpectsFormatter};
+use crate::{Combinator, ExpectsFormatter, ParseError};
 
 
 /***** IMPLEMENTATIONS *****/
@@ -70,6 +70,25 @@ macro_rules! tuple_comb_impl {
                     match self {
                         Self::[<Comb $fi>](err) => err.into_span(),
                         $(Self::[<Comb $i>](err) => err.into_span(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: ParseError<S> $(, [<E $i>]: ParseError<S>)*, S: Clone> ParseError<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
+                #[track_caller]
+                fn more_might_fix(&self) -> bool {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.more_might_fix(),
+                        $(Self::[<Comb $i>](err) => err.more_might_fix(),)*
+                    }
+                }
+
+                #[inline]
+                #[track_caller]
+                fn needed_to_fix(&self) -> Option<usize> {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.needed_to_fix(),
+                        $(Self::[<Comb $i>](err) => err.needed_to_fix(),)*
                     }
                 }
             }
@@ -131,7 +150,6 @@ macro_rules! tuple_comb_impl {
                         },
                         Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $fi>](err))),
                         Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $fi>](err))),
-                        Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                     };
                     $(
                         let rem: Span<S> = match self.$i.parse(rem) {
@@ -141,7 +159,6 @@ macro_rules! tuple_comb_impl {
                             },
                             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $i>](err))),
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $i>](err))),
-                            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
                         };
                     )*
 
@@ -226,29 +243,32 @@ tuple_comb_impls!((1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7)
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::ascii::digit1;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_snack::sequence::tuple;
-/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello123");
 /// let span2 = Span::new("123");
 /// let span3 = Span::new("HelloWorld");
 ///
-/// let mut comb = tuple((tag("Hello"), digit1()));
+/// let mut comb = tuple((tag(b"Hello"), digit1()));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(8..), (span1.slice(..5), span1.slice(5..8)))));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(tuple::Recoverable2::Comb0(tag::Recoverable {
-///         tag:  "Hello",
+///         tag: b"Hello",
+///         is_fixable: false,
 ///         span: span2,
 ///     })))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(tuple::Recoverable2::Comb1(digit1::Recoverable {
-///         fmt:  digit1::ExpectsFormatter,
-///         span: span3.slice(5..),
+///         fmt:     digit1::ExpectsFormatter,
+///         fixable: None,
+///         span:    span3.slice(5..),
 ///     })))
 /// );
 /// ```

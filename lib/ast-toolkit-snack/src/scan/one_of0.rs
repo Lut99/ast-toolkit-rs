@@ -43,7 +43,7 @@ impl<'b, T: Debug + ElemDisplay> crate::ExpectsFormatter for ExpectsFormatter<'b
         for i in 0..self.set.len() {
             if i == 0 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                <T as ElemDisplay>::fmt(unsafe { self.set.get_unchecked(i) }, f)?;
+                <T as ElemDisplay>::elem_fmt(unsafe { self.set.get_unchecked(i) }, f)?;
             } else if i < self.set.len() - 1 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
                 write!(f, ", {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;

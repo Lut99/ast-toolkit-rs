@@ -43,17 +43,11 @@ fn main() {
     assert_eq!(paren1, paren2);
     assert_eq!(<Parens<()> as Utf8Delimiter<()>>::OpenToken::TOKEN, "(");
 
-    // Also parse some string
+    // Render it to display in snack
     #[cfg(feature = "snack")]
-    use ast_toolkit_snack::Combinator as _;
+    assert_eq!(format!("{}", ast_toolkit_snack::fmt::ElemDisplayFormatter(&paren1.open)), "PARENS_OPEN");
     #[cfg(feature = "snack")]
-    let parens = Parens::parser(ast_toolkit_snack::utf8::complete::tag("foo")).parse(Span::new(("<example3>", "(foo)"))).unwrap().1.1;
-    #[cfg(feature = "snack")]
-    assert_eq!(
-        format!("{parens:?}"),
-        "Parens { open: ParensOpen { span: Span<(&str, &str)> { source: \"<example3>\", range: ..1 } }, close: ParensClose { span: Span<(&str, \
-         &str)> { source: \"<example3>\", range: 4..5 } } }"
-    );
+    assert_eq!(format!("{}", ast_toolkit_snack::fmt::ElemDisplayFormatter(&paren1.close)), "PARENS_CLOSE");
 
     // Also generate railroad diagram nodes
     #[cfg(feature = "railroad")]

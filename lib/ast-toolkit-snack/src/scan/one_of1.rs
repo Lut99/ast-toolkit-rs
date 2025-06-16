@@ -26,7 +26,7 @@ use crate::result::{Expected, Result as SResult, SnackError};
 /***** ERRORS *****/
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
-type Recoverable<'c, T, S> = Expected<ExpectsFormatter<'c, T>, S>;
+pub type Recoverable<'c, T, S> = Expected<ExpectsFormatter<'c, T>, S>;
 
 
 
@@ -52,7 +52,7 @@ impl<'c, T: Debug + ElemDisplay> crate::ExpectsFormatter for ExpectsFormatter<'c
         for i in 0..self.set.len() {
             if i == 0 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                <T as ElemDisplay>::fmt(unsafe { self.set.get_unchecked(i) }, f)?;
+                <T as ElemDisplay>::elem_fmt(unsafe { self.set.get_unchecked(i) }, f)?;
             } else if i < self.set.len() - 1 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
                 write!(f, ", {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;
@@ -148,27 +148,22 @@ where
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(comb.parse(span3), Ok((span3.slice(5..), span3.slice(..5))));
-///
-/// let err = comb.parse(span4);
 /// assert_eq!(
-///     err,
+///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
-///         fmt:  one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
-///         span: span4,
+///         fmt:     one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
+///         fixable: None,
+///         span:    span4,
 ///     }))
 /// );
-/// assert!(!err.more_might_fix());
-///
-/// let err = comb.parse(span5);
 /// assert_eq!(
-///     err,
+///     comb.parse(span5),
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
-///         fmt:  one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
-///         span: span5,
+///         fmt:     one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
+///         fixable: Some(Some(1)),
+///         span:    span5,
 ///     }))
 /// );
-/// assert!(err.more_might_fix());
-/// assert_eq!(err.needed_to_fix(), Some(1));
 /// ```
 #[inline]
 pub const fn one_of1<'c, 's, S>(set: &'c [S::Elem]) -> OneOf1<'c, S::Elem, S>

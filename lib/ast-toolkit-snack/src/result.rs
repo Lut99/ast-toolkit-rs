@@ -70,6 +70,25 @@ impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for CutError<E1, E2
         }
     }
 }
+impl<E1: ParseError<S>, E2: ParseError<S>, S: Clone> ParseError<S> for CutError<E1, E2> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool {
+        match self {
+            Self::Recoverable(err) => err.more_might_fix(),
+            Self::Fatal(err) => err.more_might_fix(),
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> {
+        match self {
+            Self::Recoverable(err) => err.needed_to_fix(),
+            Self::Fatal(err) => err.needed_to_fix(),
+        }
+    }
+}
 
 
 
@@ -87,7 +106,7 @@ pub trait ResultExt<T, E1, E2, S>: Sized {
     /// # Returns
     /// A Result with a [`SnackError`] which is either [`SnackError::Fatal`] or
     /// [`SnackError::NotEnough`].
-    fn cut(self) -> std::result::Result<T, SnackError<Infallible, CutError<E1, E2>>>;
+    fn cut(self) -> Result<T, Infallible, CutError<E1, E2>, S>;
 
     /// "Uncuts" the [`SnackError`] in this Result.
     ///
@@ -99,7 +118,7 @@ pub trait ResultExt<T, E1, E2, S>: Sized {
     /// # Returns
     /// A Result with a [`SnackError`] which is either [`SnackError::Recoverable`] or
     /// [`SnackError::NotEnough`].
-    fn uncut(self) -> std::result::Result<T, SnackError<CutError<E1, E2>, Infallible>>;
+    fn uncut(self) -> Result<T, CutError<E1, E2>, Infallible, S>;
 
 
 
@@ -111,7 +130,7 @@ pub trait ResultExt<T, E1, E2, S>: Sized {
     /// # Returns
     /// A Result that, if it was an [`Err`] with [`SnackError::Recoverable`], has the result of the
     /// `map` instead of the original error. If it was anything else, it is untouched.
-    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> std::result::Result<T, SnackError<E, E2>>;
+    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> Result<T, E, E2, S>;
 
     /// Maps the fatal error in the [`SnackError`] embedded in this Result to another one.
     ///
@@ -121,12 +140,12 @@ pub trait ResultExt<T, E1, E2, S>: Sized {
     /// # Returns
     /// A Result that, if it was an [`Err`] with [`SnackError::Fatal`], has the result of the `map`
     /// instead of the original error. If it was anything else, it is untouched.
-    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> std::result::Result<T, SnackError<E1, E>>;
+    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> Result<T, E1, E, S>;
 }
 
-impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackError<E1, E2>> {
+impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for Result<T, E1, E2, S> {
     #[inline]
-    fn cut(self) -> std::result::Result<T, SnackError<Infallible, CutError<E1, E2>>> {
+    fn cut(self) -> Result<T, Infallible, CutError<E1, E2>, S> {
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(err.cut()),
@@ -134,7 +153,7 @@ impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackErr
     }
 
     #[inline]
-    fn uncut(self) -> std::result::Result<T, SnackError<CutError<E1, E2>, Infallible>> {
+    fn uncut(self) -> Result<T, CutError<E1, E2>, Infallible, S> {
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(err.uncut()),
@@ -144,7 +163,7 @@ impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackErr
 
 
     #[inline]
-    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> std::result::Result<T, SnackError<E, E2>> {
+    fn map_recoverable<E>(self, map: impl FnOnce(E1) -> E) -> Result<T, E, E2, S> {
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(err.map_recoverable(map)),
@@ -152,7 +171,7 @@ impl<T, E1, E2, S> ResultExt<T, E1, E2, S> for ::std::result::Result<T, SnackErr
     }
 
     #[inline]
-    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> std::result::Result<T, SnackError<E1, E>> {
+    fn map_fatal<E>(self, map: impl FnOnce(E2) -> E) -> Result<T, E1, E, S> {
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(err.map_fatal(map)),
@@ -304,6 +323,15 @@ where
         }
     }
 }
+impl<E1: Error, E2: Error> Error for SnackError<E1, E2> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Recoverable(err) => err.source(),
+            Self::Fatal(err) => err.source(),
+        }
+    }
+}
 impl<E1, E2, S> Spanning<S> for SnackError<E1, E2>
 where
     E1: Spanning<S>,
@@ -323,6 +351,25 @@ where
         match self {
             Self::Recoverable(err) => err.into_span(),
             Self::Fatal(err) => err.into_span(),
+        }
+    }
+}
+impl<E1: ParseError<S>, E2: ParseError<S>, S: Clone> ParseError<S> for SnackError<E1, E2> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool {
+        match self {
+            Self::Recoverable(err) => err.more_might_fix(),
+            Self::Fatal(err) => err.more_might_fix(),
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> {
+        match self {
+            Self::Recoverable(err) => err.needed_to_fix(),
+            Self::Fatal(err) => err.needed_to_fix(),
         }
     }
 }
@@ -398,15 +445,55 @@ impl<'s, F: ExpectsFormatter, S: Clone + Spannable<'s>> ParseError<S> for Expect
 ///
 /// fn is_parse_error<T: ParseError<S>, S: Clone>(err: T) {}
 ///
-/// is_parse_error(SpanningError { err: u32::from_str("a").unwrap_err(), span: Span::new("a") });
+/// is_parse_error(SpanningError {
+///     err:     u32::from_str("a").unwrap_err(),
+///     fixable: None,
+///     span:    Span::new("a"),
+/// });
 /// ```
 #[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
 #[better_derive(impl_gen = <'s,E, S>, bound = (E: r#trait, S: Spannable<'s>))]
 pub struct SpanningError<E, S> {
     /// The error wrapped.
-    pub err:  E,
+    pub err:     E,
+    /// If not [`None`], then more bytes could fix this problem.
+    ///
+    /// The contents of the `Option` encodes an optional estimate for the minimum number of bytes
+    /// that might fix this error.
+    pub fixable: Option<Option<usize>>,
     /// The span that points to where it occurs.
-    pub span: Span<S>,
+    pub span:    Span<S>,
+}
+impl<E, S> SpanningError<E, S> {
+    /// Constructs a new SpanningError around your normal `E`rror.
+    ///
+    /// This function will assume that more input does not fix your error. See
+    /// [`SpanningError::new_fixable`] for more details.
+    ///
+    /// # Arguments
+    /// - `err`: The `E`rror to wrap around.
+    /// - `span`: Some [`Span`] indicating where in the source text the error occurred.
+    ///
+    /// # Returns
+    /// A new [`SpanningError`] that is a [`ParseError`].
+    #[inline]
+    pub const fn new(err: E, span: Span<S>) -> Self { Self { err, fixable: None, span } }
+
+    /// Constructs a new SpanningError around your normal `E`rror, with additional information that
+    /// it may be fixed when more input is shown. This is practical to do when your error is
+    /// essentially an "unexpected-end-of-file" so that users that get their implementation
+    /// incrementally know to get more to potentially fix this error.
+    ///
+    /// # Arguments
+    /// - `err`: The `E`rror to wrap around.
+    /// - `min_elems`: An estimate of the _minimum_ number of additional elements to fetch
+    ///   such that the error _may_ be fixed. If this is unknown, then [`None`] should be given.
+    /// - `span`: Some [`Span`] indicating where in the source text the error occurred.
+    ///
+    /// # Returns
+    /// A new [`SpanningError`] that is a [`ParseError`].
+    #[inline]
+    pub const fn new_fixable(err: E, min_elems: Option<usize>, span: Span<S>) -> Self { Self { err, fixable: Some(min_elems), span } }
 }
 impl<E: Display, S> Display for SpanningError<E, S> {
     #[inline]
@@ -422,4 +509,11 @@ impl<E, S: Clone> Spanning<S> for SpanningError<E, S> {
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
+}
+impl<'s, E: Error, S: Clone + Spannable<'s>> ParseError<S> for SpanningError<E, S> {
+    #[inline]
+    fn more_might_fix(&self) -> bool { self.fixable.is_some() }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> { self.fixable.flatten() }
 }

@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableBytes};
+use ast_toolkit_span::{Span, Spannable};
 
 use crate::result::Result as SResult;
 use crate::{Combinator, ExpectsFormatter as _};
@@ -58,8 +58,8 @@ pub struct While0<'c, P, S> {
 impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
 where
     'c: 's,
-    P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    P: FnMut(&'s S::Elem) -> bool,
+    S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -71,7 +71,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        let split: usize = input.match_bytes_while(&mut self.predicate);
+        let split: usize = input.match_while(&mut self.predicate);
         Ok((input.slice(split..), input.slice(..split)))
     }
 }
@@ -84,19 +84,18 @@ where
 /// Will attempt to match as many bytes from the start of a span as possible, as long as those
 /// bytes match a given predicate.
 ///
-/// This version accepts matching none of them. See [`while1()`](super::complete::while1()) (or its
-/// streaming version, [`while1()`](super::streaming::while1())) to assert at least something must
-/// be matched.
+/// This version accepts matching none of them. See [`while1()`](super::while1()) to assert at
+/// least something must be matched.
 ///
 /// # Arguments
 /// - `what`: A short string describing what byte is being matched. Should finish the sentence
 ///   "Expected ...".
-/// - `predicate`: A closure that returns true for matching bytes, and false for non-matching
-///   bytes. All bytes that are matched are returned up to the first for which `predicate` returns
-///   false (if any).
+/// - `predicate`: A closure that returns true for matching elements, and false for non-matching
+///   ones. This combinator parsers up until (but not including) the first false, if any (the end
+///   of the input otherwise).
 ///
 /// # Returns
-/// A combinator [`While0`] that will match the prefix of input as long as those bytes match the
+/// A combinator [`While0`] that will match the prefix of input as long as those elements match the
 /// given `predicate`.
 ///
 /// # Fails
@@ -105,19 +104,19 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::bytes::while0;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::while0;
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new(b"abcdefg".as_slice());
-/// let span2 = Span::new(b"cdefghi".as_slice());
-/// let span3 = Span::new("abÿcdef".as_bytes());
-/// let span4 = Span::new(b"hijklmn".as_slice());
-/// let span5 = Span::new(b"".as_slice());
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
 /// // Note: the magic numbers below are the two bytes made up by "ÿ"
-/// let mut comb = while0("'a', 'b', 'c' or 'ÿ'", |b: u8| -> bool {
-///     b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195
+/// let mut comb = while0("'a', 'b', 'c' or 'ÿ'", |b: &u8| -> bool {
+///     *b == b'a' || *b == b'b' || *b == b'c' || *b == 191 || *b == 195
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
@@ -128,8 +127,8 @@ where
 #[inline]
 pub const fn while0<'c, 's, P, S>(what: &'c str, predicate: P) -> While0<'c, P, S>
 where
-    P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    P: FnMut(&'s S::Elem) -> bool,
+    S: Clone + Spannable<'s>,
 {
     While0 { predicate, what, _s: PhantomData }
 }

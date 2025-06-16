@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ExpectsFormatter as _};
+use crate::{Combinator, ExpectsFormatter as _, ParseError};
 
 
 /***** ERRORS *****/
@@ -65,6 +65,26 @@ impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
         match self {
             Self::Comb(err) => err.into_span(),
             Self::RemainingInput { span } => span,
+        }
+    }
+}
+impl<'s, E: ParseError<S>, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<E, S> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool {
+        match self {
+            Self::Comb(err) => err.more_might_fix(),
+            // By definition, it's already too late; more input will only make the problem worse
+            Self::RemainingInput { .. } => false,
+        }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> {
+        match self {
+            Self::Comb(err) => err.needed_to_fix(),
+            Self::RemainingInput { .. } => None,
         }
     }
 }
@@ -125,7 +145,6 @@ where
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable(Recoverable::Comb(err))),
             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
         };
 
         // Then assert that nothing is remaining
@@ -159,14 +178,14 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::consume;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello");
 /// let span2 = Span::new("Hello, world!");
 /// let span3 = Span::new("Hey");
 ///
-/// let mut comb = consume(tag("Hello"));
+/// let mut comb = consume(tag(b"Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), span1.slice(..5))));
 /// assert_eq!(
 ///     comb.parse(span2),
@@ -177,7 +196,8 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(consume::Recoverable::Comb(tag::Recoverable {
-///         tag:  "Hello",
+///         tag: b"Hello",
+///         is_fixable: false,
 ///         span: span3,
 ///     })))
 /// );

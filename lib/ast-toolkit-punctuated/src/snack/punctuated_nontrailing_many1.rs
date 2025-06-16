@@ -1,10 +1,10 @@
-//  PUNCTUATED MANY 1.rs
+//  PUNCTUATED MOST 1.rs
 //    by Lut99
 //
 //  Created:
-//    12 Mar 2025, 13:43:43
+//    12 Mar 2025, 13:38:05
 //  Last edited:
-//    08 May 2025, 13:22:11
+//    08 May 2025, 13:22:21
 //  Auto updated?
 //    Yes
 //
@@ -14,12 +14,13 @@
 
 use std::marker::PhantomData;
 
-use ast_toolkit_snack::Combinator;
 use ast_toolkit_snack::combinator::remember;
+pub use ast_toolkit_snack::multi::separated_many1::{ExpectsFormatter, Recoverable};
 use ast_toolkit_snack::result::{Expected, Result as SResult, SnackError};
+use ast_toolkit_snack::{Combinator, ParseError};
 use ast_toolkit_span::{Span, Spannable};
 
-pub use super::punctuated_nontrailing_most1::{ExpectsFormatter, Fatal, Recoverable};
+pub use super::punctuated_nontrailing_many0::Fatal;
 use crate::Punctuated;
 
 
@@ -53,28 +54,22 @@ where
                 if res.len() >= res.capacity() {
                     res.reserve(1 + res.len())
                 }
-                // SAFETY: We can always safely push the first element
+                // SAFETY: It's the first element, so always safe to push
                 unsafe { res.push_value_unchecked(elem) };
                 rem
             },
-            Err(SnackError::Recoverable(_)) => return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input })),
-            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
-            Err(SnackError::NotEnough { needed, span }) => {
-                // We're lazy; so if we happen to bump into the end, we assume that none were found.
-                if input.is_empty() {
-                    return Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }));
-                }
-                return Err(SnackError::NotEnough { needed, span });
+            Err(SnackError::Recoverable(err)) => {
+                return Err(SnackError::Recoverable(Expected {
+                    fmt:     self.expects(),
+                    fixable: if err.more_might_fix() { Some(err.needed_to_fix()) } else { None },
+                    span:    input,
+                }));
             },
+            Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
         };
 
         // Then parse as long as there are commas
         loop {
-            // This is why it's lazy; if there's no input left, stop
-            if rem.is_empty() {
-                return Ok((rem, res));
-            }
-
             // Try the comma first
             let (sep, span): (C2::Output, Span<S>) = match remember(&mut self.sep).parse(rem.clone()) {
                 Ok((rem2, sep)) => {
@@ -83,7 +78,6 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => return Ok((rem, res)),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Separator(err))),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             };
 
             // Parse the element
@@ -99,7 +93,6 @@ where
                 },
                 Err(SnackError::Recoverable(_)) => return Err(SnackError::Fatal(Fatal::TrailingSeparator { span })),
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(Fatal::Comb(err))),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
         }
     }
@@ -114,19 +107,18 @@ where
 /// greedily parsing multiple instances of the same input.
 ///
 /// Note that this combinator requires at least 1 occurrence of the chosen combinator. If you want
-/// a version that also accepts parsing none, see [`punctuated_nontrailing_many0()`](super::punctuated_nontrailing_many0())
-/// instead.
+/// a version that also accepts parsing none, see
+/// [`punctuated_nontrailing_most0()`](super::punctuated_nontrailing_most0()) instead.
 ///
 /// # Streaming
 /// The punctuated_nontrailing_many1-combinator's streamingness comes from using a streamed version of the
-/// nested combinator or not. BBeing lazy, if no input is left after a successful parse of `comb`,
-/// this will _not_ return a [`SnackError::NotEnough`] (unlike
-/// [`punctuated_nontrailing_most1()`](super::punctuated_nontrailing_most1())). If you want the combinator to try and fetch
-/// more input to continue parsing instead, consider using
-/// [`punctuated_nontrailing_most1()`](super::punctuated_nontrailing_most1())).
+/// nested combinator or not. Being greedy, if no input is left after a successful parse of `comb`,
+/// this will _still_ return a [`SnackError::NotEnough`]. If you want the combinator to stop
+/// parsing in such a scenario instead, consider using
+/// [`punctuated_nontrailing_many1()`](super::punctuated_nontrailing_many1()) instead.
 ///
-/// As a rule of thumb, use the `many`-combinators when the user indicates the end of the
-/// repetitions by simply not specifying any more (e.g., statements).
+/// As a rule of thumb, use the `most`-combinators when the user indicates the end of the
+/// repetitions by something concrete (e.g., expressions wrapped in parenthesis).
 ///
 /// # Arguments
 /// - `comb`: The combinator to repeatedly apply until it fails.
@@ -146,7 +138,7 @@ where
 /// use ast_toolkit_punctuated::snack::punctuated_nontrailing_many1;
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("hello,hello,hellogoodbye");
@@ -155,7 +147,7 @@ where
 /// let span4 = Span::new(",hello");
 /// let span5 = Span::new("hello,helgoodbye");
 ///
-/// let mut comb = punctuated_nontrailing_many1(tag("hello"), tag(","));
+/// let mut comb = punctuated_nontrailing_many1(tag(b"hello"), tag(b","));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(17..), punct![
@@ -170,61 +162,29 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(punctuated_nontrailing_many1::Recoverable {
-///         fmt:  punctuated_nontrailing_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
+///         fmt:     punctuated_nontrailing_many1::ExpectsFormatter {
+///             fmt: tag::ExpectsFormatter { tag: b"hello" },
+///             sep: tag::ExpectsFormatter { tag: b"," },
 ///         },
-///         span: span3,
+///         fixable: None,
+///         span:    span3,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(punctuated_nontrailing_many1::Recoverable {
-///         fmt:  punctuated_nontrailing_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
+///         fmt:     punctuated_nontrailing_many1::ExpectsFormatter {
+///             fmt: tag::ExpectsFormatter { tag: b"hello" },
+///             sep: tag::ExpectsFormatter { tag: b"," },
 ///         },
-///         span: span4,
+///         fixable: None,
+///         span:    span4,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span5),
 ///     Err(SnackError::Fatal(punctuated_nontrailing_many1::Fatal::TrailingSeparator {
 ///         span: span5.slice(5..6),
-///     }))
-/// );
-/// ```
-///
-/// Another example which shows the usage w.r.t. unexpected end-of-files in streaming contexts:
-/// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_punctuated::snack::punctuated_nontrailing_many1;
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::streaming::tag;
-/// use ast_toolkit_span::Span;
-///
-/// let span1 = Span::new("hello,hello");
-/// let span2 = Span::new("hello,hel");
-/// let span3 = Span::new("");
-///
-/// let mut comb = punctuated_nontrailing_many1(tag("hello"), tag(","));
-/// assert_eq!(
-///     comb.parse(span1),
-///     Ok((span1.slice(11..), punct![span1.slice(..5), span1.slice(5..6), span1.slice(6..11)]))
-/// );
-/// assert_eq!(
-///     comb.parse(span2),
-///     Err(SnackError::NotEnough { needed: Some(2), span: span2.slice(9..) })
-/// );
-/// assert_eq!(
-///     comb.parse(span3),
-///     Err(SnackError::Recoverable(punctuated_nontrailing_many1::Recoverable {
-///         fmt:  punctuated_nontrailing_many1::ExpectsFormatter {
-///             fmt: tag::ExpectsFormatter { tag: "hello" },
-///             sep: tag::ExpectsFormatter { tag: "," },
-///         },
-///         span: span3,
 ///     }))
 /// );
 /// ```

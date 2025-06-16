@@ -4,12 +4,12 @@
 //  Created:
 //    30 Apr 2025, 09:20:08
 //  Last edited:
-//    08 May 2025, 11:46:21
+//    08 May 2025, 13:18:02
 //  Auto updated?
 //    Yes
 //
 //  Description:
-//!   Implements a combinator that will consume exactly one character if it
+//!   Implements a combinator that will consume exactly one grapheme if it
 //!   matches a predicate.
 //
 
@@ -79,6 +79,12 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
+        // Check first if there's *any* input to parse.
+        if input.is_empty() {
+            // Note: we don't know how long the expect grapheme is. At most 4 in length.
+            return Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: Some(None), span: input }));
+        }
+
         // It's like while but only once
         let mut first: bool = true;
         let split: usize = input.match_utf8_while(|c| {
@@ -94,7 +100,7 @@ where
         if split > 0 {
             Ok((input.slice(split..), input.slice(..split)))
         } else {
-            Err(SnackError::Recoverable(Expected { fmt: self.expects(), span: input }))
+            Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: None, span: input }))
         }
     }
 }
@@ -109,8 +115,10 @@ where
 /// This is very much like [`while1()`](super::while1()), except that it will not greedily match
 /// more characters beyond the first.
 ///
-/// Note that this is the complete version of the parser. If you're intending to stream input
-/// instead, see [`graph()`](super::super::streaming::graph()).
+/// _Note:_ For the grapheme parser, [`Recoverable::needed_to_fix()`] does not provide a size hint.
+/// This is because graphemes of arbitrary byte size may be expected by the `pred`icate. In
+/// general, though, unicode characters are at most 4 bytes wide, so it's a safe default to assume
+/// (but it's not a minimum).
 ///
 /// # Arguments
 /// - `what`: Some user-friendly description of what this combinator expects. Should complete:
@@ -131,7 +139,7 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::graph;
+/// use ast_toolkit_snack::utf8::graph;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("A");
@@ -143,15 +151,17 @@ where
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(graph::Recoverable {
-///         fmt:  graph::ExpectsFormatter { what: "uppercase letter" },
-///         span: span2,
+///         fmt:     graph::ExpectsFormatter { what: "uppercase letter" },
+///         fixable: None,
+///         span:    span2,
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(graph::Recoverable {
-///         fmt:  graph::ExpectsFormatter { what: "uppercase letter" },
-///         span: span3,
+///         fmt:     graph::ExpectsFormatter { what: "uppercase letter" },
+///         fixable: Some(None),
+///         span:    span3,
 ///     }))
 /// );
 /// ```

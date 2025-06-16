@@ -16,8 +16,6 @@
 // Declare modules
 #[cfg(feature = "macros")]
 mod macros;
-#[cfg(feature = "snack")]
-pub mod snack;
 
 // Imports
 use ast_toolkit_span::Span;
@@ -26,6 +24,8 @@ use ast_toolkit_span::Span;
 pub mod __private {
     #[cfg(feature = "railroad")]
     pub use ast_toolkit_railroad as railroad;
+    #[cfg(feature = "snack")]
+    pub use ast_toolkit_snack::fmt::ElemDisplay;
     pub use ast_toolkit_span::{Span, Spannable, Spanning};
     #[cfg(feature = "serde")]
     pub use serde::{Serialize, Serializer, ser::SerializeStruct};

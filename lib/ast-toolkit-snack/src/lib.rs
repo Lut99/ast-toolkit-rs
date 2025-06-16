@@ -18,13 +18,14 @@
 //
 
 // Declare submodules
+pub mod ascii;
 pub mod boxed;
 pub mod branch;
 pub mod combinator;
 pub mod debug;
 pub mod error;
-#[cfg(feature = "extra")]
-pub mod extra;
+// #[cfg(feature = "extra")]
+// pub mod extra;
 pub mod fmt;
 mod macros;
 pub mod multi;

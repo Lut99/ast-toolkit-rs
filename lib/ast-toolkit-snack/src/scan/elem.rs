@@ -164,7 +164,7 @@ where
 #[inline]
 pub const fn elem<'s, 'c, P, S>(what: &'c str, pred: P) -> Elem<'c, P, S>
 where
-    P: FnMut(u8) -> bool,
+    P: FnMut(&'s S::Elem) -> bool,
     S: Clone + Spannable<'s>,
 {
     Elem { what, pred, _s: PhantomData }

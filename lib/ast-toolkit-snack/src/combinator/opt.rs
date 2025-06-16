@@ -73,7 +73,6 @@ where
             Ok((rem, res)) => Ok((rem, Some(res))),
             Err(SnackError::Recoverable(_)) => Ok((input, None)),
             Err(SnackError::Fatal(err)) => Err(SnackError::Fatal(err)),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -103,13 +102,13 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::opt;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 ///
-/// let mut comb = opt(tag("Hello"));
+/// let mut comb = opt(tag(b"Hello"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), Some(span1.slice(..5)))));
 /// assert_eq!(comb.parse(span2), Ok((span2, None)));
 /// ```

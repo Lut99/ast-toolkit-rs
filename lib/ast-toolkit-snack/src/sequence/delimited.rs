@@ -89,29 +89,32 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::ascii::digit1;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_snack::sequence::delimited;
-/// use ast_toolkit_snack::utf8::complete::{digit1, tag};
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("Hello123Goodbye");
 /// let span2 = Span::new("123Goodbye");
 /// let span3 = Span::new("HelloWorld");
 ///
-/// let mut comb = delimited(tag("Hello"), digit1(), tag("Goodbye"));
+/// let mut comb = delimited(tag(b"Hello"), digit1(), tag(b"Goodbye"));
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(15..), span1.slice(5..8))));
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(delimited::Recoverable::Comb0(tag::Recoverable {
-///         tag:  "Hello",
+///         tag: b"Hello",
+///         is_fixable: false,
 ///         span: span2,
 ///     })))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(delimited::Recoverable::Comb1(digit1::Recoverable {
-///         fmt:  digit1::ExpectsFormatter,
-///         span: span3.slice(5..),
+///         fmt:     digit1::ExpectsFormatter,
+///         fixable: None,
+///         span:    span3.slice(5..),
 ///     })))
 /// );
 /// ```

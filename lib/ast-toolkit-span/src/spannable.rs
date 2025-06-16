@@ -13,6 +13,7 @@
 //!   in a [`Span`].
 //
 
+use std::borrow::Cow;
 use std::cell::{Ref, RefMut};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -22,6 +23,54 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::range::Range;
+
+
+/***** HELPER MACROS *****/
+/// Does pointer-like impls for [`Spannable`].
+macro_rules! spannable_ptr_impl {
+    ($({ $lt:lifetime $(+ $bound:ident)?},)? $ty:ty) => {
+        impl<$($lt,)? 's, T: ?Sized $($(+ $bound)?)? + Spannable<'s>> Spannable<'s> for $ty {
+            type Elem = <T as Spannable<'s>>::Elem;
+            type Slice = <T as Spannable<'s>>::Slice;
+            type SourceId = <T as Spannable<'s>>::SourceId;
+
+
+            #[inline]
+            fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
+
+            #[inline]
+            fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
+
+            #[inline]
+            fn as_slice(&self) -> &'s [Self::Elem] { <T as Spannable>::as_slice(self) }
+
+            #[inline]
+            fn match_while(&self, pred: impl FnMut(&'s Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
+
+            #[inline]
+            fn len(&self) -> usize { <T as Spannable>::len(self) }
+
+            #[inline]
+            fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
+        }
+    };
+}
+
+/// Does pointer-like impls for [`SpannableUtf8`].
+macro_rules! spannable_utf8_ptr_impl {
+    ($({ $lt:lifetime $(+ $bound:ident)?},)? $ty:ty) => {
+        impl<$($lt,)? 's, T: ?Sized $($(+ $bound)?)? + SpannableUtf8<'s>> SpannableUtf8<'s> for $ty {
+            #[inline]
+            fn as_str(&self) -> &'s str { <T as SpannableUtf8<'s>>::as_str(self) }
+
+            #[inline]
+            fn match_utf8_while(&self, pred: impl FnMut(&'s str) -> bool) -> usize { <T as SpannableUtf8<'s>>::match_utf8_while(self, pred) }
+        }
+    };
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -216,246 +265,17 @@ impl<'a, T: Clone + Debug + Eq + Hash + PartialEq, U: Spannable<'a>> Spannable<'
 // The `Spannable` impl for Span is over at its own definition
 
 // Pointer-like impls
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for &'b T {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for &'b mut T {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Box<T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Rc<T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, T: ?Sized + Spannable<'a>> Spannable<'a> for Arc<T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for MutexGuard<'b, T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RwLockReadGuard<'b, T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RwLockWriteGuard<'b, T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for Ref<'b, T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
-impl<'a, 'b, T: ?Sized + Spannable<'a>> Spannable<'a> for RefMut<'b, T> {
-    type Elem = <T as Spannable<'a>>::Elem;
-    type Slice = <T as Spannable<'a>>::Slice;
-    type SourceId = <T as Spannable<'a>>::SourceId;
-
-
-    #[inline]
-    fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
-
-    #[inline]
-    fn slice(&self, range: Range) -> Self::Slice { <T as Spannable>::slice(self, range) }
-
-    #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <T as Spannable>::as_slice(self) }
-
-    #[inline]
-    fn match_while(&self, pred: impl FnMut(&'a Self::Elem) -> bool) -> usize { <T as Spannable>::match_while(self, pred) }
-
-    #[inline]
-    fn len(&self) -> usize { <T as Spannable>::len(self) }
-
-    #[inline]
-    fn is_empty(&self) -> bool { <T as Spannable>::is_empty(self) }
-}
+spannable_ptr_impl!({'a}, &'a T);
+spannable_ptr_impl!({'a}, &'a mut T);
+spannable_ptr_impl!({'a + ToOwned}, Cow<'a, T>);
+spannable_ptr_impl!(Box<T>);
+spannable_ptr_impl!(Rc<T>);
+spannable_ptr_impl!(Arc<T>);
+spannable_ptr_impl!({'a}, MutexGuard<'a, T>);
+spannable_ptr_impl!({'a}, RwLockReadGuard<'a, T>);
+spannable_ptr_impl!({'a}, RwLockWriteGuard<'a, T>);
+spannable_ptr_impl!({'a}, Ref<'a, T>);
+spannable_ptr_impl!({'a}, RefMut<'a, T>);
 
 
 
@@ -560,76 +380,17 @@ impl<'a, T: Clone + Debug + Eq + Hash + PartialEq, U: SpannableUtf8<'a>> Spannab
 // The `SpannableUtf8` impl for Span is over at its own definition
 
 // Pointer-like impls
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for &'b T {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for &'b mut T {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for Box<T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for Rc<T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for Arc<T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for MutexGuard<'b, T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for RwLockReadGuard<'b, T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for RwLockWriteGuard<'b, T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for Ref<'b, T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
-impl<'a, 'b, T: ?Sized + SpannableUtf8<'a>> SpannableUtf8<'a> for RefMut<'b, T> {
-    #[inline]
-    fn as_str(&self) -> &'a str { <T as SpannableUtf8<'a>>::as_str(self) }
-
-    #[inline]
-    fn match_utf8_while(&self, pred: impl FnMut(&'a str) -> bool) -> usize { <T as SpannableUtf8<'a>>::match_utf8_while(self, pred) }
-}
+spannable_utf8_ptr_impl!({'a}, &'a T);
+spannable_utf8_ptr_impl!({'a}, &'a mut T);
+spannable_utf8_ptr_impl!({'a + ToOwned}, Cow<'a, T>);
+spannable_utf8_ptr_impl!(Box<T>);
+spannable_utf8_ptr_impl!(Rc<T>);
+spannable_utf8_ptr_impl!(Arc<T>);
+spannable_utf8_ptr_impl!({'a}, MutexGuard<'a, T>);
+spannable_utf8_ptr_impl!({'a}, RwLockReadGuard<'a, T>);
+spannable_utf8_ptr_impl!({'a}, RwLockWriteGuard<'a, T>);
+spannable_utf8_ptr_impl!({'a}, Ref<'a, T>);
+spannable_utf8_ptr_impl!({'a}, RefMut<'a, T>);
 
 
 

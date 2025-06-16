@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ExpectsFormatter as _};
+use crate::{Combinator, ExpectsFormatter as _, ParseError};
 
 
 /***** ERRORS *****/
@@ -48,6 +48,13 @@ impl<S: Clone> Spanning<S> for Fatal<S> {
     {
         self.span
     }
+}
+impl<'s, S: Clone + Spannable<'s>> ParseError<S> for Fatal<S> {
+    #[inline]
+    fn more_might_fix(&self) -> bool { false }
+
+    #[inline]
+    fn needed_to_fix(&self) -> Option<usize> { None }
 }
 
 

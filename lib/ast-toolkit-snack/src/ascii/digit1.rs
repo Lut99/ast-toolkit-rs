@@ -13,14 +13,42 @@
 //
 
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableUtf8, Spanning as _};
+use ast_toolkit_span::{Span, SpannableBytes, Spanning as _};
 
-pub use super::super::complete::digit1::{ExpectsFormatter, Recoverable};
-use super::while1;
-use crate::Combinator;
-use crate::result::{Result as SResult, SnackError};
+use crate::result::{Expected, Result as SResult, SnackError};
+use crate::scan::while1;
+use crate::{Combinator, ParseError as _};
+
+
+/***** TYPE ALIASES *****/
+/// The recoverable error returned by [`Digit1`].
+pub type Recoverable<S> = Expected<ExpectsFormatter, S>;
+
+
+
+
+
+/***** FORMATTERS *****/
+/// ExpectsFormatter for the [`digit1()`]-combinator.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExpectsFormatter;
+impl Display for ExpectsFormatter {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "Expected ")?;
+        <Self as crate::ExpectsFormatter>::expects_fmt(self, f, 0)
+    }
+}
+impl crate::ExpectsFormatter for ExpectsFormatter {
+    #[inline]
+    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "at least one digit") }
+}
+
+
+
 
 
 /***** COMBINATORS *****/
@@ -31,7 +59,7 @@ pub struct Digit1<S> {
 }
 impl<'s, S> Combinator<'static, 's, S> for Digit1<S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = Span<S>;
@@ -43,18 +71,14 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        match while1("", |c: &str| -> bool {
-            c.len() == 1 && {
-                let c: char = c.chars().next().unwrap();
-                c >= '0' && c <= '9'
-            }
-        })
-        .parse(input)
-        {
+        match while1("", |b| -> bool { *b >= b'0' && *b <= b'9' }).parse(input) {
             Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(err)) => Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), span: err.into_span() })),
+            Err(SnackError::Recoverable(err)) => {
+                let fixable = if err.more_might_fix() { Some(err.needed_to_fix()) } else { None };
+                let span = err.into_span();
+                Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), fixable, span }))
+            },
             Err(SnackError::Fatal(_)) => unreachable!(),
-            Err(SnackError::NotEnough { needed, span }) => Err(SnackError::NotEnough { needed, span }),
         }
     }
 }
@@ -79,8 +103,8 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::ascii::digit1;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::streaming::digit1;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("12345six");
@@ -92,16 +116,24 @@ where
 /// assert_eq!(
 ///     comb.parse(span2),
 ///     Err(SnackError::Recoverable(digit1::Recoverable {
-///         fmt:  digit1::ExpectsFormatter,
-///         span: span2,
+///         fmt:     digit1::ExpectsFormatter,
+///         fixable: None,
+///         span:    span2,
 ///     }))
 /// );
-/// assert_eq!(comb.parse(span3), Err(SnackError::NotEnough { needed: Some(1), span: span3 }));
+/// assert_eq!(
+///     comb.parse(span3),
+///     Err(SnackError::Recoverable(digit1::Recoverable {
+///         fmt:     digit1::ExpectsFormatter,
+///         fixable: Some(Some(1)),
+///         span:    span3,
+///     }))
+/// );
 /// ```
 #[inline]
 pub const fn digit1<'s, S>() -> Digit1<S>
 where
-    S: Clone + SpannableUtf8<'s>,
+    S: Clone + SpannableBytes<'s>,
 {
     Digit1 { _s: PhantomData }
 }

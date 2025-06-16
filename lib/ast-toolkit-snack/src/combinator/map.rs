@@ -74,7 +74,7 @@ where
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::combinator::map;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::complete::tag;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// #[derive(Debug, PartialEq)]
@@ -85,11 +85,15 @@ where
 /// let span1 = Span::new("Hello, world!");
 /// let span2 = Span::new("Goodbye, world!");
 ///
-/// let mut comb = map(tag("Hello"), |parsed| Hello { span: parsed });
+/// let mut comb = map(tag(b"Hello"), |parsed| Hello { span: parsed });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(5..), Hello { span: span1.slice(..5) })));
 /// assert_eq!(
 ///     comb.parse(span2),
-///     Err(SnackError::Recoverable(tag::Recoverable { tag: "Hello", span: span2 }))
+///     Err(SnackError::Recoverable(tag::Recoverable {
+///         tag: b"Hello",
+///         is_fixable: false,
+///         span: span2,
+///     }))
 /// );
 /// ```
 #[inline]

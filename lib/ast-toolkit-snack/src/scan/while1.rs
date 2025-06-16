@@ -18,7 +18,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ParseError};
@@ -97,8 +97,8 @@ pub struct While1<'c, P, S> {
 impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
-    P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    P: FnMut(&'s S::Elem) -> bool,
+    S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
     type Output = Span<S>;
@@ -116,7 +116,7 @@ where
         }
 
         // Otherwise, continue as usual
-        let split: usize = input.match_bytes_while(&mut self.predicate);
+        let split: usize = input.match_while(&mut self.predicate);
         if split > 0 {
             Ok((input.slice(split..), input.slice(..split)))
         } else {
@@ -153,19 +153,19 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::bytes::while1;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::while1;
 /// use ast_toolkit_snack::{Combinator as _, ParseError as _};
 /// use ast_toolkit_span::Span;
 ///
-/// let span1 = Span::new(b"abcdefg".as_slice());
-/// let span2 = Span::new(b"cdefghi".as_slice());
-/// let span3 = Span::new("abÿcdef".as_bytes());
-/// let span4 = Span::new(b"hijklmn".as_slice());
-/// let span5 = Span::new(b"".as_slice());
+/// let span1 = Span::new("abcdefg");
+/// let span2 = Span::new("cdefghi");
+/// let span3 = Span::new("abÿcdef");
+/// let span4 = Span::new("hijklmn");
+/// let span5 = Span::new("");
 ///
-/// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |b: u8| -> bool {
-///     b == b'a' || b == b'b' || b == b'c' || b == 191 || b == 195
+/// let mut comb = while1("'a', 'b', 'c' or 'ÿ'", |b: &u8| -> bool {
+///     *b == b'a' || *b == b'b' || *b == b'c' || *b == 191 || *b == 195
 /// });
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(3..), span1.slice(..3))));
 /// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
@@ -179,7 +179,7 @@ where
 ///         span: span4,
 ///     }))
 /// );
-/// assert!(!err.more_might_fix());
+/// assert!(!err.unwrap_err().more_might_fix());
 ///
 /// let err = comb.parse(span5);
 /// assert_eq!(
@@ -189,14 +189,15 @@ where
 ///         span: span5,
 ///     }))
 /// );
+/// let err = err.unwrap_err();
 /// assert!(err.more_might_fix());
 /// assert_eq!(err.needed_to_fix(), Some(1));
 /// ```
 #[inline]
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
-    P: FnMut(u8) -> bool,
-    S: Clone + SpannableBytes<'s>,
+    P: FnMut(&'s S::Elem) -> bool,
+    S: Clone + Spannable<'s>,
 {
     While1 { predicate, what, _s: PhantomData }
 }

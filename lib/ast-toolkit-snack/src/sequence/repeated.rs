@@ -14,13 +14,13 @@
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, Spannable, Spanning};
 
 use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ExpectsFormatter as _};
+use crate::{Combinator, ExpectsFormatter as _, ParseError};
 
 
 /***** ERRORS *****/
@@ -50,6 +50,15 @@ impl<C, E, S: Clone> Spanning<S> for Recoverable<C, E, S> {
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
+}
+impl<'s, C: crate::ExpectsFormatter, E: ParseError<S>, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<C, E, S> {
+    #[inline]
+    #[track_caller]
+    fn more_might_fix(&self) -> bool { self.err.more_might_fix() }
+
+    #[inline]
+    #[track_caller]
+    fn needed_to_fix(&self) -> Option<usize> { self.err.needed_to_fix() }
 }
 
 
@@ -121,7 +130,6 @@ where
                 },
                 // TODO: Also wrap this in an error for nicer tracing, but wait until `Diagnostics` are done so we know how that looks.
                 Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal(err)),
-                Err(SnackError::NotEnough { needed, span }) => return Err(SnackError::NotEnough { needed, span }),
             }
         }
         Ok((input, results))
@@ -156,8 +164,8 @@ where
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
 /// use ast_toolkit_snack::result::SnackError;
+/// use ast_toolkit_snack::scan::tag;
 /// use ast_toolkit_snack::sequence::repeated;
-/// use ast_toolkit_snack::utf8::complete::tag;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("hellohellohello");
@@ -165,7 +173,7 @@ where
 /// let span3 = Span::new("hellohello");
 /// let span4 = Span::new("hellohellohel");
 ///
-/// let mut comb = repeated(3, tag("hello"));
+/// let mut comb = repeated(3, tag(b"hello"));
 /// assert_eq!(
 ///     comb.parse(span1),
 ///     Ok((span1.slice(15..), vec![span1.slice(..5), span1.slice(5..10), span1.slice(10..15)]))
@@ -177,21 +185,21 @@ where
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(repeated::Recoverable {
-///         fmt:  tag::ExpectsFormatter { tag: "hello" },
+///         fmt:  tag::ExpectsFormatter { tag: b"hello" },
 ///         got:  2,
 ///         n:    3,
 ///         span: span3.slice(10..),
-///         err:  tag::Recoverable { tag: "hello", span: span3.slice(10..) },
+///         err:  tag::Recoverable { tag: b"hello", is_fixable: true, span: span3.slice(10..) },
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span4),
 ///     Err(SnackError::Recoverable(repeated::Recoverable {
-///         fmt:  tag::ExpectsFormatter { tag: "hello" },
+///         fmt:  tag::ExpectsFormatter { tag: b"hello" },
 ///         got:  2,
 ///         n:    3,
 ///         span: span4.slice(10..),
-///         err:  tag::Recoverable { tag: "hello", span: span4.slice(10..) },
+///         err:  tag::Recoverable { tag: b"hello", is_fixable: true, span: span4.slice(10..) },
 ///     }))
 /// );
 /// ```

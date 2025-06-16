@@ -18,8 +18,8 @@ use std::marker::PhantomData;
 
 use ast_toolkit_span::{Span, SpannableUtf8};
 
-use super::one_of0;
 use crate::result::{Result as SResult, SnackError};
+use crate::scan::one_of0;
 use crate::{Combinator, ExpectsFormatter as _};
 
 
@@ -63,11 +63,10 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        match one_of0(&[" ", "\t", "\n", "\r", "\r\n"]).parse(input) {
+        match one_of0(&[b' ', b'\t', b'\n', b'\r']).parse(input) {
             Ok(res) => Ok(res),
             Err(SnackError::Recoverable(_)) => unreachable!(),
             Err(SnackError::Fatal(_)) => unreachable!(),
-            Err(SnackError::NotEnough { .. }) => unreachable!(),
         }
     }
 }
@@ -85,10 +84,8 @@ where
 /// - A carriage return (`\r`); or
 /// - A newline (`\n`).
 ///
-/// This version accepts matching none of them. See
-/// [`whitespace1()`](super::complete::whitespace1()) (or its streaming version,
-/// [`whitespace1()`](super::streaming::whitespace1())) to assert at least something must be
-/// matched.
+/// This version accepts matching none of them. See [`whitespace1()`](super::whitespace1()) to
+/// assert at least something must be matched.
 ///
 /// # Returns
 /// A combinator [`Whitespace0`] that matches only whitespace characters (see above).
@@ -96,8 +93,8 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit_snack::Combinator as _;
+/// use ast_toolkit_snack::ascii::whitespace0;
 /// use ast_toolkit_snack::result::SnackError;
-/// use ast_toolkit_snack::utf8::whitespace0;
 /// use ast_toolkit_span::Span;
 ///
 /// let span1 = Span::new("   \t\n  awesome");
