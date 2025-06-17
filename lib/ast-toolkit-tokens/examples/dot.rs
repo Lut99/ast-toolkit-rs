@@ -32,8 +32,8 @@ ast_toolkit_tokens::utf8_token_serde!(Dot);
 /***** ENTRYPOINT *****/
 fn main() {
     // We can create them as expected
-    let dot1 = Dot { span: Span::new(("<example1>", ".")) };
-    let dot2 = Dot { span: Span::new(("<example2>", ".")) };
+    let dot1 = Dot::from(Span::new(("<example1>", ".")));
+    let dot2 = Dot::from(Span::new(("<example2>", ".")));
 
     // Now we can do stuff with it
     assert_eq!(format!("{dot1:?}"), "Dot { span: Span<(&str, &str)> { source: \"<example1>\", range: .. } }");

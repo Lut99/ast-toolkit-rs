@@ -53,14 +53,17 @@ macro_rules! utf8_token {
         #[doc = concat!("Represents a '", $token_desc, "' token.\n\n# Generics\n - `S`: The type of the source text that is embedded in all [`Span`](", ::std::stringify!($crate::__private::Span), ")s in this AST.\n")]
         pub struct $name<S> {
             /// The span that locates this token in the source text.
-            pub span: $crate::__private::Span<S>,
+            ///
+            /// This span _may_ be empty, in which case the token has been created from scratch and
+            /// is not associated with source text.
+            pub span: ::std::option::Option<$crate::__private::Span<S>>,
         }
 
         // Default
         impl ::std::default::Default for $name<&'static str> {
             #[inline]
             fn default() -> Self {
-                Self { span: $crate::__private::Span::new(<Self as $crate::Utf8Token<&'static str>>::TOKEN) }
+                Self { span: ::std::option::Option::None }
             }
         }
 
@@ -71,7 +74,7 @@ macro_rules! utf8_token {
         {
             #[inline]
             fn clone(&self) -> Self {
-                Self { span: self.span.clone() }
+                Self { span: <::std::option::Option<$crate::__private::Span<S>> as ::std::clone::Clone>::clone(&self.span) }
             }
         }
         impl<S> ::std::marker::Copy for $name<S>
@@ -84,8 +87,14 @@ macro_rules! utf8_token {
         {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                let Self { span } = self;
+
                 let mut fmt = f.debug_struct(::std::stringify!($name));
-                fmt.field("span", &self.span);
+                if let Some(span) = span {
+                    fmt.field("span", span);
+                } else {
+                    fmt.field("span", &"<unattached>");
+                }
                 fmt.finish()
             }
         }
@@ -118,18 +127,34 @@ macro_rules! utf8_token {
         where
             S: ::std::clone::Clone,
         {
+            /// # Panics
+            /// This function panics if this token was unattached to the source text (e.g., created
+            /// through [`Default::default()`]).
             #[inline]
-            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Borrowed(&self.span) }
+            #[track_caller]
+            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> {
+                if let Some(span) = &self.span {
+                    ::std::borrow::Cow::Borrowed(span)
+                } else {
+                    ::std::panic!(::std::concat!("Cannot get the span of an unattached ", ::std::stringify!($name)));
+                }
+            }
 
             #[inline]
-            fn into_span(self) -> $crate::__private::Span<S> { self.span }
+            #[track_caller]
+            fn into_span(self) -> $crate::__private::Span<S> {
+                if let Some(span) = self.span {
+                    span
+                } else {
+                    ::std::panic!(::std::concat!("Cannot get the span of an unattached ", ::std::stringify!($name)));
+                }}
         }
 
         // Convertion impls
         impl<S> ::std::convert::From<$crate::__private::Span<S>> for $name<S> {
             #[inline]
             fn from(value: $crate::__private::Span<S>) -> Self {
-                Self { span: value }
+                Self { span: Some(value) }
             }
         }
     };
@@ -392,7 +417,7 @@ macro_rules! utf8_delim {
             impl<S> ::std::convert::From<($crate::__private::Span<S>, $crate::__private::Span<S>)> for $name<S> {
                 #[inline]
                 fn from((open, close): ($crate::__private::Span<S>, $crate::__private::Span<S>)) -> Self {
-                    Self { open: [<$name Open>] { span: open }, close: [<$name Close>] { span: close } }
+                    Self { open: <[<$name Open>]<S> as From<$crate::__private::Span<S>>>::from(open), close: <[<$name Close>]<S> as From<$crate::__private::Span<S>>>::from(close) }
                 }
             }
         }

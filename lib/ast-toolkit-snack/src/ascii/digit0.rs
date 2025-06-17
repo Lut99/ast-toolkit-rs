@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 use ast_toolkit_span::{Span, SpannableBytes};
 
 use crate::Combinator;
-use crate::result::{Result as SResult, SnackError};
+use crate::result::Result as SResult;
 use crate::scan::while0;
 
 
@@ -51,11 +51,7 @@ where
 
     #[inline]
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        match while0("digits", |b| -> bool { *b >= b'0' && *b <= b'9' }).parse(input) {
-            Ok(res) => Ok(res),
-            Err(SnackError::Recoverable(_)) => unreachable!(),
-            Err(SnackError::Fatal(_)) => unreachable!(),
-        }
+        while0("digits", |b| -> bool { *b >= b'0' && *b <= b'9' }).parse(input)
     }
 }
 

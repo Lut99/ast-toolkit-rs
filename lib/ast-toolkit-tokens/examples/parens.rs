@@ -31,8 +31,8 @@ ast_toolkit_tokens::utf8_delim_serde!(Parens);
 fn main() {
     let span1 = Span::new(("<example1>", "(foo)"));
     let span2 = Span::new(("<example2>", "(bar)"));
-    let paren1 = Parens { open: ParensOpen { span: span1.slice(..1) }, close: ParensClose { span: span1.slice(4..) } };
-    let paren2 = Parens { open: ParensOpen { span: span2.slice(..1) }, close: ParensClose { span: span2.slice(4..) } };
+    let paren1 = Parens::from((span1.slice(..1), span1.slice(4..)));
+    let paren2 = Parens::from((span2.slice(..1), span2.slice(4..)));
 
     // We can create them as expected
     assert_eq!(
