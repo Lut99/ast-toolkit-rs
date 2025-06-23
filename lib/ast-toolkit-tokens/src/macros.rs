@@ -34,8 +34,8 @@
 /// utf8_token!(Dot, ".");
 ///
 /// // Now this struct exists
-/// let dot1 = Dot { span: Span::new(".") };
-/// let dot2 = Dot { span: Span::new(".") };
+/// let dot1 = Dot { span: Some(Span::new(".")) };
+/// let dot2 = Dot { span: Some(Span::new(".")) };
 ///
 /// // And you can do some stuff with it!
 /// assert!(format!("{dot1:?}").starts_with("Dot { span: Span<&str> { source: "),);
@@ -233,7 +233,7 @@ macro_rules! utf8_token_railroad {
 /// utf8_token_serde!(Dot);
 ///
 /// // Now you can do
-/// let dot = serde_json::to_string(&Dot { span: Span::new(".") }).unwrap();
+/// let dot = serde_json::to_string(&Dot::from(Span::new("."))).unwrap();
 /// ```
 #[macro_export]
 #[cfg(feature = "serde")]
@@ -288,8 +288,8 @@ macro_rules! utf8_token_serde {
 /// let span1 = Span::new(("<example>", "(foo)"));
 /// let span2 = Span::new(("<example>", "(bar)"));
 /// let paren1 = Parens {
-///     open:  ParensOpen { span: span1.slice(..1) },
-///     close: ParensClose { span: span1.slice(4..) },
+///     open:  ParensOpen::from(span1.slice(..1)),
+///     close: ParensClose::from(span1.slice(4..)),
 /// };
 /// // Alternatively,
 /// let paren2 = Parens::from((span2.slice(..1), span2.slice(4..)));
