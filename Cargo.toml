@@ -19,7 +19,7 @@ ast-toolkit-tokens = { path = "./lib/ast-toolkit-tokens", optional = true }
 [features]
 default = []
 
-derive = ["ast-toolkit-railroad/derive"]
+derive = ["ast-toolkit-railroad/derive", "ast-toolkit-span/derive"]
 macros = ["ast-toolkit-punctuated/macros", "ast-toolkit-snack/macros"]
 serde = [
     "ast-toolkit-punctuated/serde",
@@ -50,6 +50,7 @@ snack-extra = ["snack", "ast-toolkit-snack/extra"]
 snack-macros = ["snack", "ast-toolkit-snack/macros"]
 
 span = ["dep:ast-toolkit-span"]
+span-derive = ["ast-toolkit-span/derive"]
 span-serde = ["ast-toolkit-span/serde"]
 
 tokens = ["dep:ast-toolkit-tokens"]
