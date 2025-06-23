@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use crate::boxed::{BoxableParseError, BoxedParseError};
 use crate::{ExpectsFormatter, ParseError};
@@ -55,6 +55,23 @@ impl<E1: Display, E2: Display> Display for CutError<E1, E2> {
 impl<E1: fmt::Debug + Display, E2: fmt::Debug + Display> Error for CutError<E1, E2> {}
 impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for CutError<E1, E2> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        match self {
+            Self::Recoverable(err) => err.get_span(),
+            Self::Fatal(err) => err.get_span(),
+        }
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> {
+        match self {
+            Self::Recoverable(err) => err.take_span(),
+            Self::Fatal(err) => err.take_span(),
+        }
+    }
+}
+impl<E1: SpanningInf<S>, E2: SpanningInf<S>, S: Clone> SpanningInf<S> for CutError<E1, E2> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Recoverable(err) => err.span(),
@@ -67,6 +84,24 @@ impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for CutError<E1, E2
         match self {
             Self::Recoverable(err) => err.into_span(),
             Self::Fatal(err) => err.into_span(),
+        }
+    }
+}
+impl<E1: SpanningRef<S>, E2: SpanningRef<S>, S: Clone> SpanningRef<S> for CutError<E1, E2> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> {
+        match self {
+            Self::Recoverable(err) => err.span_ref(),
+            Self::Fatal(err) => err.span_ref(),
+        }
+    }
+}
+impl<E1: SpanningMut<S>, E2: SpanningMut<S>, S: Clone> SpanningMut<S> for CutError<E1, E2> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> {
+        match self {
+            Self::Recoverable(err) => err.span_mut(),
+            Self::Fatal(err) => err.span_mut(),
         }
     }
 }
@@ -332,12 +367,24 @@ impl<E1: Error, E2: Error> Error for SnackError<E1, E2> {
         }
     }
 }
-impl<E1, E2, S> Spanning<S> for SnackError<E1, E2>
-where
-    E1: Spanning<S>,
-    E2: Spanning<S>,
-    S: Clone,
-{
+impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for SnackError<E1, E2> {
+    #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        match self {
+            Self::Recoverable(err) => err.get_span(),
+            Self::Fatal(err) => err.get_span(),
+        }
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> {
+        match self {
+            Self::Recoverable(err) => err.take_span(),
+            Self::Fatal(err) => err.take_span(),
+        }
+    }
+}
+impl<E1: SpanningInf<S>, E2: SpanningInf<S>, S: Clone> SpanningInf<S> for SnackError<E1, E2> {
     #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
@@ -351,6 +398,24 @@ where
         match self {
             Self::Recoverable(err) => err.into_span(),
             Self::Fatal(err) => err.into_span(),
+        }
+    }
+}
+impl<E1: SpanningRef<S>, E2: SpanningRef<S>, S: Clone> SpanningRef<S> for SnackError<E1, E2> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> {
+        match self {
+            Self::Recoverable(err) => err.span_ref(),
+            Self::Fatal(err) => err.span_ref(),
+        }
+    }
+}
+impl<E1: SpanningMut<S>, E2: SpanningMut<S>, S: Clone> SpanningMut<S> for SnackError<E1, E2> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> {
+        match self {
+            Self::Recoverable(err) => err.span_mut(),
+            Self::Fatal(err) => err.span_mut(),
         }
     }
 }
@@ -398,15 +463,25 @@ impl<F: ExpectsFormatter, S> Display for Expected<F, S> {
 impl<'a, F: ExpectsFormatter, S: Spannable<'a>> Error for Expected<F, S> {}
 impl<F, S: Clone> Spanning<S> for Expected<F, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { Some(self.span) }
+}
+impl<F, S: Clone> SpanningInf<S> for Expected<F, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<S>
-    where
-        Self: Sized,
-    {
-        self.span
-    }
+    fn into_span(self) -> Span<S> { self.span }
+}
+impl<F, S: Clone> SpanningRef<S> for Expected<F, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> { &self.span }
+}
+impl<F, S: Clone> SpanningMut<S> for Expected<F, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> { &mut self.span }
 }
 impl<'s, F: ExpectsFormatter, S: Clone + Spannable<'s>> ParseError<S> for Expected<F, S> {
     #[inline]
@@ -505,10 +580,25 @@ impl<'a, E: Error, S: Spannable<'a>> Error for SpanningError<E, S> {
 }
 impl<E, S: Clone> Spanning<S> for SpanningError<E, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { Some(self.span) }
+}
+impl<E, S: Clone> SpanningInf<S> for SpanningError<E, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
+}
+impl<E, S: Clone> SpanningRef<S> for SpanningError<E, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> { &self.span }
+}
+impl<E, S: Clone> SpanningMut<S> for SpanningError<E, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> { &mut self.span }
 }
 impl<'s, E: Error, S: Clone + Spannable<'s>> ParseError<S> for SpanningError<E, S> {
     #[inline]

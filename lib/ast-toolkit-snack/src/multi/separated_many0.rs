@@ -18,7 +18,7 @@ use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use super::super::combinator::recognize;
 use crate::result::{Result as SResult, SnackError};
@@ -59,6 +59,25 @@ impl<'s, E1: error::Error, E2: error::Error, S: Spannable<'s>> error::Error for 
 }
 impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Fatal<E1, E2, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        match self {
+            Self::Comb(err) => err.get_span(),
+            Self::Separator(err) => err.get_span(),
+            Self::TrailingSeparator { span } => Some(Cow::Borrowed(span)),
+        }
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> {
+        match self {
+            Self::Comb(err) => err.take_span(),
+            Self::Separator(err) => err.take_span(),
+            Self::TrailingSeparator { span } => Some(span),
+        }
+    }
+}
+impl<E1: SpanningInf<S>, E2: SpanningInf<S>, S: Clone> SpanningInf<S> for Fatal<E1, E2, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
@@ -72,6 +91,26 @@ impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Fatal<E1, E2, S
         match self {
             Self::Comb(err) => err.into_span(),
             Self::Separator(err) => err.into_span(),
+            Self::TrailingSeparator { span } => span,
+        }
+    }
+}
+impl<E1: SpanningRef<S>, E2: SpanningRef<S>, S: Clone> SpanningRef<S> for Fatal<E1, E2, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> {
+        match self {
+            Self::Comb(err) => err.span_ref(),
+            Self::Separator(err) => err.span_ref(),
+            Self::TrailingSeparator { span } => span,
+        }
+    }
+}
+impl<E1: SpanningMut<S>, E2: SpanningMut<S>, S: Clone> SpanningMut<S> for Fatal<E1, E2, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> {
+        match self {
+            Self::Comb(err) => err.span_mut(),
+            Self::Separator(err) => err.span_mut(),
             Self::TrailingSeparator { span } => span,
         }
     }

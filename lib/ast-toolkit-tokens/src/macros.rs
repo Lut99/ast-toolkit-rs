@@ -132,22 +132,13 @@ macro_rules! utf8_token {
             /// through [`Default::default()`]).
             #[inline]
             #[track_caller]
-            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> {
-                if let Some(span) = &self.span {
-                    ::std::borrow::Cow::Borrowed(span)
-                } else {
-                    ::std::panic!(::std::concat!("Cannot get the span of an unattached ", ::std::stringify!($name)));
-                }
+            fn get_span(&self) -> ::std::option::Option<::std::borrow::Cow<$crate::__private::Span<S>>> {
+                self.span.as_ref().map(::std::borrow::Cow::Borrowed)
             }
 
             #[inline]
             #[track_caller]
-            fn into_span(self) -> $crate::__private::Span<S> {
-                if let Some(span) = self.span {
-                    span
-                } else {
-                    ::std::panic!(::std::concat!("Cannot get the span of an unattached ", ::std::stringify!($name)));
-                }}
+            fn take_span(self) -> ::std::option::Option<$crate::__private::Span<S>> { self.span }
         }
 
         // Convertion impls
@@ -405,11 +396,15 @@ macro_rules! utf8_delim {
         {
             #[inline]
             #[track_caller]
-            fn span(&self) -> ::std::borrow::Cow<$crate::__private::Span<S>> { ::std::borrow::Cow::Owned(<<Self as $crate::Utf8Delimiter<S>>::OpenToken as $crate::__private::Spanning<S>>::span(&self.open).join(<<Self as $crate::Utf8Delimiter<S>>::CloseToken as $crate::__private::Spanning<S>>::span(&self.close).as_ref()).unwrap_or_else(|| ::std::panic!("Cannot join spans that point to different files"))) }
+            fn get_span(&self) -> ::std::option::Option<::std::borrow::Cow<$crate::__private::Span<S>>> {
+                let open: &$crate::__private::Span<S> = self.open.span.as_ref()?;
+                let close: &$crate::__private::Span<S> = self.close.span.as_ref()?;
+                open.join(close).map(::std::borrow::Cow::Owned)
+            }
 
             #[inline]
             #[track_caller]
-            fn into_span(self) -> $crate::__private::Span<S> { <::std::borrow::Cow<$crate::__private::Span<S>>>::into_owned(<Self as $crate::__private::Spanning<S>>::span(&self)) }
+            fn take_span(self) -> ::std::option::Option<$crate::__private::Span<S>> { <Self as $crate::__private::Spanning<S>>::get_span(&self).map(::std::borrow::Cow::into_owned) }
         }
 
         // Convertion impls

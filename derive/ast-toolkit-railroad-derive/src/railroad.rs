@@ -20,7 +20,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseBuffer};
 use syn::punctuated::Punctuated;
-use syn::spanned::Spanned;
+use syn::spanned::Spanned as _;
 use syn::token::{Comma, PathSep};
 use syn::visit::Visit;
 use syn::{

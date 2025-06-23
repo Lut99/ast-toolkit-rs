@@ -42,10 +42,10 @@ impl<'c, S> Display for Recoverable<'c, S> {
 impl<'c, 's, S: Spannable<'s>> Error for Recoverable<'c, S> {}
 impl<'c, S: Clone> Spanning<S> for Recoverable<'c, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+    fn get_span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
-    fn into_span(self) -> Span<S> { self.span }
+    fn take_span(self) -> Span<S> { self.span }
 }
 impl<'c, 's, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<'c, S> {
     #[inline]

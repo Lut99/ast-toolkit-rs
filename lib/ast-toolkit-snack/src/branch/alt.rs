@@ -18,7 +18,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{BranchingCombinator, Combinator, ExpectsFormatter, ParseError};
@@ -90,9 +90,32 @@ macro_rules! tuple_branching_comb_impl {
                 S: Clone,
             {
                 #[inline]
+                fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+                #[inline]
+                fn take_span(self) -> Option<Span<S>> { Some(self.span) }
+            }
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> SpanningInf<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            where
+                S: Clone,
+            {
+                #[inline]
                 fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
                 #[inline]
                 fn into_span(self) -> Span<S> { self.span }
+            }
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> SpanningRef<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            where
+                S: Clone,
+            {
+                #[inline]
+                fn span_ref(&self) -> &Span<S> { &self.span }
+            }
+            impl<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> SpanningMut<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
+            where
+                S: Clone,
+            {
+                #[inline]
+                fn span_mut(&mut self) -> &mut Span<S> { &mut self.span }
             }
             impl<'s, [<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S> ParseError<S> for [<Recoverable $li>]<[<F $fi>] $(, [<F $i>])*, [<E $fi>] $(, [<E $i>])*, S>
             where
@@ -143,6 +166,22 @@ macro_rules! tuple_branching_comb_impl {
             }
             impl<[<E $fi>]: Spanning<S> $(, [<E $i>]: Spanning<S>)*, S: Clone> Spanning<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
+                fn get_span(&self) -> Option<Cow<Span<S>>> {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.get_span(),
+                        $(Self::[<Branch $i>](err) => err.get_span(),)*
+                    }
+                }
+                #[inline]
+                fn take_span(self) -> Option<Span<S>> {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.take_span(),
+                        $(Self::[<Branch $i>](err) => err.take_span(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningInf<S> $(, [<E $i>]: SpanningInf<S>)*, S: Clone> SpanningInf<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
                 fn span(&self) -> Cow<Span<S>> {
                     match self {
                         Self::[<Branch $fi>](err) => err.span(),
@@ -154,6 +193,24 @@ macro_rules! tuple_branching_comb_impl {
                     match self {
                         Self::[<Branch $fi>](err) => err.into_span(),
                         $(Self::[<Branch $i>](err) => err.into_span(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningRef<S> $(, [<E $i>]: SpanningRef<S>)*, S: Clone> SpanningRef<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
+                fn span_ref(&self) -> &Span<S> {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.span_ref(),
+                        $(Self::[<Branch $i>](err) => err.span_ref(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningMut<S> $(, [<E $i>]: SpanningMut<S>)*, S: Clone> SpanningMut<S> for [<Fatal $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
+                fn span_mut(&mut self) -> &mut Span<S> {
+                    match self {
+                        Self::[<Branch $fi>](err) => err.span_mut(),
+                        $(Self::[<Branch $i>](err) => err.span_mut(),)*
                     }
                 }
             }

@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, SpannableBytes, Spanning};
+use ast_toolkit_span::{Span, SpannableBytes, SpanningInf as _};
 
 use crate::result::{Expected, Result as SResult, SnackError};
 use crate::scan::one_of1;

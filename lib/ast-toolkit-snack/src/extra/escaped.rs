@@ -67,19 +67,19 @@ impl<'c, 's, T: Debug + ElemDisplay, E: Error, S: Spannable<'s>> Error for Fatal
 }
 impl<'c, T, E, S: Clone> Spanning<S> for Fatal<'c, T, E, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> {
+    fn get_span(&self) -> Cow<Span<S>> {
         match self {
             Self::DelimClose { span, .. } => Cow::Borrowed(span),
-            Self::IllegalEscapee { err } => err.span(),
+            Self::IllegalEscapee { err } => err.get_span(),
             Self::OrphanEscaper { span, .. } => Cow::Borrowed(span),
         }
     }
 
     #[inline]
-    fn into_span(self) -> Span<S> {
+    fn take_span(self) -> Span<S> {
         match self {
             Self::DelimClose { span, .. } => span,
-            Self::IllegalEscapee { err } => err.into_span(),
+            Self::IllegalEscapee { err } => err.take_span(),
             Self::OrphanEscaper { span, .. } => span,
         }
     }
@@ -147,7 +147,7 @@ impl<'s, S: Clone + Spannable<'s>> Spanning<S> for EscapedString<S> {
     /// This returns the span of the ENTIRE object, not just the string literal value.
     #[inline]
     #[track_caller]
-    fn span(&self) -> Cow<Span<S>> {
+    fn get_span(&self) -> Cow<Span<S>> {
         Cow::Owned(self.delim.0.join(&self.delim.1).unwrap_or_else(|| {
             panic!(
                 "Attempted to join left and right delimiters, but they are from different sources (left: {:?}, right: {:?})",
@@ -159,7 +159,7 @@ impl<'s, S: Clone + Spannable<'s>> Spanning<S> for EscapedString<S> {
 
     /// This returns the span of the ENTIRE object, not just the string literal value.
     #[inline]
-    fn into_span(self) -> Span<S> { self.span().into_owned() }
+    fn take_span(self) -> Span<S> { self.get_span().into_owned() }
 }
 
 
@@ -214,7 +214,7 @@ where
                 return Err(SnackError::Recoverable(Recoverable {
                     fmt:     self.expects(),
                     fixable: if err.more_might_fix() { Some(err.needed_to_fix()) } else { None },
-                    span:    err.into_span(),
+                    span:    err.take_span(),
                 }));
             },
             Err(SnackError::Fatal(_)) => unreachable!(),

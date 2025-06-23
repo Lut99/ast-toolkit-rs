@@ -44,15 +44,15 @@ impl<S> Display for Fatal<S> {
 impl<'s, S: Spannable<'s>> Error for Fatal<S> {}
 impl<S: Clone> Spanning<S> for Fatal<S> {
     #[inline]
-    fn span(&self) -> std::borrow::Cow<Span<S>> {
+    fn get_span(&self) -> Option<std::borrow::Cow<Span<S>>> {
         match self {
-            Self::Overflow { span } => Cow::Borrowed(span),
+            Self::Overflow { span } => Some(Cow::Borrowed(span)),
         }
     }
     #[inline]
-    fn into_span(self) -> Span<S> {
+    fn take_span(self) -> Option<Span<S>> {
         match self {
-            Self::Overflow { span } => span,
+            Self::Overflow { span } => Some(span),
         }
     }
 }

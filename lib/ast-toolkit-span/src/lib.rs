@@ -23,6 +23,8 @@ mod spannable;
 mod spanning;
 
 // Bring some of it into the parent namespace
+#[cfg(feature = "derive")]
+pub use ast_toolkit_span_derive::{Spanning, SpanningInf, SpanningMut, SpanningRef};
 pub use span::Span;
 pub use spannable::{Spannable, SpannableBytes};
-pub use spanning::Spanning;
+pub use spanning::{Spanning, SpanningInf, SpanningMut, SpanningRef};

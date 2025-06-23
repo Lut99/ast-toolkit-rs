@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ExpectsFormatter as _, ParseError};
@@ -53,6 +53,23 @@ impl<'s, E: Error, S: Spannable<'s>> Error for Recoverable<E, S> {
 }
 impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        match self {
+            Self::Comb(err) => err.get_span(),
+            Self::RemainingInput { span } => Some(Cow::Borrowed(span)),
+        }
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> {
+        match self {
+            Self::Comb(err) => err.take_span(),
+            Self::RemainingInput { span } => Some(span),
+        }
+    }
+}
+impl<E: SpanningInf<S>, S: Clone> SpanningInf<S> for Recoverable<E, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
@@ -64,6 +81,24 @@ impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     fn into_span(self) -> Span<S> {
         match self {
             Self::Comb(err) => err.into_span(),
+            Self::RemainingInput { span } => span,
+        }
+    }
+}
+impl<E: SpanningRef<S>, S: Clone> SpanningRef<S> for Recoverable<E, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> {
+        match self {
+            Self::Comb(err) => err.span_ref(),
+            Self::RemainingInput { span } => span,
+        }
+    }
+}
+impl<E: SpanningMut<S>, S: Clone> SpanningMut<S> for Recoverable<E, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> {
+        match self {
+            Self::Comb(err) => err.span_mut(),
             Self::RemainingInput { span } => span,
         }
     }

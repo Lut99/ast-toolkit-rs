@@ -65,9 +65,9 @@ impl<'e, S> Error for BoxedParseError<'e, S> {
 }
 impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { self.0.span() }
+    fn get_span(&self) -> Option<Cow<Span<S>>> { self.0.get_span() }
     #[inline]
-    fn into_span(self) -> Span<S> { self.0.into_span() }
+    fn take_span(self) -> Option<Span<S>> { self.0.get_span().map(Cow::into_owned) }
 }
 impl<'e, S: Clone> ParseError<S> for BoxedParseError<'e, S> {
     #[inline]

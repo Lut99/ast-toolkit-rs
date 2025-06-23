@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use super::remember;
 use crate::result::{Result as SResult, SnackError};
@@ -46,6 +46,23 @@ impl<E: Display, F: crate::ExpectsFormatter, S> Display for Recoverable<E, F, S>
 impl<'s, E: fmt::Debug + Display, F: crate::ExpectsFormatter, S: Spannable<'s>> Error for Recoverable<E, F, S> {}
 impl<'s, E: Spanning<S>, F, S: Clone> Spanning<S> for Recoverable<E, F, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        match self {
+            Self::Comb(err) => err.get_span(),
+            Self::Empty { span, .. } => Some(Cow::Borrowed(span)),
+        }
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> {
+        match self {
+            Self::Comb(err) => err.take_span(),
+            Self::Empty { span, .. } => Some(span),
+        }
+    }
+}
+impl<'s, E: SpanningInf<S>, F, S: Clone> SpanningInf<S> for Recoverable<E, F, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
@@ -57,6 +74,24 @@ impl<'s, E: Spanning<S>, F, S: Clone> Spanning<S> for Recoverable<E, F, S> {
     fn into_span(self) -> Span<S> {
         match self {
             Self::Comb(err) => err.into_span(),
+            Self::Empty { span, .. } => span,
+        }
+    }
+}
+impl<'s, E: SpanningRef<S>, F, S: Clone> SpanningRef<S> for Recoverable<E, F, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> {
+        match self {
+            Self::Comb(err) => err.span_ref(),
+            Self::Empty { span, .. } => span,
+        }
+    }
+}
+impl<'s, E: SpanningMut<S>, F, S: Clone> SpanningMut<S> for Recoverable<E, F, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> {
+        match self {
+            Self::Comb(err) => err.span_mut(),
             Self::Empty { span, .. } => span,
         }
     }

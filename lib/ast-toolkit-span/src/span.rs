@@ -20,6 +20,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::range::Range;
 use crate::spannable::{Spannable, SpannableBytes};
+use crate::{Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 
 /***** LIBRARY *****/
@@ -396,6 +397,28 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }
+}
+impl<S: Clone> Spanning<S> for Span<S> {
+    #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(self)) }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { Some(self) }
+}
+impl<S: Clone> SpanningInf<S> for Span<S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(self) }
+
+    #[inline]
+    fn into_span(self) -> Span<S> { self }
+}
+impl<S: Clone> SpanningRef<S> for Span<S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> { self }
+}
+impl<S: Clone> SpanningMut<S> for Span<S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> { self }
 }
 
 

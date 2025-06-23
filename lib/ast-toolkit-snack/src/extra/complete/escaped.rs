@@ -54,7 +54,7 @@ where
         let (rem, open): (Span<S>, Span<S>) = match utf8::complete::tag(self.delim).parse(input) {
             Ok(res) => res,
             Err(SnackError::Recoverable(err)) => {
-                return Err(SnackError::Recoverable(Recoverable { delim: self.delim, escaper: self.escaper, span: err.into_span() }));
+                return Err(SnackError::Recoverable(Recoverable { delim: self.delim, escaper: self.escaper, span: err.take_span() }));
             },
             Err(SnackError::Fatal(_) | SnackError::NotEnough { .. }) => unreachable!(),
         };

@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::mem::MaybeUninit;
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::{Combinator, ExpectsFormatter, ParseError};
@@ -58,6 +58,23 @@ macro_rules! tuple_comb_impl {
             impl<[<E $fi>]: Debug + Display $(, [<E $i>]: Debug + Display)*> Error for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {}
             impl<[<E $fi>]: Spanning<S> $(, [<E $i>]: Spanning<S>)*, S: Clone> Spanning<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
+                fn get_span(&self) -> Option<Cow<Span<S>>> {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.get_span(),
+                        $(Self::[<Comb $i>](err) => err.get_span(),)*
+                    }
+                }
+
+                #[inline]
+                fn take_span(self) -> Option<Span<S>> {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.take_span(),
+                        $(Self::[<Comb $i>](err) => err.take_span(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningInf<S> $(, [<E $i>]: SpanningInf<S>)*, S: Clone> SpanningInf<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
                 fn span(&self) -> Cow<Span<S>> {
                     match self {
                         Self::[<Comb $fi>](err) => err.span(),
@@ -70,6 +87,24 @@ macro_rules! tuple_comb_impl {
                     match self {
                         Self::[<Comb $fi>](err) => err.into_span(),
                         $(Self::[<Comb $i>](err) => err.into_span(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningRef<S> $(, [<E $i>]: SpanningRef<S>)*, S: Clone> SpanningRef<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
+                fn span_ref(&self) -> &Span<S> {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.span_ref(),
+                        $(Self::[<Comb $i>](err) => err.span_ref(),)*
+                    }
+                }
+            }
+            impl<[<E $fi>]: SpanningMut<S> $(, [<E $i>]: SpanningMut<S>)*, S: Clone> SpanningMut<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
+                #[inline]
+                fn span_mut(&mut self) -> &mut Span<S> {
+                    match self {
+                        Self::[<Comb $fi>](err) => err.span_mut(),
+                        $(Self::[<Comb $i>](err) => err.span_mut(),)*
                     }
                 }
             }

@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
 use crate::result::{Result as SResult, SnackError};
 use crate::scan::tag;
@@ -40,10 +40,25 @@ impl<'t, S> Display for Recoverable<'t, S> {
 impl<'t, 's, S: Spannable<'s>> Error for Recoverable<'t, S> {}
 impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { Some(self.span) }
+}
+impl<'t, S: Clone> SpanningInf<S> for Recoverable<'t, S> {
+    #[inline]
     fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
+}
+impl<'t, S: Clone> SpanningRef<S> for Recoverable<'t, S> {
+    #[inline]
+    fn span_ref(&self) -> &Span<S> { &self.span }
+}
+impl<'t, S: Clone> SpanningMut<S> for Recoverable<'t, S> {
+    #[inline]
+    fn span_mut(&mut self) -> &mut Span<S> { &mut self.span }
 }
 impl<'s, 't, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<'t, S> {
     #[inline]

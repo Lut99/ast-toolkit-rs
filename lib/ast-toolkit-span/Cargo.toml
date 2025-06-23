@@ -1,15 +1,23 @@
 [package]
 name = "ast-toolkit-span"
-version = "0.1.0"
+version = "0.3.0"
 edition.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Provides a Span that is akin to a slice but with more context. Used in various other parts of the ast-toolkit."
 
 
+[[example]]
+name = "spanning_derive"
+path = "examples/spanning_derive.rs"
+required-features = ["derive"]
+
+
 [dependencies]
-console = "0.15"
+parking_lot = { version = "0.12", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
+
+ast-toolkit-span-derive = { path = "../../derive/ast-toolkit-span-derive", optional = true }
 
 
 [dev-dependencies]
@@ -19,4 +27,7 @@ function_name = "0.3"
 [features]
 default = []
 
+derive = ["dep:ast-toolkit-span-derive"]
+
+parking_lot = ["dep:parking_lot"]
 serde = ["dep:serde"]

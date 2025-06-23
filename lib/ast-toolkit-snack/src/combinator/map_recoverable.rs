@@ -92,8 +92,8 @@ where
 /// impl std::error::Error for Hidden {}
 /// impl<S: Clone> ast_toolkit_span::Spanning<S> for Hidden {
 ///     /* ... */
-/// #   fn span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
-/// #   fn into_span(self) -> Span<S> { unreachable!() }
+/// #   fn get_span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
+/// #   fn take_span(self) -> Span<S> { unreachable!() }
 /// }
 /// impl<S: Clone> ast_toolkit_snack::ParseError<S> for Hidden {
 ///     /* ... */
