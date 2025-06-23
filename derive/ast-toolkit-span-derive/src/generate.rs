@@ -13,7 +13,7 @@ use syn::{
     PredicateType, Token, TraitBound, TraitBoundModifier, Type, TypeParam, TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
 
-use crate::analyze::{GenericImplInfo, ToplevelAttrs};
+use crate::analyze::{GenericImplInfo, StaircaseImplInfo, ToplevelAttrs};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -146,10 +146,11 @@ fn gen_s_where_pred(attrs: &ToplevelAttrs, lt: Option<&Lifetime>) -> WherePredic
 
 
 /***** GENERATOR FUNCTIONS *****/
-/// Injects the required bounds for implementing any of the traits in the given [`Generics`].
+/// Injects the required bounds on `S` for implementing any of the traits.
 ///
 /// # Arguments
-/// - `info`: The [`GenericImplInfo`] that we use to discover for which types to inject.
+/// - `info`: The [`GenericImplInfo`] that we use to discover whether to add `S: Spannable<'s>` or
+///   not.
 /// - `attrs`: The [`ToplevelAttrs`] that describe toplevel information needed to properly
 ///   construct paths and all that. And where we update bounds in.
 /// - `gens`: The [`Generics`] to update.
@@ -167,6 +168,28 @@ pub fn inject_attrs_and_gens(info: &GenericImplInfo, attrs: &mut ToplevelAttrs, 
 
     // Add bounds to `S`
     gens.make_where_clause().predicates.push(gen_s_where_pred(attrs, if info.is_joining() { Some(&attrs.lifetime) } else { None }));
+}
+
+/// Injects the required bounds on `S` for implementing any of the traits.
+///
+/// This is the same as [`inject_attrs_and_gens()`], but then for the staircase-case.
+///
+/// # Arguments
+/// - `attrs`: The [`ToplevelAttrs`] that describe toplevel information needed to properly
+///   construct paths and all that. And where we update bounds in.
+/// - `gens`: The [`Generics`] to update.
+pub fn staircase_inject_attrs_and_gens(attrs: &mut ToplevelAttrs, gens: &mut Generics) {
+    // Inject the generic if not already there
+    insert_ty_in_gens(&attrs.s, &mut gens.params);
+    // Simply insert for every span
+    let was_empty: bool = attrs.impl_gen.is_none();
+    insert_lt_in_gens(&attrs.lifetime, &mut attrs.impl_gen);
+    if let (true, Some(impl_gen)) = (was_empty, &mut attrs.impl_gen) {
+        impl_gen.extend(gens.params.clone());
+    }
+
+    // Add bounds to `S`
+    gens.make_where_clause().predicates.push(gen_s_where_pred(attrs, Some(&attrs.lifetime)));
 }
 
 
@@ -268,18 +291,119 @@ impl GenericImplInfo {
 
 
 
+
+
+/***** STAIRCASE INFO GENERATORS *****/
+/// Wraps a [`StaircaseImplInfo`] in order to generate a list of [`WherePredicate`]s for a specific
+/// trait impl.
+pub struct StaircaseImplInfoWherePreds<'i, 'a>(&'i StaircaseImplInfo, &'a ToplevelAttrs, &'static str);
+impl<'i, 'a> ToTokens for StaircaseImplInfoWherePreds<'i, 'a> {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        /// Appends `#ty: #crate::$trt<#s>,` to the given [`TokenStream2`].
+        ///
+        /// # Arguments
+        /// - `attrs`: Some [`ToplevelAttrs`] to use for some settings (e.g., generic parameter and
+        ///   `ast_toolkit_span`-path).
+        /// - `ty`: Some type to put a bound for.
+        /// - `trt`: The trait which bounds.
+        /// - `tokens`: The [`TokenStream2`] to append to.
+        fn append_ty_bound_with_s(attrs: &ToplevelAttrs, ty: &Type, trt: &'static str, tokens: &mut TokenStream2) {
+            use proc_macro2::{Ident, Punct};
+            ty.to_tokens(tokens);
+            tokens.append(Punct::new(':', Spacing::Alone));
+            attrs.ast_toolkit_span.to_tokens(tokens);
+            tokens.append(Punct::new(':', Spacing::Joint));
+            tokens.append(Punct::new(':', Spacing::Alone));
+            tokens.append(Ident::new(trt, Span::mixed_site()));
+            tokens.append(Punct::new('<', Spacing::Alone));
+            attrs.s.to_tokens(tokens);
+            tokens.append(Punct::new('>', Spacing::Alone));
+            tokens.append(Punct::new(',', Spacing::Alone));
+        }
+
+
+        let Self(info, attrs, trt) = self;
+
+        // Simply generate everything straightforwardly
+        for (_, _, ty) in info.spans() {
+            append_ty_bound_with_s(attrs, ty, trt, tokens);
+        }
+    }
+}
+impl StaircaseImplInfo {
+    /// Returns a wrapper type that will generate the where predicates needed to implement the
+    /// required trait-bounds for that trait.
+    ///
+    /// # Arguments
+    /// - `attrs`: Some [`ToplevelAttrs`] to use during generation.
+    /// - `trt`: The name of the trait for which we're generating the where-clauses.
+    ///
+    /// # Returns
+    /// A [`StaircaseImplInfoWherePreds`] that implements [`ToTokens`].
+    #[inline]
+    pub const fn where_preds<'i, 'a>(&'i self, attrs: &'a ToplevelAttrs, trt: &'static str) -> StaircaseImplInfoWherePreds<'i, 'a> {
+        StaircaseImplInfoWherePreds(self, attrs, trt)
+    }
+}
+
+
+
+/// Generator for populating the pattern for the parent type.
+pub struct StaircaseImplInfoTyPat<'i>(&'i StaircaseImplInfo);
+impl<'i> ToTokens for StaircaseImplInfoTyPat<'i> {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        use proc_macro2::{Delimiter, Group};
+
+        let Self(info) = self;
+        match info {
+            StaircaseImplInfo::Struct { spans, .. } => {
+                let mut inner = TokenStream2::new();
+                for (i, (_, ident, _)) in spans.iter().enumerate() {
+                    if i > 0 {
+                        inner.append(Punct::new(',', Spacing::Alone));
+                    }
+                    ident.to_tokens(&mut inner);
+                }
+                inner.append(Punct::new(',', Spacing::Alone));
+                inner.append(Punct::new('.', Spacing::Joint));
+                inner.append(Punct::new('.', Spacing::Alone));
+                tokens.append(Group::new(Delimiter::Brace, inner));
+            },
+            StaircaseImplInfo::Tuple { idents, .. } => {
+                tokens.append(Group::new(Delimiter::Parenthesis, idents.to_token_stream()));
+            },
+        }
+    }
+}
+impl StaircaseImplInfo {
+    /// Returns a wrapper that will generate the body of a pattern matching the struct/variant for
+    /// which this StaircaseImplInfo was created.
+    ///
+    /// # Returns
+    /// A [`StaircaseImplInfoTyPat`] which implements [`ToTokens`].
+    #[inline]
+    pub const fn ty_pat(&self) -> StaircaseImplInfoTyPat { StaircaseImplInfoTyPat(self) }
+}
+
+
+
+
+
+/***** AGNOSTIC INFO GENERATORS *****/
 /// Defines a generic wrapper around multiple [`GenericImplInfo`]s, one for each variant of an
 /// enum.
-pub struct GenericEnumImplInfo(pub TokenStream2, pub TokenStream2, pub TokenStream2);
-impl GenericEnumImplInfo {
-    /// Creates a new GenericEnumImplInfo.
+pub struct EnumImplInfo(pub TokenStream2, pub TokenStream2, pub TokenStream2);
+impl EnumImplInfo {
+    /// Creates a new EnumImplInfo.
     ///
-    /// Call [`GenericEnumImplInfo::add_variant()`] repeatedly to add enum variants. Then, when all
-    /// are added, call [`GenericEnumImplInfo::finish()`] to get an implementator specific for your
+    /// Call [`EnumImplInfo::add_variant()`] repeatedly to add enum variants. Then, when all
+    /// are added, call [`EnumImplInfo::finish()`] to get an implementator specific for your
     /// trait.
     ///
     /// # Returns
-    /// A new GenericEnumImplInfo that can be loaded with variants.
+    /// A new EnumImplInfo that can be loaded with variants.
     #[inline]
     pub fn new() -> Self { Self(TokenStream2::new(), TokenStream2::new(), TokenStream2::new()) }
 
@@ -378,7 +502,7 @@ impl GenericEnumImplInfo {
     ///
     /// # Generics
     /// - `T`: Some generator (something implementing [`ToTokens`]) that will generate the final
-    ///   impl. It is supposed to be able to constructed ([`From`]) this GenericEnumImplInfo and
+    ///   impl. It is supposed to be able to constructed ([`From`]) this EnumImplInfo and
     ///   some other things that are contextually useful.
     ///
     /// # Arguments

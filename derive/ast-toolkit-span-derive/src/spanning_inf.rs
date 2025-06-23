@@ -10,7 +10,7 @@ use quote::{ToTokens, quote};
 use syn::{Generics, Ident};
 
 use crate::analyze::{GenericImplInfo, ToplevelAttrs};
-use crate::generate::{GenericEnumImplInfo, WhereClauseWithoutWhereWithComma};
+use crate::generate::{EnumImplInfo, WhereClauseWithoutWhereWithComma};
 
 
 /***** LIBRARY *****/
@@ -147,11 +147,11 @@ impl<'i, 'a> SpanningInfImplInfo<'i, 'a> {
 
 /// Defines a wrapper around [`SpanningInfImplInfoEnum`] that encodes the finishing state (i.e., we
 /// have enough info to generate the full impl).
-pub struct SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i>(GenericEnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident);
+pub struct SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i>(EnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident);
 impl<'a, 'g, 'i> ToTokens for SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i> {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let Self(GenericEnumImplInfo(where_preds_new, span_tokens, into_span_tokens), attrs, gens, ident) = self;
+        let Self(EnumImplInfo(where_preds_new, span_tokens, into_span_tokens), attrs, gens, ident) = self;
         let ast_toolkit_span = &attrs.ast_toolkit_span;
 
         let (ig, ty_gen, _) = gens.split_for_impl();
@@ -182,9 +182,9 @@ impl<'a, 'g, 'i> ToTokens for SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i> {
         });
     }
 }
-impl<'a, 'g, 'i> From<(GenericEnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident)> for SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i> {
+impl<'a, 'g, 'i> From<(EnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident)> for SpanningInfImplInfoEnumImplFinish<'a, 'g, 'i> {
     #[inline]
-    fn from((info, where_preds, func1_tokens, func2_tokens): (GenericEnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident)) -> Self {
+    fn from((info, where_preds, func1_tokens, func2_tokens): (EnumImplInfo, &'a ToplevelAttrs, &'g Generics, &'i Ident)) -> Self {
         Self(info, where_preds, func1_tokens, func2_tokens)
     }
 }

@@ -63,55 +63,11 @@ impl ToplevelAttrs {
     /// # Errors
     /// This function can error if we recognized any attribute as our own, but failed to parse its
     /// contents.
-    pub fn parse(attrs: impl IntoIterator<Item = Attribute>) -> Result<Self, Error> {
-        /// Defines a single ToplevelAttr and how to parse it.
-        enum ToplevelAttr {
-            Crate(Path),
-            Generic(Ident),
-            Lifetime(Lifetime),
-            ImplGen(Punctuated<GenericParam, Token![,]>),
-            Bounds(Punctuated<WherePredicate, Token![,]>),
-        }
-        impl Parse for ToplevelAttr {
-            #[inline]
-            fn parse(input: ParseStream) -> syn::Result<Self> {
-                let path: Path = input.parse()?;
-                if path.is_ident("crate") {
-                    // `crate = ast_toolkit::span`
-                    input.parse::<Token![=]>()?;
-                    Ok(Self::Crate(input.parse()?))
-                } else if path.is_ident("gen") || path.is_ident("generic") {
-                    // `generic = S`
-                    input.parse::<Token![=]>()?;
-                    Ok(Self::Generic(input.parse()?))
-                } else if path.is_ident("impl_gen") {
-                    // `generic = S`
-                    input.parse::<Token![=]>()?;
-                    input.parse::<Token![<]>()?;
-                    let generics = Punctuated::parse_terminated(input)?;
-                    input.parse::<Token![>]>()?;
-                    Ok(Self::ImplGen(generics))
-                } else if path.is_ident("lifetime") {
-                    // `lifetime = 's`
-                    input.parse::<Token![=]>()?;
-                    Ok(Self::Lifetime(input.parse()?))
-                } else if path.is_ident("bound") || path.is_ident("bounds") {
-                    // `bound = (S: Spannable<'s>)`
-                    input.parse::<Token![=]>()?;
-                    let content;
-                    parenthesized!(content in input);
-                    Ok(Self::Bounds(Punctuated::parse_terminated(&content)?))
-                } else {
-                    Err(Error::new(path.span(), "Unknown attribute for `spanning`"))
-                }
-            }
-        }
-
-
+    pub fn parse<'a>(attrs: impl IntoIterator<Item = &'a Attribute>) -> Result<Self, Error> {
         // Iterate over all attributes
         let mut res = Self::default();
         for attr in attrs {
-            match attr.meta {
+            match &attr.meta {
                 Meta::List(l) if l.path.is_ident("spanning") => {
                     // Parse the arguments to the list as specialized metas
                     let attrs: Punctuated<ToplevelAttr, Token![,]> = l.parse_args_with(Punctuated::parse_terminated)?;
@@ -122,6 +78,115 @@ impl ToplevelAttrs {
                             ToplevelAttr::Lifetime(l) => res.lifetime = l,
                             ToplevelAttr::ImplGen(ig) => res.impl_gen = Some(ig),
                             ToplevelAttr::Bounds(b) => res.bounds = Some(b),
+                            ToplevelAttr::Staircase => { /* Ignore, is for `VariantAttrs` */ },
+                        }
+                    }
+                },
+
+                Meta::Path(p) if p.is_ident("spanning") => {
+                    return Err(Error::new(p.span(), "`spanning`-attribute must be followed by a list of name/value pairs"));
+                },
+                Meta::NameValue(nv) if nv.path.is_ident("spanning") => {
+                    return Err(Error::new(nv.path.span(), "`spanning`-attribute cannot be used with name/value syntax"));
+                },
+
+                // Ignore anything else
+                _ => continue,
+            }
+        }
+        Ok(res)
+    }
+}
+
+/// Defines a single ToplevelAttr and how to parse it.
+enum ToplevelAttr {
+    Crate(Path),
+    Generic(Ident),
+    Lifetime(Lifetime),
+    ImplGen(Punctuated<GenericParam, Token![,]>),
+    Bounds(Punctuated<WherePredicate, Token![,]>),
+    Staircase,
+}
+impl Parse for ToplevelAttr {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let path: Path = input.parse()?;
+        if path.is_ident("crate") {
+            // `crate = ast_toolkit::span`
+            input.parse::<Token![=]>()?;
+            Ok(Self::Crate(input.parse()?))
+        } else if path.is_ident("gen") || path.is_ident("generic") {
+            // `generic = S`
+            input.parse::<Token![=]>()?;
+            Ok(Self::Generic(input.parse()?))
+        } else if path.is_ident("impl_gen") {
+            // `generic = S`
+            input.parse::<Token![=]>()?;
+            input.parse::<Token![<]>()?;
+            let generics = Punctuated::parse_terminated(input)?;
+            input.parse::<Token![>]>()?;
+            Ok(Self::ImplGen(generics))
+        } else if path.is_ident("lifetime") {
+            // `lifetime = 's`
+            input.parse::<Token![=]>()?;
+            Ok(Self::Lifetime(input.parse()?))
+        } else if path.is_ident("bound") || path.is_ident("bounds") {
+            // `bound = (S: Spannable<'s>)`
+            input.parse::<Token![=]>()?;
+            let content;
+            parenthesized!(content in input);
+            Ok(Self::Bounds(Punctuated::parse_terminated(&content)?))
+        } else if path.is_ident("staircase") {
+            // `staircase`
+            Ok(Self::Staircase)
+        } else {
+            Err(Error::new(path.span(), "Unknown attribute for `spanning`"))
+        }
+    }
+}
+
+
+
+/// Defines attributes we parse at the variant level.
+///
+/// Note: for structs, this is indistuinghuisable from the [`ToplevelAttrs`].
+pub struct VariantAttrs {
+    /// Whether the user marked this as a staircase impl.
+    pub staircase: bool,
+}
+impl Default for VariantAttrs {
+    #[inline]
+    fn default() -> Self { Self { staircase: false } }
+}
+impl VariantAttrs {
+    /// Parses the VariantAttrs from a given list of attributes.
+    ///
+    /// # Arguments
+    /// - `attrs`: The list of [`Attribute`]s to parse.
+    ///
+    /// # Returns
+    /// A VariantAttrs representing the `attrs`' information.
+    ///
+    /// # Errors
+    /// This function can error if we recognized any attribute as our own, but failed to parse its
+    /// contents.
+    pub fn parse<'a>(attrs: impl IntoIterator<Item = &'a Attribute>) -> Result<Self, Error> {
+        // Iterate over all attributes
+        let mut res = Self::default();
+        for attr in attrs {
+            match &attr.meta {
+                Meta::List(l) if l.path.is_ident("spanning") => {
+                    // Parse the arguments to the list as specialized metas
+                    // NOTE: Because we may overlap with the ToplevelAttrs, we parse that instead.
+                    let attrs: Punctuated<ToplevelAttr, Token![,]> = l.parse_args_with(Punctuated::parse_terminated)?;
+                    for attr in attrs {
+                        match attr {
+                            ToplevelAttr::Crate(_)
+                            | ToplevelAttr::Generic(_)
+                            | ToplevelAttr::Lifetime(_)
+                            | ToplevelAttr::ImplGen(_)
+                            | ToplevelAttr::Bounds(_) => { /* Ignore, is for `ToplevelAttrs` */ },
+                            ToplevelAttr::Staircase => res.staircase = true,
                         }
                     }
                 },
@@ -146,13 +211,17 @@ impl ToplevelAttrs {
 /// Defines what we will learn from field-level attributes.
 pub struct FieldAttrs {
     /// Whether this field is marked as The Span:tm:
-    pub is_span:    bool,
+    pub is_span: bool,
     /// Whether the span is joined with the main one.
     pub is_joining: bool,
+    /// (STAIRCASE IMPL) Whether the span is infallible.
+    pub is_infallible: bool,
+    /// (STAIRCASE IMPL) Whether the span should be skipped.
+    pub skip: bool,
 }
 impl Default for FieldAttrs {
     #[inline]
-    fn default() -> Self { Self { is_span: false, is_joining: false } }
+    fn default() -> Self { Self { is_span: false, is_joining: false, is_infallible: false, skip: false } }
 }
 impl FieldAttrs {
     /// Parses the FieldAttrs from a given list of attributes.
@@ -169,6 +238,8 @@ impl FieldAttrs {
     pub fn parse(attrs: impl IntoIterator<Item = Attribute>) -> Result<Self, Error> {
         enum FieldAttr {
             Joining,
+            Infallible,
+            Skip,
         }
         impl Parse for FieldAttr {
             #[inline]
@@ -177,6 +248,10 @@ impl FieldAttrs {
                 let path: Path = input.parse()?;
                 if path.is_ident("join") || path.is_ident("joining") {
                     Ok(Self::Joining)
+                } else if path.is_ident("infallible") {
+                    Ok(Self::Infallible)
+                } else if path.is_ident("skip") {
+                    Ok(Self::Skip)
                 } else {
                     Err(Error::new(path.span(), "Unknown attribute for `span`"))
                 }
@@ -205,6 +280,8 @@ impl FieldAttrs {
                     for attr in attrs {
                         match attr {
                             FieldAttr::Joining => res.is_joining = true,
+                            FieldAttr::Infallible => res.is_infallible = true,
+                            FieldAttr::Skip => res.skip = true,
                         }
                     }
                 },
@@ -305,6 +382,48 @@ impl GenericImplInfo {
 
 
 
+/// Defines everything we need to know for a staircase impl.
+pub enum StaircaseImplInfo {
+    /// We're implementing for a struct struct/variant.
+    Struct {
+        /// The fields to consider, in-order.
+        spans: Vec<(bool, Ident, Type)>,
+    },
+    /// We're implementing for a tuple struct/variant.
+    Tuple {
+        /// The list of field identifiers. Those unused are compiled as wildcards.
+        idents: Punctuated<IdentOrWildcard, Token![,]>,
+        /// The fields to consider, in-order.
+        /// NOTE: Has indices of `idents`
+        spans:  Vec<(bool, usize, Type)>,
+    },
+}
+impl StaircaseImplInfo {
+    /// Returns an iterator over all the spans that participate in the staircase impl.
+    ///
+    /// # Returns
+    /// An [`Iterator`]-like that yields pairs of identifiers and types for all spans that are
+    /// staircase'd. It also reports whether this field is infallible (first element).
+    #[inline]
+    pub fn spans<'s>(&'s self) -> Box<dyn 's + DoubleEndedIterator<Item = (bool, &'s Ident, &'s Type)>> {
+        match self {
+            Self::Struct { spans } => Box::new(spans.iter().map(|(is_infallible, ident, ty)| (*is_infallible, ident, ty))),
+            Self::Tuple { idents, spans } => Box::new(spans.iter().map(|(is_infallible, i, ty)| {
+                (
+                    *is_infallible,
+                    match &idents[*i] {
+                        IdentOrWildcard::Ident(ident) => ident,
+                        IdentOrWildcard::Wildcard(_) => panic!("`spans` points to a wildcard instead of an ident"),
+                    },
+                    ty,
+                )
+            })),
+        }
+    }
+}
+
+
+
 /// Defines the possible ways in which we generate fields.
 pub enum IdentOrWildcard {
     Ident(Ident),
@@ -387,6 +506,55 @@ pub fn analyze_fields(fields: Fields) -> Result<GenericImplInfo, Error> {
             } else {
                 Err(Error::new(Span::mixed_site(), "No 'span'-field found; mark one with `#[span]` to indicate it holds the span for this type"))
             }
+        },
+        Fields::Unit => Err(Error::new(Span::mixed_site(), "No 'span'-found; add fields and name one 'span' or mark it with `#[span]`")),
+    }
+}
+
+
+
+/// Given a set of fields, returns the information needed to create a staircase impl for this one.
+///
+/// # Arguments
+/// - `fields`: Some [`Fields`] to analyze for what we need to know to implement some `Spanning`.
+///
+/// # Returns
+/// A tuple with loose information that calling functions can turn into something public.
+pub fn analyze_fields_staircase(fields: Fields) -> Result<StaircaseImplInfo, Error> {
+    // Split on the style of fields
+    match fields {
+        Fields::Named(fields) => {
+            // Collect fields that are participating in the staircase
+            let mut spans: Vec<(bool, Ident, Type)> = Vec::new();
+            for field in fields.named {
+                // SAFETY: We can do this because we're sure the field is named
+                let ident: Ident = field.ident.unwrap();
+                let attrs = FieldAttrs::parse(field.attrs)?;
+                if !attrs.skip {
+                    spans.push((attrs.is_infallible, ident, field.ty));
+                }
+            }
+            Ok(StaircaseImplInfo::Struct { spans })
+        },
+        Fields::Unnamed(fields) => {
+            // Collect fields that are participating in the staircase
+            let mut spans: Vec<(bool, usize, Type)> = Vec::new();
+            let idents: Punctuated<IdentOrWildcard, Token![,]> = fields
+                .unnamed
+                .into_iter()
+                .enumerate()
+                .map(|(i, field)| {
+                    let attrs = FieldAttrs::parse(field.attrs)?;
+                    if !attrs.skip {
+                        let ty_span: Span = field.ty.span();
+                        spans.push((attrs.is_infallible, i, field.ty));
+                        Ok(IdentOrWildcard::Ident(Ident::new(&format!("field{i}"), ty_span)))
+                    } else {
+                        Ok(IdentOrWildcard::Wildcard(field.ty.span()))
+                    }
+                })
+                .collect::<Result<Punctuated<_, _>, Error>>()?;
+            Ok(StaircaseImplInfo::Tuple { idents, spans })
         },
         Fields::Unit => Err(Error::new(Span::mixed_site(), "No 'span'-found; add fields and name one 'span' or mark it with `#[span]`")),
     }

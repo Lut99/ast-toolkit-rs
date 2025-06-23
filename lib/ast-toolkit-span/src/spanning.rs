@@ -146,6 +146,13 @@ impl<S: Clone> Spanning<S> for Infallible {
         unsafe { unreachable_unchecked() }
     }
 }
+impl<T: Spanning<S>, S: Clone> Spanning<S> for Option<T> {
+    #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> { self.as_ref().and_then(Spanning::get_span) }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { self.and_then(Spanning::take_span) }
+}
 
 // Pointer-like impls
 spanning_ptr_impl!(&'a T);
