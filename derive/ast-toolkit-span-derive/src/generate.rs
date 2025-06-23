@@ -245,6 +245,9 @@ impl<'i> ToTokens for GenericImplInfoTyPat<'i> {
                     inner.append(Punct::new(',', Spacing::Alone));
                     ident.to_tokens(&mut inner);
                 }
+                inner.append(Punct::new(',', Spacing::Alone));
+                inner.append(Punct::new('.', Spacing::Joint));
+                inner.append(Punct::new('.', Spacing::Alone));
                 tokens.append(Group::new(Delimiter::Brace, inner));
             },
             GenericImplInfo::Tuple { idents, .. } => {

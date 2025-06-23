@@ -28,3 +28,35 @@ pub use ast_toolkit_span_derive::{Spanning, SpanningInf, SpanningMut, SpanningRe
 pub use span::Span;
 pub use spannable::{Spannable, SpannableBytes};
 pub use spanning::{Spanning, SpanningInf, SpanningMut, SpanningRef};
+
+
+/***** TESTS *****/
+/// NOTE: Has to be here, because we need to resolve this crate things and we don't want a
+/// mutually dependent relationship
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use super::*;
+
+    #[cfg(feature = "derive")]
+    #[test]
+    fn test_spanning_struct_nonspan_fields() {
+        #[derive(Spanning, SpanningInf, SpanningMut, SpanningRef)]
+        #[spanning(crate = crate)]
+        #[allow(dead_code)]
+        struct Test1<S> {
+            nonspan: &'static str,
+            span:    Span<S>,
+        }
+
+        #[derive(Spanning, SpanningInf, SpanningMut, SpanningRef)]
+        #[spanning(crate = crate)]
+        #[allow(dead_code)]
+        struct Test2<S>(&'static str, #[span] Span<S>);
+
+        let span = Span::new("test");
+        assert_eq!(Test1 { nonspan: "Howdy", span: span.clone() }.get_span(), Some(Cow::Owned(span)));
+        assert_eq!(Test2("Howdy", span.clone()).get_span(), Some(Cow::Owned(span)));
+    }
+}
