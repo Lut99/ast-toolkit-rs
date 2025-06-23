@@ -358,6 +358,7 @@ pub fn analyze_fields(fields: Fields) -> Result<GenericImplInfo, Error> {
         },
         Fields::Unnamed(fields) => {
             // Find the field marked as span, generating idents as we go
+            let n_fields: usize = fields.unnamed.len();
             let mut span: Option<(usize, Type)> = None;
             let mut joining: Vec<(usize, Type)> = Vec::new();
             let idents: Punctuated<IdentOrWildcard, Token![,]> = fields
@@ -367,7 +368,7 @@ pub fn analyze_fields(fields: Fields) -> Result<GenericImplInfo, Error> {
                 .map(|(i, field)| {
                     // Parse the attributes
                     let attrs = FieldAttrs::parse(field.attrs)?;
-                    if attrs.is_span {
+                    if attrs.is_span || n_fields == 1 {
                         // Just overwrite, I can't be bothered
                         let ty_span: Span = field.ty.span();
                         span = Some((i, field.ty));

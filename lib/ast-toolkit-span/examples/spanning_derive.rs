@@ -65,7 +65,7 @@ pub struct Token5<S> {
 #[derive(Spanning, SpanningInf, SpanningRef, SpanningMut)]
 #[spanning(crate = ast_toolkit_span)]
 pub enum Token6<S> {
-    One(#[span] Span<S>),
+    One(Span<S>),
     Two { span: Span<S> },
 }
 
