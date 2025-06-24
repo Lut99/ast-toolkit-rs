@@ -24,6 +24,8 @@ mod railroad;
 mod serde;
 #[cfg(feature = "snack")]
 pub mod snack;
+#[cfg(feature = "span")]
+mod span;
 
 // Imports
 use std::cmp::Ordering;

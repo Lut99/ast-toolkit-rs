@@ -13,7 +13,7 @@ use std::hint::unreachable_unchecked;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::Span;
+use crate::{Span, Spannable};
 
 
 /***** HELPER MACROS *****/
@@ -152,6 +152,34 @@ impl<T: Spanning<S>, S: Clone> Spanning<S> for Option<T> {
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { self.and_then(Spanning::take_span) }
+}
+impl<'s, T: Spanning<S>, S: Clone + Spannable<'s>> Spanning<S> for Vec<T> {
+    /// This function will join all elements in `self` for which `Spanning::get_span()` returns
+    /// [`Some`]thing.
+    ///
+    /// # Returns
+    /// A span covering all elements in `self`, or [`None`] if:
+    /// - It was empty;
+    /// - No element returns [`Some`] from `Spanning::get_span()`; or
+    /// - Any [`Span::join`] returned [`None`] (this happens if they are from different sources).
+    #[inline]
+    fn get_span(&self) -> Option<Cow<Span<S>>> {
+        // Get the first & last elements, staircase style
+        let mut span: Option<Cow<Span<S>>> = None;
+        for elem in self.iter() {
+            match elem.get_span() {
+                Some(new) => match span.take() {
+                    Some(old) => span = Some(Cow::Owned(old.join(new.as_ref())?)),
+                    None => span = Some(new),
+                },
+                None => continue,
+            }
+        }
+        span
+    }
+
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { self.get_span().map(Cow::into_owned) }
 }
 
 // Pointer-like impls

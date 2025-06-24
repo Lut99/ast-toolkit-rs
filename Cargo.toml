@@ -33,6 +33,7 @@ punctuated = ["dep:ast-toolkit-punctuated"]
 punctuated-macros = ["punctuated", "ast-toolkit-punctuated/macros"]
 punctuated-serde = ["punctuated", "ast-toolkit-punctuated/serde"]
 punctuated-snack = ["punctuated", "ast-toolkit-punctuated/snack"]
+punctuated-span = ["punctuated", "ast-toolkit-punctuated/span"]
 
 railroad = [
     "dep:ast-toolkit-railroad",
@@ -49,7 +50,7 @@ snack = [
 snack-extra = ["snack", "ast-toolkit-snack/extra"]
 snack-macros = ["snack", "ast-toolkit-snack/macros"]
 
-span = ["dep:ast-toolkit-span"]
+span = ["dep:ast-toolkit-span", "ast-toolkit-punctuated/span"]
 span-derive = ["ast-toolkit-span/derive"]
 span-serde = ["ast-toolkit-span/serde"]
 
