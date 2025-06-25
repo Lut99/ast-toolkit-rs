@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter, Result as FResult};
 
-use ast_toolkit_span::{Span, Spannable, Spanning};
+use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf};
 
 use crate::combinator::forget_ty;
 use crate::result::Result as SResult;
@@ -68,6 +68,12 @@ impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
     fn get_span(&self) -> Option<Cow<Span<S>>> { self.0.get_span() }
     #[inline]
     fn take_span(self) -> Option<Span<S>> { self.0.get_span().map(Cow::into_owned) }
+}
+impl<'e, S: Clone> SpanningInf<S> for BoxedParseError<'e, S> {
+    #[inline]
+    fn span(&self) -> Cow<Span<S>> { self.0.span() }
+    #[inline]
+    fn into_span(self) -> Span<S> { self.0.span().into_owned() }
 }
 impl<'e, S: Clone> ParseError<S> for BoxedParseError<'e, S> {
     #[inline]

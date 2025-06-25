@@ -22,7 +22,7 @@ use ast_toolkit_snack::combinator::closure;
 use ast_toolkit_snack::result::SnackError;
 use ast_toolkit_snack::scan::tag;
 use ast_toolkit_snack::{Combinator, ParseError, branch, combinator as comb};
-use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
+use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning, SpanningInf};
 use better_derive::{Debug, Eq, PartialEq};
 
 
@@ -44,15 +44,21 @@ impl<S> Display for Fatal<S> {
 impl<'s, S: Spannable<'s>> Error for Fatal<S> {}
 impl<S: Clone> Spanning<S> for Fatal<S> {
     #[inline]
-    fn get_span(&self) -> Option<std::borrow::Cow<Span<S>>> {
+    fn get_span(&self) -> Option<std::borrow::Cow<Span<S>>> { Some(self.span()) }
+    #[inline]
+    fn take_span(self) -> Option<Span<S>> { Some(self.into_span()) }
+}
+impl<S: Clone> SpanningInf<S> for Fatal<S> {
+    #[inline]
+    fn span(&self) -> std::borrow::Cow<Span<S>> {
         match self {
-            Self::Overflow { span } => Some(Cow::Borrowed(span)),
+            Self::Overflow { span } => Cow::Borrowed(span),
         }
     }
     #[inline]
-    fn take_span(self) -> Option<Span<S>> {
+    fn into_span(self) -> Span<S> {
         match self {
-            Self::Overflow { span } => Some(span),
+            Self::Overflow { span } => span,
         }
     }
 }

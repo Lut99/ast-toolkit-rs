@@ -40,13 +40,13 @@ use std::error::Error;
 use std::fmt::Debug;
 
 // Re-exports
-pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning};
+pub use ast_toolkit_span::{Span, Spannable, SpannableBytes, Spanning, SpanningInf};
 pub use fmt::ExpectsFormatter;
 
 
 /***** LIBRARY *****/
 /// A trait implemented by errors that are returned by snack [`Combinator`]s.
-pub trait ParseError<S: Clone>: Debug + Error + Spanning<S> {
+pub trait ParseError<S: Clone>: Debug + Error + SpanningInf<S> {
     /// This function tells if more input might fix this error.
     ///
     /// This is very useful for streaming input. If you see a

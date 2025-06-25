@@ -15,12 +15,14 @@
 
 // Modules
 pub mod cut;
+pub mod expected;
 pub mod fatal;
 pub mod recoverable;
 pub mod uncut;
 
 // Use some of those things
 pub use cut::cut;
+pub use expected::expected;
 pub use fatal::fatal;
 pub use recoverable::recoverable;
 pub use uncut::uncut;
