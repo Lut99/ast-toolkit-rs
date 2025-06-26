@@ -199,7 +199,7 @@ macro_rules! comb_newtype {
     ($(#[doc = $docs:expr])* $(cfg = [$($cfg:tt)*],)? visibility = $vis:vis, name = $name:ident $(, ty_gen = ($($ty_gen:tt)+))? $(, impl_gen = ($($impl_gen:tt)+))? , comb_gen = ($($comb_gen:tt)+) $(, where_preds = ($($where_preds:tt)+))?, ty = $comb:ty $(,)?) => {
         $(#[cfg($($cfg)*)])?
         $(#[doc = $docs])*
-        $vis struct $name $(<$($ty_gen)+>)? ($comb);
+        $vis struct $name $(<$($ty_gen)+>)? (pub $comb);
         $(#[cfg($($cfg)*)])?
         impl $(<$($impl_gen)+>)? $crate::Combinator <$($comb_gen)+> for $name $(<$($ty_gen)+>)? $(where $($where_preds)+)? {
             type ExpectsFormatter = <$comb as $crate::Combinator<$($comb_gen)+>>::ExpectsFormatter;
