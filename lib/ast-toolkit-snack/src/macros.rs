@@ -147,7 +147,7 @@ macro_rules! comb_cfg {
 #[macro_export]
 macro_rules! comb_newtype {
     // Abbreviated syntax, without `'t` and `'s`
-    ($(#[doc = $docs:literal])* $vis:vis $name:ident<S>($comb:ty) $(;)?) => {
+    ($(#[doc = $docs:expr])* $vis:vis $name:ident<S>($comb:ty) $(;)?) => {
         $crate::comb_newtype!(
             $(#[doc = $docs])*
             visibility = $vis,
@@ -159,7 +159,7 @@ macro_rules! comb_newtype {
         )
     };
     // Abbreviated syntax, with `'t` but without `'s`
-    ($(#[doc = $docs:literal])* $vis:vis $name:ident<'t, S>($comb:ty) $(;)?) => {
+    ($(#[doc = $docs:expr])* $vis:vis $name:ident<'t, S>($comb:ty) $(;)?) => {
         $crate::comb_newtype!(
             $(#[doc = $docs])*
             visibility = $vis,
@@ -171,7 +171,7 @@ macro_rules! comb_newtype {
         )
     };
     // Abbreviated syntax, without `'t` but with `'s`
-    ($(#[doc = $docs:literal])* $vis:vis $name:ident<'s, S>($comb:ty) $(;)?) => {
+    ($(#[doc = $docs:expr])* $vis:vis $name:ident<'s, S>($comb:ty) $(;)?) => {
         $crate::comb_newtype!(
             $(#[doc = $docs])*
             visibility = $vis,
@@ -183,7 +183,7 @@ macro_rules! comb_newtype {
         )
     };
     // Abbreviated syntax, with `'t` and `'s`
-    ($(#[doc = $docs:literal])* $vis:vis $name:ident<'t, 's, S>($comb:ty) $(;)?) => {
+    ($(#[doc = $docs:expr])* $vis:vis $name:ident<'t, 's, S>($comb:ty) $(;)?) => {
         $crate::comb_newtype!(
             $(#[doc = $docs])*
             visibility = $vis,
@@ -196,7 +196,7 @@ macro_rules! comb_newtype {
     };
 
     // Explicit syntax (most verbose, so has the actual impl)
-    ($(#[doc = $docs:literal])* $(cfg = [$($cfg:tt)*],)? visibility = $vis:vis, name = $name:ident $(, ty_gen = ($($ty_gen:tt)+))? $(, impl_gen = ($($impl_gen:tt)+))? , comb_gen = ($($comb_gen:tt)+) $(, where_preds = ($($where_preds:tt)+))?, ty = $comb:ty $(,)?) => {
+    ($(#[doc = $docs:expr])* $(cfg = [$($cfg:tt)*],)? visibility = $vis:vis, name = $name:ident $(, ty_gen = ($($ty_gen:tt)+))? $(, impl_gen = ($($impl_gen:tt)+))? , comb_gen = ($($comb_gen:tt)+) $(, where_preds = ($($where_preds:tt)+))?, ty = $comb:ty $(,)?) => {
         $(#[cfg($($cfg)*)])?
         $(#[doc = $docs])*
         $vis struct $name $(<$($ty_gen)+>)? ($comb);
