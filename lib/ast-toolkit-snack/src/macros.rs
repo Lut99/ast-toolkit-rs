@@ -215,5 +215,10 @@ macro_rules! comb_newtype {
                 <$comb as $crate::Combinator <$($comb_gen)+>>::parse(&mut self.0, input)
             }
         }
+        $(#[cfg($($cfg)*)])?
+        impl $(<$($impl_gen)+>)? ::std::convert::From<$comb> for $name $(<$($ty_gen)+>)? {
+            #[inline]
+            fn from(value: $comb) -> Self { Self(value) }
+        }
     };
 }
