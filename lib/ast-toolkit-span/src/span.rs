@@ -371,6 +371,14 @@ impl<'s, S: Spannable<'s>> Span<S> {
         let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
         &self.source.as_slice()[start..end]
     }
+
+    /// Gets the start position of the span in the source text.
+    ///
+    /// # Returns
+    /// A [`usize`] encoding a zero-indexed position in the spanned array where this span begins.
+    /// If the [`Span`] is empty, it returns [`None`].
+    #[inline]
+    pub fn start(&self) -> Option<usize> { self.range.start_resolved(self.source.len()) }
 }
 impl<'s, S: SpannableBytes<'s>> Span<S> {
     /// Alias for [`Span::as_slice()`] that has a more topical name.
@@ -383,6 +391,27 @@ impl<'s, S: SpannableBytes<'s>> Span<S> {
     /// A byte slice representing the spanned area.
     #[inline]
     pub fn as_bytes(&self) -> &'s [u8] { <Self>::as_slice(self) }
+
+    /// Gets the start position of the span in the source text as a (line, column)-pair.
+    ///
+    /// # Returns
+    /// A pair of [`usize`]s encoding two one-indexed line- and column position, respectively, in
+    /// the spanned array where this span begins. If the [`Span`] is empty, it returns [`None`].
+    #[inline]
+    pub fn start_pos(&self) -> Option<(usize, usize)> {
+        let start: usize = self.start()?;
+        let mut line = 1;
+        let mut col = 1;
+        for b in &self.source.as_bytes()[..start] {
+            if *b == b'\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+        }
+        Some((line, col))
+    }
 }
 impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     type Elem = <S as Spannable<'s>>::Elem;

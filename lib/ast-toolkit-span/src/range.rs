@@ -15,6 +15,33 @@
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 
+/***** HELPER FUNCTIONS *****/
+/// Manual re-implementation of [`min()`] but then `const`.
+///
+/// # Arguments
+/// - `lhs`: The first value to compare.
+/// - `rhs`: The second value to compare.
+///
+/// # Returns
+/// `lhs` if it's smaller or equal to `rhs`, else `rhs`.
+#[inline]
+pub const fn min(lhs: usize, rhs: usize) -> usize { if lhs <= rhs { lhs } else { rhs } }
+
+/// Manual re-implementation of [`max()`] but then `const`.
+///
+/// # Arguments
+/// - `lhs`: The first value to compare.
+/// - `rhs`: The second value to compare.
+///
+/// # Returns
+/// `lhs` if it's larger or equal to `rhs`, else `rhs`.
+#[inline]
+pub const fn max(lhs: usize, rhs: usize) -> usize { if lhs >= rhs { lhs } else { rhs } }
+
+
+
+
+
 /***** HELPERS *****/
 /// Actual implementation of the [`Range`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -209,21 +236,21 @@ impl Range {
             },
             (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
                 let start: usize = lstart + rstart;
-                let end: usize = std::cmp::min(lend, lstart + rend);
+                let end: usize = min(lend, lstart + rend);
                 Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
             },
             (RangeInner::Bounded(start, lend), RangeInner::Until(rend)) => {
-                let end: usize = std::cmp::min(lend, start + rend);
+                let end: usize = min(lend, start + rend);
                 Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
             },
             (RangeInner::Until(end), RangeInner::Onwards(start)) => {
                 Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
             },
             (RangeInner::Until(lend), RangeInner::Bounded(start, rend)) => {
-                let end: usize = std::cmp::min(lend, rend);
+                let end: usize = min(lend, rend);
                 Range { inner: if start < end { RangeInner::Bounded(start, end) } else { RangeInner::Empty } }
             },
-            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range { inner: RangeInner::Until(std::cmp::min(lend, rend)) },
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range { inner: RangeInner::Until(min(lend, rend)) },
 
             // The full cases
             (RangeInner::Full, inner) | (inner, RangeInner::Full) => Self { inner },
@@ -342,17 +369,15 @@ impl Range {
     #[inline]
     pub fn join(&self, other: &Range) -> Range {
         match (self.inner, other.inner) {
-            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
-            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, _)) => Range::onwards(std::cmp::min(lstart, rstart)),
+            (RangeInner::Onwards(lstart), RangeInner::Onwards(rstart)) => Range::onwards(min(lstart, rstart)),
+            (RangeInner::Onwards(lstart), RangeInner::Bounded(rstart, _)) => Range::onwards(min(lstart, rstart)),
             (RangeInner::Onwards(_), RangeInner::Until(_)) => Range::full(),
-            (RangeInner::Bounded(lstart, _), RangeInner::Onwards(rstart)) => Range::onwards(std::cmp::min(lstart, rstart)),
-            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => {
-                Range::bounded(std::cmp::min(lstart, rstart), std::cmp::max(lend, rend))
-            },
-            (RangeInner::Bounded(_, lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Bounded(lstart, _), RangeInner::Onwards(rstart)) => Range::onwards(min(lstart, rstart)),
+            (RangeInner::Bounded(lstart, lend), RangeInner::Bounded(rstart, rend)) => Range::bounded(min(lstart, rstart), max(lend, rend)),
+            (RangeInner::Bounded(_, lend), RangeInner::Until(rend)) => Range::until(max(lend, rend)),
             (RangeInner::Until(_), RangeInner::Onwards(_)) => Range::full(),
-            (RangeInner::Until(lend), RangeInner::Bounded(_, rend)) => Range::until(std::cmp::max(lend, rend)),
-            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range::until(std::cmp::max(lend, rend)),
+            (RangeInner::Until(lend), RangeInner::Bounded(_, rend)) => Range::until(max(lend, rend)),
+            (RangeInner::Until(lend), RangeInner::Until(rend)) => Range::until(max(lend, rend)),
 
             // Full- and empty catch-alls
             (RangeInner::Full, _) | (_, RangeInner::Full) => Range::full(),
@@ -368,7 +393,7 @@ impl Range {
     /// # Returns
     /// The start index (inclusive), or [`None`] if the range is unbounded on this side (or empty).
     #[inline]
-    pub fn start(&self) -> Option<usize> {
+    pub const fn start(&self) -> Option<usize> {
         match self.inner {
             RangeInner::Bounded(start, _) | RangeInner::Onwards(start) => Some(start),
             RangeInner::Until(_) | RangeInner::Full | RangeInner::Empty => None,
@@ -385,11 +410,11 @@ impl Range {
     ///
     /// Will still be [`None`] if this range is empty OR `len` is 0 (but only then).
     #[inline]
-    pub fn start_resolved(&self, len: usize) -> Option<usize> {
+    pub const fn start_resolved(&self, len: usize) -> Option<usize> {
         match self.inner {
             RangeInner::Bounded(start, _) | RangeInner::Onwards(start) => {
                 if len > 0 {
-                    Some(std::cmp::min(start, len))
+                    Some(min(start, len))
                 } else {
                     None
                 }
@@ -410,7 +435,7 @@ impl Range {
     /// # Returns
     /// The end index (exclusive), or [`None`] if the range is unbounded on this side (or empty).
     #[inline]
-    pub fn end(&self) -> Option<usize> {
+    pub const fn end(&self) -> Option<usize> {
         match self.inner {
             RangeInner::Bounded(_, end) | RangeInner::Until(end) => Some(end),
             RangeInner::Onwards(_) | RangeInner::Full | RangeInner::Empty => None,
@@ -427,11 +452,11 @@ impl Range {
     ///
     /// Will still be [`None`] if this range is empty OR `len` is 0 (but only then).
     #[inline]
-    pub fn end_resolved(&self, len: usize) -> Option<usize> {
+    pub const fn end_resolved(&self, len: usize) -> Option<usize> {
         match self.inner {
             RangeInner::Bounded(_, end) | RangeInner::Until(end) => {
                 if len > 0 {
-                    Some(std::cmp::min(end, len))
+                    Some(min(end, len))
                 } else {
                     None
                 }
@@ -457,15 +482,15 @@ impl Range {
     /// # Returns
     /// A [`usize`] describing how many elements are encompassed in this Range.
     #[inline]
-    pub fn resolved_len(&self, len: usize) -> usize {
+    pub const fn resolved_len(&self, len: usize) -> usize {
         match self.inner {
             RangeInner::Bounded(start, end) => {
-                let start: usize = if len > 0 { std::cmp::min(start, len - 1) } else { 0 };
-                let end: usize = std::cmp::min(end, len);
+                let start: usize = if len > 0 { min(start, len - 1) } else { 0 };
+                let end: usize = min(end, len);
                 if start <= end { end - start } else { 0 }
             },
             RangeInner::Onwards(start) => len.saturating_sub(start),
-            RangeInner::Until(end) => std::cmp::min(end, len),
+            RangeInner::Until(end) => min(end, len),
             RangeInner::Full => len,
             RangeInner::Empty => 0,
         }
