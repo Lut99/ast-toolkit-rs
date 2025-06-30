@@ -210,7 +210,7 @@ impl<I, S, H> Sources<I, S, H> {
 ///
 /// This struct is only obtainable through [`Sources::load()`]'s closure. You should _not_ leak it
 /// outside of that in any way, that will result into a BFM ("Big Fucking Mess").
-pub struct SourcesAccess<'a, 's, I, S, H>(&'a mut HashMap<Key<I>, *const S, H>, PhantomData<&'s ()>);
+pub struct SourcesAccess<'a, 's, I, S, H = RandomState>(&'a mut HashMap<Key<I>, *const S, H>, PhantomData<&'s ()>);
 
 // Collection
 impl<'a, 's, I: Debug + Eq + Hash, S, H: BuildHasher> SourcesAccess<'a, 's, I, S, H> {
