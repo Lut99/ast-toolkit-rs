@@ -146,6 +146,33 @@ impl<I: Eq + Hash, S, H: BuildHasher> Sources<I, S, H> {
         })
     }
 
+    /// Provides access to one of the `S`ources and its `I`dentifier.
+    ///
+    /// This may seem redundant if you already give a key to search for it, but importantly, the
+    /// returned key has lifetime `'s`.
+    ///
+    /// Only read-access is provided, because of potential lingering read-only references on your
+    /// side.
+    ///
+    /// # Arguments
+    /// - `id`: Some `I`dentifier by which we recognize the source to get.
+    ///
+    /// # Returns
+    /// A tuple with the `&'s I`dentifier and the `&'s S`ource if we found one for the given `id`,
+    /// or else [`None`].
+    #[inline]
+    pub fn get_key_value<'s>(&'s self, id: &I) -> Option<(&'s I, &'s S)> {
+        // SAFETY: It's OK to get a pointer and assume it's valid, as `I` will exist for the
+        // duration of this function.
+        let key = unsafe { Key::new(id as *const I) };
+        self.data.get_key_value(&key).map(|(id, source)| {
+            // SAFETY: We can assume the `id`entifier and `source` are valid and exist because we
+            // have never deallocated it or mutated it; i.e., we behaved as if there are already
+            // read-only pointers to it (which there probably are).
+            (unsafe { &*id.as_ptr() }, unsafe { &**source })
+        })
+    }
+
     /// Checks if a source with the given `id` exists.
     ///
     /// # Returns
@@ -263,6 +290,33 @@ impl<'a, 's, I: Eq + Hash, S, H: BuildHasher> SourcesAccess<'a, 's, I, S, H> {
             // deallocated it or mutated it; i.e., we behaved as if there are already read-only
             // pointers to it (which there probably are).
             unsafe { &**source }
+        })
+    }
+
+    /// Provides access to one of the `S`ources and its `I`dentifier.
+    ///
+    /// This may seem redundant if you already give a key to search for it, but importantly, the
+    /// returned key has lifetime `'s`.
+    ///
+    /// Only read-access is provided, because of potential lingering read-only references on your
+    /// side.
+    ///
+    /// # Arguments
+    /// - `id`: Some `I`dentifier by which we recognize the source to get.
+    ///
+    /// # Returns
+    /// A tuple with the `&'s I`dentifier and the `&'s S`ource if we found one for the given `id`,
+    /// or else [`None`].
+    #[inline]
+    pub fn get_key_value(&self, id: &I) -> Option<(&'s I, &'s S)> {
+        // SAFETY: It's OK to get a pointer and assume it's valid, as `I` will exist for the
+        // duration of this function.
+        let key = unsafe { Key::new(id as *const I) };
+        self.0.get_key_value(&key).map(|(id, source)| {
+            // SAFETY: We can assume the `id`entifier and `source` are valid and exist because we
+            // have never deallocated it or mutated it; i.e., we behaved as if there are already
+            // read-only pointers to it (which there probably are).
+            (unsafe { &*id.as_ptr() }, unsafe { &**source })
         })
     }
 
