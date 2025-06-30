@@ -22,6 +22,8 @@ pub use ast_toolkit_punctuated as punctuated;
 pub use ast_toolkit_railroad as railroad;
 #[cfg(feature = "snack")]
 pub use ast_toolkit_snack as snack;
+#[cfg(feature = "sources")]
+pub use ast_toolkit_sources as sources;
 #[cfg(feature = "span")]
 pub use ast_toolkit_span as span;
 #[cfg(feature = "tokens")]
