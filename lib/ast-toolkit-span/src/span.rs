@@ -239,7 +239,7 @@ impl<'s, S: Spannable<'s>> Span<S> {
     /// # Returns
     /// A slice of the internal source as spanned by this Span.
     #[inline]
-    pub fn value(&self) -> &'s [S::Elem] { self.as_slice() }
+    pub fn value(&self) -> &[S::Elem] { self.as_slice() }
 
 
 
@@ -365,7 +365,7 @@ impl<'s, S: Spannable<'s>> Span<S> {
     /// # Returns
     /// A slice of internal elements that should be a counterpart of the spanned area.
     #[inline]
-    pub fn as_slice(&self) -> &'s [S::Elem] {
+    pub fn as_slice(&self) -> &[S::Elem] {
         let source_len: usize = self.source.len();
         let start: usize = self.range.start_resolved(source_len).unwrap_or(0);
         let end: usize = self.range.end_resolved(source_len).unwrap_or(0);
@@ -390,7 +390,7 @@ impl<'s, S: SpannableBytes<'s>> Span<S> {
     /// # Returns
     /// A byte slice representing the spanned area.
     #[inline]
-    pub fn as_bytes(&self) -> &'s [u8] { <Self>::as_slice(self) }
+    pub fn as_bytes(&self) -> &[u8] { <Self>::as_slice(self) }
 
     /// Gets the start position of the span in the source text as a (line, column)-pair.
     ///
@@ -422,7 +422,7 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
     fn source_id(&self) -> Self::SourceId { <Self>::source_id(self) }
 
     #[inline]
-    fn as_slice(&self) -> &'s [Self::Elem] { <Self>::as_slice(self) }
+    fn as_slice(&self) -> &[Self::Elem] { <Self>::as_slice(self) }
 
     #[inline]
     fn len(&self) -> usize { <Self>::len(self) }

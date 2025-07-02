@@ -66,7 +66,7 @@ pub struct Elem<'c, P, S> {
 impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Elem<'c, P, S>
 where
     'c: 'a,
-    P: FnMut(&'s S::Elem) -> bool,
+    P: for<'b> FnMut(&'b S::Elem) -> bool,
     S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
@@ -86,7 +86,7 @@ where
 
         // Match the first element
         // SAFETY: We know it exists, because the span is non-empty
-        let elem: &'s S::Elem = &input.as_slice()[0];
+        let elem: &S::Elem = &input.as_slice()[0];
         if (self.pred)(elem) {
             Ok((input.slice(1..), input.slice(..1)))
         } else {
@@ -153,7 +153,7 @@ where
 #[inline]
 pub const fn elem<'s, 'c, P, S>(what: &'c str, pred: P) -> Elem<'c, P, S>
 where
-    P: FnMut(&'s S::Elem) -> bool,
+    P: for<'a> FnMut(&'a S::Elem) -> bool,
     S: Clone + Spannable<'s>,
 {
     Elem { what, pred, _s: PhantomData }

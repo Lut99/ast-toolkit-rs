@@ -69,7 +69,7 @@ pub struct While1<'c, P, S> {
 impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
-    P: FnMut(&'s S::Elem) -> bool,
+    P: for<'b> FnMut(&'b S::Elem) -> bool,
     S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
@@ -166,7 +166,7 @@ where
 #[inline]
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
-    P: FnMut(&'s S::Elem) -> bool,
+    P: for<'a> FnMut(&'a S::Elem) -> bool,
     S: Clone + Spannable<'s>,
 {
     While1 { predicate, what, _s: PhantomData }

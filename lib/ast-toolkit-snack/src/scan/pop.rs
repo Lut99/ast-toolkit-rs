@@ -90,7 +90,7 @@ where
     S: Clone + Spannable<'s>,
 {
     type ExpectsFormatter = ExpectsFormatter;
-    type Output = &'s S::Elem;
+    type Output = Span<S>;
     type Recoverable = Recoverable<S>;
     type Fatal = Infallible;
 
@@ -101,7 +101,7 @@ where
     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
         if !input.is_empty() {
             // SAFETY: We can just take the element because we asserted we aren't empty.
-            Ok((input.slice(1..), &input.as_slice()[0]))
+            Ok((input.slice(1..), input.slice(..1)))
         } else {
             Err(SnackError::Recoverable(Recoverable { span: input }))
         }

@@ -34,7 +34,7 @@ macro_rules! spannable_ptr_impl {
             fn source_id(&self) -> Self::SourceId { <T as Spannable>::source_id(self) }
 
             #[inline]
-            fn as_slice(&self) -> &'s [Self::Elem] { <T as Spannable>::as_slice(self) }
+            fn as_slice(&self) -> &[Self::Elem] { <T as Spannable>::as_slice(self) }
 
             #[inline]
             fn len(&self) -> usize { <T as Spannable>::len(self) }
@@ -69,7 +69,7 @@ pub trait Spannable<'s> {
     /// Describes the ID returned by [`Spannable::source_id()`].
     type SourceId: Debug + Eq + Hash + PartialEq;
     /// Describes the elements in this spannable array.
-    type Elem: 's;
+    type Elem;
 
 
     // Mandatory implementation
@@ -88,7 +88,7 @@ pub trait Spannable<'s> {
     ///
     /// # Returns
     /// A slice of internal elements that should be a counterpart of the spanned area.
-    fn as_slice(&self) -> &'s [Self::Elem];
+    fn as_slice(&self) -> &[Self::Elem];
 
 
     // Derived functions
@@ -149,7 +149,7 @@ impl<'a, T: Clone + Debug + Eq + Hash + PartialEq, U: Spannable<'a>> Spannable<'
     fn source_id(&self) -> Self::SourceId { self.0.clone() }
 
     #[inline]
-    fn as_slice(&self) -> &'a [Self::Elem] { <U as Spannable>::as_slice(&self.1) }
+    fn as_slice(&self) -> &[Self::Elem] { <U as Spannable>::as_slice(&self.1) }
 
     #[inline]
     fn len(&self) -> usize { self.1.len() }
@@ -182,7 +182,7 @@ pub trait SpannableBytes<'s>: Spannable<'s, Elem = u8> {
     ///
     /// # Returns
     /// A byte slice representing this array.
-    fn as_bytes(&self) -> &'s [u8];
+    fn as_bytes(&self) -> &[u8];
 
 
 
@@ -194,11 +194,11 @@ pub trait SpannableBytes<'s>: Spannable<'s, Elem = u8> {
     /// # Errors
     /// This function will return the error if it was not a valid UTF-8 string.
     #[inline]
-    fn try_as_str(&self) -> Result<&'s str, std::str::Utf8Error> { std::str::from_utf8(self.as_bytes()) }
+    fn try_as_str(&self) -> Result<&str, std::str::Utf8Error> { std::str::from_utf8(self.as_bytes()) }
 }
 
 // Default impl to make it an alias
 impl<'s, T: Spannable<'s, Elem = u8>> SpannableBytes<'s> for T {
     #[inline]
-    fn as_bytes(&self) -> &'s [u8] { self.as_slice() }
+    fn as_bytes(&self) -> &[u8] { self.as_slice() }
 }
