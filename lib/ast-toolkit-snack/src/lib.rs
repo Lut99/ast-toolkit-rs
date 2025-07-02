@@ -19,6 +19,7 @@
 
 // Declare submodules
 pub mod ascii;
+pub mod asserts;
 pub mod boxed;
 pub mod branch;
 pub mod combinator;
