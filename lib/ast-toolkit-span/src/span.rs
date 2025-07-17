@@ -392,6 +392,19 @@ impl<'s, S: SpannableBytes<'s>> Span<S> {
     #[inline]
     pub fn as_bytes(&self) -> &'s [u8] { <Self>::as_slice(self) }
 
+    /// Wrapper around [`Span::as_bytes()`] that will attempt to interpret the bytes as UTF-8.
+    ///
+    /// It is literally the same as `std::str::from_utf8(Span::as_bytes())`.
+    ///
+    /// # Returns
+    /// A [`str`] representing the spanned area as UTF-8.
+    ///
+    /// # Errors
+    /// This function can error if the bytes are not valid UTF-8. Note this can also happen is you
+    /// sliced incorrectly, and interrupted a unicode code point.
+    #[inline]
+    pub fn try_as_str(&self) -> Result<&'s str, std::str::Utf8Error> { std::str::from_utf8(self.as_bytes()) }
+
     /// Gets the start position of the span in the source text as a (line, column)-pair.
     ///
     /// # Returns
