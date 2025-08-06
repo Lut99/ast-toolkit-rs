@@ -22,7 +22,11 @@ ast-toolkit-tokens = { path = "./lib/ast-toolkit-tokens", optional = true }
 default = []
 
 derive = ["ast-toolkit-railroad/derive", "ast-toolkit-span/derive"]
-macros = ["ast-toolkit-punctuated/macros", "ast-toolkit-snack/macros"]
+macros = [
+    "ast-toolkit-print/macros",
+    "ast-toolkit-punctuated/macros",
+    "ast-toolkit-snack/macros",
+]
 serde = [
     "ast-toolkit-punctuated/serde",
     "ast-toolkit-span/serde",
@@ -33,6 +37,7 @@ diagnostic = ["dep:ast-toolkit-diagnostic"]
 
 print = ["dep:ast-toolkit-print"]
 print-color = ["print", "ast-toolkit-print/color"]
+print-macros = ["print", "ast-toolkit-print/macros"]
 
 punctuated = ["dep:ast-toolkit-punctuated"]
 punctuated-macros = ["punctuated", "ast-toolkit-punctuated/macros"]

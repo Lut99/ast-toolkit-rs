@@ -12,6 +12,7 @@ console = { version = "0.16.0", optional = true }
 
 
 [features]
-default = []
+default = ["macros"]
 
 color = ["dep:console"]
+macros = []

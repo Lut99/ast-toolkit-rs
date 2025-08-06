@@ -8,6 +8,7 @@
 // Modules
 mod display;
 mod formatter;
+#[cfg(feature = "macros")]
 mod macros;
 mod spec;
 
