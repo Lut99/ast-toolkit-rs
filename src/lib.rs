@@ -16,6 +16,8 @@
 // Use some deps
 #[cfg(feature = "diagnostic")]
 pub use ast_toolkit_diagnostic as diagnostic;
+#[cfg(feature = "print")]
+pub use ast_toolkit_print as print;
 #[cfg(feature = "punctuated")]
 pub use ast_toolkit_punctuated as punctuated;
 #[cfg(feature = "railroad")]

@@ -19,9 +19,6 @@ better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v3.0
 paste = "1.0"
 
 
-[dev-dependencies]
-
-
 [features]
 default = ["extra", "macros"]
 

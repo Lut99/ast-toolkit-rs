@@ -1,0 +1,17 @@
+[package]
+name = "ast-toolkit-print"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides utilities for printing ASTs."
+
+
+[dependencies]
+console = { version = "0.16.0", optional = true }
+
+
+[features]
+default = []
+
+color = ["dep:console"]
