@@ -7,6 +7,7 @@
 
 use std::borrow::Cow;
 use std::cell::{Ref, RefMut};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Result as FResult, Write};
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -135,6 +136,43 @@ pub trait DisplayFmt {
     /// # Errors
     /// This function can error if it failed to serialize to the given `f`ormatter.
     fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult;
+}
+
+// std impls
+impl<T: DisplayFmt> DisplayFmt for Option<T> {
+    #[inline]
+    fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult {
+        match self {
+            Some(elem) => elem.display_fmt(f),
+            None => Ok(()),
+        }
+    }
+}
+impl<T: DisplayFmt> DisplayFmt for [T] {
+    #[inline]
+    fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult {
+        for elem in self {
+            elem.display_fmt(f)?;
+        }
+        Ok(())
+    }
+}
+impl<const LEN: usize, T: DisplayFmt> DisplayFmt for [T; LEN] {
+    #[inline]
+    fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult { <[T]>::display_fmt(self, f) }
+}
+impl<T: DisplayFmt> DisplayFmt for Vec<T> {
+    #[inline]
+    fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult { <[T]>::display_fmt(self, f) }
+}
+impl<T: DisplayFmt> DisplayFmt for BTreeSet<T> {
+    #[inline]
+    fn display_fmt<W: Write>(&self, f: &mut Formatter<'_, W>) -> FResult {
+        for elem in self {
+            elem.display_fmt(f)?;
+        }
+        Ok(())
+    }
 }
 
 // Pointer-like impls
