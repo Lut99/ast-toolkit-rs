@@ -13,7 +13,7 @@
 #[macro_export]
 macro_rules! write_dedup {
     ($f:expr, $($t:tt)*) => {
-        <$crate::Formatter>::write_dedup($f, ::std::format_args!($($t)*))
+        <$crate::Formatter<_>>::write_dedup($f, ::std::format_args!($($t)*))
     };
 }
 
