@@ -51,19 +51,73 @@ pub trait Displayable {
     /// Returns a formatter for serializing the output representation as something understood by
     /// humans.
     ///
+    /// # Returns
+    /// A [`Display`] that implements [`std::fmt::Display`].
+    fn display(&self) -> Display<'_, Self>;
+
+    /// Returns a formatter for serializing this instance as something understood by humans.
+    ///
+    /// This overload will allow you to define a custom color policy.
+    ///
     /// # Arguments
-    /// - `color`: Whether to use ANSI-colors while serializing. Use [`None`] to automatically
-    ///   decide based on whether stdout is a TTY.
+    /// - `use_color`: Determines whether to write ANSI-colors or not.
     ///
     /// # Returns
     /// A [`Display`] that implements [`std::fmt::Display`].
-    fn display(&self, color: Option<bool>) -> Display<'_, Self>;
+    #[cfg(feature = "color")]
+    fn display_color(&self, use_color: bool) -> Display<'_, Self>;
+
+    /// Returns a formatter that will automatically determine if we should use color based on
+    /// whether STDOUT is a TTY.
+    ///
+    /// # Returns
+    /// A [`Display`] that implements [`std::fmt::Display`].
+    #[cfg(feature = "color")]
+    fn display_stdout(&self) -> Display<'_, Self>;
+
+    /// Returns a formatter that will automatically determine if we should use color based on
+    /// whether STDERR is a TTY.
+    ///
+    /// # Returns
+    /// A [`Display`] that implements [`std::fmt::Display`].
+    #[cfg(feature = "color")]
+    fn display_stderr(&self) -> Display<'_, Self>;
 }
 
 // Blanket impl for everything [`DisplayFmt`].
 impl<T: ?Sized + DisplayFmt> Displayable for T {
     #[inline]
-    fn display(&self, color: Option<bool>) -> Display<'_, Self> { Display(self, color) }
+    fn display(&self) -> Display<'_, Self> {
+        Display(
+            self,
+            #[cfg(feature = "color")]
+            crate::display::Coloring::AutoStdout,
+        )
+    }
+
+    #[cfg(feature = "color")]
+    #[inline]
+    fn display_color(&self, use_color: bool) -> Display<'_, Self> { Display(self, crate::display::Coloring::Manual(use_color)) }
+
+    #[cfg(feature = "color")]
+    #[inline]
+    fn display_stdout(&self) -> Display<'_, Self> {
+        Display(
+            self,
+            #[cfg(feature = "color")]
+            crate::display::Coloring::AutoStdout,
+        )
+    }
+
+    #[cfg(feature = "color")]
+    #[inline]
+    fn display_stderr(&self) -> Display<'_, Self> {
+        Display(
+            self,
+            #[cfg(feature = "color")]
+            crate::display::Coloring::AutoStderr,
+        )
+    }
 }
 
 

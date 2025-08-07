@@ -7,12 +7,29 @@
 //
 
 
-use std::fmt::{self, Result as FResult, Write};
+#[cfg(feature = "color")]
+use std::fmt;
+use std::fmt::{Arguments, Result as FResult, Write};
+use std::iter::repeat_n;
+
+
+/***** HELPER MACROS *****/
+/// Generates constants necessary to work with the lib.
+macro_rules! define_indent {
+    ($ident:literal) => {
+        /// Defines the thing we write for eight times the indentation level.
+        const EIGHT_TIMES_INDENT: &str = concat!($ident, $ident, $ident, $ident, $ident, $ident, $ident, $ident);
+        /// The number of spaces we write for every indentation level.
+        pub const INDENT_SIZE: usize = $ident.len();
+    };
+}
+
+
+
 
 
 /***** CONSTANTS *****/
-/// Defines the indentation size for the [`Formatter`].
-pub const INDENT_SIZE: usize = 4;
+define_indent!("    ");
 
 
 
@@ -108,6 +125,16 @@ pub struct Formatter<'w, W> {
     indent: usize,
     /// Whether to write indentation on the next call to write.
     write_indent: bool,
+    /// A little buffer for remembering what we last wrote.
+    trail: Vec<u8>,
+    /// The current index in the buffer.
+    ///
+    /// Together with `trail_len`, this will do ring-buffer like reading and writing of `trail`.
+    trail_i: usize,
+    /// The current number of bytes occupied in the `trail` buffer.
+    ///
+    /// Together with `trail_i`, this will do ring-buffer like reading and writing of `trail`.
+    trail_len: usize,
 }
 impl<'w, W> Formatter<'w, W> {
     /// Constructor for the Formatter.
@@ -118,13 +145,16 @@ impl<'w, W> Formatter<'w, W> {
     /// # Returns
     /// A new Formatter that can be [`Write`]n to.
     #[inline]
-    pub const fn new(fmt: &'w mut W) -> Self {
+    pub fn new(fmt: &'w mut W) -> Self {
         Self {
             fmt,
             #[cfg(feature = "color")]
             color: false,
             indent: 0,
             write_indent: true,
+            trail: vec![b'\0'; 1],
+            trail_i: 0,
+            trail_len: 0,
         }
     }
 }
@@ -138,7 +168,7 @@ impl<'w, W> Formatter<'w, W> {
     /// `Self` for chaining.
     #[inline]
     pub fn add_indent(&mut self, n: usize) -> &mut Self {
-        self.indent = self.indent.saturating_add(n.saturating_mul(INDENT_SIZE));
+        self.indent = self.indent.saturating_add(n);
         self
     }
 
@@ -172,8 +202,64 @@ impl<'w, W> Formatter<'w, W> {
     /// `Self` for chaining.
     #[inline]
     pub fn rem_indent(&mut self, n: usize) -> &mut Self {
-        self.indent = self.indent.saturating_sub(n.saturating_mul(INDENT_SIZE));
+        self.indent = self.indent.saturating_sub(n);
         self
+    }
+
+
+
+    /// Sets the size of the trailing buffer.
+    ///
+    /// This will change the number of bytes (at most) returned by [`Formatter::trail()`]. By
+    /// default, only the last byte is kept.
+    ///
+    /// Also note that this can never _shrink_ the buffer. Nothing will happen if the new size you
+    /// specify is smaller than or equal to the current size.
+    ///
+    /// If you _do_ extend the size of the buffer, then any "new" slots are still empty. I.e., the
+    /// string returned by [`Formatter::trail()`] still has the old length until more is written.
+    ///
+    /// # Arguments
+    /// - `new_len`: The total length to set the internal trail buffer to. If it's smaller than the
+    ///   current length, it won't do anything.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[inline]
+    pub fn extend_trail_len(&mut self, new_len: usize) -> &mut Self {
+        // Early quit on no-ops
+        let act_trail_len: usize = self.trail.len();
+        if new_len <= act_trail_len {
+            return self;
+        }
+
+        // Extend the buffer size
+        self.trail.extend(repeat_n(0, new_len - act_trail_len));
+
+        // That's it! Note that the `trail_len` doesn't have to change (the new bytes are simply
+        // unallocated), neither does the `trail_i` (we ain't no writing anything).
+        self
+    }
+
+    /// Returns the last bytes written to the formatter.
+    ///
+    /// The maximum number returned is determined by the length of the trail buffer, set by
+    /// [`Formatter::extend_trail_len()`].
+    ///
+    /// # Returns
+    /// A [`Vec`] with the bytes last read.
+    #[inline]
+    pub fn trail(&self) -> Vec<u8> {
+        // We need to allocate a new buffer bc the internal one is improperly laid out
+        let mut res = vec![0; self.trail_len];
+        let mut trail_i: usize = self.trail_i;
+        for i in 0..self.trail_len {
+            // Read the current byte and copy it over
+            res[i] = self.trail[trail_i];
+            // Then advance our read pointer, wrapping around the buffer size
+            trail_i = (trail_i + 1) % self.trail.len();
+        }
+        res
     }
 
 
@@ -238,6 +324,51 @@ impl<'w, W> Formatter<'w, W> {
     #[inline]
     pub fn style(&self) -> Style { Style(self.color, console::Style::new()) }
 }
+impl<'w, W> Formatter<'w, W> {
+    /// Helper function for remembering that we wrote a given string.
+    ///
+    /// You can just dump the entire string in there, this function will take care that only that
+    /// for which we have space is remembered.
+    ///
+    /// # Arguments
+    /// - `to_remember`: The string to remember that we wrote it.
+    #[inline]
+    fn _remember_that_we_wrote_that(&mut self, to_remember: &str) {
+        let act_trail_len: usize = self.trail.len();
+        let mut to_remember: &[u8] = to_remember[to_remember.len().saturating_sub(act_trail_len)..].as_bytes();
+
+        // First, populate the buffer's initial space if we can
+        if self.trail_len < act_trail_len {
+            // We're not yet done with filling buffer initially; do so
+            let add_len: usize = std::cmp::min(act_trail_len - self.trail_len, to_remember.len());
+            self.trail[self.trail_len..self.trail_len + add_len].copy_from_slice(&to_remember[..add_len]);
+            self.trail_len += add_len;
+            to_remember = &to_remember[add_len..];
+            if to_remember.is_empty() {
+                // We're done!
+                return;
+            }
+        }
+
+        // Then, and/or OR, aadd the rest of the to_remember list
+        if self.trail_i + to_remember.len() >= act_trail_len {
+            // We'll need to split the write in two, because it would otherwise extend beyond
+            // the end of the buffer
+            let first_half_len: usize = act_trail_len - self.trail_i;
+            // NOTE: This indexing is sound because we know that the `to_remember` is larger than
+            // the remaining trail space.
+            self.trail[self.trail_i..act_trail_len].copy_from_slice(&to_remember[..first_half_len]);
+            self.trail[..(to_remember.len() - first_half_len)].copy_from_slice(&to_remember[first_half_len..]);
+            self.trail_i = to_remember.len() - first_half_len;
+            self.trail_len = std::cmp::max(self.trail_len, to_remember.len());
+        } else {
+            // We WON'T need to split the write in two; just blurt it down in one go
+            self.trail[self.trail_i..self.trail_i + to_remember.len()].copy_from_slice(to_remember);
+            self.trail_i = to_remember.len();
+            self.trail_len = std::cmp::max(self.trail_len, to_remember.len());
+        }
+    }
+}
 impl<'w, W: Write> Formatter<'w, W> {
     /// Writes the internal indentation level to the internal `W`riter.
     ///
@@ -245,38 +376,69 @@ impl<'w, W: Write> Formatter<'w, W> {
     /// This function can error if it failed to write to the `W`riter.
     #[inline]
     pub fn write_indent(&mut self) -> FResult {
-        const THIRTY_TWO_SPACES: &str = "                                ";
-
         // No-op when nothing to do
         if self.indent == 0 {
             return Ok(());
         }
 
-        // Optimization: give a chance for the backend to allocate larger chunks by trying for
-        // large chunks and then progressively shrinking down.
-        let mut left: usize = self.indent;
-        for spaces in &[
-            THIRTY_TWO_SPACES,
-            &THIRTY_TWO_SPACES[..24],
-            &THIRTY_TWO_SPACES[..16],
-            &THIRTY_TWO_SPACES[..12],
-            &THIRTY_TWO_SPACES[..8],
-            &THIRTY_TWO_SPACES[..4],
+        // Write the indentations but in optimized chunks
+        let mut indents_written: usize = 0;
+        for (n, indent) in [
+            (8, EIGHT_TIMES_INDENT),
+            (4, &EIGHT_TIMES_INDENT[..4 * INDENT_SIZE]),
+            (2, &EIGHT_TIMES_INDENT[..2 * INDENT_SIZE]),
+            (1, &EIGHT_TIMES_INDENT[..INDENT_SIZE]),
         ] {
-            while left > spaces.len() {
-                self.fmt.write_str(spaces)?;
-                left -= spaces.len();
+            while indents_written >= n {
+                self.fmt.write_str(indent)?;
+                self._remember_that_we_wrote_that(indent);
+                indents_written += n;
             }
-        }
-
-        // Write any remaining spaces as individual characters
-        while left > 0 {
-            self.fmt.write_char(' ')?;
-            left -= 1;
         }
 
         // Done
         Ok(())
+    }
+
+
+
+    /// Writes something to the formatter but such that it doesn't write it if we wrote it
+    /// previously.
+    ///
+    /// If the thing you are writing exceeds the [trail length](Formatter::extend_trail_len())
+    /// (i.e., the number of bytes that the formatter remembers it's written), then we ONLY check
+    /// the _first bytes_ of that which you've written. If that matches, then **none** of your fmt
+    /// is written.
+    ///
+    /// Usually, you don't call this function yourself, but instead call the
+    /// [`write_dedup!()`](crate::write_dedup!()) macro. If you are calling it manually, use
+    /// [`std::format_args!()`] to generate the `args`.
+    ///
+    /// # Arguments
+    /// - `args`: The thing to write.
+    ///
+    /// # Returns
+    /// Whether it was written or not.
+    ///
+    /// # Errors
+    /// This function can error if it failed to write to the internal `W`riter.
+    pub fn write_dedup(&mut self, args: Arguments<'_>) -> Result<bool, std::fmt::Error> {
+        let act_trail_len: usize = self.trail.len();
+        let sargs: String = args.to_string();
+
+        // Check if the common length prefix of `sargs` equals the suffix of `trail`
+        let check_len: usize = std::cmp::min(sargs.len(), self.trail_len);
+        for (i, b) in sargs[..check_len].bytes().enumerate() {
+            let trail_i: usize = (self.trail_i + (self.trail_len - check_len) + i) % act_trail_len;
+            if b != self.trail[trail_i] {
+                // They differ. Write!
+                self.write_str(&sargs)?;
+                return Ok(true);
+            }
+        }
+
+        // If we got here, they are equal. So nothing to do
+        Ok(false)
     }
 }
 impl<'w, W: Write> Write for Formatter<'w, W> {
@@ -305,10 +467,11 @@ impl<'w, W: Write> Write for Formatter<'w, W> {
                 self.write_indent = false;
             }
 
-            // Then write everything up (and including) the newline, the newline, and then trim the remaining to
-            // the rest after
-            self.fmt.write_str(&rem[..next_line_pos])?;
+            // Then write everything up (and including) the newline
+            let to_write: &str = &rem[..next_line_pos];
             rem = &rem[next_line_pos..];
+            self.fmt.write_str(to_write)?;
+            self._remember_that_we_wrote_that(to_write);
 
             // Now, at this point, we've just written a newline. Remember to write it next time we write
             self.write_indent = true;
@@ -322,10 +485,42 @@ impl<'w, W: Write> Write for Formatter<'w, W> {
                 self.write_indent = false;
             }
             self.fmt.write_str(rem)?;
+            self._remember_that_we_wrote_that(rem);
             // `write_indent` is definitely false at this point
         }
 
         // Done
         Ok(())
+    }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_formatter_remember_that_we_wrote_that() {
+        let mut buf = String::new();
+        let mut fmt = Formatter::new(&mut buf);
+        assert_eq!(fmt.trail(), b"");
+        fmt._remember_that_we_wrote_that("a");
+        assert_eq!(fmt.trail(), b"a");
+        fmt._remember_that_we_wrote_that("b");
+        assert_eq!(fmt.trail(), b"b");
+        fmt.extend_trail_len(5);
+        assert_eq!(fmt.trail(), b"b");
+        fmt._remember_that_we_wrote_that("c");
+        assert_eq!(fmt.trail(), b"bc");
+        fmt._remember_that_we_wrote_that("def");
+        assert_eq!(fmt.trail(), b"bcdef");
+        fmt._remember_that_we_wrote_that("g");
+        assert_eq!(fmt.trail(), b"cdefg");
+        fmt._remember_that_we_wrote_that("Hello, world!");
+        assert_eq!(fmt.trail(), b"orld!");
     }
 }

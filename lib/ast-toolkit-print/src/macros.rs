@@ -7,7 +7,22 @@
 
 
 /***** LIBRARY *****/
-/// A macro for conveniently calling [`Style::apply_to_args()`] and writing it to a formatter.
+/// A macro for conveniently calling
+/// [`Formatter::write_dedup()`](crate::formatter::Formatter::write_dedup()) using format
+/// arguments.
+#[macro_export]
+macro_rules! write_dedup {
+    ($f:expr, $($t:tt)*) => {
+        <$crate::Formatter>::write_dedup($f, ::std::format_args!($($t)*))
+    };
+}
+
+
+
+/// A macro for conveniently calling
+/// [`Style::apply_to_args()`](crate::formatter::Style::apply_to_args()) and writing it to a
+/// formatter.
+#[cfg(feature = "color")]
 #[macro_export]
 macro_rules! write_styled {
     ($f:expr, $style:expr, $($t:tt)*) => {
@@ -15,7 +30,10 @@ macro_rules! write_styled {
     };
 }
 
-/// A macro for conveniently calling [`Style::apply_to_args()`] and writing it to a formatter with a newline.
+/// A macro for conveniently calling
+/// [`Style::apply_to_args()`](crate::formatter::Style::apply_to_args()) and writing it to a
+/// formatter with a newline.
+#[cfg(feature = "color")]
 #[macro_export]
 macro_rules! writeln_styled {
     ($f:expr, $style:expr, $($t:tt)*) => {
