@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 use std::cell::{Ref, RefMut};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt::{Result as FResult, Write};
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
