@@ -15,9 +15,9 @@ use super::Punctuated;
 /***** IMPLEMENTATIONS *****/
 impl<'s, V: Spanning<S>, P: Spanning<S>, S: Clone + Spannable<'s>> Spanning<S> for Punctuated<V, P> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         // Simply join everything in the land to be safe
-        let mut res: Option<Cow<Span<S>>> = None;
+        let mut res: Option<Cow<'_, Span<S>>> = None;
         for (value, punct) in self {
             if let Some(span) = value.get_span() {
                 res = res.and_then(|old| old.join(span.as_ref()).map(Cow::Owned));

@@ -53,7 +53,7 @@ impl<'s, E: Error, S: Spannable<'s>> Error for Recoverable<E, S> {
 }
 impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         match self {
             Self::Comb(err) => err.get_span(),
             Self::RemainingInput { span } => Some(Cow::Borrowed(span)),
@@ -70,7 +70,7 @@ impl<E: Spanning<S>, S: Clone> Spanning<S> for Recoverable<E, S> {
 }
 impl<E: SpanningInf<S>, S: Clone> SpanningInf<S> for Recoverable<E, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> {
+    fn span(&self) -> Cow<'_, Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
             Self::RemainingInput { span } => Cow::Borrowed(span),

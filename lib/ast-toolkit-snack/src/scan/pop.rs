@@ -31,13 +31,13 @@ impl<S> Display for Recoverable<S> {
 impl<'s, S: Spannable<'s>> Error for Recoverable<S> {}
 impl<'s, S: Clone + Spannable<'s>> Spanning<S> for Recoverable<S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(self.span()) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(self.span()) }
     #[inline]
     fn take_span(self) -> Option<Span<S>> { Some(self.into_span()) }
 }
 impl<'s, S: Clone + Spannable<'s>> SpanningInf<S> for Recoverable<S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(self.span_ref()) }
+    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(self.span_ref()) }
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
 }

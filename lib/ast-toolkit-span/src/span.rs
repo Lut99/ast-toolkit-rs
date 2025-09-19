@@ -442,14 +442,14 @@ impl<'s, S: Clone + Spannable<'s>> Spannable<'s> for Span<S> {
 }
 impl<S: Clone> Spanning<S> for Span<S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(self)) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(Cow::Borrowed(self)) }
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { Some(self) }
 }
 impl<S: Clone> SpanningInf<S> for Span<S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(self) }
+    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(self) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self }

@@ -67,7 +67,7 @@ impl<'c, 's, T: Debug + ElemDisplay, E: Error, S: Spannable<'s>> Error for Fatal
 }
 impl<'c, T, E, S: Clone> Spanning<S> for Fatal<'c, T, E, S> {
     #[inline]
-    fn get_span(&self) -> Cow<Span<S>> {
+    fn get_span(&self) -> Cow<'_, Span<S>> {
         match self {
             Self::DelimClose { span, .. } => Cow::Borrowed(span),
             Self::IllegalEscapee { err } => err.get_span(),
@@ -147,7 +147,7 @@ impl<'s, S: Clone + Spannable<'s>> Spanning<S> for EscapedString<S> {
     /// This returns the span of the ENTIRE object, not just the string literal value.
     #[inline]
     #[track_caller]
-    fn get_span(&self) -> Cow<Span<S>> {
+    fn get_span(&self) -> Cow<'_, Span<S>> {
         Cow::Owned(self.delim.0.join(&self.delim.1).unwrap_or_else(|| {
             panic!(
                 "Attempted to join left and right delimiters, but they are from different sources (left: {:?}, right: {:?})",

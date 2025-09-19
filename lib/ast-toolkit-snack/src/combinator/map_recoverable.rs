@@ -92,12 +92,12 @@ where
 /// impl std::error::Error for Hidden {}
 /// impl<S: Clone> ast_toolkit_span::Spanning<S> for Hidden {
 ///     /* ... */
-/// #   fn get_span(&self) -> Option<std::borrow::Cow<Span<S>>> { unreachable!() }
+/// #   fn get_span(&self) -> Option<std::borrow::Cow<'_, Span<S>>> { unreachable!() }
 /// #   fn take_span(self) -> Option<Span<S>> { unreachable!() }
 /// }
 /// impl<S: Clone> ast_toolkit_span::SpanningInf<S> for Hidden {
 ///     /* ... */
-/// #   fn span(&self) -> std::borrow::Cow<Span<S>> { unreachable!() }
+/// #   fn span(&self) -> std::borrow::Cow<'_, Span<S>> { unreachable!() }
 /// #   fn into_span(self) -> Span<S> { unreachable!() }
 /// }
 /// impl<S: Clone> ast_toolkit_snack::ParseError<S> for Hidden {

@@ -1270,7 +1270,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding `(V, Option<P>)`-pairs.
     #[inline]
-    pub fn iter(&self) -> Iter<V, P> { Iter { iter: self.data.iter().enumerate(), len: self.data.len(), has_trailing: self.has_trailing } }
+    pub fn iter(&self) -> Iter<'_, V, P> { Iter { iter: self.data.iter().enumerate(), len: self.data.len(), has_trailing: self.has_trailing } }
 
     /// Returns an iterator over mutable references to pairs of values and punctuations.
     ///
@@ -1280,7 +1280,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding mutable `(V, Option<P>)`-pairs.
     #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<V, P> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, V, P> {
         let len: usize = self.data.len();
         IterMut { iter: self.data.iter_mut().enumerate(), len, has_trailing: self.has_trailing }
     }
@@ -1299,14 +1299,14 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding `V`.
     #[inline]
-    pub fn values(&self) -> Values<V, P> { Values { iter: self.data.iter() } }
+    pub fn values(&self) -> Values<'_, V, P> { Values { iter: self.data.iter() } }
 
     /// Consumes this Punctuated into an iterator that yields its values mutably.
     ///
     /// # Returns
     /// An iterator yielding mutable `V`.
     #[inline]
-    pub fn values_mut(&mut self) -> ValuesMut<V, P> { ValuesMut { iter: self.data.iter_mut() } }
+    pub fn values_mut(&mut self) -> ValuesMut<'_, V, P> { ValuesMut { iter: self.data.iter_mut() } }
 
 
 
@@ -1331,7 +1331,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding `P`.
     #[inline]
-    pub fn puncts(&self) -> Puncts<V, P> { Puncts { iter: self.data.iter().enumerate(), len: self.data.len(), has_trailing: self.has_trailing } }
+    pub fn puncts(&self) -> Puncts<'_, V, P> { Puncts { iter: self.data.iter().enumerate(), len: self.data.len(), has_trailing: self.has_trailing } }
 
     /// Consumes this Punctuated into an iterator that yields its punctuation mutably.
     ///
@@ -1341,7 +1341,7 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding mutable `P`.
     #[inline]
-    pub fn puncts_mut(&mut self) -> PunctsMut<V, P> {
+    pub fn puncts_mut(&mut self) -> PunctsMut<'_, V, P> {
         let len: usize = self.data.len();
         PunctsMut { iter: self.data.iter_mut().enumerate(), len, has_trailing: self.has_trailing }
     }

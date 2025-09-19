@@ -63,7 +63,7 @@ impl<E1: error::Error, E2: error::Error> error::Error for Error<E1, E2> {
 }
 impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Error<E1, E2> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         match self {
             Self::Comb(err) => err.get_span(),
             Self::Map(err) => err.get_span(),
@@ -80,7 +80,7 @@ impl<E1: Spanning<S>, E2: Spanning<S>, S: Clone> Spanning<S> for Error<E1, E2> {
 }
 impl<E1: SpanningInf<S>, E2: SpanningInf<S>, S: Clone> SpanningInf<S> for Error<E1, E2> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> {
+    fn span(&self) -> Cow<'_, Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
             Self::Map(err) => err.span(),

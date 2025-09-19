@@ -46,7 +46,7 @@ impl<E: Display, F: crate::ExpectsFormatter, S> Display for Recoverable<E, F, S>
 impl<'s, E: fmt::Debug + Display, F: crate::ExpectsFormatter, S: Spannable<'s>> Error for Recoverable<E, F, S> {}
 impl<'s, E: Spanning<S>, F, S: Clone> Spanning<S> for Recoverable<E, F, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         match self {
             Self::Comb(err) => err.get_span(),
             Self::Empty { span, .. } => Some(Cow::Borrowed(span)),
@@ -63,7 +63,7 @@ impl<'s, E: Spanning<S>, F, S: Clone> Spanning<S> for Recoverable<E, F, S> {
 }
 impl<'s, E: SpanningInf<S>, F, S: Clone> SpanningInf<S> for Recoverable<E, F, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> {
+    fn span(&self) -> Cow<'_, Span<S>> {
         match self {
             Self::Comb(err) => err.span(),
             Self::Empty { span, .. } => Cow::Borrowed(span),

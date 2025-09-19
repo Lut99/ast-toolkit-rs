@@ -111,7 +111,7 @@ use crate::spanning_ref::SpanningRefImplInfoEnumImplFinish;
 /// // ...
 ///
 /// impl<S: Clone> Spanning<S> for BinOp<S> {
-///     fn get_span(&self) -> Option<std::borrow::Cow<Span<S>>> {
+///     fn get_span(&self) -> Option<std::borrow::Cow<'_, Span<S>>> {
 ///         let lhs = self.lhs.get_span().or_else(self.op.get_span()).or_else(self.rhs.get_span())?;
 ///         let rhs = self.rhs.get_span().or_else(self.op.get_span()).or_else(self.lhs.get_span())?;
 ///         lhs.join(rhs.as_ref()).map(std::borrow::Cow::Owned)

@@ -65,13 +65,13 @@ impl<'e, S> Error for BoxedParseError<'e, S> {
 }
 impl<'e, S: Clone> Spanning<S> for BoxedParseError<'e, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { self.0.get_span() }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { self.0.get_span() }
     #[inline]
     fn take_span(self) -> Option<Span<S>> { self.0.get_span().map(Cow::into_owned) }
 }
 impl<'e, S: Clone> SpanningInf<S> for BoxedParseError<'e, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { self.0.span() }
+    fn span(&self) -> Cow<'_, Span<S>> { self.0.span() }
     #[inline]
     fn into_span(self) -> Span<S> { self.0.span().into_owned() }
 }

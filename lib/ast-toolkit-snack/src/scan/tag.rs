@@ -47,14 +47,14 @@ impl<'t, T: Debug + ElemDisplay, S> Display for Recoverable<'t, T, S> {
 impl<'t, 'a, T: Debug + ElemDisplay, S: Spannable<'a>> Error for Recoverable<'t, T, S> {}
 impl<'t, T, S: Clone> Spanning<S> for Recoverable<'t, T, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(Cow::Borrowed(&self.span)) }
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { Some(self.span) }
 }
 impl<'t, T, S: Clone> SpanningInf<S> for Recoverable<'t, T, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }

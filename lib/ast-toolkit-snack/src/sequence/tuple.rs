@@ -58,7 +58,7 @@ macro_rules! tuple_comb_impl {
             impl<[<E $fi>]: Debug + Display $(, [<E $i>]: Debug + Display)*> Error for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {}
             impl<[<E $fi>]: Spanning<S> $(, [<E $i>]: Spanning<S>)*, S: Clone> Spanning<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
-                fn get_span(&self) -> Option<Cow<Span<S>>> {
+                fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
                     match self {
                         Self::[<Comb $fi>](err) => err.get_span(),
                         $(Self::[<Comb $i>](err) => err.get_span(),)*
@@ -75,7 +75,7 @@ macro_rules! tuple_comb_impl {
             }
             impl<[<E $fi>]: SpanningInf<S> $(, [<E $i>]: SpanningInf<S>)*, S: Clone> SpanningInf<S> for [<Error $li>]<[<E $fi>] $(, [<E $i>])*> {
                 #[inline]
-                fn span(&self) -> Cow<Span<S>> {
+                fn span(&self) -> Cow<'_, Span<S>> {
                     match self {
                         Self::[<Comb $fi>](err) => err.span(),
                         $(Self::[<Comb $i>](err) => err.span(),)*

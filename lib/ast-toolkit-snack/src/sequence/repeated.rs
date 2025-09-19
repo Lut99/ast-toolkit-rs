@@ -46,14 +46,14 @@ impl<C: crate::ExpectsFormatter, E, S> Display for Recoverable<C, E, S> {
 impl<'s, C: crate::ExpectsFormatter, E: Error, S: Spannable<'s>> Error for Recoverable<C, E, S> {}
 impl<C, E, S: Clone> Spanning<S> for Recoverable<C, E, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(Cow::Borrowed(&self.span)) }
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { Some(self.span) }
 }
 impl<C, E, S: Clone> SpanningInf<S> for Recoverable<C, E, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }

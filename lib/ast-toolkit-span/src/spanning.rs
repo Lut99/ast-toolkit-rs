@@ -26,7 +26,7 @@ macro_rules! spanning_ptr_impl {
         impl<'a, T: Spanning<S>, S: Clone> Spanning<S> for $ty {
             #[inline]
             #[track_caller]
-            fn get_span(&self) -> Option<Cow<Span<S>>> { <T as Spanning<S>>::get_span(self) }
+            fn get_span(&self) -> Option<Cow<'_, Span<S>>> { <T as Spanning<S>>::get_span(self) }
 
             // # A note on performance
             // This function cannot take ownership of `T` to call [`Spanning::take_span()`]; as
@@ -49,7 +49,7 @@ macro_rules! spanning_inv_ptr_impl {
         impl<'a, T: SpanningInf<S>, S: Clone> SpanningInf<S> for $ty {
             #[inline]
             #[track_caller]
-            fn span(&self) -> Cow<Span<S>> { <T as SpanningInf<S>>::span(self) }
+            fn span(&self) -> Cow<'_, Span<S>> { <T as SpanningInf<S>>::span(self) }
 
             // # A note on performance
             // This function cannot take ownership of `T` to call [`SpanningInf::into_span()`]; as
@@ -111,7 +111,7 @@ pub trait Spanning<S: Clone> {
     ///
     /// If you don't feel like runtime checking the `Option` or deal with the `Cow`, then check
     /// [`SpanningInf::span()`] or [`SpanningRef::span()`], respectively.
-    fn get_span(&self) -> Option<Cow<Span<S>>>;
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>>;
 
     /// Returns a span that represents this whole node in the source text, consuming this node in
     /// order to return it directly.
@@ -132,7 +132,7 @@ pub trait Spanning<S: Clone> {
 impl<S: Clone> Spanning<S> for Infallible {
     /// Note: This is a dummy implementation. Calling it is undefined behaviour (and impossible).
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         // SAFETY: It is impossible to construct `Infallible`, so this function cannot be called
         // (it needs an instance `self` as argument).
         unsafe { unreachable_unchecked() }
@@ -148,7 +148,7 @@ impl<S: Clone> Spanning<S> for Infallible {
 }
 impl<T: Spanning<S>, S: Clone> Spanning<S> for Option<T> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { self.as_ref().and_then(Spanning::get_span) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { self.as_ref().and_then(Spanning::get_span) }
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { self.and_then(Spanning::take_span) }
@@ -163,9 +163,9 @@ impl<'s, T: Spanning<S>, S: Clone + Spannable<'s>> Spanning<S> for Vec<T> {
     /// - No element returns [`Some`] from `Spanning::get_span()`; or
     /// - Any [`Span::join`] returned [`None`] (this happens if they are from different sources).
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> {
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> {
         // Get the first & last elements, staircase style
-        let mut span: Option<Cow<Span<S>>> = None;
+        let mut span: Option<Cow<'_, Span<S>>> = None;
         for elem in self.iter() {
             match elem.get_span() {
                 Some(new) => match span.take() {
@@ -199,7 +199,7 @@ spanning_ptr_impl!(parking_lot::RwLockWriteGuard<'a, T>);
 impl<'a, T: Clone + Spanning<S>, S: Clone> Spanning<S> for Cow<'a, T> {
     #[inline]
     #[track_caller]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { <T as Spanning<S>>::get_span(self) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { <T as Spanning<S>>::get_span(self) }
 
     /// # A note on performance
     /// This function takes advantage of ownership to call [`Spanning::take_span()`] in case
@@ -217,7 +217,7 @@ impl<'a, T: Clone + Spanning<S>, S: Clone> Spanning<S> for Cow<'a, T> {
 impl<T: Spanning<S>, S: Clone> Spanning<S> for Box<T> {
     #[inline]
     #[track_caller]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { <T as Spanning<S>>::get_span(self) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { <T as Spanning<S>>::get_span(self) }
 
     #[inline]
     #[track_caller]
@@ -226,7 +226,7 @@ impl<T: Spanning<S>, S: Clone> Spanning<S> for Box<T> {
 impl<T: Spanning<S>, S: Clone> Spanning<S> for Rc<T> {
     #[inline]
     #[track_caller]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { <T as Spanning<S>>::get_span(self) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { <T as Spanning<S>>::get_span(self) }
 
     /// # A note on performance
     /// This function will take advantage of ownership to call [`Spanning::take_span()`] in case
@@ -245,7 +245,7 @@ impl<T: Spanning<S>, S: Clone> Spanning<S> for Rc<T> {
 impl<T: Spanning<S>, S: Clone> Spanning<S> for Arc<T> {
     #[inline]
     #[track_caller]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { <T as Spanning<S>>::get_span(self) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { <T as Spanning<S>>::get_span(self) }
 
     /// # A note on performance
     /// This function will take advantage of ownership to call [`Spanning::take_span()`] in case
@@ -281,7 +281,7 @@ pub trait SpanningInf<S: Clone>: Spanning<S> {
     /// this node is linked to.
     ///
     /// If you don't feel like dealing with the `Cow`, then check [`SpanningRef::span()`].
-    fn span(&self) -> Cow<Span<S>>;
+    fn span(&self) -> Cow<'_, Span<S>>;
 
     /// Returns a span that represents this whole node in the source text, consuming this node in
     /// order to return it directly.
@@ -298,7 +298,7 @@ pub trait SpanningInf<S: Clone>: Spanning<S> {
 impl<S: Clone> SpanningInf<S> for Infallible {
     /// Note: This is a dummy implementation. Calling it is undefined behaviour (and impossible).
     #[inline]
-    fn span(&self) -> Cow<Span<S>> {
+    fn span(&self) -> Cow<'_, Span<S>> {
         // SAFETY: It is impossible to construct `Infallible`, so this function cannot be called
         // (it needs an instance `self` as argument).
         unsafe { unreachable_unchecked() }
@@ -330,7 +330,7 @@ spanning_inv_ptr_impl!(parking_lot::RwLockWriteGuard<'a, T>);
 impl<'a, T: Clone + SpanningInf<S>, S: Clone> SpanningInf<S> for Cow<'a, T> {
     #[inline]
     #[track_caller]
-    fn span(&self) -> Cow<Span<S>> { <T as SpanningInf<S>>::span(self) }
+    fn span(&self) -> Cow<'_, Span<S>> { <T as SpanningInf<S>>::span(self) }
 
     /// # A note on performance
     /// This function takes advantage of ownership to call [`SpanningInf::take_span()`] in case
@@ -348,7 +348,7 @@ impl<'a, T: Clone + SpanningInf<S>, S: Clone> SpanningInf<S> for Cow<'a, T> {
 impl<T: SpanningInf<S>, S: Clone> SpanningInf<S> for Box<T> {
     #[inline]
     #[track_caller]
-    fn span(&self) -> Cow<Span<S>> { <T as SpanningInf<S>>::span(self) }
+    fn span(&self) -> Cow<'_, Span<S>> { <T as SpanningInf<S>>::span(self) }
 
     #[inline]
     #[track_caller]
@@ -357,7 +357,7 @@ impl<T: SpanningInf<S>, S: Clone> SpanningInf<S> for Box<T> {
 impl<T: SpanningInf<S>, S: Clone> SpanningInf<S> for Rc<T> {
     #[inline]
     #[track_caller]
-    fn span(&self) -> Cow<Span<S>> { <T as SpanningInf<S>>::span(self) }
+    fn span(&self) -> Cow<'_, Span<S>> { <T as SpanningInf<S>>::span(self) }
 
     /// # A note on performance
     /// This function will take advantage of ownership to call [`SpanningInf::into_span()`] in case
@@ -376,7 +376,7 @@ impl<T: SpanningInf<S>, S: Clone> SpanningInf<S> for Rc<T> {
 impl<T: SpanningInf<S>, S: Clone> SpanningInf<S> for Arc<T> {
     #[inline]
     #[track_caller]
-    fn span(&self) -> Cow<Span<S>> { <T as SpanningInf<S>>::span(self) }
+    fn span(&self) -> Cow<'_, Span<S>> { <T as SpanningInf<S>>::span(self) }
 
     /// # A note on performance
     /// This function will take advantage of ownership to call [`SpanningInf::into_span()`] in case

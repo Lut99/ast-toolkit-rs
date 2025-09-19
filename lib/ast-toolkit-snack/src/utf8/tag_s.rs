@@ -40,14 +40,14 @@ impl<'t, S> Display for Recoverable<'t, S> {
 impl<'t, 's, S: Spannable<'s>> Error for Recoverable<'t, S> {}
 impl<'t, S: Clone> Spanning<S> for Recoverable<'t, S> {
     #[inline]
-    fn get_span(&self) -> Option<Cow<Span<S>>> { Some(Cow::Borrowed(&self.span)) }
+    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(Cow::Borrowed(&self.span)) }
 
     #[inline]
     fn take_span(self) -> Option<Span<S>> { Some(self.span) }
 }
 impl<'t, S: Clone> SpanningInf<S> for Recoverable<'t, S> {
     #[inline]
-    fn span(&self) -> Cow<Span<S>> { Cow::Borrowed(&self.span) }
+    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(&self.span) }
 
     #[inline]
     fn into_span(self) -> Span<S> { self.span }
