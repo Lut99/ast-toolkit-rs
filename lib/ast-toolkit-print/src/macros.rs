@@ -26,7 +26,7 @@ macro_rules! write_dedup {
 #[macro_export]
 macro_rules! write_styled {
     ($f:expr, $style:expr, $($t:tt)*) => {
-        ::std::write!($f, "{}", <::console::Style>::apply_to_args($style, ::std::format_args!($($t)*)))
+        ::std::write!($f, "{}", <$crate::Style>::apply_to_args($style, ::std::format_args!($($t)*)))
     };
 }
 
@@ -37,6 +37,6 @@ macro_rules! write_styled {
 #[macro_export]
 macro_rules! writeln_styled {
     ($f:expr, $style:expr, $($t:tt)*) => {
-        ::std::writeln!($f, "{}", <::console::Style>::apply_to_args($style, ::std::format_args!($($t)*)))
+        ::std::writeln!($f, "{}", <$crate::Style>::apply_to_args($style, ::std::format_args!($($t)*)))
     };
 }
