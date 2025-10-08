@@ -1,0 +1,17 @@
+[package]
+name = "ast-toolkit-loc"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Provides the `Loc`, a struct that refers to a location in a source text."
+
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+
+[features]
+default = []
+
+serde = ["dep:serde"]

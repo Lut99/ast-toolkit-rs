@@ -16,6 +16,8 @@
 // Use some deps
 #[cfg(feature = "diagnostic")]
 pub use ast_toolkit_diagnostic as diagnostic;
+#[cfg(feature = "loc")]
+pub use ast_toolkit_loc as loc;
 #[cfg(feature = "print")]
 pub use ast_toolkit_print as print;
 #[cfg(feature = "punctuated")]
