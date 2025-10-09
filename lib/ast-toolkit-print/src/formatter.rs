@@ -389,7 +389,7 @@ impl<'w, W: Write> Formatter<'w, W> {
             (2, &EIGHT_TIMES_INDENT[..2 * INDENT_SIZE]),
             (1, &EIGHT_TIMES_INDENT[..INDENT_SIZE]),
         ] {
-            while indents_written >= n {
+            while indents_written <= n {
                 self.fmt.write_str(indent)?;
                 self._remember_that_we_wrote_that(indent);
                 indents_written += n;
