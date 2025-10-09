@@ -270,13 +270,16 @@ impl<'w, W> Formatter<'w, W> {
     /// [stderr](std::io::stderr()), refer to [`Formatter::use_color_auto_stdout()`] and
     /// [`Formatter::use_color_auto_stderr()`], respectively.
     ///
+    /// Note that this will not updating existing [`Style`]s; they will inherit the color mode at
+    /// the moment of creating them.
+    ///
     /// # Arguments
     /// - `use_color`: Whether to use color.
     ///
     /// # Returns
     /// Self for chaining.
     #[cfg(feature = "color")]
-    pub fn use_color(&mut self, use_color: bool) -> &mut Self {
+    pub const fn use_color(&mut self, use_color: bool) -> &mut Self {
         self.color = use_color;
         self
     }
@@ -289,6 +292,9 @@ impl<'w, W> Formatter<'w, W> {
     /// render them.
     ///
     /// Refer to [`console::colors_enabled()`] to find out when exactly colors are enabled.
+    ///
+    /// Note that this will not updating existing [`Style`]s; they will inherit the color mode at
+    /// the moment of creating them.
     ///
     /// # Returns
     /// Self for chaining.
@@ -307,6 +313,9 @@ impl<'w, W> Formatter<'w, W> {
     ///
     /// Refer to [`console::colors_enabled_stderr()`] to find out when exactly colors are enabled.
     ///
+    /// Note that this will not updating existing [`Style`]s; they will inherit the color mode at
+    /// the moment of creating them.
+    ///
     /// # Returns
     /// Self for chaining.
     #[cfg(feature = "color")]
@@ -314,6 +323,32 @@ impl<'w, W> Formatter<'w, W> {
         self.color = console::colors_enabled_stderr();
         self
     }
+
+    /// Calls a closure in which, for the duration of the closure, no color is being used.
+    ///
+    /// # Arguments
+    /// - `with`: Some [`FnOnce()`]-closure that takes a mutable reference to self and can write
+    ///   safe in the knowledge no color will be printed regardless of what the current mode is.
+    ///
+    /// # Returns
+    /// Whatever `with` returns.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub fn with_no_color<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
+        let color: bool = self.color;
+        self.color = false;
+        let res = with(self);
+        self.color = color;
+        res
+    }
+
+    /// Returns whether the formatter is using any colors.
+    ///
+    /// # Returns
+    /// True if ANSI-colors will be printed, false otherwise.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub const fn using_color(&self) -> bool { self.color }
 
     /// Returns a [`Style`] that will conditionally apply the given colors.
     ///
