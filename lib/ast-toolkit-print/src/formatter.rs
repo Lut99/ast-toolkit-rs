@@ -7,10 +7,11 @@
 //
 
 
-#[cfg(feature = "color")]
-use std::fmt;
 use std::fmt::{Arguments, Result as FResult, Write};
 use std::iter::repeat_n;
+
+#[cfg(feature = "color")]
+pub use console::Style;
 
 
 /***** HELPER MACROS *****/
@@ -35,92 +36,31 @@ define_indent!("    ");
 
 
 
+/***** HELPERS *****/
+/// Helps us to remember what coloring policy to apply.
+#[cfg(feature = "color")]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Coloring {
+    /// Use a fixed coloring
+    Manual(bool),
+    /// Automatically determine based on stdout
+    AutoStdout,
+    /// Automatically determine based on stderr
+    AutoStderr,
+}
+
+
+
+
+
 /***** LIBRARY *****/
-/// Represents a [`console::Style`]-like object, but then customized to conditionally color based
-/// on the [`Formatter`].
-#[cfg(feature = "color")]
-pub struct Style(bool, console::Style);
-#[cfg(feature = "color")]
-impl Style {
-    /// Applies red styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground red.
-    #[inline]
-    pub const fn red(self) -> Self { Self(self.0, self.1.red()) }
-
-    /// Applies green styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground green.
-    #[inline]
-    pub const fn green(self) -> Self { Self(self.0, self.1.green()) }
-
-    /// Applies blue styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground blue.
-    #[inline]
-    pub const fn blue(self) -> Self { Self(self.0, self.1.blue()) }
-
-    /// Applies magenta styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground magenta.
-    #[inline]
-    pub const fn magenta(self) -> Self { Self(self.0, self.1.magenta()) }
-
-    /// Applies bold styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its colors bold.
-    #[inline]
-    pub const fn bold(self) -> Self { Self(self.0, self.1.bold()) }
-
-    /// Applies bright styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground colors brighter.
-    #[inline]
-    pub const fn bright(self) -> Self { Self(self.0, self.1.bright()) }
-
-    /// Applies dim styling to this object.
-    ///
-    /// # Returns
-    /// A [`Style`] that will make its foreground colors dimmer.
-    #[inline]
-    pub const fn dim(self) -> Self { Self(self.0, self.1.dim()) }
-}
-#[cfg(feature = "color")]
-impl Style {
-    /// Applies this Style to a given object.
-    ///
-    /// # Returns
-    /// A [`StyledObject`] that will [`std::fmt::Display`] with ANSI colors.
-    #[inline]
-    pub fn apply_to<T: fmt::Display>(&self, obj: T) -> console::StyledObject<T> {
-        if self.0 { self.1.apply_to(obj) } else { console::Style::new().apply_to(obj) }
-    }
-
-    /// Applies this Style to a given (formatted) object.
-    ///
-    /// # Returns
-    /// A [`StyledObject`] that will [`std::fmt::Display`] with ANSI colors.
-    #[inline]
-    pub fn apply_to_args<'a>(&'_ self, args: fmt::Arguments<'a>) -> console::StyledObject<fmt::Arguments<'a>> {
-        if self.0 { self.1.apply_to(args) } else { console::Style::new().apply_to(args) }
-    }
-}
-
-
-
 /// Custom [`fmt::Formatter`]-like formatter for formatting [`DisplayFmt`] things.
 pub struct Formatter<'w, W> {
     /// The actual [`Write`]r wrapped.
     fmt: &'w mut W,
     /// Whether color is applied or not.
     #[cfg(feature = "color")]
-    color: bool,
+    color: Coloring,
     /// The current indentation level.
     indent: usize,
     /// Whether to write indentation on the next call to write.
@@ -139,6 +79,10 @@ pub struct Formatter<'w, W> {
 impl<'w, W> Formatter<'w, W> {
     /// Constructor for the Formatter.
     ///
+    /// If you've enabled the `color`-feature, this will determine the color choice based on
+    /// whether `stdout` is a TTY or not. See [`Formatter::with_color()`] for more control, or
+    /// apply it after the fact with [`Formatter::set_color()`].
+    ///
     /// # Arguments
     /// - `fmt`: Some nested [`Write`]r to write to.
     ///
@@ -149,13 +93,29 @@ impl<'w, W> Formatter<'w, W> {
         Self {
             fmt,
             #[cfg(feature = "color")]
-            color: false,
+            color: Coloring::AutoStdout,
             indent: 0,
             write_indent: true,
             trail: vec![b'\0'; 1],
             trail_i: 0,
             trail_len: 0,
         }
+    }
+
+    /// Constructor for the Formatter with non-default coloring style.
+    ///
+    /// # Arguments
+    /// - `fmt`: Some nested [`Write`]r to write to.
+    /// - `color`: A [`Coloring`] that determines how the formatter will render any styling.
+    ///
+    /// # Returns
+    /// A new Formatter that can be [`Write`]n to.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub fn with_color(fmt: &'w mut W, color: Coloring) -> Self {
+        let mut res = Self::new(fmt);
+        res.set_color(color);
+        res
     }
 }
 impl<'w, W> Formatter<'w, W> {
@@ -280,7 +240,7 @@ impl<'w, W> Formatter<'w, W> {
     /// Self for chaining.
     #[cfg(feature = "color")]
     pub const fn use_color(&mut self, use_color: bool) -> &mut Self {
-        self.color = use_color;
+        self.color = Coloring::Manual(use_color);
         self
     }
 
@@ -300,7 +260,7 @@ impl<'w, W> Formatter<'w, W> {
     /// Self for chaining.
     #[cfg(feature = "color")]
     pub fn use_color_auto_stdout(&mut self) -> &mut Self {
-        self.color = console::colors_enabled();
+        self.color = Coloring::AutoStdout;
         self
     }
 
@@ -320,7 +280,26 @@ impl<'w, W> Formatter<'w, W> {
     /// Self for chaining.
     #[cfg(feature = "color")]
     pub fn use_color_auto_stderr(&mut self) -> &mut Self {
-        self.color = console::colors_enabled_stderr();
+        self.color = Coloring::AutoStderr;
+        self
+    }
+
+    /// Sets the coloring mode applied to this formatter.
+    ///
+    /// This is the parametric version of [`Formatter::use_color()`],
+    /// [`Formatter::use_color_auto_stdout()`] and [`Formatter::use_color_auto_stderr()`].
+    ///
+    /// Note that this will not updating existing [`Style`]s; they will inherit the color mode at
+    /// the moment of creating them.
+    ///
+    /// # Arguments
+    /// - `color`: A [`Coloring`] describing the color mode.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[cfg(feature = "color")]
+    pub const fn set_color(&mut self, color: Coloring) -> &mut Self {
+        self.color = color;
         self
     }
 
@@ -335,8 +314,8 @@ impl<'w, W> Formatter<'w, W> {
     #[cfg(feature = "color")]
     #[inline]
     pub fn with_no_color<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
-        let color: bool = self.color;
-        self.color = false;
+        let color: Coloring = self.color;
+        self.color = Coloring::Manual(false);
         let res = with(self);
         self.color = color;
         res
@@ -344,11 +323,21 @@ impl<'w, W> Formatter<'w, W> {
 
     /// Returns whether the formatter is using any colors.
     ///
+    /// This will attempt to give you a resolved answer. I.e., if this is set to auto-determine the
+    /// coloring based on stdout/stderr, it will query those outputs to see if they are TTYs and
+    /// determine its answer based on that.
+    ///
     /// # Returns
     /// True if ANSI-colors will be printed, false otherwise.
     #[cfg(feature = "color")]
     #[inline]
-    pub const fn using_color(&self) -> bool { self.color }
+    pub fn using_color(&self) -> bool {
+        match self.color {
+            Coloring::Manual(color) => color,
+            Coloring::AutoStdout => console::colors_enabled(),
+            Coloring::AutoStderr => console::colors_enabled_stderr(),
+        }
+    }
 
     /// Returns a [`Style`] that will conditionally apply the given colors.
     ///
@@ -357,7 +346,14 @@ impl<'w, W> Formatter<'w, W> {
     /// be used to add ANSI-colors to the serialization of another object.
     #[cfg(feature = "color")]
     #[inline]
-    pub fn style(&self) -> Style { Style(self.color, console::Style::new()) }
+    pub fn style(&self) -> Style {
+        let style = Style::new();
+        match self.color {
+            Coloring::Manual(color) => style.force_styling(color),
+            Coloring::AutoStdout => style.for_stdout(),
+            Coloring::AutoStderr => style.for_stderr(),
+        }
+    }
 }
 impl<'w, W> Formatter<'w, W> {
     /// Helper function for remembering that we wrote a given string.
