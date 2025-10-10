@@ -339,6 +339,16 @@ impl<'w, W> Formatter<'w, W> {
         }
     }
 
+    /// Returns the coloring mode set in this Formatter.
+    ///
+    /// This will not give a result answer, but instead just the option.
+    ///
+    /// # Returns
+    /// A [`Coloring`] describing the strategy for deciding whether colors will be rendered.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub const fn get_color(&self) -> Coloring { self.color }
+
     /// Returns a [`Style`] that will conditionally apply the given colors.
     ///
     /// # Returns
