@@ -13,6 +13,8 @@ use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::display::Display;
+#[cfg(feature = "color")]
+use crate::formatter::Coloring;
 use crate::formatter::Formatter;
 
 
@@ -92,13 +94,13 @@ impl<T: ?Sized + DisplayFmt> Displayable for T {
         Display(
             self,
             #[cfg(feature = "color")]
-            crate::display::Coloring::AutoStdout,
+            Coloring::AutoStdout,
         )
     }
 
     #[cfg(feature = "color")]
     #[inline]
-    fn display_color(&self, use_color: bool) -> Display<'_, Self> { Display(self, crate::display::Coloring::Manual(use_color)) }
+    fn display_color(&self, use_color: bool) -> Display<'_, Self> { Display(self, Coloring::Manual(use_color)) }
 
     #[cfg(feature = "color")]
     #[inline]
@@ -106,7 +108,7 @@ impl<T: ?Sized + DisplayFmt> Displayable for T {
         Display(
             self,
             #[cfg(feature = "color")]
-            crate::display::Coloring::AutoStdout,
+            Coloring::AutoStdout,
         )
     }
 
@@ -116,7 +118,7 @@ impl<T: ?Sized + DisplayFmt> Displayable for T {
         Display(
             self,
             #[cfg(feature = "color")]
-            crate::display::Coloring::AutoStderr,
+            Coloring::AutoStderr,
         )
     }
 }
