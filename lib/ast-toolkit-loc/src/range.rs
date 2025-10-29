@@ -6,6 +6,7 @@
 //
 
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
+use std::ops;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -37,6 +38,15 @@ pub const fn max(lhs: u64, rhs: u64) -> u64 { if lhs >= rhs { lhs } else { rhs }
 
 /***** INTERFACES *****/
 /// Things that are 100% guaranteed to be convertible to [`u64`].
+///
+/// # A notice
+/// For your convenience, and, specifically, to support e.g.
+/// ```rust
+/// # use ast_toolkit_loc::Range;
+/// Range::from(0..10);
+/// ```
+/// this is also implemented for _signed_ types. Obviously, these are _not_ guaranteed to be
+/// convertible to [`u64`] per sé; so we panic if they are too small.
 pub trait Index {
     /// Returns it as a [`u64`].
     ///
@@ -67,6 +77,57 @@ impl Index for usize {
     #[inline]
     fn as_u64(&self) -> u64 { *self as u64 }
 }
+impl Index for i8 {
+    #[inline]
+    #[track_caller]
+    fn as_u64(&self) -> u64 {
+        if *self < 0 {
+            panic!("Cannot use negative `i8` as index! (Only zero or positive integers are indices)")
+        }
+        *self as u64
+    }
+}
+impl Index for i16 {
+    #[inline]
+    #[track_caller]
+    fn as_u64(&self) -> u64 {
+        if *self < 0 {
+            panic!("Cannot use negative `i16` as index! (Only zero or positive integers are indices)")
+        }
+        *self as u64
+    }
+}
+impl Index for i32 {
+    #[inline]
+    #[track_caller]
+    fn as_u64(&self) -> u64 {
+        if *self < 0 {
+            panic!("Cannot use negative `i32` as index! (Only zero or positive integers are indices)")
+        }
+        *self as u64
+    }
+}
+impl Index for i64 {
+    #[inline]
+    #[track_caller]
+    fn as_u64(&self) -> u64 {
+        if *self < 0 {
+            panic!("Cannot use negative `i64` as index! (Only zero or positive integers are indices)")
+        }
+        *self as u64
+    }
+}
+#[cfg(any(target_pointer_width = "16", target_pointer_width = "32", target_pointer_width = "64"))]
+impl Index for isize {
+    #[inline]
+    #[track_caller]
+    fn as_u64(&self) -> u64 {
+        if *self < 0 {
+            panic!("Cannot use negative `isize` as index! (Only zero or positive integers are indices)")
+        }
+        *self as u64
+    }
+}
 
 
 
@@ -91,6 +152,7 @@ pub enum Length {
 // Conversion
 impl<T: Index> From<T> for Length {
     #[inline]
+    #[track_caller]
     fn from(value: T) -> Self { Self::Fixed(value.as_u64()) }
 }
 
@@ -142,12 +204,15 @@ impl Range {
     ///
     /// # Returns
     /// A range that starts at 0 and has length [`Length::Indefinite`].
+    #[inline]
+    #[track_caller]
     pub fn new(start: impl Index, len: impl Into<Length>) -> Self { Self { pos: start.as_u64(), len: len.into() } }
 
     /// Constructor for the Range that will initialize it to always span everything.
     ///
     /// # Returns
     /// A Range that starts at 0 and has length [`Length::Indefinite`].
+    #[inline]
     pub const fn full() -> Self { Self { pos: 0, len: Length::Indefinite } }
 
     /// Constructor for the Range that places it on a specific index, but spans until the end of
@@ -160,6 +225,7 @@ impl Range {
     ///
     /// # Returns
     /// A Range that starts at the given `index` and has length [`Length::Indefinite`].
+    #[inline]
     pub const fn onwards(start: u64) -> Self { Self { pos: start, len: Length::Indefinite } }
 
     /// Constructor for the Range that places it at the start and stretches _up until_ (but not
@@ -172,6 +238,7 @@ impl Range {
     ///
     /// # Returns
     /// A Range that starts at 0 and has length [`Length::Fixed`] of the given `end`.
+    #[inline]
     pub const fn until(end: u64) -> Self { Self { pos: 0, len: Length::Fixed(end) } }
 
     /// Constructor for the Range that places it in the given bounded area.
@@ -187,12 +254,14 @@ impl Range {
     /// # Returns
     /// A Range that starts at `start` and has length [`Length::Fixed`] such that it ends on the
     /// element before `end`.
+    #[inline]
     pub const fn bounded(start: u64, end: u64) -> Self { Self { pos: 0, len: Length::Fixed(end.saturating_sub(start)) } }
 
     /// Constructor for a Range that is always empty and starts on 0.
     ///
     /// # Returns
     /// A Range that start at 0 and has length [`Length::Fixed`] of 0.
+    #[inline]
     pub const fn empty() -> Self { Self { pos: 0, len: Length::Fixed(0) } }
 
     /// Constructor for a Range that is always empty and starts on the given position.
@@ -208,6 +277,7 @@ impl Range {
     ///
     /// # Returns
     /// A Range that start at `start` and has length [`Length::Fixed`] of 0.
+    #[inline]
     pub const fn empty_at(start: u64) -> Self { Self { pos: start, len: Length::Fixed(0) } }
 }
 
@@ -233,6 +303,10 @@ impl Debug for Range {
         Ok(())
     }
 }
+impl Display for Range {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { <Self as Debug>::fmt(self, f) }
+}
 impl Eq for Range {}
 impl PartialEq for Range {
     #[inline]
@@ -248,6 +322,7 @@ impl PartialEq for Range {
 }
 impl<T: Index> PartialEq<std::ops::Range<T>> for Range {
     #[inline]
+    #[track_caller]
     fn eq(&self, other: &std::ops::Range<T>) -> bool {
         match self.len {
             Length::Fixed(len) => self.pos == other.start.as_u64() && self.pos.saturating_add(len) == other.end.as_u64(),
@@ -257,6 +332,7 @@ impl<T: Index> PartialEq<std::ops::Range<T>> for Range {
 }
 impl<T: Index> PartialEq<std::ops::RangeFrom<T>> for Range {
     #[inline]
+    #[track_caller]
     fn eq(&self, other: &std::ops::RangeFrom<T>) -> bool {
         match self.len {
             Length::Indefinite => self.pos == other.start.as_u64(),
@@ -266,6 +342,7 @@ impl<T: Index> PartialEq<std::ops::RangeFrom<T>> for Range {
 }
 impl<T: Index> PartialEq<std::ops::RangeTo<T>> for Range {
     #[inline]
+    #[track_caller]
     fn eq(&self, other: &std::ops::RangeTo<T>) -> bool {
         match self.len {
             Length::Fixed(len) => self.pos == 0 && len == other.end.as_u64(),
@@ -284,6 +361,7 @@ impl PartialEq<std::ops::RangeFull> for Range {
 }
 impl<T: Index> PartialEq<T> for Range {
     #[inline]
+    #[track_caller]
     fn eq(&self, other: &T) -> bool {
         match self.len {
             Length::Fixed(1) => self.pos == other.as_u64(),
@@ -323,6 +401,22 @@ impl Range {
         self.shrink(other);
         self
     }
+
+    /// Convenience alias for [`Range::slice()`] that accepts anything converting into a Range,
+    /// not just the Range itself.
+    ///
+    /// See [it](Range::slice()) for more information.
+    ///
+    /// # Arguments
+    /// - `range`: Some other Range(-like) that defines a subset of self. Take note: a Range
+    ///   starting at 0 starts at `self.pos`, _not_ 0 in the sequence. Similarly, if it has
+    ///   [`Length::Indefinite`], then the returned range will have the end of _this_ Range, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// A new Range that is a subset of this one.
+    #[inline]
+    pub fn slice_range(self, other: impl Into<Self>) -> Self { self.slice(other.into()) }
 
     /// Shrinks this Range to a specific subset of itself.
     ///
@@ -366,6 +460,22 @@ impl Range {
             },
         }
     }
+
+    /// Convenience alias for [`Range::shrink()`] that accepts anything converting into a Range,
+    /// not just the Range itself.
+    ///
+    /// See [it](Range::shrink()) for more information.
+    ///
+    /// # Arguments
+    /// - `range`: Some other Range(-like) that defines a subset of self. Take note: a Range
+    ///   starting at 0 starts at `self.pos`, _not_ 0 in the sequence. Similarly, if it has
+    ///   [`Length::Indefinite`], then the returned range will have the end of _this_ Range, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[inline]
+    pub fn shrink_range(&mut self, other: impl Into<Self>) -> &mut Self { self.shrink(other.into()) }
 
 
 
@@ -477,38 +587,86 @@ impl Range {
     }
 }
 
+// Conversion
+impl<T: Index> From<ops::Range<T>> for Range {
+    #[inline]
+    #[track_caller]
+    fn from(value: ops::Range<T>) -> Self {
+        let start: u64 = value.start.as_u64();
+        let end: u64 = value.end.as_u64();
+        Self { pos: start, len: Length::Fixed(end.saturating_sub(start)) }
+    }
+}
+impl<T: Index + PartialOrd> From<ops::RangeInclusive<T>> for Range {
+    #[inline]
+    #[track_caller]
+    fn from(value: ops::RangeInclusive<T>) -> Self {
+        let start: u64 = value.start().as_u64();
+        if !value.is_empty() {
+            let end: u64 = value.end().as_u64();
+            Self { pos: start, len: Length::Fixed(1 + end.saturating_sub(start)) }
+        } else {
+            Self { pos: start, len: Length::Fixed(0) }
+        }
+    }
+}
+impl<T: Index> From<ops::RangeTo<T>> for Range {
+    #[inline]
+    #[track_caller]
+    fn from(value: ops::RangeTo<T>) -> Self { Self { pos: 0, len: Length::Fixed(value.end.as_u64()) } }
+}
+impl<T: Index + PartialOrd> From<ops::RangeToInclusive<T>> for Range {
+    /// NOTE: We are assuming that [`ops::RangeToInclusive]` cannot represent empty ranges.
+    #[inline]
+    #[track_caller]
+    fn from(value: ops::RangeToInclusive<T>) -> Self { Self { pos: 0, len: Length::Fixed(1 + value.end.as_u64()) } }
+}
+impl<T: Index> From<ops::RangeFrom<T>> for Range {
+    #[inline]
+    #[track_caller]
+    fn from(value: ops::RangeFrom<T>) -> Self { Self { pos: value.start.as_u64(), len: Length::Indefinite } }
+}
+impl From<ops::RangeFull> for Range {
+    #[inline]
+    fn from(_value: ops::RangeFull) -> Self { Self { pos: 0, len: Length::Indefinite } }
+}
+impl From<()> for Range {
+    #[inline]
+    fn from(_value: ()) -> Self { Self { pos: 0, len: Length::Fixed(0) } }
+}
 
 
 
 
-// /***** TESTS *****/
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
 
-//     #[test]
-//     fn test_slice() {
-//         // Some testcases; extend when more are known!
-//         assert_eq!(Range::from(0..10).slice(0..5), 0..5);
-//         assert_eq!(Range::from(..10).slice(0..5), 0..5);
-//         assert_eq!(Range::from(..10).slice(..5), ..5);
-//         assert_eq!(Range::from(5..10).slice(..5), 5..10);
-//         assert_eq!(Range::from(10..5), ());
-//         assert_eq!(Range::from(5..).slice(..5), 5..10);
-//         assert_eq!(Range::from(5..).slice(..10), 5..15);
-//         assert_eq!(Range::from(..).slice(5..10), 5..10);
-//         assert_eq!(Range::from(()).slice(1..10), ());
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//         // Remember, we're slicing _in_ the left slice
-//         assert_eq!(Range::from(1..).slice(1..), 2..);
-//         assert_eq!(Range::from(1..).slice(1..3), 2..4);
-//         assert_eq!(Range::from(1..).slice(1..1), ());
-//         assert_eq!(Range::from(1..3).slice(1..), 2..3);
-//         assert_eq!(Range::from(1..4).slice(1..2), 2..3);
-//         assert_eq!(Range::from(1..4).slice(1..7), 2..4);
-//         assert_eq!(Range::from(1..8).slice(1..2), 2..3);
-//         assert_eq!(Range::from(1..4).slice(..2), 1..3);
+    #[test]
+    fn test_slice() {
+        // Some testcases; extend when more are known!
+        assert_eq!(Range::from(0..10).slice_range(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice_range(0..5), 0..5);
+        assert_eq!(Range::from(..10).slice_range(..5), ..5);
+        assert_eq!(Range::from(5..10).slice_range(..5), 5..10);
+        assert_eq!(Range::from(10..5), ());
+        assert_eq!(Range::from(5..).slice_range(..5), 5..10);
+        assert_eq!(Range::from(5..).slice_range(..10), 5..15);
+        assert_eq!(Range::from(..).slice_range(5..10), 5..10);
+        assert_eq!(Range::from(()).slice_range(1..10), ());
 
-//         assert_eq!(Range::from(2..).slice(..1), 2..3);
-//     }
-// }
+        // Remember, we're slicing _in_ the left slice
+        assert_eq!(Range::from(1..).slice_range(1..), 2..);
+        assert_eq!(Range::from(1..).slice_range(1..3), 2..4);
+        assert_eq!(Range::from(1..).slice_range(1..1), ());
+        assert_eq!(Range::from(1..3).slice_range(1..), 2..3);
+        assert_eq!(Range::from(1..4).slice_range(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice_range(1..7), 2..4);
+        assert_eq!(Range::from(1..8).slice_range(1..2), 2..3);
+        assert_eq!(Range::from(1..4).slice_range(..2), 1..3);
+
+        assert_eq!(Range::from(2..).slice_range(..1), 2..3);
+    }
+}

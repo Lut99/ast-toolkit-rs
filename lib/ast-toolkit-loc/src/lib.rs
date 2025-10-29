@@ -32,6 +32,7 @@
 // Modules
 mod range;
 
+use std::cmp::Ordering;
 // Imports
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
@@ -58,6 +59,10 @@ pub use range::Range;
 #[derive(Clone, Copy, Debug)]
 pub struct Loc {
     /// Some unique ID (e.g., a hash) of the source text this was from.
+    ///
+    /// NOTE: Change at your own risk! Later parts of the code using locs might expect this to be
+    /// a valid identifier and/or at least one that relates things from the same source text. You
+    /// WILL run into panics if you don't replace this with a valid identifier.
     pub source: Option<u64>,
     /// The range that does the slicing.
     pub range:  Range,
@@ -74,12 +79,15 @@ impl Loc {
     /// # Returns
     /// A Loc that doesn't point to source text whatsoever.
     #[inline]
-    pub const fn new() -> Self { Self { source: None, range: Range::Empty } }
+    pub const fn new() -> Self { Self { source: None, range: Range::empty() } }
 
     /// Creates a new Loc that points to a source with the given identifier.
     ///
-    /// It will initially point to the whole source. See [`Loc::ranged()`] if you want to start
-    /// with a specific subset of it instead.
+    /// It will initially point to the whole source. See [`Loc::encapsulate_range()`] if you
+    /// want to start with a specific subset of it instead.
+    ///
+    /// If your ranges are instead dependent on hashes (of identifiers), see [`Loc::encapsulate()`]
+    /// instead.
     ///
     /// # Arguments
     /// - `id`: Some identifier (as a [`u64`]) that is **unique for this source.** This is used to
@@ -89,12 +97,12 @@ impl Loc {
     /// # Returns
     /// A Loc that points to a source with the given `id`, and spans it in its entirety.
     #[inline]
-    pub const fn with_source(id: u64) -> Self { Self { source: Some(id), range: Range::Full } }
+    pub const fn encapsulate(id: u64) -> Self { Self { source: Some(id), range: Range::full() } }
 
     /// Creates a new Loc that points to a source with the given identifier, and a specific subset
     /// of it.
     ///
-    /// See [`Loc::with_source()`] if you are fine with this Loc spanning the entire source
+    /// See [`Loc::encapsulate()`] if you are fine with this Loc spanning the entire source
     /// instead.
     ///
     /// # Arguments
@@ -108,7 +116,7 @@ impl Loc {
     /// A Loc that points to a source with the given `id` and spans a subset in the given `range`
     /// of it.
     #[inline]
-    pub fn ranged(id: u64, range: impl Into<Range>) -> Self { Self { source: Some(id), range: range.into() } }
+    pub fn encapsulate_range(id: u64, range: impl Into<Range>) -> Self { Self { source: Some(id), range: range.into() } }
 }
 
 // Ops
@@ -134,4 +142,20 @@ impl PartialEq for Loc {
     /// It exists to make deriving this trait on a parent struct easier and harmless.
     #[inline]
     fn ne(&self, _other: &Self) -> bool { false }
+}
+impl PartialOrd for Loc {
+    /// WARNING: Note that this function **always** returns [`Ordering::Equal`], as it considers
+    /// all Locs to be equivalent from an AST perspective.
+    ///
+    /// It exists to make deriving this trait on a parent struct easier and harmless.
+    #[inline]
+    fn partial_cmp(&self, _other: &Self) -> Option<Ordering> { Some(Ordering::Equal) }
+}
+impl Ord for Loc {
+    /// WARNING: Note that this function **always** returns [`Ordering::Equal`], as it considers
+    /// all Locs to be equivalent from an AST perspective.
+    ///
+    /// It exists to make deriving this trait on a parent struct easier and harmless.
+    #[inline]
+    fn cmp(&self, _other: &Self) -> Ordering { Ordering::Equal }
 }
