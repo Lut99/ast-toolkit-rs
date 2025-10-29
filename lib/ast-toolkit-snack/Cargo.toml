@@ -14,8 +14,7 @@ required-features = []
 
 
 [dependencies]
-ast-toolkit-span = { path = "../ast-toolkit-span" }
-better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v3.0.0" }
+ast-toolkit-loc = { path = "../ast-toolkit-loc" }
 paste = "1.0"
 
 
