@@ -159,3 +159,193 @@ impl Ord for Loc {
     #[inline]
     fn cmp(&self, _other: &Self) -> Ordering { Ordering::Equal }
 }
+
+// Range
+impl Loc {
+    /// Returns a new Loc which is a subset of this one.
+    ///
+    /// The subset is expressed as a [`Range`]. See [`Loc::slice_range()`] for something
+    /// [`Range`]-like instead.
+    ///
+    /// If you want to do this operation in-place, see [`Loc::shrink()`].
+    ///
+    /// # Arguments
+    /// - `range`: Some [`Range`] that defines a subset of self. Take note: a Loc starting at
+    ///   0 starts at `self.range.pos`, _not_ 0 in the sequence. Similarly, if `range` has
+    ///   [`Length::Indefinite`], then the returned loc will have the end of _this_ Loc, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// A new Loc that is a subset of this one and spans the same [`source`](Loc::source).
+    #[inline]
+    pub const fn slice(mut self, other: Range) -> Self {
+        // Defer to the in-place variant
+        self.shrink(other);
+        self
+    }
+
+    /// Convenience alias for [`Loc::slice()`] that accepts anything converting into a [`Range`],
+    /// not just the Loc itself.
+    ///
+    /// See [it](Loc::slice()) for more information.
+    ///
+    /// # Arguments
+    /// - `range`: Some [`Range`](-like) that defines a subset of self. Take note: a Loc starting
+    ///   at 0 starts at `self.range.pos`, _not_ 0 in the sequence. Similarly, if `range` has
+    ///   [`Length::Indefinite`], then the returned loc will have the end of _this_ Loc, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// A new Loc that is a subset of this one and spans the same [`source`](Loc::source).
+    #[inline]
+    pub fn slice_range(self, other: impl Into<Range>) -> Self { self.slice(other.into()) }
+
+    /// Shrinks this Loc to a specific subset of itself.
+    ///
+    /// The subset is expressed as a [`Range`]. See [`Loc::shrink_range()`] for something
+    /// [`Range`]-like instead.
+    ///
+    /// If you don't need to mutate self, see [`Loc::slice()`] instead.
+    ///
+    /// # Arguments
+    /// - `range`: Some [`Range`] that defines a subset of self. Take note: a Loc starting at
+    ///   0 starts at `self.range.pos`, _not_ 0 in the sequence. Similarly, if `range` has
+    ///   [`Length::Indefinite`], then the returned loc will have the end of _this_ Loc, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[inline]
+    pub const fn shrink(&mut self, other: Range) -> &mut Self {
+        self.range.shrink(other);
+        self
+    }
+
+    /// Convenience alias for [`Loc::shrink()`] that accepts anything converting into a Range,
+    /// not just the Loc itself.
+    ///
+    /// See [it](Loc::shrink()) for more information.
+    ///
+    /// # Arguments
+    /// - `range`: Some [`Range`](-like) that defines a subset of self. Take note: a Loc starting
+    ///   at 0 starts at `self.range.pos`, _not_ 0 in the sequence. Similarly, if `range` has
+    ///   [`Length::Indefinite`], then the returned loc will have the end of _this_ Loc, not
+    ///   necessarily that of the sequence.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[inline]
+    pub fn shrink_range(&mut self, other: impl Into<Range>) -> &mut Self { self.shrink(other.into()) }
+
+
+
+    /// Returns a new Loc that is the union of this and the given Loc.
+    ///
+    /// Visually, given two ranges:
+    /// ```plain
+    ///      A  <============>
+    ///      B                     <=======>
+    /// result  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /// ```
+    ///
+    /// If you want to do this in-place, see [`Loc::extend()`] instead.
+    ///
+    /// # Arguments
+    /// - `other`: Some other Loc to join with this one.
+    ///
+    /// # Returns
+    /// A new range representing the union of the two.
+    ///
+    /// Note that, if `self` and `other` have differing [`source`](Loc::source)-fields, this is a
+    /// no-op! `self` is returned in that case.
+    #[inline]
+    pub const fn join(mut self, other: Self) -> Self {
+        // Defer to the in-place variant
+        self.extend(other);
+        self
+    }
+
+    /// Extends this Loc to encapsulate both `self` and another given Loc.
+    ///
+    /// Visually, given two ranges:
+    /// ```plain
+    ///      A  <============>
+    ///      B                     <=======>
+    /// result  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /// ```
+    ///
+    /// If you don't need to mutate `self`, consider [`Loc::join()`] instead.
+    ///
+    /// # Arguments
+    /// - `other`: Some other Loc to encapsulate `self` around.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    ///
+    /// Note that, if `self` and `other` have differing [`source`](Loc::source)-fields, this is a
+    /// no-op! `self` is returned in that case.
+    #[inline]
+    pub const fn extend(&mut self, other: Self) -> &mut Self {
+        // NOTE: Let's use match mechanics so that this `const`ant!
+        match (self.source, other.source) {
+            (Some(lhs), Some(rhs)) if lhs == rhs => {
+                self.range.extend(other.range);
+                self
+            },
+            (None, None) => {
+                self.range.extend(other.range);
+                self
+            },
+            _ => self,
+        }
+    }
+
+
+
+    /// Returns the starting position of this Loc.
+    ///
+    /// Simply equal to [`Range::pos`] in [`Loc::range`].
+    ///
+    /// # Returns
+    /// The zero-indexed index of the leftmost element part of the range (i.e., inclusive start
+    /// index).
+    #[inline]
+    pub const fn start(&self) -> u64 { self.range.start() }
+
+    /// Returns the ending position of this Loc.
+    ///
+    /// Computes [`Range::pos`] + [`Range::len`] in [`Loc::range`], except when the second is
+    /// [`Length::Indefinite`]. To get a concrete number in that case, see [`Loc::end_in()`].
+    ///
+    /// # Returns
+    /// The zero-indexed index of the first element after the range _not_ part of it (i.e.,
+    /// exclusive end index), or [`None`] if [`Range::len`] is [`Length::Indefinite`].
+    #[inline]
+    pub const fn end(&self) -> Option<u64> { self.range.end() }
+
+    /// Returns the ending position of this Loc taking into account the total length of the
+    /// sequence it ranges in.
+    ///
+    /// Computes [`Range::pos`] + [`Range::len`] in [`Loc::range`] bounded to the given length.
+    /// [`Length::Indefinite`] is resolved to the given length, always. See [`Range::end()`] if you
+    /// don't (want to) know `max_len`.
+    ///
+    /// # Arguments
+    /// - `max_len`: The length of the sequence in which we contextualize this Loc.
+    ///
+    /// # Returns
+    /// The zero-indexed index of the first element after the range _not_ part of it (i.e.,
+    /// exclusive end index).
+    #[inline]
+    pub const fn end_in(&self, max_len: u64) -> u64 { self.range.end_in(max_len) }
+}
+
+// Conversion
+impl From<Range> for Loc {
+    #[inline]
+    fn from(value: Range) -> Self { Self { source: None, range: value } }
+}
+impl From<Loc> for Range {
+    #[inline]
+    fn from(value: Loc) -> Self { value.range }
+}
