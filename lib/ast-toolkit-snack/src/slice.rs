@@ -52,11 +52,11 @@ macro_rules! source_ptr_impl {
 
             #[inline]
             #[track_caller]
-            fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
+            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
 
             #[inline]
             #[track_caller]
-            fn forget_up_to(&self, index: usize) { <T as Source>::forget_up_to(self, index) }
+            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
         }
     };
     ('a, $ty:ty) => {
@@ -70,11 +70,11 @@ macro_rules! source_ptr_impl {
 
             #[inline]
             #[track_caller]
-            fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
+            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
 
             #[inline]
             #[track_caller]
-            fn forget_up_to(&self, index: usize) { <T as Source>::forget_up_to(self, index) }
+            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
         }
     };
     ($ty:ty) => {
@@ -88,11 +88,11 @@ macro_rules! source_ptr_impl {
 
             #[inline]
             #[track_caller]
-            fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
+            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
 
             #[inline]
             #[track_caller]
-            fn forget_up_to(&self, index: usize) { <T as Source>::forget_up_to(self, index) }
+            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
         }
     };
 }
@@ -192,7 +192,7 @@ pub trait Source {
     /// # Errors
     /// This function can error if something went horribly, horribly wrong while attempting to get
     /// the `index`ed element.
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error>;
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error>;
 
     /// Tells the implementation that the parser will not access anything before the given index
     /// anymore.
@@ -206,7 +206,7 @@ pub trait Source {
     /// # Arguments
     /// - `up_to`: The first index of the element that **may still be accessed**. I.e., anything
     ///   _before_ this can be discarded.
-    fn forget_up_to(&self, index: usize);
+    fn forget_up_to(&self, index: u64);
 }
 
 // Std impls
@@ -222,10 +222,10 @@ impl<'a, T> Source for &'a [T] {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index)) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
 
     #[inline]
-    fn forget_up_to(&self, _index: usize) {
+    fn forget_up_to(&self, _index: u64) {
         /* Nothing to do, we have the entire slice in memory already */
     }
 }
@@ -238,10 +238,10 @@ impl<T> Source for [T] {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index)) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
 
     #[inline]
-    fn forget_up_to(&self, _index: usize) {
+    fn forget_up_to(&self, _index: u64) {
         /* Nothing to do, we have the entire slice in memory already */
     }
 }
@@ -254,10 +254,10 @@ impl<T> Source for Vec<T> {
     fn id(&self) -> u64 { <&Vec<T> as Source>::id(&self) }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index)) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
 
     #[inline]
-    fn forget_up_to(&self, _index: usize) {
+    fn forget_up_to(&self, _index: u64) {
         /* Nothing to do, we have the entire slice in memory already */
     }
 }
@@ -270,10 +270,10 @@ impl Source for str {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index)) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index as usize)) }
 
     #[inline]
-    fn forget_up_to(&self, _index: usize) {
+    fn forget_up_to(&self, _index: u64) {
         /* Nothing to do, we have the entire slice in memory already */
     }
 }
@@ -286,10 +286,10 @@ impl Source for String {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index)) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index as usize)) }
 
     #[inline]
-    fn forget_up_to(&self, _index: usize) {
+    fn forget_up_to(&self, _index: u64) {
         /* Nothing to do, we have the entire slice in memory already */
     }
 }
@@ -303,10 +303,10 @@ impl<I: Identifier, S: Source> Source for (I, S) {
     fn id(&self) -> u64 { <I as Identifier>::id(&self.0) }
 
     #[inline]
-    fn get(&self, index: usize) -> Result<Option<&Self::Elem>, Self::Error> { <S as Source>::get(&self.1, index) }
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <S as Source>::get(&self.1, index) }
 
     #[inline]
-    fn forget_up_to(&self, index: usize) { <S as Source>::forget_up_to(&self.1, index) }
+    fn forget_up_to(&self, index: u64) { <S as Source>::forget_up_to(&self.1, index) }
 }
 
 // Pointer-like impls
@@ -365,6 +365,36 @@ impl<'s, S: Source> Slice<'s, S> {
     /// A unique [`u64`] for the underlying `S`ource text.
     #[inline]
     pub fn id(&self) -> u64 { self.source.id() }
+
+
+
+    /// Slices this slice further while the head matches some predicate.
+    ///
+    /// This is essentially the bread-and-butter of the `snack` parser. The rest is just
+    /// convenience wrapper around this function to do it in a certain way.
+    ///
+    /// # Arguments
+    /// - `pred`: Some [`FnMut`] that will be called for every element at the end of the slice
+    ///   until it returns false.
+    ///
+    /// # Returns
+    /// A slice that is this one but advanced for every element where `pred` returned true, or one
+    /// pointing beyond the end of the array (if all of them did).
+    ///
+    /// # Errors
+    /// This function can error if a call to [`Source::get()`] failed.
+    #[inline]
+    pub fn slice_while(&self, mut pred: impl FnMut(&S::Elem) -> bool) -> Result<Self, S::Error> {
+        let mut pos: u64 = self.pos;
+        while let Some(elem) = self.source.get(pos)? {
+            if !pred(elem) {
+                return Ok(Self { source: self.source, pos });
+            }
+            pos += 1;
+        }
+        // Got `None`, i.e., this is out-of-bounds
+        Ok(Self { source: self.source, pos })
+    }
 }
 impl<'s, S> Slice<'s, S> {
     /// Returns the position from where this Slice slices onwards.
