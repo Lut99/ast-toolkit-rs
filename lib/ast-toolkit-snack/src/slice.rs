@@ -12,6 +12,8 @@ use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
+use ast_toolkit_loc::Loc;
+
 
 /***** HELPER MACROS *****/
 /// Does implementations of pointer-like types for [`Identifier`].
@@ -339,11 +341,11 @@ pub struct Slice<'s, S> {
     /// The thing we're parsing.
     source: &'s S,
     /// The current position we're parsing.
-    pos:    u64,
+    loc:    Loc,
 }
 
 // Constructors
-impl<'s, S> Slice<'s, S> {
+impl<'s, S: Source> Slice<'s, S> {
     /// Constructor for the Slice that initializes it with a new `S`ource to read from.
     ///
     /// This will put the input to the beginning of the stream.
@@ -354,7 +356,7 @@ impl<'s, S> Slice<'s, S> {
     /// # Returns
     /// A new Slice that can be used to parse `source`.
     #[inline]
-    pub const fn new(source: &'s S) -> Self { Self { source, pos: 0 } }
+    pub fn new(source: &'s S) -> Self { Self { source, loc: Loc::encapsulate(source.id()) } }
 }
 
 // Parsing
@@ -385,22 +387,24 @@ impl<'s, S: Source> Slice<'s, S> {
     /// This function can error if a call to [`Source::get()`] failed.
     #[inline]
     pub fn slice_while(&self, mut pred: impl FnMut(&S::Elem) -> bool) -> Result<Self, S::Error> {
-        let mut pos: u64 = self.pos;
-        while let Some(elem) = self.source.get(pos)? {
+        let mut loc: Loc = self.loc;
+        while let Some(elem) = self.source.get(loc.range.pos)? {
             if !pred(elem) {
-                return Ok(Self { source: self.source, pos });
+                return Ok(Self { source: self.source, loc });
             }
-            pos += 1;
+            loc.range.pos += 1;
         }
         // Got `None`, i.e., this is out-of-bounds
-        Ok(Self { source: self.source, pos })
+        Ok(Self { source: self.source, loc })
     }
 }
 impl<'s, S> Slice<'s, S> {
-    /// Returns the position from where this Slice slices onwards.
+    /// Returns the location that this Slice spans.
     ///
     /// # Returns
-    /// A [`u64`] encoding up to where this slice ignores.
+    /// A [`Loc`] encoding the area in the `S`ource being spanned.
+    ///
+    /// It is already loaded with the [`Source::id()`] of `S`.
     #[inline]
-    pub const fn pos(&self) -> u64 { self.pos }
+    pub const fn loc(&self) -> Loc { self.loc }
 }
