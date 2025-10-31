@@ -19,7 +19,7 @@
 
 // Declare submodules
 // pub mod ascii;
-// pub mod asserts;
+pub mod asserts;
 // pub mod boxed;
 // pub mod branch;
 // pub mod combinator;
@@ -28,7 +28,8 @@
 // #[cfg(feature = "extra")]
 // pub mod extra;
 // pub mod fmt;
-mod input;
+pub mod auxillary;
+mod slice;
 // mod macros;
 // pub mod multi;
 // pub mod result;
@@ -38,7 +39,10 @@ mod spec;
 // pub mod utf8;
 
 // Re-exports
+pub mod prelude {
+    pub use super::auxillary::ResultExt;
+}
 pub use ast_toolkit_loc::{Loc, Located};
-pub use input::*;
+pub use slice::*;
 // pub use fmt::ExpectsFormatter;
 pub use spec::*;

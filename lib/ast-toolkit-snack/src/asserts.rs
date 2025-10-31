@@ -12,9 +12,8 @@
 
 use std::convert::Infallible;
 
-use ast_toolkit_span::Spannable;
-
-use crate::Combinator;
+use crate::slice::Source;
+use crate::spec::Combinator;
 
 
 /***** LIBRARY *****/
@@ -29,8 +28,7 @@ use crate::Combinator;
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Examples
@@ -52,7 +50,7 @@ use crate::Combinator;
 /// assert_infallible::<&[u8], tag::Tag<u8, &[u8]>>();
 /// ```
 #[inline]
-pub const fn assert_infallible<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Recoverable = Infallible, Fatal = Infallible>>() {}
+pub const fn assert_infallible<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible, Fatal = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail at all (recoverably or
 /// otherwise).
@@ -65,12 +63,11 @@ pub const fn assert_infallible<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Arguments
-/// - `value`: An instance of your combinator by which we will derive the generics.
+/// - `comb`: An instance of your combinator by which we will derive the generics.
 ///
 /// # Examples
 /// We can assert that the [`while0`](crate::scan::while0())-combinator never fails:
@@ -103,10 +100,7 @@ pub const fn assert_infallible<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_value<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Recoverable = Infallible, Fatal = Infallible>>(
-    _comb: &C,
-) {
-}
+pub const fn assert_infallible_value<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible, Fatal = Infallible>>(_comb: &C) {}
 
 
 
@@ -120,8 +114,7 @@ pub const fn assert_infallible_value<'c, 's, S: Clone + Spannable<'s>, C: Combin
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Examples
@@ -143,7 +136,7 @@ pub const fn assert_infallible_value<'c, 's, S: Clone + Spannable<'s>, C: Combin
 /// assert_infallible_recoverable::<&[u8], tag::Tag<u8, &[u8]>>();
 /// ```
 #[inline]
-pub const fn assert_infallible_recoverable<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Recoverable = Infallible>>() {}
+pub const fn assert_infallible_recoverable<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail recoverably.
 ///
@@ -155,12 +148,11 @@ pub const fn assert_infallible_recoverable<'c, 's, S: Clone + Spannable<'s>, C: 
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Arguments
-/// - `value`: An instance of your combinator by which we will derive the generics.
+/// - `comb`: An instance of your combinator by which we will derive the generics.
 ///
 /// # Examples
 /// We can assert that the [`while0`](crate::scan::while0())-combinator never fails:
@@ -193,7 +185,7 @@ pub const fn assert_infallible_recoverable<'c, 's, S: Clone + Spannable<'s>, C: 
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_recoverable_value<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Recoverable = Infallible>>(_comb: &C) {}
+pub const fn assert_infallible_recoverable_value<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible>>(_comb: &C) {}
 
 
 
@@ -207,8 +199,7 @@ pub const fn assert_infallible_recoverable_value<'c, 's, S: Clone + Spannable<'s
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Examples
@@ -235,7 +226,7 @@ pub const fn assert_infallible_recoverable_value<'c, 's, S: Clone + Spannable<'s
 /// >();
 /// ```
 #[inline]
-pub const fn assert_infallible_fatal<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Fatal = Infallible>>() {}
+pub const fn assert_infallible_fatal<'c, S: Source, C: Combinator<'c, S, Fatal = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail fatally.
 ///
@@ -247,12 +238,11 @@ pub const fn assert_infallible_fatal<'c, 's, S: Clone + Spannable<'s>, C: Combin
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
-/// - `'s`: The lifetime upon which the `S`ource parsed by the `C`ombinator depends.
-/// - `S`: The source which may be parsed by your `C`ombinator.
+/// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
 /// # Arguments
-/// - `value`: An instance of your combinator by which we will derive the generics.
+/// - `comb`: An instance of your combinator by which we will derive the generics.
 ///
 /// # Examples
 /// We can assert that the [`tag()`](crate::scan::tag())-combinator never fails:
@@ -270,7 +260,7 @@ pub const fn assert_infallible_fatal<'c, 's, S: Clone + Spannable<'s>, C: Combin
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 ///
-/// The same cannot be asserted of the =
+/// The same cannot be asserted of the
 /// [`separated_many0()`](crate::multi::separated_many0())-combinator:
 /// ```compile_fail
 /// use ast_toolkit_snack::Combinator as _;
@@ -287,4 +277,4 @@ pub const fn assert_infallible_fatal<'c, 's, S: Clone + Spannable<'s>, C: Combin
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_fatal_value<'c, 's, S: Clone + Spannable<'s>, C: Combinator<'c, 's, S, Fatal = Infallible>>(_comb: &C) {}
+pub const fn assert_infallible_fatal_value<'c, S: Source, C: Combinator<'c, S, Fatal = Infallible>>(_comb: &C) {}
