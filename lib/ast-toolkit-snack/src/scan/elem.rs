@@ -130,25 +130,27 @@ where
 /// use ast_toolkit_snack::{Combinator as _, SnackError};
 ///
 /// let span1 = Span::new("A");
-/// let span2 = Span::new("a");
-/// let span3 = Span::new("");
+/// let span2 = Span::new("AA");
+/// let span3 = Span::new("a");
+/// let span4 = Span::new("");
 ///
 /// let mut comb = elem("uppercase letter", |b| *b >= b'A' && *b <= b'Z');
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(1..), span1.slice(..1))));
-/// assert_eq!(
-///     comb.parse(span2),
-///     Err(SnackError::Recoverable(elem::Recoverable {
-///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
-///         fixable: None,
-///         loc:     span2.loc(),
-///     }))
-/// );
+/// assert_eq!(comb.parse(span2), Ok((span2.slice(1..), span2.slice(..1))));
 /// assert_eq!(
 ///     comb.parse(span3),
 ///     Err(SnackError::Recoverable(elem::Recoverable {
 ///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
-///         fixable: Some(Some(1)),
+///         fixable: None,
 ///         loc:     span3.loc(),
+///     }))
+/// );
+/// assert_eq!(
+///     comb.parse(span4),
+///     Err(SnackError::Recoverable(elem::Recoverable {
+///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
+///         fixable: Some(Some(1)),
+///         loc:     span4.loc(),
 ///     }))
 /// );
 /// ```
