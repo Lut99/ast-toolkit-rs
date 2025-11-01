@@ -12,7 +12,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit_loc::{Loc, Located};
 
-use crate::spec::{ExpectsFormatter, ParseError, Result as SResult};
+use crate::spec::{ExpectsFormatter, ParseError, SResult};
 
 
 /***** ERROR TYPES *****/
@@ -60,7 +60,7 @@ impl<F: ExpectsFormatter> ParseError for Expected<F> {
 /// use std::str::FromStr as _;
 /// use ast_toolkit_snack::ParseError;
 ///
-/// fn is_parse_error<T: ParseError<S>, S: Clone>(err: T) {}
+/// fn is_parse_error<T: ParseError>(err: T) {}
 ///
 /// is_parse_error(u32::from_str("a").unwrap_err());
 /// ```
@@ -71,15 +71,15 @@ impl<F: ExpectsFormatter> ParseError for Expected<F> {
 /// use std::str::FromStr as _;
 ///
 /// use ast_toolkit_snack::ParseError;
-/// use ast_toolkit_snack::result::SpanningError;
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::auxillary::SpanningError;
+/// use ast_toolkit_snack::span::Span;
 ///
-/// fn is_parse_error<T: ParseError<S>, S: Clone>(err: T) {}
+/// fn is_parse_error<T: ParseError>(err: T) {}
 ///
 /// is_parse_error(SpanningError {
 ///     err:     u32::from_str("a").unwrap_err(),
 ///     fixable: None,
-///     span:    Span::new("a"),
+///     loc:     Default::default(),
 /// });
 /// ```
 #[derive(Debug, Eq, PartialEq)]

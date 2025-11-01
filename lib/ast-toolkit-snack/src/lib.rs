@@ -29,11 +29,11 @@ pub mod asserts;
 // pub mod extra;
 // pub mod fmt;
 pub mod auxillary;
-mod slice;
+pub mod span;
 // mod macros;
 // pub mod multi;
 // pub mod result;
-// pub mod scan;
+pub mod scan;
 // pub mod sequence;
 mod spec;
 // pub mod utf8;
@@ -43,6 +43,6 @@ pub mod prelude {
     pub use super::auxillary::ResultExt;
 }
 pub use ast_toolkit_loc::{Loc, Located};
-pub use slice::*;
+pub use span::*;
 // pub use fmt::ExpectsFormatter;
 pub use spec::*;

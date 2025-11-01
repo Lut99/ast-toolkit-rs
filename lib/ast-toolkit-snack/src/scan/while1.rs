@@ -16,16 +16,18 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
-
-use crate::Combinator;
-use crate::result::{Expected, Result as SResult, SnackError};
+#[cfg(debug_assertions)]
+use crate::asserts::assert_infallible_value;
+use crate::auxillary::Expected;
+use crate::scan::while0;
+use crate::span::{Source, Span};
+use crate::spec::{Combinator, SResult, SnackError};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`While1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
-pub type Recoverable<'c, S> = Expected<ExpectsFormatter<'c>, S>;
+pub type Recoverable<'c> = Expected<ExpectsFormatter<'c>>;
 
 
 
@@ -56,7 +58,7 @@ impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`while1()`]-combinator.
-pub struct While1<'c, P, S> {
+pub struct While1<'c, P, S: ?Sized> {
     /// The predicate used for matching.
     predicate: P,
     /// A helper provided by the user to describe what is expected.
@@ -70,33 +72,34 @@ impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While1<'c, P, S>
 where
     'c: 'a,
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
-    type Output = Span<S>;
-    type Recoverable = Recoverable<'c, S>;
+    type Output = Span<'s, S>;
+    type Recoverable = Recoverable<'c>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Simply iterate as long as we can
-        let slice: &[S::Elem] = input.as_slice();
-        let slice_len: usize = slice.len();
-        let mut i: usize = 0;
-        while i < slice_len && (self.predicate)(&slice[i]) {
-            i += 1;
-        }
-        if i > 0 {
-            Ok((input.slice(i..), input.slice(..i)))
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+        // Depend on the `while0`-combinator to parse, first
+        // SAFETY: We require that `while0()` is actually infallible.
+        let mut comb = while0(self.what, &mut self.predicate);
+        #[cfg(debug_assertions)]
+        assert_infallible_value(&comb);
+        let (rem, res): (Span<'s, S>, Span<'s, S>) = comb.try_parse(input)?.unwrap();
+
+        // Now require something was actually parsed
+        if rem.range().pos > res.range().pos {
+            Ok(Ok((rem, res)))
         } else {
-            Err(SnackError::Recoverable(Recoverable {
+            Ok(Err(SnackError::Recoverable(Recoverable {
                 fmt:     self.expects(),
                 fixable: if input.is_empty() { Some(Some(1)) } else { None },
-                span:    input,
-            }))
+                loc:     input.loc(),
+            })))
         }
     }
 }
@@ -129,10 +132,9 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::while1;
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::Span;
+/// use ast_toolkit_snack::{Combinator as _, SnackError};
 ///
 /// let span1 = Span::new("abcdefg");
 /// let span2 = Span::new("cdefghi");
@@ -151,7 +153,7 @@ where
 ///     Err(SnackError::Recoverable(while1::Recoverable {
 ///         fmt:     while1::ExpectsFormatter { what: "'a', 'b', 'c' or 'ÿ'" },
 ///         fixable: None,
-///         span:    span4,
+///         loc:     span4.loc(),
 ///     }))
 /// );
 /// assert_eq!(
@@ -159,7 +161,7 @@ where
 ///     Err(SnackError::Recoverable(while1::Recoverable {
 ///         fmt:     while1::ExpectsFormatter { what: "'a', 'b', 'c' or 'ÿ'" },
 ///         fixable: Some(Some(1)),
-///         span:    span5,
+///         loc:     span5.loc(),
 ///     }))
 /// );
 /// ```
@@ -167,7 +169,7 @@ where
 pub const fn while1<'c, 's, P, S>(what: &'c str, predicate: P) -> While1<'c, P, S>
 where
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     While1 { predicate, what, _s: PhantomData }
 }

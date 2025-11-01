@@ -19,21 +19,21 @@ use ast_toolkit_loc::{Length, Loc, Range};
 /// Does implementations of pointer-like types for [`Identifier`].
 macro_rules! identifier_ptr_impl {
     ('a,Cow < 'a,T >) => {
-        impl<'a, T: Identifier + ToOwned> Identifier for Cow<'a, T> {
+        impl<'a, T: ?Sized + Identifier + ToOwned> Identifier for Cow<'a, T> {
             #[inline]
             #[track_caller]
             fn id(&self) -> u64 { <T as Identifier>::id(self) }
         }
     };
     ('a, $ty:ty) => {
-        impl<'a, T: Identifier> Identifier for $ty {
+        impl<'a, T: ?Sized + Identifier> Identifier for $ty {
             #[inline]
             #[track_caller]
             fn id(&self) -> u64 { <T as Identifier>::id(self) }
         }
     };
     ($ty:ty) => {
-        impl<T: Identifier> Identifier for $ty {
+        impl<T: ?Sized + Identifier> Identifier for $ty {
             #[inline]
             #[track_caller]
             fn id(&self) -> u64 { <T as Identifier>::id(self) }
@@ -57,21 +57,25 @@ macro_rules! source_ptr_impl {
         fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
             <T as Source>::count_in_slice_while(self, range, pred)
         }
+
+        #[inline]
+        #[track_caller]
+        fn len(&self) -> u64 { <T as Source>::len(self) }
     };
 
     /* Public interface */
     ('a,Cow < 'a,T >) => {
-        impl<'a, T: Source + ToOwned> Source for Cow<'a, T> {
+        impl<'a, T: ?Sized + Source + ToOwned> Source for Cow<'a, T> {
             source_ptr_impl!(__BODY);
         }
     };
     ('a, $ty:ty) => {
-        impl<'a, T: Source> Source for $ty {
+        impl<'a, T: ?Sized + Source> Source for $ty {
             source_ptr_impl!(__BODY);
         }
     };
     ($ty:ty) => {
-        impl<T: Source> Source for $ty {
+        impl<T: ?Sized + Source> Source for $ty {
             source_ptr_impl!(__BODY);
         }
     };
@@ -180,6 +184,19 @@ pub trait Source {
     /// This function can error if something went horribly, horribly wrong while attempting to get
     /// an `index`ed element.
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error>;
+
+    /// Returns the total length of the source text.
+    ///
+    /// # Returns
+    /// A [`u64`] encoding the total number of elements.
+    fn len(&self) -> u64;
+
+    /// Alias for checking if the [`Source::len()`] is nothing.
+    ///
+    /// # Returns
+    /// True when `Source::len() == 0`, false otherwise.
+    #[inline]
+    fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 // Std impls
@@ -209,6 +226,9 @@ impl<T> Source for [T] {
         }
         Ok(count)
     }
+
+    #[inline]
+    fn len(&self) -> u64 { <[T]>::len(self) as u64 }
 }
 impl<T> Source for Vec<T> {
     type Elem = T;
@@ -222,6 +242,9 @@ impl<T> Source for Vec<T> {
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <[T]>::count_in_slice_while(self.as_slice(), range, pred)
     }
+
+    #[inline]
+    fn len(&self) -> u64 { <[T]>::len(self) as u64 }
 }
 impl Source for str {
     type Elem = u8;
@@ -235,6 +258,9 @@ impl Source for str {
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <[u8]>::count_in_slice_while(self.as_bytes(), range, pred)
     }
+
+    #[inline]
+    fn len(&self) -> u64 { <[u8]>::len(self.as_bytes()) as u64 }
 }
 impl Source for String {
     type Elem = u8;
@@ -248,6 +274,9 @@ impl Source for String {
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <[u8]>::count_in_slice_while(self.as_bytes(), range, pred)
     }
+
+    #[inline]
+    fn len(&self) -> u64 { <[u8]>::len(self.as_bytes()) as u64 }
 }
 
 // Source impls
@@ -262,6 +291,9 @@ impl<I: Identifier, S: Source> Source for (I, S) {
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <S as Source>::count_in_slice_while(&self.1, range, pred)
     }
+
+    #[inline]
+    fn len(&self) -> u64 { <S as Source>::len(&self.1) as u64 }
 }
 
 // Pointer-like impls
@@ -290,7 +322,7 @@ source_ptr_impl!('a, RwLockWriteGuard<'a, T>);
 /// # Generics
 /// - `S`: The type of [`Source`] text that we use as input.
 #[derive(Debug)]
-pub struct Span<'s, S> {
+pub struct Span<'s, S: ?Sized> {
     /// The thing we're parsing.
     source: &'s S,
     /// The current position we're parsing.
@@ -298,7 +330,7 @@ pub struct Span<'s, S> {
 }
 
 // Constructors
-impl<'s, S: Source> Span<'s, S> {
+impl<'s, S: ?Sized + Source> Span<'s, S> {
     /// Constructor for the Slice that initializes it with a new `S`ource to read from.
     ///
     /// This will put the input to the beginning of the stream.
@@ -313,14 +345,19 @@ impl<'s, S: Source> Span<'s, S> {
 }
 
 // Ops
-impl<'s, S> Clone for Span<'s, S> {
+impl<'s, S: ?Sized> Clone for Span<'s, S> {
     #[inline]
     fn clone(&self) -> Self { *self }
 }
-impl<'s, S> Copy for Span<'s, S> {}
+impl<'s, S: ?Sized> Copy for Span<'s, S> {}
+impl<'s, S: ?Sized + Source> Eq for Span<'s, S> {}
+impl<'s, S: ?Sized + Source> PartialEq for Span<'s, S> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { self.source.id() == other.source.id() && self.range == other.range }
+}
 
 // Parsing
-impl<'s, S: Source> Span<'s, S> {
+impl<'s, S: ?Sized + Source> Span<'s, S> {
     /// Returns the identifier of the underlying source text.
     ///
     /// # Returns
@@ -336,6 +373,21 @@ impl<'s, S: Source> Span<'s, S> {
     /// It is already loaded with the [`Source::id()`] of `S`.
     #[inline]
     pub fn loc(&self) -> Loc { Loc { source: Some(self.source.id()), range: self.range } }
+
+    /// Returns whether  this `Span` is empty or not.
+    ///
+    /// Note that this takes the actual length of the underlying `S`ource into account.
+    ///
+    /// # Returns
+    /// True if it is, false if it isn't.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        let real_len: u64 = self.source.len();
+        match self.range.len {
+            Length::Fixed(0) => true,
+            Length::Fixed(_) | Length::Indefinite => self.range.pos >= real_len,
+        }
+    }
 
 
 
@@ -380,11 +432,23 @@ impl<'s, S: Source> Span<'s, S> {
         Ok((rem, head))
     }
 }
-impl<'s, S> Span<'s, S> {
-    /// Returns the inner range into the soruce text.
+impl<'s, S: ?Sized> Span<'s, S> {
+    /// Returns the inner range into the source text.
     ///
     /// # Returns
     /// A [`Range`] encoding what area is spanned.
     #[inline]
     pub const fn range(&self) -> Range { self.range }
+
+
+
+    /// Slices this Span manually.
+    ///
+    /// # Arguments
+    /// - `range`: A [`Range`] that will slice ourselves. For details, see [`Range::slice()`].
+    ///
+    /// # Returns
+    /// A new Span that is this but slices according to the given `range`.
+    #[inline]
+    pub fn slice(&self, range: impl Into<Range>) -> Self { Self { source: self.source, range: self.range.slice_range(range) } }
 }

@@ -16,10 +16,8 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
-
-use crate::result::Result as SResult;
-use crate::{Combinator, ExpectsFormatter as _};
+use crate::span::{Source, Span};
+use crate::spec::{Combinator, ExpectsFormatter as _, SResult};
 
 
 /***** FORMATTERS *****/
@@ -47,7 +45,7 @@ impl<'t> crate::ExpectsFormatter for ExpectsFormatter<'t> {
 
 /***** COMBINATORS *****/
 /// Actually implements the [`while0()`]-combinator.
-pub struct While0<'c, P, S> {
+pub struct While0<'c, P, S: ?Sized> {
     /// The predicate used for matching.
     predicate: P,
     /// A description of what was while'd
@@ -55,14 +53,14 @@ pub struct While0<'c, P, S> {
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
     _s: PhantomData<S>,
 }
-impl<'c, 's, 'a, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
+impl<'a, 'c, 's, P, S> Combinator<'a, 's, S> for While0<'c, P, S>
 where
-    'c: 's,
+    'c: 'a,
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
-    type Output = Span<S>;
+    type Output = Span<'s, S>;
     type Recoverable = Infallible;
     type Fatal = Infallible;
 
@@ -70,15 +68,8 @@ where
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Simply iterate as long as we can
-        let slice: &[S::Elem] = input.as_slice();
-        let slice_len: usize = slice.len();
-        let mut i: usize = 0;
-        while i < slice_len && (self.predicate)(&slice[i]) {
-            i += 1;
-        }
-        Ok((input.slice(i..), input.slice(..i)))
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+        input.slice_while(&mut self.predicate).map(Ok)
     }
 }
 
@@ -109,10 +100,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::while0;
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::{Combinator as _, Span};
 ///
 /// let span1 = Span::new("abcdefg");
 /// let span2 = Span::new("cdefghi");
@@ -134,7 +123,7 @@ where
 pub const fn while0<'c, 's, P, S>(what: &'c str, predicate: P) -> While0<'c, P, S>
 where
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     While0 { predicate, what, _s: PhantomData }
 }

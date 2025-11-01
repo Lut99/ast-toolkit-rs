@@ -12,7 +12,7 @@
 
 use std::convert::Infallible;
 
-use crate::slice::Source;
+use crate::span::Source;
 use crate::spec::Combinator;
 
 
@@ -50,7 +50,7 @@ use crate::spec::Combinator;
 /// assert_infallible::<&[u8], tag::Tag<u8, &[u8]>>();
 /// ```
 #[inline]
-pub const fn assert_infallible<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible, Fatal = Infallible>>() {}
+pub const fn assert_infallible<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Recoverable = Infallible, Fatal = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail at all (recoverably or
 /// otherwise).
@@ -100,7 +100,7 @@ pub const fn assert_infallible<'c, S: Source, C: Combinator<'c, S, Recoverable =
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_value<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible, Fatal = Infallible>>(_comb: &C) {}
+pub const fn assert_infallible_value<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Recoverable = Infallible, Fatal = Infallible>>(_comb: &C) {}
 
 
 
@@ -114,6 +114,7 @@ pub const fn assert_infallible_value<'c, S: Source, C: Combinator<'c, S, Recover
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
+/// - `'s`: A lifetime for which the `S`ource is valid.
 /// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
@@ -136,7 +137,7 @@ pub const fn assert_infallible_value<'c, S: Source, C: Combinator<'c, S, Recover
 /// assert_infallible_recoverable::<&[u8], tag::Tag<u8, &[u8]>>();
 /// ```
 #[inline]
-pub const fn assert_infallible_recoverable<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible>>() {}
+pub const fn assert_infallible_recoverable<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Recoverable = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail recoverably.
 ///
@@ -148,6 +149,7 @@ pub const fn assert_infallible_recoverable<'c, S: Source, C: Combinator<'c, S, R
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
+/// - `'s`: A lifetime for which the `S`ource is valid.
 /// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
@@ -185,7 +187,7 @@ pub const fn assert_infallible_recoverable<'c, S: Source, C: Combinator<'c, S, R
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_recoverable_value<'c, S: Source, C: Combinator<'c, S, Recoverable = Infallible>>(_comb: &C) {}
+pub const fn assert_infallible_recoverable_value<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Recoverable = Infallible>>(_comb: &C) {}
 
 
 
@@ -199,6 +201,7 @@ pub const fn assert_infallible_recoverable_value<'c, S: Source, C: Combinator<'c
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
+/// - `'s`: A lifetime for which the `S`ource is valid.
 /// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
@@ -226,7 +229,7 @@ pub const fn assert_infallible_recoverable_value<'c, S: Source, C: Combinator<'c
 /// >();
 /// ```
 #[inline]
-pub const fn assert_infallible_fatal<'c, S: Source, C: Combinator<'c, S, Fatal = Infallible>>() {}
+pub const fn assert_infallible_fatal<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Fatal = Infallible>>() {}
 
 /// Asserts statically that your given input combinator cannot fail fatally.
 ///
@@ -238,6 +241,7 @@ pub const fn assert_infallible_fatal<'c, S: Source, C: Combinator<'c, S, Fatal =
 ///
 /// # Generics
 /// - `'c`: Any lifetime upon which the `C`ombinator depends.
+/// - `'s`: A lifetime for which the `S`ource is valid.
 /// - `S`: The [`Source`] which may be parsed by your `C`ombinator.
 /// - `C`: The type of your combinator to check.
 ///
@@ -277,4 +281,4 @@ pub const fn assert_infallible_fatal<'c, S: Source, C: Combinator<'c, S, Fatal =
 /// assert!(comb.parse(Span::new("Hello, world")).is_ok());
 /// ```
 #[inline]
-pub const fn assert_infallible_fatal_value<'c, S: Source, C: Combinator<'c, S, Fatal = Infallible>>(_comb: &C) {}
+pub const fn assert_infallible_fatal_value<'c, 's, S: ?Sized + Source, C: Combinator<'c, 's, S, Fatal = Infallible>>(_comb: &C) {}

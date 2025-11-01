@@ -17,15 +17,15 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
-
-use crate::Combinator;
-use crate::result::{Expected, Result as SResult, SnackError};
+use crate::auxillary::Expected;
+use crate::scan::while1;
+use crate::span::{Source, Span};
+use crate::spec::{Combinator, SResult, SnackError};
 
 
 /***** TYPE ALIASES *****/
 /// Defines recoverable errors emitted by the [`Elem`]-combinator.
-pub type Recoverable<'c, S> = Expected<ExpectsFormatter<'c>, S>;
+pub type Recoverable<'c> = Expected<ExpectsFormatter<'c>>;
 
 
 
@@ -56,7 +56,7 @@ impl<'c> crate::ExpectsFormatter for ExpectsFormatter<'c> {
 
 /***** COMBINATOR *****/
 /// Actual implementation of [`elem()`]-.
-pub struct Elem<'c, P, S> {
+pub struct Elem<'c, P, S: ?Sized> {
     /// A string describing what was expected.
     what: &'c str,
     /// The predicate for matching elements.
@@ -67,31 +67,34 @@ impl<'s, 'c, 'a, P, S> Combinator<'a, 's, S> for Elem<'c, P, S>
 where
     'c: 'a,
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     type ExpectsFormatter = ExpectsFormatter<'c>;
-    type Output = Span<S>;
-    type Recoverable = Recoverable<'c, S>;
+    type Output = Span<'s, S>;
+    type Recoverable = Recoverable<'c>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { what: self.what } }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Check first if there's *any* input to parse.
-        if input.is_empty() {
-            return Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: Some(Some(1)), span: input }));
-        }
-
-        // Match the first element
-        // SAFETY: We know it exists, because the span is non-empty
-        let elem: &'s S::Elem = &input.as_slice()[0];
-        if (self.pred)(elem) {
-            Ok((input.slice(1..), input.slice(..1)))
-        } else {
-            Err(SnackError::Recoverable(Expected { fmt: self.expects(), fixable: None, span: input }))
-        }
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+        // Implemented as a while1() with a predicate that limits the consumption
+        let mut first: bool = true;
+        let pred = &mut self.pred;
+        Ok(while1(self.what, |elem| {
+            if first {
+                first = false;
+                pred(elem)
+            } else {
+                false
+            }
+        })
+        .try_parse(input)?
+        .map_err(|err| match err {
+            SnackError::Recoverable(err) => SnackError::Recoverable(Recoverable { fmt: self.expects(), fixable: err.fixable, loc: err.loc }),
+            SnackError::Fatal(_) => unreachable!(),
+        }))
     }
 }
 
@@ -122,10 +125,9 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::elem;
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::Span;
+/// use ast_toolkit_snack::{Combinator as _, SnackError};
 ///
 /// let span1 = Span::new("A");
 /// let span2 = Span::new("a");
@@ -138,7 +140,7 @@ where
 ///     Err(SnackError::Recoverable(elem::Recoverable {
 ///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
 ///         fixable: None,
-///         span:    span2,
+///         loc:     span2.loc(),
 ///     }))
 /// );
 /// assert_eq!(
@@ -146,7 +148,7 @@ where
 ///     Err(SnackError::Recoverable(elem::Recoverable {
 ///         fmt:     elem::ExpectsFormatter { what: "uppercase letter" },
 ///         fixable: Some(Some(1)),
-///         span:    span3,
+///         loc:     span3.loc(),
 ///     }))
 /// );
 /// ```
@@ -154,7 +156,7 @@ where
 pub const fn elem<'s, 'c, P, S>(what: &'c str, pred: P) -> Elem<'c, P, S>
 where
     P: FnMut(&'s S::Elem) -> bool,
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     Elem { what, pred, _s: PhantomData }
 }

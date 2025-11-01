@@ -16,7 +16,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 use ast_toolkit_loc::{Loc, Located};
 
 use crate::auxillary::CutError;
-use crate::slice::{Source, Span};
+use crate::span::{Source, Span};
 
 
 /***** HELPER MACROS *****/
@@ -49,28 +49,28 @@ macro_rules! expects_formatter_ptr_impl {
 macro_rules! combinator_ptr_impl {
     /* Private interface */
     (__BODY) => {
-        type ExpectsFormatter = <T as Combinator<'c, S>>::ExpectsFormatter;
-        type Output = <T as Combinator<'c, S>>::Output;
-        type Recoverable = <T as Combinator<'c, S>>::Recoverable;
-        type Fatal = <T as Combinator<'c, S>>::Fatal;
+        type ExpectsFormatter = <T as Combinator<'c, 's, S>>::ExpectsFormatter;
+        type Output = <T as Combinator<'c, 's, S>>::Output;
+        type Recoverable = <T as Combinator<'c, 's, S>>::Recoverable;
+        type Fatal = <T as Combinator<'c, 's, S>>::Fatal;
 
         #[inline]
-        fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'c, S>>::expects(self) }
+        fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'c, 's, S>>::expects(self) }
 
         #[inline]
-        fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
-            <T as Combinator<'c, S>>::parse(self, input)
+        fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+            <T as Combinator<'c, 's, S>>::try_parse(self, input)
         }
     };
 
     /* Public interface */
     ('a, $ty:ty) => {
-        impl<'c, 'a, S: Source, T: Combinator<'c, S>> Combinator<'c, S> for $ty {
+        impl<'c, 's, 'a, S: ?Sized + Source, T: Combinator<'c, 's, S>> Combinator<'c, 's, S> for $ty {
             combinator_ptr_impl!(__BODY);
         }
     };
     ($ty:ty) => {
-        impl<'c, S: Source, T: Combinator<'c, S>> Combinator<'c, S> for $ty {
+        impl<'c, 's, S: ?Sized + Source, T: Combinator<'c, 's, S>> Combinator<'c, 's, S> for $ty {
             combinator_ptr_impl!(__BODY);
         }
     };
@@ -80,28 +80,28 @@ macro_rules! combinator_ptr_impl {
 macro_rules! branching_combinator_ptr_impl {
     /* Private interface */
     (__BODY) => {
-        type ExpectsFormatter = <T as BranchingCombinator<'c, S>>::ExpectsFormatter;
-        type Output = <T as BranchingCombinator<'c, S>>::Output;
-        type Recoverable = <T as BranchingCombinator<'c, S>>::Recoverable;
-        type Fatal = <T as BranchingCombinator<'c, S>>::Fatal;
+        type ExpectsFormatter = <T as BranchingCombinator<'c, 's, S>>::ExpectsFormatter;
+        type Output = <T as BranchingCombinator<'c, 's, S>>::Output;
+        type Recoverable = <T as BranchingCombinator<'c, 's, S>>::Recoverable;
+        type Fatal = <T as BranchingCombinator<'c, 's, S>>::Fatal;
 
         #[inline]
-        fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'c, S>>::expects(self) }
+        fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'c, 's, S>>::expects(self) }
 
         #[inline]
-        fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
-            <T as BranchingCombinator<'c, S>>::parse(self, input)
+        fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+            <T as BranchingCombinator<'c, 's, S>>::try_parse(self, input)
         }
     };
 
     /* Public interface */
     ('a, $ty:ty) => {
-        impl<'c, 'a, S: Source, T: BranchingCombinator<'c, S>> BranchingCombinator<'c, S> for $ty {
+        impl<'c, 's, 'a, S: ?Sized + Source, T: BranchingCombinator<'c, 's, S>> BranchingCombinator<'c, 's, S> for $ty {
             branching_combinator_ptr_impl!(__BODY);
         }
     };
     ($ty:ty) => {
-        impl<'c, S: Source, T: BranchingCombinator<'c, S>> BranchingCombinator<'c, S> for $ty {
+        impl<'c, 's, S: ?Sized + Source, T: BranchingCombinator<'c, 's, S>> BranchingCombinator<'c, 's, S> for $ty {
             branching_combinator_ptr_impl!(__BODY);
         }
     };
@@ -116,7 +116,7 @@ macro_rules! branching_combinator_ptr_impl {
 ///
 /// It is essentially a three-way return type but separated in two levels to use the stock
 /// [`Result`](std::result::Result) (so that `?` works).
-pub type Result<'s, T, E1, E2, S> = std::result::Result<(Span<'s, S>, T), SnackError<E1, E2>>;
+pub type SResult<'s, T, E1, E2, S> = Result<(Span<'s, S>, T), SnackError<E1, E2>>;
 
 
 
@@ -404,9 +404,11 @@ expects_formatter_ptr_impl!('a, RwLockWriteGuard<'a, T>);
 /// - `'c`: Some lifetime of something upon which the _combinator_ depends. For example, this is
 ///   the lifetime `'c` in the `&'c str` given as input to a [`tag()`](utf8::complete::tag)-
 ///   combinator. This is used to delay serialization of the arguments to the last moment.
+/// - `'s`: Some lifetime for which `S` will be referenced. You can think of the this as the
+///   lifetime of the source text.
 /// - `S`: Some [`Source`]-string that will be parsed by this Combinator. This is what is
 ///   effectively parsed.
-pub trait Combinator<'c, S: Source> {
+pub trait Combinator<'c, 's, S: ?Sized + Source> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for this Combinator.
@@ -448,15 +450,44 @@ pub trait Combinator<'c, S: Source> {
     ///   [`alt()`](branch::alt()) should still try another branch;
     /// - It can emit a [`SnackError::Fatal`](crate::result::SnackError::Fatal), which returns
     ///   something of [`Combinator::Fatal`] and encodes that there is no point for any wrapping
-    ///   [`alt()`](branch::alt()) to still try another branch.
-    /// - It can emit a [`SnackError::NotEnough`](crate::result::SnackError::NotEnough), which
-    ///   encodes that the input *may* become parsable if additional input is given. This is useful
-    ///   when streaming the input from e.g. stdin or a socket, and one retrieves input in chunks
-    ///   that aren't necessarily valid.
+    ///   [`alt()`](branch::alt()) to still try another branch; or
+    /// - It can emit an even higher [`S::Error`](Source::Error), which encodes that not a parsing
+    ///   error but rather a reading error of the input has occurred.
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error>;
+
+    /// Runs the combinator on a [`Span`] of input.
+    ///
+    /// This overload will allow you to ignore any errors occurring while reading if they cannot occur anyway.
+    ///
+    /// # Arguments
+    /// - `input`: The input to parse.
+    ///
+    /// # Returns
+    /// A pair of the remaining input left unparsed (as a [`Span`]) and something of type
+    /// [`Combinator::Output`] that encodes the result of this parser.
+    ///
+    /// # Errors
+    /// The parse function should error if it failed to parse anything. It has three ways of doing
+    /// so:
+    /// - It can emit a [`SnackError::Recoverable`](crate::result::SnackError::Recoverable), which
+    ///   returns something of [`Combinator::Recoverable`] and encodes that any wrapping
+    ///   [`alt()`](branch::alt()) should still try another branch; or
+    /// - It can emit a [`SnackError::Fatal`](crate::result::SnackError::Fatal), which returns
+    ///   something of [`Combinator::Fatal`] and encodes that there is no point for any wrapping
+    ///   [`alt()`](branch::alt()) to still try another branch.
+    ///
+    /// # Examples
+    /// For examples, look at any of the combinators that are shipped with the Snack library.
+    #[inline]
+    fn parse(&mut self, input: Span<'s, S>) -> SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>
+    where
+        S: Source<Error = Infallible>,
+    {
+        self.try_parse(input).unwrap()
+    }
 }
 
 // Ptr-like impls
@@ -483,10 +514,7 @@ combinator_ptr_impl!('a, RwLockWriteGuard<'a, T>);
 ///   serialization of the expects-string until the last moment.
 /// - `S`: Some [`Source`]-string that will be parsed by this BranchingCombinator. This is what is
 ///   effectively parsed.
-pub trait BranchingCombinator<'c, S>
-where
-    S: Source,
-{
+pub trait BranchingCombinator<'c, 's, S: ?Sized + Source> {
     /// The type that is in charge of generating the expects-string.
     type ExpectsFormatter: ExpectsFormatter;
     /// The output type for all paths of this Combinator.
@@ -528,15 +556,13 @@ where
     ///   [`alt()`](branch::alt()) should still try another branch;
     /// - It can emit a [`SnackError::Fatal`](crate::result::SnackError::Fatal), which returns
     ///   something of [`BranchingCombinator::Fatal`] and encodes that there is no point for any
-    ///   wrapping [`alt()`](branch::alt()) to still try another branch.
-    /// - It can emit a [`SnackError::NotEnough`](crate::result::SnackError::NotEnough), which
-    ///   encodes that the input *may* become parsable if additional input is given. This is useful
-    ///   when streaming the input from e.g. stdin or a socket, and one retrieves input in chunks
-    ///   that aren't necessarily valid.
+    ///   wrapping [`alt()`](branch::alt()) to still try another branch; or
+    /// - It can emit an even higher [`S::Error`](Source::Error), which encodes that not a parsing
+    ///   error but rather a reading error of the input has occurred.
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error>;
 }
 
 // Ptr-like impls
