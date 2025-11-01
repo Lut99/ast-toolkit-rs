@@ -16,7 +16,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 use ast_toolkit_loc::{Loc, Located};
 
 use crate::auxillary::CutError;
-use crate::slice::{Slice, Source};
+use crate::slice::{Source, Span};
 
 
 /***** HELPER MACROS *****/
@@ -58,7 +58,7 @@ macro_rules! combinator_ptr_impl {
         fn expects(&self) -> Self::ExpectsFormatter { <T as Combinator<'c, S>>::expects(self) }
 
         #[inline]
-        fn parse<'s>(&mut self, input: Slice<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
+        fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
             <T as Combinator<'c, S>>::parse(self, input)
         }
     };
@@ -89,7 +89,7 @@ macro_rules! branching_combinator_ptr_impl {
         fn expects(&self) -> Self::ExpectsFormatter { <T as BranchingCombinator<'c, S>>::expects(self) }
 
         #[inline]
-        fn parse<'s>(&mut self, input: Slice<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
+        fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S> {
             <T as BranchingCombinator<'c, S>>::parse(self, input)
         }
     };
@@ -116,7 +116,7 @@ macro_rules! branching_combinator_ptr_impl {
 ///
 /// It is essentially a three-way return type but separated in two levels to use the stock
 /// [`Result`](std::result::Result) (so that `?` works).
-pub type Result<'s, T, E1, E2, S> = std::result::Result<(Slice<'s, S>, T), SnackError<E1, E2>>;
+pub type Result<'s, T, E1, E2, S> = std::result::Result<(Span<'s, S>, T), SnackError<E1, E2>>;
 
 
 
@@ -456,7 +456,7 @@ pub trait Combinator<'c, S: Source> {
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse<'s>(&mut self, input: Slice<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
+    fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
 }
 
 // Ptr-like impls
@@ -536,7 +536,7 @@ where
     ///
     /// # Examples
     /// For examples, look at any of the combinators that are shipped with the Snack library.
-    fn parse<'s>(&mut self, input: Slice<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
+    fn parse<'s>(&mut self, input: Span<'s, S>) -> Result<'s, Self::Output, Self::Recoverable, Self::Fatal, S>;
 }
 
 // Ptr-like impls

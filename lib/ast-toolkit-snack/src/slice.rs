@@ -12,7 +12,7 @@ use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
-use ast_toolkit_loc::Loc;
+use ast_toolkit_loc::{Length, Loc, Range};
 
 
 /***** HELPER MACROS *****/
@@ -43,58 +43,36 @@ macro_rules! identifier_ptr_impl {
 
 /// Does implementations of pointer-like types for [`Source`].
 macro_rules! source_ptr_impl {
+    /* Private interface */
+    (__BODY) => {
+        type Elem = <T as Source>::Elem;
+        type Error = <T as Source>::Error;
+
+        #[inline]
+        #[track_caller]
+        fn id(&self) -> u64 { <T as Source>::id(self) }
+
+        #[inline]
+        #[track_caller]
+        fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+            <T as Source>::count_in_slice_while(self, range, pred)
+        }
+    };
+
+    /* Public interface */
     ('a,Cow < 'a,T >) => {
         impl<'a, T: Source + ToOwned> Source for Cow<'a, T> {
-            type Elem = <T as Source>::Elem;
-            type Error = <T as Source>::Error;
-
-            #[inline]
-            #[track_caller]
-            fn id(&self) -> u64 { <T as Source>::id(self) }
-
-            #[inline]
-            #[track_caller]
-            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
-
-            #[inline]
-            #[track_caller]
-            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
+            source_ptr_impl!(__BODY);
         }
     };
     ('a, $ty:ty) => {
         impl<'a, T: Source> Source for $ty {
-            type Elem = <T as Source>::Elem;
-            type Error = <T as Source>::Error;
-
-            #[inline]
-            #[track_caller]
-            fn id(&self) -> u64 { <T as Source>::id(self) }
-
-            #[inline]
-            #[track_caller]
-            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
-
-            #[inline]
-            #[track_caller]
-            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
+            source_ptr_impl!(__BODY);
         }
     };
     ($ty:ty) => {
         impl<T: Source> Source for $ty {
-            type Elem = <T as Source>::Elem;
-            type Error = <T as Source>::Error;
-
-            #[inline]
-            #[track_caller]
-            fn id(&self) -> u64 { <T as Source>::id(self) }
-
-            #[inline]
-            #[track_caller]
-            fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
-
-            #[inline]
-            #[track_caller]
-            fn forget_up_to(&self, index: u64) { <T as Source>::forget_up_to(self, index) }
+            source_ptr_impl!(__BODY);
         }
     };
 }
@@ -179,58 +157,32 @@ pub trait Source {
     /// Some [`u64`] that represents this source's ID.
     fn id(&self) -> u64;
 
-    /// Gets the next element in the list.
+    /// Counts the number of elements from a given index onwards that match some predicate.
     ///
-    /// Note that if you're implementing something complex that involves mutating internal buffers,
-    /// then unfortunately, you will have to do this using interior mutability. It's important that
-    /// the code can be cheaply sprinkled with references to your source text.
+    /// This sounds super niche. However, it's the cornerstone of the `snack` library: a [`Span`]
+    /// will refer to a specific position in the array, and then wants to parse elements as long as
+    /// they meet certain conditions. This function will implement that logic for your array.
     ///
-    /// However, this will _not_ be asynchronous in any way. So you can use cheap  mutability like
+    /// Note, however, that any mutability you might like (e.g., buffers) would have to be
+    /// interior. This because copies referring to your Source will be many and interleaved.
+    /// Luckily, these are never accessed concurrently, so you should be able to use an e.g.
     /// [`RefCell`](std::cell::RefCell).
     ///
+    /// # Arguments
+    /// - `range`: Some [`Range`] slicing `self` to indicate the area in which to count. If this
+    ///   area is empty or out-of-bounds, you should return `Ok(0)`.
+    /// - `pred`: Some [`FnMut`] encoding a predicate for matching elements as long as possible.
+    ///
     /// # Returns
-    /// The [`Source::Elem`] at the given position, or [`None`] if it is out-of-bounds.
+    /// The number of elements for which `pred` yielded true.
     ///
     /// # Errors
     /// This function can error if something went horribly, horribly wrong while attempting to get
-    /// the `index`ed element.
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error>;
-
-    /// Tells the implementation that the parser will not access anything before the given index
-    /// anymore.
-    ///
-    /// This is useful when the implementation abstracts away dynamic loading of files or network
-    /// streams. It can forget memory representing anything before the index if this is called.
-    ///
-    /// Note that you will probably need interior mutability in your type to do something useful
-    /// here.
-    ///
-    /// # Arguments
-    /// - `up_to`: The first index of the element that **may still be accessed**. I.e., anything
-    ///   _before_ this can be discarded.
-    fn forget_up_to(&self, index: u64);
+    /// an `index`ed element.
+    fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error>;
 }
 
 // Std impls
-// NOTE: Yes quite a bit repition. Don't mess too much with it, though, because we need to
-// communicate that we can use the read-only references to slices etc as mutable in _this_ case
-// (since we're not actually using the mutability).
-impl<'a, T> Source for &'a [T] {
-    type Elem = T;
-    type Error = Infallible;
-
-    /// NOTE: This implementation will just assume the pointer to the original object as the ID.
-    #[inline]
-    fn id(&self) -> u64 { self.as_ptr() as u64 }
-
-    #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
-
-    #[inline]
-    fn forget_up_to(&self, _index: u64) {
-        /* Nothing to do, we have the entire slice in memory already */
-    }
-}
 impl<T> Source for [T] {
     type Elem = T;
     type Error = Infallible;
@@ -240,11 +192,22 @@ impl<T> Source for [T] {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
-
-    #[inline]
-    fn forget_up_to(&self, _index: u64) {
-        /* Nothing to do, we have the entire slice in memory already */
+    fn count_in_slice_while<'s>(&'s self, range: Range, mut pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+        // Keep counting elements while 1) the current index is within range of the `source`, and
+        // 2) it also does not exceed any length indicated by `range`.
+        let mut count: u64 = 0;
+        while range.pos + count < self.len() as u64
+            && match range.len {
+                Length::Fixed(len) => count <= len,
+                Length::Indefinite => true,
+            }
+        {
+            if !pred(&self[(range.pos + count) as usize]) {
+                break;
+            }
+            count += 1;
+        }
+        Ok(count)
     }
 }
 impl<T> Source for Vec<T> {
@@ -256,11 +219,8 @@ impl<T> Source for Vec<T> {
     fn id(&self) -> u64 { <&Vec<T> as Source>::id(&self) }
 
     #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
-
-    #[inline]
-    fn forget_up_to(&self, _index: u64) {
-        /* Nothing to do, we have the entire slice in memory already */
+    fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+        <[T]>::count_in_slice_while(self.as_slice(), range, pred)
     }
 }
 impl Source for str {
@@ -272,11 +232,8 @@ impl Source for str {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index as usize)) }
-
-    #[inline]
-    fn forget_up_to(&self, _index: u64) {
-        /* Nothing to do, we have the entire slice in memory already */
+    fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+        <[u8]>::count_in_slice_while(self.as_bytes(), range, pred)
     }
 }
 impl Source for String {
@@ -288,11 +245,8 @@ impl Source for String {
     fn id(&self) -> u64 { self.as_ptr() as u64 }
 
     #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(self.as_bytes().get(index as usize)) }
-
-    #[inline]
-    fn forget_up_to(&self, _index: u64) {
-        /* Nothing to do, we have the entire slice in memory already */
+    fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+        <[u8]>::count_in_slice_while(self.as_bytes(), range, pred)
     }
 }
 
@@ -305,10 +259,9 @@ impl<I: Identifier, S: Source> Source for (I, S) {
     fn id(&self) -> u64 { <I as Identifier>::id(&self.0) }
 
     #[inline]
-    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <S as Source>::get(&self.1, index) }
-
-    #[inline]
-    fn forget_up_to(&self, index: u64) { <S as Source>::forget_up_to(&self.1, index) }
+    fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
+        <S as Source>::count_in_slice_while(&self.1, range, pred)
+    }
 }
 
 // Pointer-like impls
@@ -336,16 +289,16 @@ source_ptr_impl!('a, RwLockWriteGuard<'a, T>);
 ///
 /// # Generics
 /// - `S`: The type of [`Source`] text that we use as input.
-#[derive(Clone, Copy, Debug)]
-pub struct Slice<'s, S> {
+#[derive(Debug)]
+pub struct Span<'s, S> {
     /// The thing we're parsing.
     source: &'s S,
     /// The current position we're parsing.
-    loc:    Loc,
+    range:  Range,
 }
 
 // Constructors
-impl<'s, S: Source> Slice<'s, S> {
+impl<'s, S: Source> Span<'s, S> {
     /// Constructor for the Slice that initializes it with a new `S`ource to read from.
     ///
     /// This will put the input to the beginning of the stream.
@@ -356,17 +309,33 @@ impl<'s, S: Source> Slice<'s, S> {
     /// # Returns
     /// A new Slice that can be used to parse `source`.
     #[inline]
-    pub fn new(source: &'s S) -> Self { Self { source, loc: Loc::encapsulate(source.id()) } }
+    pub fn new(source: &'s S) -> Self { Self { source, range: Range::full() } }
 }
 
+// Ops
+impl<'s, S> Clone for Span<'s, S> {
+    #[inline]
+    fn clone(&self) -> Self { *self }
+}
+impl<'s, S> Copy for Span<'s, S> {}
+
 // Parsing
-impl<'s, S: Source> Slice<'s, S> {
+impl<'s, S: Source> Span<'s, S> {
     /// Returns the identifier of the underlying source text.
     ///
     /// # Returns
     /// A unique [`u64`] for the underlying `S`ource text.
     #[inline]
     pub fn id(&self) -> u64 { self.source.id() }
+
+    /// Returns the location that this Slice spans.
+    ///
+    /// # Returns
+    /// A [`Loc`] encoding the area in the `S`ource being spanned.
+    ///
+    /// It is already loaded with the [`Source::id()`] of `S`.
+    #[inline]
+    pub fn loc(&self) -> Loc { Loc { source: Some(self.source.id()), range: self.range } }
 
 
 
@@ -380,31 +349,42 @@ impl<'s, S: Source> Slice<'s, S> {
     ///   until it returns false.
     ///
     /// # Returns
-    /// A slice that is this one but advanced for every element where `pred` returned true, or one
-    /// pointing beyond the end of the array (if all of them did).
+    /// A tuple of two spans:
+    /// - The first is the span of anything **after** the head matched by `pred`. I.e., it starts
+    ///   at the first element in the current span for which `pred` returned false.
+    /// - The second is the head matched by `pred` itself. I.e., it starts at the current span and
+    ///   then extends to include every element for which `pred` returned true.
+    ///
+    /// (Note their reversed order! Done for consistency with
+    /// [`Combinator`](crate::spec::Combinator)s).
     ///
     /// # Errors
     /// This function can error if a call to [`Source::get()`] failed.
     #[inline]
-    pub fn slice_while(&self, mut pred: impl FnMut(&S::Elem) -> bool) -> Result<Self, S::Error> {
-        let mut loc: Loc = self.loc;
-        while let Some(elem) = self.source.get(loc.range.pos)? {
-            if !pred(elem) {
-                return Ok(Self { source: self.source, loc });
-            }
-            loc.range.pos += 1;
-        }
-        // Got `None`, i.e., this is out-of-bounds
-        Ok(Self { source: self.source, loc })
+    pub fn slice_while(&self, pred: impl FnMut(&'s S::Elem) -> bool) -> Result<(Self, Self), S::Error> {
+        let count: u64 = self.source.count_in_slice_while(self.range, pred)?;
+        let head: Self = Self { source: self.source, range: Range { pos: self.range.pos, len: Length::Fixed(count) } };
+        let rem: Self = Self {
+            source: self.source,
+            range:  Range {
+                pos: self.range.pos + count,
+                len: match self.range.len {
+                    // SAFETY: This subtraction SHOULD be OK, because `count_in_slice_while()`
+                    // should already bound itself to this length.
+                    Length::Fixed(len) => Length::Fixed(len - count),
+                    Length::Indefinite => Length::Indefinite,
+                },
+            },
+        };
+        // Note the reversal here!
+        Ok((rem, head))
     }
 }
-impl<'s, S> Slice<'s, S> {
-    /// Returns the location that this Slice spans.
+impl<'s, S> Span<'s, S> {
+    /// Returns the inner range into the soruce text.
     ///
     /// # Returns
-    /// A [`Loc`] encoding the area in the `S`ource being spanned.
-    ///
-    /// It is already loaded with the [`Source::id()`] of `S`.
+    /// A [`Range`] encoding what area is spanned.
     #[inline]
-    pub const fn loc(&self) -> Loc { self.loc }
+    pub const fn range(&self) -> Range { self.range }
 }

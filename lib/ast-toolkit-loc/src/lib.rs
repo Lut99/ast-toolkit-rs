@@ -38,7 +38,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-pub use range::Range;
+pub use range::{Length, Range};
 pub use spec::Located;
 
 
