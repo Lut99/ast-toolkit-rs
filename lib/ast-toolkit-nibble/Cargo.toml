@@ -1,0 +1,16 @@
+[package]
+name = "ast-toolkit-nibble"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "A re-imagining of the legendary `snack` library, which is based on [`nom`](https://docs.rs/nom)."
+
+
+[dependencies]
+futures = "0.3.0"
+
+
+[features]
+default = []
