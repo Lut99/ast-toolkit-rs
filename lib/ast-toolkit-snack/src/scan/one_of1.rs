@@ -16,50 +16,73 @@ use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable};
-
-use crate::Combinator;
-use crate::fmt::{ElemDisplay, ElemDisplayFormatter};
-use crate::result::{Expected, Result as SResult, SnackError};
+#[cfg(debug_assertions)]
+use crate::asserts::assert_infallible_fatal_value;
+use crate::auxillary::Expected;
+use crate::scan::while1;
+use crate::span::{Source, Span};
+use crate::spec::{Combinator, SResult, SnackError};
 
 
 /***** ERRORS *****/
 /// Error thrown by the [`OneOf1`]-combinator that encodes that not even one of the expected
 /// bytes was parsed.
-pub type Recoverable<'c, T, S> = Expected<ExpectsFormatter<'c, T>, S>;
+pub type Recoverable<'c, T> = Expected<ExpectsFormatter<'c, T>>;
 
 
 
 
 
 /***** FORMATTERS *****/
-/// ExpectsFormatter for the [`OneOf1`] combinator.
-#[derive(Debug, Eq, PartialEq)]
+/// ExpectsFormatter for the [`OneOf0`] combinator.
+#[derive(Eq, PartialEq)]
 pub struct ExpectsFormatter<'c, T> {
     /// The set of elements we expect one of.
     pub set: &'c [T],
 }
-impl<'c, T: Debug + ElemDisplay> Display for ExpectsFormatter<'c, T> {
+impl<'c, T: Display> Debug for ExpectsFormatter<'c, T> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        struct ListDisplayFormatter<'c, T>(&'c [T]);
+        impl<'c, T: Display> Debug for ListDisplayFormatter<'c, T> {
+            #[inline]
+            fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+                let mut fmt = f.debug_list();
+                for entry in self.0 {
+                    fmt.entry(&entry.to_string());
+                }
+                fmt.finish()
+            }
+        }
+
+
+        let Self { set } = self;
+        let mut fmt = f.debug_struct(std::any::type_name::<Self>());
+        fmt.field("set", &ListDisplayFormatter(set));
+        fmt.finish()
+    }
+}
+impl<'c, T: Display> Display for ExpectsFormatter<'c, T> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "Expected ")?;
-        <Self as crate::ExpectsFormatter>::expects_fmt(self, f, 0)
+        <Self as crate::spec::ExpectsFormatter>::expects_fmt(self, f, 0)
     }
 }
-impl<'c, T: Debug + ElemDisplay> crate::ExpectsFormatter for ExpectsFormatter<'c, T> {
+impl<'c, T: Display> crate::spec::ExpectsFormatter for ExpectsFormatter<'c, T> {
     fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult {
         write!(f, "at least one of ")?;
         for i in 0..self.set.len() {
-            if i == 0 {
-                // SAFETY: Loops prevents us from going outside of byteset's length
-                <T as ElemDisplay>::elem_fmt(unsafe { self.set.get_unchecked(i) }, f)?;
+            if i > 0 {
             } else if i < self.set.len() - 1 {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                write!(f, ", {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;
+                write!(f, ", ")?;
             } else {
                 // SAFETY: Loops prevents us from going outside of byteset's length
-                write!(f, " or {}", ElemDisplayFormatter(unsafe { self.set.get_unchecked(i) }))?;
+                write!(f, " or ")?;
             }
+            // SAFETY: Loops prevents us from going outside of byteset's length
+            <T as Display>::fmt(unsafe { self.set.get_unchecked(i) }, f)?;
         }
         Ok(())
     }
@@ -71,7 +94,7 @@ impl<'c, T: Debug + ElemDisplay> crate::ExpectsFormatter for ExpectsFormatter<'c
 
 /***** COMBINATORS *****/
 /// Actual implementation of the [`one_of1()`]-combinator.
-pub struct OneOf1<'c, T, S> {
+pub struct OneOf1<'c, T, S: ?Sized> {
     /// The set of elements to one of.
     set: &'c [T],
     /// Store the target `S`ource string type in this struct in order to be much nicer to type deduction.
@@ -82,35 +105,32 @@ pub struct OneOf1<'c, T, S> {
 impl<'c, 's, 'a, S> Combinator<'a, 's, S> for OneOf1<'c, S::Elem, S>
 where
     'c: 'a,
-    S: Clone + Spannable<'s>,
-    S::Elem: Debug + ElemDisplay + PartialEq,
+    S: 's + ?Sized + Source,
+    S::Elem: Display + PartialEq,
 {
     type ExpectsFormatter = ExpectsFormatter<'c, S::Elem>;
-    type Output = Span<S>;
-    type Recoverable = Recoverable<'c, S::Elem, S>;
+    type Output = Span<'s, S>;
+    type Recoverable = Recoverable<'c, S::Elem>;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter { set: self.set } }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        // Simply iterate as long as we can
-        let slice: &[S::Elem] = input.as_slice();
-        let slice_len: usize = slice.len();
-        let mut i: usize = 0;
-        while i < slice_len && self.set.contains(&slice[i]) {
-            i += 1;
-        }
-        if i > 0 {
-            Ok((input.slice(i..), input.slice(..i)))
-        } else {
-            Err(SnackError::Recoverable(Recoverable {
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+        // Assert it is indeed infallible
+        let mut comb = while1("<IGNORED>", |elem| self.set.contains(elem));
+        #[cfg(debug_assertions)]
+        assert_infallible_fatal_value(&comb);
+
+        // Wrap a while as one_of
+        Ok(comb.try_parse(input)?.map_err(|err| match err {
+            SnackError::Recoverable(err) => SnackError::Recoverable(Recoverable {
                 fmt:     self.expects(),
                 fixable: if input.is_empty() { Some(Some(1)) } else { None },
-                span:    input,
-            }))
-        }
+                loc:     err.loc,
+            }),
+        }))
     }
 }
 
@@ -137,10 +157,9 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::one_of1;
-/// use ast_toolkit_snack::{Combinator as _, ParseError as _};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::Span;
+/// use ast_toolkit_snack::{Combinator as _, ParseError as _, SnackError};
 ///
 /// let span1 = Span::new("abcdefg");
 /// let span2 = Span::new("cdefghi");
@@ -158,7 +177,7 @@ where
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         fmt:     one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
 ///         fixable: None,
-///         span:    span4,
+///         loc:     span4.loc(),
 ///     }))
 /// );
 /// assert_eq!(
@@ -166,15 +185,15 @@ where
 ///     Err(SnackError::Recoverable(one_of1::Recoverable {
 ///         fmt:     one_of1::ExpectsFormatter { set: &[b'a', b'b', b'c', 191, 195] },
 ///         fixable: Some(Some(1)),
-///         span:    span5,
+///         loc:     span5.loc(),
 ///     }))
 /// );
 /// ```
 #[inline]
 pub const fn one_of1<'c, 's, S>(set: &'c [S::Elem]) -> OneOf1<'c, S::Elem, S>
 where
-    S: Clone + Spannable<'s>,
-    S::Elem: Debug + ElemDisplay + PartialEq,
+    S: 's + ?Sized + Source,
+    S::Elem: Display + PartialEq,
 {
     OneOf1 { set, _s: PhantomData }
 }

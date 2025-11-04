@@ -7,18 +7,18 @@
 
 // Declare modules
 pub mod elem;
-// pub mod one_of0;
-// pub mod one_of1;
-// pub mod pop;
+pub mod one_of0;
+pub mod one_of1;
+pub mod pop;
 // pub mod tag;
 pub mod while0;
 pub mod while1;
 
 // Import some of that
 pub use elem::elem;
-// pub use one_of0::one_of0;
-// pub use one_of1::one_of1;
-// pub use pop::pop;
+pub use one_of0::one_of0;
+pub use one_of1::one_of1;
+pub use pop::pop;
 // pub use tag::tag;
 pub use while0::while0;
 pub use while1::while1;

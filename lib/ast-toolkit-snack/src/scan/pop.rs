@@ -5,56 +5,21 @@
 //!   Implements the [`pop()`]-combinator.
 //
 
-use std::borrow::Cow;
 use std::convert::Infallible;
-use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
 
-use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
-
-use crate::result::{Result as SResult, SnackError};
-use crate::{Combinator, ParseError};
+#[cfg(debug_assertions)]
+use crate::asserts::assert_infallible_fatal_value;
+use crate::auxillary::Expected;
+use crate::scan::while1;
+use crate::span::{Source, Span};
+use crate::spec::{Combinator, SResult, SnackError};
 
 
 /***** ERRORS *****/
 /// Defines recoverable errors for the [`Pop`]-combinator.
-#[derive(better_derive::Debug, better_derive::Eq, better_derive::PartialEq)]
-pub struct Recoverable<S> {
-    /// The span where the input ended.
-    pub span: Span<S>,
-}
-impl<S> Display for Recoverable<S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", ExpectsFormatter) }
-}
-impl<'s, S: Spannable<'s>> Error for Recoverable<S> {}
-impl<'s, S: Clone + Spannable<'s>> Spanning<S> for Recoverable<S> {
-    #[inline]
-    fn get_span(&self) -> Option<Cow<'_, Span<S>>> { Some(self.span()) }
-    #[inline]
-    fn take_span(self) -> Option<Span<S>> { Some(self.into_span()) }
-}
-impl<'s, S: Clone + Spannable<'s>> SpanningInf<S> for Recoverable<S> {
-    #[inline]
-    fn span(&self) -> Cow<'_, Span<S>> { Cow::Borrowed(self.span_ref()) }
-    #[inline]
-    fn into_span(self) -> Span<S> { self.span }
-}
-impl<'s, S: Clone + Spannable<'s>> SpanningRef<S> for Recoverable<S> {
-    #[inline]
-    fn span_ref(&self) -> &Span<S> { &self.span }
-}
-impl<'s, S: Clone + Spannable<'s>> SpanningMut<S> for Recoverable<S> {
-    #[inline]
-    fn span_mut(&mut self) -> &mut Span<S> { &mut self.span }
-}
-impl<'s, S: Clone + Spannable<'s>> ParseError<S> for Recoverable<S> {
-    #[inline]
-    fn more_might_fix(&self) -> bool { true }
-    #[inline]
-    fn needed_to_fix(&self) -> Option<usize> { Some(1) }
-}
+pub type Recoverable = Expected<ExpectsFormatter>;
 
 
 
@@ -82,29 +47,46 @@ impl crate::ExpectsFormatter for ExpectsFormatter {
 
 /***** COMBINATORS *****/
 /// Actual implementation of [`pop()`].
-pub struct Pop<S> {
+pub struct Pop<S: ?Sized> {
     _s: PhantomData<S>,
 }
 impl<'s, S> Combinator<'static, 's, S> for Pop<S>
 where
-    S: Clone + Spannable<'s>,
+    S: 's + ?Sized + Source,
 {
     type ExpectsFormatter = ExpectsFormatter;
     type Output = &'s S::Elem;
-    type Recoverable = Recoverable<S>;
+    type Recoverable = Recoverable;
     type Fatal = Infallible;
 
     #[inline]
     fn expects(&self) -> Self::ExpectsFormatter { ExpectsFormatter }
 
     #[inline]
-    fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
-        if !input.is_empty() {
-            // SAFETY: We can just take the element because we asserted we aren't empty.
-            Ok((input.slice(1..), &input.as_slice()[0]))
-        } else {
-            Err(SnackError::Recoverable(Recoverable { span: input }))
-        }
+    fn try_parse(&mut self, input: Span<'s, S>) -> Result<SResult<'s, Self::Output, Self::Recoverable, Self::Fatal, S>, S::Error> {
+        // Assert that the while1-combinator is not fallible in fatal
+        let mut first = true;
+        let mut comb = while1("<IGNORED>", |_| {
+            if first {
+                first = false;
+                true
+            } else {
+                false
+            }
+        });
+        #[cfg(debug_assertions)]
+        assert_infallible_fatal_value(&comb);
+
+        // Then parse using a predicate that pops at most one thing (and `while1` pops at least one)
+        Ok(match comb.try_parse(input)? {
+            // SAFETY: We unwrap this because we parsed something. But we don't unwrap it unsafely
+            // because we're relying on a black box implementation to uphold this guarantee, one
+            // which is NOT in control of the user.
+            Ok((rem, _)) => Ok((rem, input.get(0)?.unwrap())),
+            Err(SnackError::Recoverable(err)) => {
+                Err(SnackError::Recoverable(Recoverable { fmt: self.expects(), fixable: Some(Some(1)), loc: err.loc }))
+            },
+        })
     }
 }
 
@@ -123,25 +105,31 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::Combinator as _;
-/// use ast_toolkit_snack::result::SnackError;
 /// use ast_toolkit_snack::scan::pop;
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit_snack::span::Span;
+/// use ast_toolkit_snack::{Combinator as _, SnackError};
 ///
 /// let span1 = Span::new("abc");
 /// let span2 = Span::new("");
 ///
 /// let mut comb = pop();
 /// assert_eq!(comb.parse(span1), Ok((span1.slice(1..), &b'a')));
-/// assert_eq!(comb.parse(span2), Err(SnackError::Recoverable(pop::Recoverable { span: span2 })));
+/// assert_eq!(
+///     comb.parse(span2),
+///     Err(SnackError::Recoverable(pop::Recoverable {
+///         fmt:     pop::ExpectsFormatter,
+///         fixable: Some(Some(1)),
+///         loc:     span2.loc(),
+///     }))
+/// );
 /// ```
 ///
 /// Note that, in the case of strings, this function works on _bytes_, not graphemes. Hence:
 /// ```rust
 /// # use ast_toolkit_snack::Combinator as _;
-/// # use ast_toolkit_snack::result::SnackError;
+/// # use ast_toolkit_snack::SnackError;
 /// # use ast_toolkit_snack::scan::pop;
-/// # use ast_toolkit_span::Span;
+/// # use ast_toolkit_snack::span::Span;
 /// let span = Span::new("ÿ");
 ///
 /// let mut comb = pop();
@@ -150,9 +138,9 @@ where
 /// assert_eq!(span.slice(1..).value(), &[191]);
 /// ```
 #[inline]
-pub const fn pop<'s, S>() -> Pop<S>
+pub const fn pop<S>() -> Pop<S>
 where
-    S: Clone + Spannable<'s>,
+    S: ?Sized + Source,
 {
     Pop { _s: PhantomData }
 }

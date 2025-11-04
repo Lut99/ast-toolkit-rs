@@ -60,6 +60,10 @@ macro_rules! source_ptr_impl {
 
         #[inline]
         #[track_caller]
+        fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <T as Source>::get(self, index) }
+
+        #[inline]
+        #[track_caller]
         fn len(&self) -> u64 { <T as Source>::len(self) }
     };
 
@@ -185,6 +189,15 @@ pub trait Source {
     /// an `index`ed element.
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error>;
 
+    /// Returns the element at the i'th position.
+    ///
+    /// # Arguments
+    /// - `index`: The index at which position to return the element for.
+    ///
+    /// # Returns
+    /// [`Source::Elem`] if the element existed, or [`None`] if `index` is out-of-bounds.
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error>;
+
     /// Returns the total length of the source text.
     ///
     /// # Returns
@@ -228,6 +241,9 @@ impl<T> Source for [T] {
     }
 
     #[inline]
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
+
+    #[inline]
     fn len(&self) -> u64 { <[T]>::len(self) as u64 }
 }
 impl<T> Source for Vec<T> {
@@ -242,6 +258,9 @@ impl<T> Source for Vec<T> {
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <[T]>::count_in_slice_while(self.as_slice(), range, pred)
     }
+
+    #[inline]
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[T]>::get(self, index as usize)) }
 
     #[inline]
     fn len(&self) -> u64 { <[T]>::len(self) as u64 }
@@ -260,6 +279,9 @@ impl Source for str {
     }
 
     #[inline]
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[u8]>::get(self.as_bytes(), index as usize)) }
+
+    #[inline]
     fn len(&self) -> u64 { <[u8]>::len(self.as_bytes()) as u64 }
 }
 impl Source for String {
@@ -276,6 +298,9 @@ impl Source for String {
     }
 
     #[inline]
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { Ok(<[u8]>::get(self.as_bytes(), index as usize)) }
+
+    #[inline]
     fn len(&self) -> u64 { <[u8]>::len(self.as_bytes()) as u64 }
 }
 
@@ -285,14 +310,21 @@ impl<I: Identifier, S: Source> Source for (I, S) {
     type Error = S::Error;
 
     #[inline]
+    #[track_caller]
     fn id(&self) -> u64 { <I as Identifier>::id(&self.0) }
 
     #[inline]
+    #[track_caller]
     fn count_in_slice_while<'s>(&'s self, range: Range, pred: impl FnMut(&'s Self::Elem) -> bool) -> Result<u64, Self::Error> {
         <S as Source>::count_in_slice_while(&self.1, range, pred)
     }
 
     #[inline]
+    #[track_caller]
+    fn get(&self, index: u64) -> Result<Option<&Self::Elem>, Self::Error> { <S as Source>::get(&self.1, index) }
+
+    #[inline]
+    #[track_caller]
     fn len(&self) -> u64 { <S as Source>::len(&self.1) as u64 }
 }
 
@@ -431,6 +463,16 @@ impl<'s, S: ?Sized + Source> Span<'s, S> {
         // Note the reversal here!
         Ok((rem, head))
     }
+
+    /// Returns an object at the given position.
+    ///
+    /// # Arguments
+    /// - `index`: The index at which to get the element. Note that this is relative to the slice!
+    ///
+    /// # Returns
+    /// An [`S::Elem`](Source::Elem) if `index` is within this slice's bounds, or else [`None`].
+    #[inline]
+    pub fn get(&self, index: u64) -> Result<Option<&'s S::Elem>, S::Error> { self.source.get(self.range.pos + index) }
 }
 impl<'s, S: ?Sized> Span<'s, S> {
     /// Returns the inner range into the source text.
