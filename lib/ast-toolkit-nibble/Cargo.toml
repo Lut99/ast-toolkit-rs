@@ -9,8 +9,10 @@ description = "A re-imagining of the legendary `snack` library, which is based o
 
 
 [dependencies]
-futures = "0.3.0"
+futures = { version = "0.3.0", default-features = false, optional = true }
 
 
 [features]
-default = []
+default = ["poll"]
+
+poll = ["dep:futures"]
