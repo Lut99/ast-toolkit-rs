@@ -16,7 +16,6 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
 
 use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
@@ -300,31 +299,19 @@ macro_rules! tuple_branching_comb_impl {
                     #[inline]
                     fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
                         // We attempt to parse first, collecting errors as they occur
-                        let mut fails: (MaybeUninit<[<C $fi>]::Recoverable>, $(MaybeUninit<[<C $i>]::Recoverable>),*) = (MaybeUninit::<[<C $fi>]::Recoverable>::uninit(), $(MaybeUninit::<[<C $i>]::Recoverable>::uninit()),*);
-                        match self.$fi.parse(input.clone()) {
+                        let [<fail $fi>] = match self.$fi.parse(input.clone()) {
                             Ok((rem, res)) => return Ok((rem, res)),
-                            Err(SnackError::Recoverable(err)) => {
-                                fails.$fi.write(err);
-                            },
+                            Err(SnackError::Recoverable(err)) => err,
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Fatal $li>]::[<Branch $fi>](err))),
-                        }
-                        $(match self.$i.parse(input.clone()) {
+                        };
+                        $(let [<fail $i>] = match self.$i.parse(input.clone()) {
                             Ok((rem, res)) => return Ok((rem, res)),
-                            Err(SnackError::Recoverable(err)) => {
-                                fails.$i.write(err);
-                            },
+                            Err(SnackError::Recoverable(err)) => err,
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Fatal $li>]::[<Branch $i>](err))),
-                        })*
+                        };)*
 
-                        // If we're here, all branches failed. So we can assume that their error is initialized...
-                        // SAFETY: All branches are initialized above.
-                        let fails: ([<C $fi>]::Recoverable, $([<C $i>]::Recoverable),*) = unsafe {(
-                            fails.$fi.assume_init(),
-                            $(fails.$i.assume_init(),)*
-                        )};
-
-                        // ...and then return it
-                        Err(SnackError::Recoverable([<Recoverable $li>] { fmt: [<ExpectsFormatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects()),*) }, fails, span: input }))
+                        // If we're here, all branches failed, so the whole alt failed
+                        Err(SnackError::Recoverable([<Recoverable $li>] { fmt: [<ExpectsFormatter $li>] { fmts: (self.$fi.expects(), $(self.$i.expects()),*) }, fails: ([<fail $fi>], $([<fail $i>],)*), span: input }))
                     }
                 }
             );

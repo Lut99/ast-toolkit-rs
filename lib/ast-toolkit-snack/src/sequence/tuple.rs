@@ -15,7 +15,6 @@
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
-use std::mem::MaybeUninit;
 
 use ast_toolkit_span::{Span, Spannable, Spanning, SpanningInf, SpanningMut, SpanningRef};
 
@@ -177,32 +176,21 @@ macro_rules! tuple_comb_impl {
 
                 fn parse(&mut self, input: Span<S>) -> SResult<Self::Output, Self::Recoverable, Self::Fatal, S> {
                     // We collect the results as we find them
-                    let mut results: (MaybeUninit<[<C $fi>]::Output>, $(MaybeUninit<[<C $i>]::Output>,)*) = (MaybeUninit::<[<C $fi>]::Output>::uninit(), $(MaybeUninit::<[<C $i>]::Output>::uninit(),)*);
-                    let rem: Span<S> = match self.$fi.parse(input) {
-                        Ok((rem, res)) => {
-                            results.$fi.write(res);
-                            rem
-                        },
+                    let (rem, [<res $fi>]): (Span<S>, [<C $fi>]::Output) = match self.$fi.parse(input) {
+                        Ok((rem, res)) => (rem, res),
                         Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $fi>](err))),
                         Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $fi>](err))),
                     };
                     $(
-                        let rem: Span<S> = match self.$i.parse(rem) {
-                            Ok((rem, res)) => {
-                                results.$i.write(res);
-                                rem
-                            },
+                        let (rem, [<res $i>]): (Span<S>, [<C $i>]::Output) = match self.$i.parse(rem) {
+                            Ok((rem, res)) => (rem, res),
                             Err(SnackError::Recoverable(err)) => return Err(SnackError::Recoverable([<Error $li>]::[<Comb $i>](err))),
                             Err(SnackError::Fatal(err)) => return Err(SnackError::Fatal([<Error $li>]::[<Comb $i>](err))),
                         };
                     )*
 
-                    // Assume all of them are OK before returning
-                    // SAFETY: All are initialized above.
-                    Ok((rem, (
-                        unsafe { results.$fi.assume_init() },
-                        $( unsafe { results.$i.assume_init() }, )*
-                    )))
+                    // Yus, now we can yield
+                    Ok((rem, ([<res $fi>], $([<res $i>],)*)))
                 }
             }
         }

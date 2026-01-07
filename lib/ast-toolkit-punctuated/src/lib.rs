@@ -173,6 +173,25 @@ impl<V, P> Punctuated<V, P> {
     pub fn singleton(value: V) -> Self { Self { data: vec![(value, MaybeUninit::uninit())], has_trailing: false } }
 }
 
+// Destructors
+impl<V, P> Drop for Punctuated<V, P> {
+    #[inline]
+    fn drop(&mut self) {
+        // We need to drop the punctuation!
+        let data_len: usize = self.data.len();
+        for (i, (_, p)) in self.data.iter_mut().enumerate() {
+            if i < data_len - 1 || self.has_trailing {
+                // SAFETY: There is a punctuation to drop here because we're either looking at the
+                // non-last element (which are guaranteed to be there) OR if we've marked for
+                // ourselves that the last element exists (we have a trailing punctuation).
+                unsafe { p.assume_init_drop() };
+            }
+        }
+
+        // Then leave it up to the normal drop for `Vec` to drop the rest
+    }
+}
+
 // Pushing
 impl<V, P: Default> Punctuated<V, P> {
     /// Pushes a new value to the list.
@@ -1292,7 +1311,14 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding `V` by ownership.
     #[inline]
-    pub fn into_values(self) -> IntoValues<V, P> { IntoValues { iter: self.data.into_iter() } }
+    pub fn into_values(mut self) -> IntoValues<V, P> {
+        // Get the data out
+        let mut data = Vec::new();
+        std::mem::swap(&mut data, &mut self.data);
+
+        // Yield the iterator with it
+        IntoValues { iter: data.into_iter() }
+    }
 
     /// Consumes this Punctuated into an iterator that yields its values by reference.
     ///
@@ -1318,9 +1344,14 @@ impl<V, P> Punctuated<V, P> {
     /// # Returns
     /// An iterator yielding `P` by ownership.
     #[inline]
-    pub fn into_puncts(self) -> IntoPuncts<V, P> {
+    pub fn into_puncts(mut self) -> IntoPuncts<V, P> {
+        // Get the data out
+        let mut data = Vec::new();
+        std::mem::swap(&mut data, &mut self.data);
+
+        // Yield the iterator with it
         let len: usize = self.data.len();
-        IntoPuncts { iter: self.data.into_iter().enumerate(), len, has_trailing: self.has_trailing }
+        IntoPuncts { iter: data.into_iter().enumerate(), len, has_trailing: self.has_trailing }
     }
 
     /// Consumes this Punctuated into an iterator that yields its punctuation by reference.
@@ -1351,9 +1382,14 @@ impl<V, P> IntoIterator for Punctuated<V, P> {
     type IntoIter = IntoIter<V, P>;
 
     #[inline]
-    fn into_iter(self) -> Self::IntoIter {
+    fn into_iter(mut self) -> Self::IntoIter {
+        // Get the data out
+        let mut data = Vec::new();
+        std::mem::swap(&mut data, &mut self.data);
+
+        // Yield the iterator with it
         let data_len: usize = self.data.len();
-        IntoIter { iter: self.data.into_iter().enumerate(), len: data_len, has_trailing: self.has_trailing }
+        IntoIter { iter: data.into_iter().enumerate(), len: data_len, has_trailing: self.has_trailing }
     }
 }
 impl<'a, V, P> IntoIterator for &'a Punctuated<V, P> {
