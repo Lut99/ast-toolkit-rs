@@ -180,6 +180,7 @@ impl<V, P> Drop for Punctuated<V, P> {
         // We need to drop the punctuation!
         let data_len: usize = self.data.len();
         for (i, (_, p)) in self.data.iter_mut().enumerate() {
+            // SAFETY: The `- 1` can never fail because we won't enter the loop if there is no data
             if i < data_len - 1 || self.has_trailing {
                 // SAFETY: There is a punctuation to drop here because we're either looking at the
                 // non-last element (which are guaranteed to be there) OR if we've marked for
@@ -1388,7 +1389,7 @@ impl<V, P> IntoIterator for Punctuated<V, P> {
         std::mem::swap(&mut data, &mut self.data);
 
         // Yield the iterator with it
-        let data_len: usize = self.data.len();
+        let data_len: usize = data.len();
         IntoIter { iter: data.into_iter().enumerate(), len: data_len, has_trailing: self.has_trailing }
     }
 }
