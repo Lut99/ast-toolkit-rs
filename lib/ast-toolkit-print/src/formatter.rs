@@ -11,7 +11,9 @@ use std::fmt::{Arguments, Result as FResult, Write};
 use std::iter::repeat_n;
 
 #[cfg(feature = "color")]
-pub use console::Style;
+use console::StyledObject;
+#[cfg(feature = "color")]
+pub use console::{Attribute, Color};
 
 
 /***** HELPER MACROS *****/
@@ -22,6 +24,18 @@ macro_rules! define_indent {
         const EIGHT_TIMES_INDENT: &str = concat!($ident, $ident, $ident, $ident, $ident, $ident, $ident, $ident);
         /// The number of spaces we write for every indentation level.
         pub const INDENT_SIZE: usize = $ident.len();
+    };
+}
+
+/// Implements a transformation function on a `style` but only if it's not fixed.
+macro_rules! style_impl {
+    ($self:ident, |$style:ident| $($code:tt)*) => {
+        if !$self.fixed {
+            let Self { style: $style, fixed } = $self;
+            Self { style: { $($code)* }, fixed }
+        } else {
+            $self
+        }
     };
 }
 
@@ -51,6 +65,458 @@ pub enum Coloring {
 
 
 
+/// A wrapper around [`console::Style`]'s styling object.
+///
+/// This does much the same, except that it has a special "override" mode that prevent it from
+/// changing.
+#[cfg(feature = "color")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Style {
+    style: console::Style,
+    fixed: bool,
+}
+
+// Constructors
+#[cfg(feature = "color")]
+impl Default for Style {
+    #[inline]
+    fn default() -> Self { Self::new() }
+}
+#[cfg(feature = "color")]
+impl Style {
+    /// Constructor for the Style that initializes it as a neutral style.
+    ///
+    /// # Returns
+    /// A new Style for styling.
+    #[inline]
+    pub const fn new() -> Self { Self { style: console::Style::new(), fixed: false } }
+
+    /// Constructor for the Style that initializes it from a "dotted string".
+    ///
+    /// See the original function [`console::Style::from_dotted_str()`]'s documentation for more
+    /// information on what this does.
+    ///
+    /// # Arguments
+    /// - `s`: The dotted string to create this Style from.
+    ///
+    /// # Returns
+    /// A new Style for styling.
+    #[inline]
+    pub fn from_dotted_str(s: &str) -> Self { Self { style: console::Style::from_dotted_str(s), fixed: false } }
+}
+
+// Color options
+#[cfg(feature = "color")]
+impl Style {
+    /// Forces styling on or off.
+    ///
+    /// # Arguments
+    /// - `value`: Whether to always use coloring (true) or never (false).
+    ///
+    /// # Returns
+    /// Self but with the forced styling.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn force_styling(self, value: bool) -> Self { style_impl!(self, |style| style.force_styling(value)) }
+
+    /// Will adapt the colouring of this style on whether stdout is a TTY.
+    ///
+    /// See [`console::Style::for_stdout()`] for more information.
+    ///
+    /// # Returns
+    /// Self but with colouring optionally enabled if stdout is a TTY.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn for_stdout(self) -> Self { style_impl!(self, |style| style.for_stdout()) }
+
+    /// Will adapt the colouring of this style on whether stderr is a TTY.
+    ///
+    /// See [`console::Style::for_stderr()`] for more information.
+    ///
+    /// # Returns
+    /// Self but with colouring optionally enabled if stderr is a TTY.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn for_stderr(self) -> Self { style_impl!(self, |style| style.for_stderr()) }
+
+    /// Fixes the styling of this Style.
+    ///
+    /// Once this function has been called, all of the other functions stop mutating this Style.
+    ///
+    /// This is used to prevent nested functions from changing it. As such, **this cannot be undone
+    /// until you create a fresh Style.**
+    ///
+    /// # Returns
+    /// Self that can never change anymore.
+    #[inline]
+    pub const fn fix(self) -> Self {
+        let Self { style, fixed: _ } = self;
+        Self { style, fixed: true }
+    }
+}
+
+// Styling
+#[cfg(feature = "color")]
+impl Style {
+    /// Sets an attribute for this Style.
+    ///
+    /// # Arguments
+    /// - `attr`: An [`Attribute`] to set it to.
+    ///
+    /// # Returns
+    /// Self but with the given `attr`ibute.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn attr(self, attr: Attribute) -> Self { style_impl!(self, |style| style.attr(attr)) }
+
+    /// Sets the foreground color of this Style.
+    ///
+    /// # Arguments
+    /// - `color`: A [`Color`] to set it to.
+    ///
+    /// # Returns
+    /// Self but with the given foreground `color`.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn fg(self, color: Color) -> Self { style_impl!(self, |style| style.fg(color)) }
+
+    /// Sets the background color of this Style.
+    ///
+    /// # Arguments
+    /// - `color`: A [`Color`] to set it to.
+    ///
+    /// # Returns
+    /// Self but with the given background `color`.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn bg(self, color: Color) -> Self { style_impl!(self, |style| style.bg(color)) }
+
+
+
+    /// Sets the foreground color of this Style to ANSI black.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn black(self) -> Self { style_impl!(self, |style| style.black()) }
+
+    /// Sets the foreground color of this Style to ANSI red.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn red(self) -> Self { style_impl!(self, |style| style.red()) }
+
+    /// Sets the foreground color of this Style to ANSI green.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn green(self) -> Self { style_impl!(self, |style| style.green()) }
+
+    /// Sets the foreground color of this Style to ANSI yellow.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn yellow(self) -> Self { style_impl!(self, |style| style.yellow()) }
+
+    /// Sets the foreground color of this Style to ANSI blue.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn blue(self) -> Self { style_impl!(self, |style| style.blue()) }
+
+    /// Sets the foreground color of this Style to ANSI magenta.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn magenta(self) -> Self { style_impl!(self, |style| style.magenta()) }
+
+    /// Sets the foreground color of this Style to ANSI cyan.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn cyan(self) -> Self { style_impl!(self, |style| style.cyan()) }
+
+    /// Sets the foreground color of this Style to ANSI white.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn white(self) -> Self { style_impl!(self, |style| style.white()) }
+
+    /// Sets the foreground color of this Style to some 8-bit color.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn color256(self, color: u8) -> Self { style_impl!(self, |style| style.color256(color)) }
+
+    /// Sets the foreground color of this Style to some 24-bit color.
+    ///
+    /// # Returns
+    /// Self but with the given foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn true_color(self, red: u8, green: u8, blue: u8) -> Self { style_impl!(self, |style| style.true_color(red, green, blue)) }
+
+    /// Uses a bright version of the current foreground color, if any.
+    ///
+    /// # Returns
+    /// Self but with a brighter foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn bright(self) -> Self { style_impl!(self, |style| style.bright()) }
+
+    /// Sets the background color of this Style to ANSI black.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_black(self) -> Self { style_impl!(self, |style| style.on_black()) }
+
+    /// Sets the background color of this Style to ANSI red.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_red(self) -> Self { style_impl!(self, |style| style.on_red()) }
+
+    /// Sets the background color of this Style to ANSI green.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_green(self) -> Self { style_impl!(self, |style| style.on_green()) }
+
+    /// Sets the background color of this Style to ANSI yellow.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_yellow(self) -> Self { style_impl!(self, |style| style.on_yellow()) }
+
+    /// Sets the background color of this Style to ANSI blue.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_blue(self) -> Self { style_impl!(self, |style| style.on_blue()) }
+
+    /// Sets the background color of this Style to ANSI magenta.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_magenta(self) -> Self { style_impl!(self, |style| style.on_magenta()) }
+
+    /// Sets the background color of this Style to ANSI cyan.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_cyan(self) -> Self { style_impl!(self, |style| style.on_cyan()) }
+
+    /// Sets the background color of this Style to ANSI white.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_white(self) -> Self { style_impl!(self, |style| style.on_white()) }
+
+    /// Sets the background color of this Style to some 8-bit color.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_color256(self, color: u8) -> Self { style_impl!(self, |style| style.on_color256(color)) }
+
+    /// Sets the background color of this Style to some 24-bit color.
+    ///
+    /// # Returns
+    /// Self but with the given background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_true_color(self, red: u8, green: u8, blue: u8) -> Self { style_impl!(self, |style| style.on_true_color(red, green, blue)) }
+
+    /// Uses a bright version of the current background color, if any.
+    ///
+    /// # Returns
+    /// Self but with a brighter background color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn on_bright(self) -> Self { style_impl!(self, |style| style.on_bright()) }
+
+    /// Uses a bold font.
+    ///
+    /// # Returns
+    /// Self but with a bold font.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn bold(self) -> Self { style_impl!(self, |style| style.bold()) }
+
+    /// Uses a dimmer foreground color, if any.
+    ///
+    /// # Returns
+    /// Self but with a dimmer foreground color.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn dim(self) -> Self { style_impl!(self, |style| style.dim()) }
+
+    /// Uses an italic font.
+    ///
+    /// # Returns
+    /// Self but with an italic font.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn italic(self) -> Self { style_impl!(self, |style| style.italic()) }
+
+    /// Uses an underlined font.
+    ///
+    /// # Returns
+    /// Self but with an underlined font.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn underlined(self) -> Self { style_impl!(self, |style| style.underlined()) }
+
+    /// Sets the text to blinking.
+    ///
+    /// # Returns
+    /// Self but with blinking text.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn blink(self) -> Self { style_impl!(self, |style| style.blink()) }
+
+    /// Sets the text to blinking but _faster._
+    ///
+    /// # Returns
+    /// Self but with blinking text.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn blink_fast(self) -> Self { style_impl!(self, |style| style.blink_fast()) }
+
+    /// Runs the reverse ANSI-escape code.
+    ///
+    /// # Returns
+    /// Self but reversed.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn reverse(self) -> Self { style_impl!(self, |style| style.reverse()) }
+
+    /// Hides the text.
+    ///
+    /// # Returns
+    /// Self but with hidden text.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn hidden(self) -> Self { style_impl!(self, |style| style.hidden()) }
+
+    /// Uses a strike through'd font.
+    ///
+    /// # Returns
+    /// Self but with a strike through'd font.
+    ///
+    /// Note that it is actually unchanged if this style is fixed!
+    #[inline]
+    pub const fn strikethrough(self) -> Self { style_impl!(self, |style| style.strikethrough()) }
+}
+
+// Application
+#[cfg(feature = "color")]
+impl Style {
+    /// Applies this style to some [`Display`]able object.
+    ///
+    /// # Arguments
+    /// - `val`: Some object that will be rendered using this style's style.
+    ///
+    /// # Returns
+    /// A [`StyledObject`] that does the actual rendering.
+    #[inline]
+    pub fn apply_to<D>(&self, val: D) -> StyledObject<D> { self.style.apply_to(val) }
+}
+
+// Conversion
+#[cfg(feature = "color")]
+impl AsRef<Style> for Style {
+    #[inline]
+    fn as_ref(&self) -> &Style { self }
+}
+#[cfg(feature = "color")]
+impl AsRef<console::Style> for Style {
+    #[inline]
+    fn as_ref(&self) -> &console::Style { &self.style }
+}
+#[cfg(feature = "color")]
+impl From<console::Style> for Style {
+    #[inline]
+    fn from(value: console::Style) -> Self { Self { style: value, fixed: false } }
+}
+#[cfg(feature = "color")]
+impl From<Style> for console::Style {
+    #[inline]
+    fn from(value: Style) -> Self { value.style }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -61,6 +527,9 @@ pub struct Formatter<'w, W> {
     /// Whether color is applied or not.
     #[cfg(feature = "color")]
     color: Coloring,
+    /// If set, then overrides all styles with the given one.
+    #[cfg(feature = "color")]
+    override_style: Option<Style>,
     /// The current indentation level.
     indent: usize,
     /// Whether to write indentation on the next call to write.
@@ -94,6 +563,8 @@ impl<'w, W> Formatter<'w, W> {
             fmt,
             #[cfg(feature = "color")]
             color: Coloring::AutoStdout,
+            #[cfg(feature = "color")]
+            override_style: None,
             indent: 0,
             write_indent: true,
             trail: vec![b'\0'; 1],
@@ -349,6 +820,39 @@ impl<'w, W> Formatter<'w, W> {
     #[inline]
     pub const fn get_color(&self) -> Coloring { self.color }
 
+    /// Sets an "override" color for this Formatter.
+    ///
+    /// This will make the Formatter returns Styles that don't change. Instead, it will format like
+    /// the given one. This can be used to make nested formatters write with a fixed style.
+    ///
+    /// Use [`Formatter::clear_override_color()`] to go back to having any style.
+    ///
+    /// # Arguments
+    /// - `style`: A [`Style`] who's style will be used no matter what.
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub const fn override_color(&mut self, style: Style) -> &mut Self {
+        // Don't forget to fix the style when we set it
+        self.override_style = Some(style.fix());
+        self
+    }
+
+    /// Removes the "override" color for this Formatter.
+    ///
+    /// This is the inverse of [`Formatter::override_color()`].
+    ///
+    /// # Returns
+    /// Self for chaining.
+    #[cfg(feature = "color")]
+    #[inline]
+    pub const fn clear_override_color(&mut self) -> &mut Self {
+        self.override_style = None;
+        self
+    }
+
     /// Returns a [`Style`] that will conditionally apply the given colors.
     ///
     /// # Returns
@@ -357,11 +861,15 @@ impl<'w, W> Formatter<'w, W> {
     #[cfg(feature = "color")]
     #[inline]
     pub fn style(&self) -> Style {
-        let style = Style::new();
-        match self.color {
-            Coloring::Manual(color) => style.force_styling(color),
-            Coloring::AutoStdout => style.for_stdout(),
-            Coloring::AutoStderr => style.for_stderr(),
+        if let Some(style) = &self.override_style {
+            style.clone()
+        } else {
+            let style = Style::new();
+            match self.color {
+                Coloring::Manual(color) => style.force_styling(color),
+                Coloring::AutoStdout => style.for_stdout(),
+                Coloring::AutoStderr => style.for_stderr(),
+            }
         }
     }
 }
